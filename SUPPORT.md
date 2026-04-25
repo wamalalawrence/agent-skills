@@ -1,29 +1,15 @@
 # Support
 
-`agent-skills` is a public open-source project maintained on a best-effort basis by one person.
+There is no support. This is a solo-maintained, public-good open-source project — not a product.
 
-## Where To Ask For Help
+- **No SLA.** Issues may sit untouched. PRs may be ignored or closed without detailed feedback.
+- **No private support.** Don't email asking for help with your specific repo, ticket, or pipeline.
+- **Security issues** are the one exception — see [SECURITY.md](./SECURITY.md). Those will be looked at as a priority.
 
-- Use GitHub issues for reproducible bugs, unclear documentation, portability problems, and focused improvement proposals.
-- Use GitHub discussions if they are enabled for broader questions, workflow ideas, and community feedback.
-- For security concerns, follow [SECURITY.md](./SECURITY.md).
+## If you have a real bug
 
-## What To Include
+GitHub Issues are open. Include the smallest reproducer you can, the skill name, the agent (Claude Code, Cursor, etc.), and the relevant `.env` keys with secrets stripped.
 
-When asking for help, include:
+## If something doesn't fit your workflow
 
-- The skill name and version from [VERSION](./VERSION).
-- The AI assistant or agent environment where you are using the skill.
-- The relevant workspace shape, with private names replaced by placeholders.
-- The expected behavior, actual behavior, and any error message.
-- The smallest useful excerpt of your `.env` keys, without secrets or tokens.
-
-## Maintenance Expectations
-
-There is no guaranteed response time or service-level agreement. The maintainer will prioritize security concerns, portability bugs, unclear installation or usage docs, and changes that improve the flagship `software-engineer` skill.
-
-## Funding
-
-GitHub Sponsors support helps fund maintenance time, triage, documentation, and continued development. Sponsorship does not create private support obligations, priority queues, or guarantees. It is personal maintainer support for public-benefit work.
-
-Before publishing, set the maintainer's GitHub Sponsors handle in [.github/FUNDING.yml](./.github/FUNDING.yml).
+Fork it. The MIT license is there for exactly this. A custom fork tuned to your stack is almost always a better answer than waiting for an upstream change.

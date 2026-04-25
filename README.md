@@ -2,7 +2,7 @@
 
 Reusable [Agent Skills](https://agentskills.io/) for software-engineering work — portable, role-shaped workflows your AI assistant can load on demand so the same model produces senior-engineer, product-owner, tester, or reviewer output instead of generic answers.
 
-> **Status:** `0.4.0` — pre-1.0. Core skill set is shipped and stable enough for public use; interfaces may still evolve.
+> **Status:** `0.5.0` — pre-1.0. Core skill set is shipped and stable enough for public use; interfaces may still evolve.
 
 ## Why Skills
 
@@ -84,7 +84,9 @@ Diagram of the actual collaboration graph:
 
 ## Contributing
 
-Contributions that improve portability, clarity, safety, or real-world usefulness are welcome — start with [CONTRIBUTING.md](CONTRIBUTING.md).
+This is a solo-maintained project I built for my own engineering work and shared as a public good. **Issues and PRs are not actively solicited.** I may not respond, may close work that doesn't fit the project's direction, and reserve the right to keep the scope small.
+
+If you still want to send something, the bar is in [CONTRIBUTING.md](CONTRIBUTING.md): focused, portable, and easy for one person to verify in an evening. Forking is a perfectly fine alternative if your needs diverge.
 
 ## License
 
