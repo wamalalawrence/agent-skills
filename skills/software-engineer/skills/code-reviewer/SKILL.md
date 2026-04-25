@@ -5,7 +5,7 @@ license: MIT
 compatibility: Works with any agent that supports the Agent Skills format (Claude Code, Cursor, Windsurf, Continue, GitHub Copilot Chat, ChatGPT, etc.). Expects workspace `.env` populated by setup.init.
 metadata:
   author: wamalalawrence
-  version: "0.3.0"
+  version: "0.4.0"
   homepage: "https://github.com/wamalalawrence/agent-skills"
 argument-hint: 'optional: mode inner|outer, base branch, issue key/URL, PR URL, or task description'
 user-invocable: true
@@ -72,6 +72,7 @@ If issue-aware review is requested or an issue key/URL is present, usable issue 
 | `CODE_REVIEWER_MAX_DIFF_CHARS` | no | `60000` | Diff character budget per review pass |
 | `CODE_REVIEWER_SHOW_SEVERITIES` | no | `blocker,major,minor,nit` | Severities surfaced in outer-loop mode |
 | `CODE_REVIEWER_INNER_LOOP_SEVERITIES` | no | `blocker,major` | Severities surfaced in inner-loop mode |
+| `CODE_REVIEWER_MAX_ROUNDS` | no | `3` | Maximum engineer↔reviewer iteration rounds before escalation |
 | `CODE_REVIEWER_CACHE_DIR` | no | `${WORKSPACE_ROOT}/.cache/code-reviewer` | Cache for fetched issue context summaries |
 | `CODE_REVIEWER_CACHE_TTL_HOURS` | no | `24` | Cache TTL |
 | `JIRA_HOST`, `JIRA_API_TOKEN`, `JIRA_AUTH_TYPE` | only for Jira issue-aware review | - | Jira ticket lookup |
@@ -96,7 +97,21 @@ If required setup is missing, output:
   - `inner`: staged diff, intended for implementation checkpoint review.
   - `outer`: branch diff against base, intended for pre-PR or final review.
   - `pr`: pull request diff and metadata.
-  - `manual`: user-supplied diff or code excerpt.
+  - `manual`: user-supplied diff or code excerpt. Use the `test-quality` profile when the diff is test code (e.g., `test-automation-engineer` or `manual-tester` outputs) and focus findings on selector stability, deterministic data, condition-based waits (no fixed sleeps), assertion meaningfulness, and isolation.
+
+#### Hard handoff contract from the engineer
+
+When invoked from [`software-engineer`](../../SKILL.md) (inner or outer loop), expect this evidence pack and call it out as a finding when missing:
+
+- Project entry from `${PROJECTS_JSON}` (name, stack, base branch, validation commands).
+- Issue brief: ticket key/URL, summary, acceptance criteria, expected vs actual behavior.
+- Root-cause confidence from [`issue-investigator`](../issue-investigator/SKILL.md), if the change is a bug fix or regression.
+- For bug fixes: the failing-regression-test commit hash. The reviewer must verify the test fails on the parent commit and passes on HEAD (`--repro-verify` mode).
+- The 5-line plan from the engineer (Problem · Hypothesis · Smallest change · Risk · Validation).
+- Risk areas the engineer wants extra attention on.
+- Inner-loop only: list of changes since the last review round so the reviewer can focus on the delta (`--since-last-review`).
+
+If the evidence pack is missing or thin, surface this as a `major` finding before continuing — the reviewer should not silently re-derive context the engineer is responsible for providing.
 
 ### 2. Build issue-aware context first
 
@@ -162,6 +177,18 @@ Severity guidance:
 
 - If `${CODE_REVIEWER_BLOCKING}` is `true` and any blocker finding exists, the calling workflow must stop until the finding is fixed or explicitly waived with a written reason.
 - If blocking is disabled, still label blockers clearly and explain the risk.
+
+### 7. Enforce iteration convergence
+
+When this skill is invoked iteratively in the engineer↔reviewer pair-programming loop:
+
+- Track the round number in the evidence pack (`round: 1`, `round: 2`, ...).
+- The number of `blocker` + `major` findings **must strictly decrease** between rounds. If round N has the same or more blocker/major findings than round N-1, stop and surface a "not converging" summary to the user with the recurring findings highlighted.
+- After `${CODE_REVIEWER_MAX_ROUNDS}` (default `3`) rounds, escalate regardless of finding counts: report the unresolved blockers, the engineer's responses, and ask the user how to proceed. Do not loop indefinitely or silently downgrade blockers to advisory.
+
+### 8. Devil's-advocate self-rebuttal (before final verdict)
+
+Before producing a `PASS` verdict, write one paragraph attacking your own conclusion: _"Here is the most credible scenario in which I am wrong about this diff being safe."_ Cover at least one of: silent data loss, lost-update / race condition, auth bypass or missing authorization check, secret or PII leakage, broken or non-reversible migration, breaking API contract change, regression in a previously-fixed defect. If the rebuttal surfaces a credible risk, downgrade the verdict to `WARN` or add a `blocker`/`major` finding accordingly.
 
 ## Expected Output
 

@@ -5,7 +5,7 @@ license: MIT
 compatibility: Works with any agent that supports the Agent Skills format (Claude Code, Cursor, Windsurf, Continue, GitHub Copilot Chat, ChatGPT, etc.). Expects workspace `.env` populated by setup.init. Optional Jira CLI integration when `.jira-config.yml` is present.
 metadata:
   author: wamalalawrence
-  version: "0.3.0"
+  version: "0.4.0"
   homepage: "https://github.com/wamalalawrence/agent-skills"
 argument-hint: 'issue URL/key, bug report, incident, support ticket, feature request, or task description plus affected repo/service/environment'
 user-invocable: true
@@ -122,9 +122,45 @@ Classify the most likely type, and explain the evidence:
 
 - Inspect relevant code paths, configuration, data, logs, CI output, deployment history, feature flags, and environment-specific behavior where available.
 - Prefer the actual affected environment when access and safety allow; operate read-only unless explicitly authorized.
-- Reproduce locally or in a safe test environment when useful.
+- Reproduce locally or in a safe test environment when useful (see _Safe reproduction protocol_ below).
 - Use [`software-engineer`](../../SKILL.md) for deeper technical analysis, architecture impact, repository conventions, or implementation feasibility.
-- Avoid stopping at the first plausible explanation. Track primary and secondary contributing factors separately.
+- Avoid stopping at the first plausible explanation. Use the _Three-hypothesis discipline_ below to fight confirmation bias.
+- For regressions, run the _Regression triage_ checklist below before forming hypotheses.
+- Track primary and secondary contributing factors separately.
+
+#### Safe reproduction protocol
+
+Never reproduce a defect against live production data or by mutating shared state. Pick the cheapest safe environment that still reproduces the behavior:
+
+1. Local stack (docker-compose, devcontainer, in-process test harness).
+2. Ephemeral branch environment with a snapshot or seeded data set.
+3. Replayed input only: HAR file, recorded log slice, captured request/response pair, or anonymized payload.
+4. Read-only inspection of the affected environment (`SET TRANSACTION READ ONLY`, `--dry-run`, read-replica, snapshot DB) when no other option reproduces it.
+
+For each reproduction attempt, record: environment chosen, exact commands and inputs, observed output, and a deterministic recipe (env vars + commands + expected log lines) that another agent or human can replay verbatim. Hand that recipe to [`software-engineer`](../../SKILL.md) and [`test-automation-engineer`](../../../test-automation-engineer/SKILL.md) so it can become the failing regression test before any fix is written.
+
+#### Three-hypothesis discipline
+
+When the root cause is not obvious from evidence already in hand:
+
+1. List the **top three** candidate causes, ranked by prior likelihood plus evidence already seen.
+2. For each hypothesis, write a one-line **"what would change my mind"** falsifier.
+3. Design the **single cheapest experiment that discriminates between the top two** hypotheses (a query, a log filter, a one-line probe, a unit test, a config flip in a sandbox).
+4. Run it. Update rankings. Eliminate or promote.
+5. Repeat until one hypothesis dominates the evidence or all three are eliminated and a new set is needed.
+
+Do not skip to step 5 by intuition. Recording the discriminating experiment is the artifact that distinguishes investigation from guessing.
+
+#### Regression triage (when the issue worked before)
+
+For any reported regression, run these high-signal cheap moves before forming hypotheses:
+
+- `git log -L :<symbol>:<file>` or `git log --follow -p -- <file>` on the suspect file or function.
+- `git blame` the suspect line and read the introducing commit message and PR (title, description, review comments).
+- `git bisect` between the last known-good and first known-bad commit when those are available, using the deterministic reproduction recipe as the bisect predicate.
+- Compare CI output, deploy timestamps, and feature-flag/config changes between the good and bad versions.
+
+Document the introducing commit hash and PR link in the investigation result so the fix can reference them.
 
 ### 5. Establish root cause confidence
 
@@ -132,6 +168,18 @@ Classify the most likely type, and explain the evidence:
 - Tie every suspected or confirmed cause to evidence.
 - State what evidence would be needed to raise confidence.
 - If the issue cannot be reproduced, document what was attempted and why confidence is limited.
+
+**Confidence gate for the next-action recommendation:**
+
+| Recommended next action | Minimum required confidence |
+|---|---|
+| `code fix` | `confirmed`, or `suspected` plus a reproducible recipe and a falsifiable hypothesis |
+| `rollback` / `revert` | `suspected` or higher, plus a clear introducing change identified by regression triage |
+| `configuration change` / `data correction` | `confirmed` (mutation in a real environment requires evidence, not a hunch) |
+| `monitoring or alerting improvement` | any confidence (always safe to add observability) |
+| `product clarification` / `documentation` / `support response` | any confidence |
+
+If the evidence does not meet the bar for the action you want to recommend, choose a lower-impact action (typically `monitoring` or `clarification`) and state explicitly what evidence is missing.
 
 ### 6. Recommend the next action
 

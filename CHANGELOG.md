@@ -4,6 +4,34 @@ All notable project changes should be recorded here.
 
 ## Unreleased
 
+## 0.4.0 - Accuracy & Cross-Skill Collaboration
+
+Anchored to the engineering fundamentals the skills are meant to enforce: full context awareness, no guessing, real root-cause investigation, safe-environment reproduction, and engineer↔reviewer pair-programming.
+
+### Added
+- **README cross-skill graph.** The skills table now shows _Reuses / collaborates with_ instead of just folder nesting, plus an ASCII collaboration diagram. Makes it explicit that `test-automation-engineer`, `manual-tester`, and `product-owner` all reuse the other roles — that information previously lived only inside each `SKILL.md`.
+- **`software-engineer` Phase 1.5 — Reproduce-before-fix gate.** Bug fixes must now write a failing regression test FIRST, commit it as the first commit on the branch (verifiable by checking out the parent), and only then implement the fix. Refactors / formatting / docs / new features are explicitly exempt.
+- **`software-engineer` 5-line plan structure** (Problem · Hypothesis · Smallest change · Risk · Validation) so the reviewer can later check the diff against the stated intent.
+- **`software-engineer` self-review item — fix-adds-observability.** If the defect was hard to investigate because evidence was missing, the fix must add the missing log/metric/correlation id.
+- **`issue-investigator` safe reproduction protocol.** Operational ladder (local stack → ephemeral env → replayed input → read-only inspection of affected env), with a deterministic recipe captured for handoff to engineer/test-automation-engineer.
+- **`issue-investigator` three-hypothesis discipline.** Top-3 candidate causes, falsifiable "what would change my mind" line per hypothesis, single cheapest discriminating experiment. Replaces the vague "avoid stopping at the first plausible explanation" guidance with a concrete technique.
+- **`issue-investigator` regression triage** (`git log -L`, `git blame`, `git bisect`, deploy/feature-flag diff) before forming hypotheses for any reported regression.
+- **`issue-investigator` confidence gate** mapping each recommended next-action (code fix / rollback / config change / monitoring / clarification) to the minimum root-cause confidence required to recommend it.
+- **`code-reviewer` hard handoff contract** listing the evidence pack the engineer must supply (project entry, issue brief, root-cause confidence, failing-test commit for bug fixes, 5-line plan, risk areas). Missing handoff is a `major` finding.
+- **`code-reviewer` `test-quality` review profile** for `manual` mode when reviewing test code (selector stability, deterministic data, condition-based waits, assertion meaningfulness, isolation).
+- **`code-reviewer` iteration convergence rule (`CODE_REVIEWER_MAX_ROUNDS`, default `3`).** Blocker+major finding count must strictly decrease between rounds; non-converging loops escalate to the user instead of grinding indefinitely or silently downgrading blockers.
+- **`code-reviewer` devil's-advocate self-rebuttal** before any `PASS` verdict, attacking your own conclusion against silent data loss, lost-update / race conditions, auth bypass, secret/PII leakage, broken migration, breaking API contract, and regression risk.
+- **`test-automation-engineer` invokes `code-reviewer`** in `test-quality` mode on its own test code, plus a flake-budget rule (≥20 repeat executions in CI before merge), explicit anti-pattern list (`Thread.sleep`, `cy.wait(N)`, `time.sleep`, hard-coded dates, ordering-dependent fixtures, shared mutable test data, blind retries), and links to the originating `issue-investigator` recipe for regression-derived tests.
+- **`manual-tester` safe reproduction protocol** mirroring `issue-investigator`, plus a defect-template _investigator handoff_ field, mandatory commit-SHA in defect reports, replayable artifact preference (HAR / Playwright trace / Cypress recording), and time-boxed exploratory charters.
+- **`product-owner` routes bug-flavored input through `issue-investigator` first.** Support tickets, incidents, regression complaints, etc. are not turned into acceptance criteria until investigation results are in hand — closes a guessing path that previously let the PO invent "actual behavior".
+- **`product-owner` Definition-of-Ready gate** before producing the Jira-ready output (goal stated, investigator result attached for bug-flavored input, observable/testable ACs with at least one negative criterion, scope explicit, feasibility note attached for API/migration/security/shared-library work, open questions listed).
+- **`product-owner` requires at least one negative AC** (`Given X, the system MUST NOT Y`) per work item.
+- **`product-owner` feasibility-note artifact** (effort tier, key risks, breaking-change y/n) from `software-engineer` before locking acceptance criteria.
+
+### Changed
+- README status banner bumped to `0.4.0`.
+- All six `SKILL.md` files: `metadata.version` bumped to `0.4.0`.
+
 ## 0.3.0 - Spec Alignment And Slim README
 
 ### Added
