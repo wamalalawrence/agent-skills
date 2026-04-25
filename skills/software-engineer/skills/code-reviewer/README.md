@@ -25,4 +25,4 @@ See [SKILL.md](./SKILL.md) for the full workflow.
 
 ## Required environment
 
-See [SKILL.md](./SKILL.md#required-environment). Minimum: `WORKSPACE_ROOT`, `PROJECTS_JSON`, `GITHUB_DEFAULT_BRANCH`, and `CODE_REVIEWER_MODEL`.
+Run [`../../../../setup.init`](../../../../setup.init) from the `agent-skills` folder for the simplest setup path. See [SKILL.md](./SKILL.md#required-environment) for details. Minimum for repository-aware review: `WORKSPACE_ROOT`, `PROJECTS_JSON`, and `GITHUB_DEFAULT_BRANCH`. `CODE_REVIEWER_MODEL` is optional when the host uses its default model routing.

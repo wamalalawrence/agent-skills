@@ -5,8 +5,9 @@
 # Keep this file only if you want a project- or workspace-specific default
 # project, board, or epic preselected for the CLI.
 #
-# Copy to `.jira-config.yml` in your workspace root and adjust. The real
-# `.jira-config.yml` is gitignored.
+# Prefer running `./setup.init` and choosing Jira setup. It copies this file to
+# `.jira-config.yml` in your workspace root. You can still copy it manually when
+# you want full control. The real `.jira-config.yml` is gitignored.
 #
 # If a Jira ticket is in scope and neither this file nor the Jira environment
 # variables are usable, skills must warn and stop instead of guessing from an
