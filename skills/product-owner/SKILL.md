@@ -1,6 +1,12 @@
 ---
 name: product-owner
 description: 'Product ownership workflow for turning product goals, stakeholder needs, Jira tickets, and rough ideas into clear, testable, implementation-ready work. Use when: clarifying goals, refining requirements, defining scope, writing acceptance criteria, preparing Jira-ready stories or tasks, or handing work to engineering and testing. Collaborates with software-engineer for feasibility and tradeoffs, manual-tester for scenario coverage, and test-automation-engineer for automation-friendly acceptance criteria.'
+license: MIT
+compatibility: Works with any agent that supports the Agent Skills format (Claude Code, Cursor, Windsurf, Continue, GitHub Copilot Chat, ChatGPT, etc.). Expects workspace `.env` populated by setup.init.
+metadata:
+  author: wamalalawrence
+  version: "0.3.0"
+  homepage: "https://github.com/wamalalawrence/agent-skills"
 ---
 
 # Product Owner

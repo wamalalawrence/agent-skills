@@ -1,6 +1,12 @@
 ---
 name: software-engineer
 description: 'Senior-level pair-programming workflow for software engineering work. Use when: making code changes, bug fixes, refactors, feature implementation, issue-description driven fixes, code review, PR preparation, migration scripts, API changes, or security review. Connects implementation, review, and issue resolution in one context-aware loop. Uses compact project and issue context first, then expands only when risk or ambiguity requires it. Invokes the nested code-reviewer skill at the end of Implementation and again at the end of QA. Reuses issue-investigator when issue context, root cause, or expected behavior needs deeper evidence.'
+license: MIT
+compatibility: Works with any agent that supports the Agent Skills format (Claude Code, Cursor, Windsurf, Continue, GitHub Copilot Chat, ChatGPT, etc.). Expects workspace `.env` populated by setup.init.
+metadata:
+  author: wamalalawrence
+  version: "0.3.0"
+  homepage: "https://github.com/wamalalawrence/agent-skills"
 ---
 
 # Software Engineer
