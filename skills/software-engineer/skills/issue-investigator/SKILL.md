@@ -5,7 +5,7 @@ license: MIT
 compatibility: Works with any agent that supports the Agent Skills format (Claude Code, Cursor, Windsurf, Continue, GitHub Copilot Chat, ChatGPT, etc.). Expects workspace `.env` populated by setup.init. Optional Jira CLI integration when `.jira-config.yml` is present.
 metadata:
   author: wamalalawrence
-  version: "0.4.0"
+  version: "0.5.0"
   homepage: "https://github.com/wamalalawrence/agent-skills"
 argument-hint: 'issue URL/key, bug report, incident, support ticket, feature request, or task description plus affected repo/service/environment'
 user-invocable: true
@@ -137,7 +137,11 @@ Never reproduce a defect against live production data or by mutating shared stat
 3. Replayed input only: HAR file, recorded log slice, captured request/response pair, or anonymized payload.
 4. Read-only inspection of the affected environment (`SET TRANSACTION READ ONLY`, `--dry-run`, read-replica, snapshot DB) when no other option reproduces it.
 
-For each reproduction attempt, record: environment chosen, exact commands and inputs, observed output, and a deterministic recipe (env vars + commands + expected log lines) that another agent or human can replay verbatim. Hand that recipe to [`software-engineer`](../../SKILL.md) and [`test-automation-engineer`](../../../test-automation-engineer/SKILL.md) so it can become the failing regression test before any fix is written.
+For each reproduction attempt, record: environment chosen, exact commands and inputs, observed output, and a deterministic recipe (env vars + commands + expected log lines) that another agent or human can replay verbatim. Persist the recipe to `${WORKSPACE_ROOT}/.cache/agent-skills/<issue-key>/repro-recipe.yml` per the [evidence-pack & repro-recipe schema](../../references/evidence-pack.md). Hand that recipe to [`software-engineer`](../../SKILL.md) and [`test-automation-engineer`](../../../test-automation-engineer/SKILL.md) so it can become the failing regression test before any fix is written.
+
+#### Evidence-pack output
+
+Persist the full investigation result to `${WORKSPACE_ROOT}/.cache/agent-skills/<issue-key>/evidence-pack.yml` per the [evidence-pack schema](../../references/evidence-pack.md). At minimum populate `issue_*`, `project`, `expected_behavior`, `actual_behavior`, `investigation` (root-cause status, evidence, hypotheses considered, confidence, what-would-change-my-mind), and `risk_areas`. Subsequent skills append to this file rather than re-deriving the context.
 
 #### Three-hypothesis discipline
 

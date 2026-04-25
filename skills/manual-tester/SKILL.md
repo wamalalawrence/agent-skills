@@ -5,7 +5,7 @@ license: MIT
 compatibility: Works with any agent that supports the Agent Skills format (Claude Code, Cursor, Windsurf, Continue, GitHub Copilot Chat, ChatGPT, etc.). Expects workspace `.env` populated by setup.init.
 metadata:
   author: wamalalawrence
-  version: "0.4.0"
+  version: "0.5.0"
   homepage: "https://github.com/wamalalawrence/agent-skills"
 ---
 
@@ -92,7 +92,7 @@ For each defect, include:
 - Evidence: screenshot, screen recording, request/response, console error, log excerpt, or data state where useful. Replayable artifacts (HAR, Playwright trace, Cypress recording) are strongly preferred over text-only steps because they let [`test-automation-engineer`](../test-automation-engineer/SKILL.md) seed a regression test directly.
 - Scope: how often it happens, affected users, affected browsers/devices, affected roles, or affected data.
 - Retest guidance.
-- **Investigator handoff:** the smallest set of facts [`issue-investigator`](../software-engineer/skills/issue-investigator/SKILL.md) needs to start — environment, build SHA, deterministic recipe, expected vs actual, and any logs/correlation ids you already collected.
+- **Investigator handoff:** the smallest set of facts [`issue-investigator`](../software-engineer/skills/issue-investigator/SKILL.md) needs to start — environment, build SHA, deterministic recipe, expected vs actual, and any logs/correlation ids you already collected. When you have a reproducible defect, write the recipe to `${WORKSPACE_ROOT}/.cache/agent-skills/<issue-key>/repro-recipe.yml` per the [evidence-pack & repro-recipe schema](../software-engineer/references/evidence-pack.md) so the engineer and `test-automation-engineer` can replay it without re-investigation.
 
 #### Safe reproduction protocol
 

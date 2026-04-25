@@ -5,7 +5,7 @@ license: MIT
 compatibility: Works with any agent that supports the Agent Skills format (Claude Code, Cursor, Windsurf, Continue, GitHub Copilot Chat, ChatGPT, etc.). Expects workspace `.env` populated by setup.init.
 metadata:
   author: wamalalawrence
-  version: "0.4.0"
+  version: "0.5.0"
   homepage: "https://github.com/wamalalawrence/agent-skills"
 argument-hint: 'optional: mode inner|outer, base branch, issue key/URL, PR URL, or task description'
 user-invocable: true
@@ -101,17 +101,18 @@ If required setup is missing, output:
 
 #### Hard handoff contract from the engineer
 
-When invoked from [`software-engineer`](../../SKILL.md) (inner or outer loop), expect this evidence pack and call it out as a finding when missing:
+When invoked from [`software-engineer`](../../SKILL.md) (inner or outer loop), read `${WORKSPACE_ROOT}/.cache/agent-skills/<issue-key>/evidence-pack.yml` per the [evidence-pack schema](../../references/evidence-pack.md) and expect every required field. Surface a `major` finding when any of the following is missing or empty:
 
-- Project entry from `${PROJECTS_JSON}` (name, stack, base branch, validation commands).
-- Issue brief: ticket key/URL, summary, acceptance criteria, expected vs actual behavior.
-- Root-cause confidence from [`issue-investigator`](../issue-investigator/SKILL.md), if the change is a bug fix or regression.
-- For bug fixes: the failing-regression-test commit hash. The reviewer must verify the test fails on the parent commit and passes on HEAD (`--repro-verify` mode).
-- The 5-line plan from the engineer (Problem · Hypothesis · Smallest change · Risk · Validation).
-- Risk areas the engineer wants extra attention on.
-- Inner-loop only: list of changes since the last review round so the reviewer can focus on the delta (`--since-last-review`).
+- `project` block (name, stack, base_branch, build_command).
+- `issue_url`, `summary`, `expected_behavior`, `acceptance_criteria`.
+- `investigation.root_cause_status` and `investigation.confidence`, when the change is a bug fix or regression. Stop and invoke [`issue-investigator`](../issue-investigator/SKILL.md) when these are absent.
+- `plan` (the engineer's 5-line plan: problem · hypothesis · smallest change · risk · validation).
+- `risk_areas`.
+- For bug fixes: a referenced **failing-regression-test commit** that fails on the commit's parent and passes on HEAD (`--repro-verify` mode). Cross-check with `repro-recipe.yml` if present.
+- For outer-loop or PR review: `${WORKSPACE_ROOT}/.cache/agent-skills/<issue-key>/definition-of-done.json` per the [Definition of Done schema](../../references/definition-of-done.md). Any `false` flag without a written waiver is itself a `blocker`.
+- Inner-loop only: `--since-last-review` delta so the reviewer focuses on changes since the previous round, not the whole staged diff again.
 
-If the evidence pack is missing or thin, surface this as a `major` finding before continuing — the reviewer should not silently re-derive context the engineer is responsible for providing.
+If the evidence pack is missing entirely, the reviewer must not re-derive context silently — it surfaces the missing handoff as a `major` finding and asks the engineer to produce it before the loop continues.
 
 ### 2. Build issue-aware context first
 

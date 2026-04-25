@@ -4,6 +4,26 @@ All notable project changes should be recorded here.
 
 ## Unreleased
 
+## 0.5.0 - Evidence Pack, Definition of Done, Honest Contribution Framing
+
+The infrastructure half of the v0.4.0 plan (G1, G2, G9, G10) plus an honesty pass on the contribution/governance/support docs.
+
+### Added
+- **`skills/software-engineer/references/evidence-pack.md`** — the schema for `evidence-pack.yml` and `repro-recipe.yml`. Cached at `${WORKSPACE_ROOT}/.cache/agent-skills/<issue-key>/`. Defines what each skill reads and writes so `issue-investigator`, `software-engineer`, `code-reviewer`, `manual-tester`, `test-automation-engineer`, and `product-owner` stop re-deriving context on every hop.
+- **`skills/software-engineer/references/definition-of-done.md`** — the schema for `definition-of-done.json`, the Phase 5 gate artifact the reviewer must verify before declaring `PASS`. Includes bug-fix-specific fields (regression-test commit, fails-on-parent, passes-on-head, observability_added) and operational hygiene flags (`no_no_verify`, `branch_starts_with_ticket_key`, `no_unrelated_files`).
+- **`software-engineer` Phase 5.3 — Definition-of-Done artifact step.** The engineer now writes the DoD JSON before opening the PR; `--no-verify` is explicitly forbidden without a written waiver.
+- **`software-engineer` Phase 1.4 + 1.5** persist the 5-line plan and reference the repro recipe path in the evidence pack.
+- **`code-reviewer` hard handoff contract** now reads from the on-disk evidence pack and DoD artifact and surfaces specific missing fields as `major` findings; any `false` flag in the DoD without a waiver is itself a `blocker`.
+- **`issue-investigator`** now persists the full investigation result and repro recipe to the cache so downstream skills can consume them directly.
+- **`test-automation-engineer`** seeds regression tests directly from `repro-recipe.yml` (`prerequisites`, `steps`, `expected_observation`, `post_fix_observation`).
+- **`manual-tester`** writes its repro recipe to the same shared file when the defect is reproducible.
+- **`product-owner`** writes refined `acceptance_criteria` back to the shared evidence pack.
+
+### Changed
+- **README, CONTRIBUTING.md, GOVERNANCE.md, SUPPORT.md rewritten to drop the welcoming-but-ignored contradiction.** The project is solo-maintained and exists primarily for the maintainer's own engineering work, shared as a public good. Issues and PRs are not actively solicited; forking is the recommended path for divergent needs. The new files set realistic expectations up front instead of implying a contributor pipeline that does not exist.
+- README status banner bumped to `0.5.0`.
+- All six `SKILL.md` files: `metadata.version` bumped to `0.5.0`.
+
 ## 0.4.0 - Accuracy & Cross-Skill Collaboration
 
 Anchored to the engineering fundamentals the skills are meant to enforce: full context awareness, no guessing, real root-cause investigation, safe-environment reproduction, and engineer↔reviewer pair-programming.

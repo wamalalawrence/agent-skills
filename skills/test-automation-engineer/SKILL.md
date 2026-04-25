@@ -5,7 +5,7 @@ license: MIT
 compatibility: Works with any agent that supports the Agent Skills format (Claude Code, Cursor, Windsurf, Continue, GitHub Copilot Chat, ChatGPT, etc.). Expects workspace `.env` populated by setup.init.
 metadata:
   author: wamalalawrence
-  version: "0.4.0"
+  version: "0.5.0"
   homepage: "https://github.com/wamalalawrence/agent-skills"
 ---
 
@@ -100,7 +100,7 @@ If behavior is not stable or expected outcomes are unclear, ask [`product-owner`
 - Share automation candidates and gaps with [`manual-tester`](../manual-tester/SKILL.md) and product-risk gaps with [`product-owner`](../product-owner/SKILL.md).
 - **Invoke [`code-reviewer`](../software-engineer/skills/code-reviewer/SKILL.md) in `manual` mode with the `test-quality` profile on the new or modified test files.** Test code is production code; selector instability, fixed sleeps, ordering coupling, and weak assertions cause the next three incidents.
 - For new e2e or integration tests, run them with a **flake budget**: at least 20 repeat executions in CI before merging (e.g., `--repeat-each=20`, `pytest --count=20`, `mvn -Dsurefire.rerunFailingTestsCount=0` with a repeat plugin). Any failure must be fixed or quarantined with a linked follow-up ticket — silent quarantine is forbidden.
-- For regression tests that originated from an [`issue-investigator`](../software-engineer/skills/issue-investigator/SKILL.md) reproduction recipe, link the investigation result and the introducing commit (when the defect was a regression) in the test's docstring or a code comment.
+- For regression tests that originated from an [`issue-investigator`](../software-engineer/skills/issue-investigator/SKILL.md) reproduction recipe, read `${WORKSPACE_ROOT}/.cache/agent-skills/<issue-key>/repro-recipe.yml` per the [evidence-pack & repro-recipe schema](../software-engineer/references/evidence-pack.md), use its `prerequisites`, `steps`, `expected_observation`, and `post_fix_observation` to seed the test, and link the investigation result and the introducing commit (when the defect was a regression) in the test's docstring or a code comment.
 
 ## Expected Outputs
 

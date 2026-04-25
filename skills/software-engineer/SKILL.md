@@ -5,7 +5,7 @@ license: MIT
 compatibility: Works with any agent that supports the Agent Skills format (Claude Code, Cursor, Windsurf, Continue, GitHub Copilot Chat, ChatGPT, etc.). Expects workspace `.env` populated by setup.init.
 metadata:
   author: wamalalawrence
-  version: "0.4.0"
+  version: "0.5.0"
   homepage: "https://github.com/wamalalawrence/agent-skills"
 ---
 
@@ -163,14 +163,14 @@ Use the locally installed CLI first, fall back to direct REST only when the CLI 
 - [ ] Identify any service that depends on this repo and could be affected.
 - [ ] For meaningful API or interface changes: design first, share the contract, discuss with the team, then implement.
 - [ ] If product intent or acceptance criteria are unclear, pause and use [`product-owner`](../product-owner/SKILL.md) before writing code.
-- [ ] **Present a brief plan with actionable findings BEFORE writing code.** Use this 5-line structure so the reviewer can later check the diff against it: _Problem · Hypothesis · Smallest change · Risk · Validation._
+- [ ] **Present a brief plan with actionable findings BEFORE writing code.** Use this 5-line structure so the reviewer can later check the diff against it: _Problem · Hypothesis · Smallest change · Risk · Validation._ Persist it as the `plan` block of `${WORKSPACE_ROOT}/.cache/agent-skills/<issue-key>/evidence-pack.yml` per the [evidence-pack schema](./references/evidence-pack.md). If `issue-investigator` already wrote the file, append to it; do not overwrite the investigation block.
 - [ ] For ambiguous, high-risk, or user-facing changes, get confirmation before proceeding. For clearly specified low-risk changes, continue after stating the plan.
 
 ### 1.5 Reproduce-before-fix gate (bug fixes only)
 
 For any bug fix, regression, or production incident, do not write the fix until you can reproduce the defect deterministically.
 
-- [ ] Use [`issue-investigator`](./skills/issue-investigator/SKILL.md) to confirm root cause and capture a deterministic reproduction recipe in a safe environment (local, sandbox, snapshot, or replayed input — never against live production data).
+- [ ] Use [`issue-investigator`](./skills/issue-investigator/SKILL.md) to confirm root cause and capture a deterministic reproduction recipe in a safe environment (local, sandbox, snapshot, or replayed input — never against live production data). The recipe lives at `${WORKSPACE_ROOT}/.cache/agent-skills/<issue-key>/repro-recipe.yml` per the [evidence-pack & repro-recipe schema](./references/evidence-pack.md).
 - [ ] **Write the failing regression test FIRST.** Commit it as the first commit on the branch (e.g., `test: failing test for <TICKET>`). The test must fail on the parent commit and pass on the fix commit. The reviewer will verify this by checking out the parent.
 - [ ] If the bug cannot be reproduced or no failing test can be written, escalate via `issue-investigator`'s _Recommended Next Action_ instead of guessing at a fix.
 - [ ] Skip this gate only for: pure refactors, formatting, docs, or new features without a reported defect — and say so explicitly in the plan.
@@ -347,13 +347,23 @@ Address remaining findings, then proceed.
 
 - [ ] Commit message format hint: `${GIT_COMMIT_MSG_FORMAT}` — typically `<TICKET> <Brief description>`.
 - [ ] Stage only relevant files — no IDE configs, no unrelated changes.
+- [ ] Never bypass git hooks (`--no-verify`) without an explicit user-approved waiver recorded in the Definition-of-Done artifact.
 
 ### 5.2 Conflict resolution
 
 - [ ] If resolving merge conflicts: ensure **both** your branch and the base branch are up-to-date with remote.
 - [ ] After conflict resolution, re-run the full build to confirm nothing broke.
 
-### 5.3 Pull request
+### 5.3 Definition-of-Done artifact
+
+Write `${WORKSPACE_ROOT}/.cache/agent-skills/<issue-key>/definition-of-done.json` per [definition-of-done.md](./references/definition-of-done.md). The reviewer reads this file as part of its hard-handoff contract and must not declare `PASS` if any `false` flag is missing a written waiver.
+
+- [ ] Build, tests, format, lint/static analysis, security scan all `passed: true` or explicitly waived.
+- [ ] For bug fixes: `bug_fix.is_bug_fix: true`, `regression_test_commit` set, `fails_on_parent: true`, `passes_on_head: true`, `repro_recipe_path` populated, `observability_added` set honestly.
+- [ ] `git.no_no_verify: true` and `git.branch_starts_with_ticket_key: true` for ticket-driven work.
+- [ ] `scope.shared_library_changed` truthful; if `true`, list affected downstream consumers.
+
+### 5.4 Pull request
 
 - [ ] PR title follows the same format as the commit.
 - [ ] PR description explains: **what** changed, **why**, and **how it was tested**.
@@ -379,6 +389,8 @@ Behaviour is configured by `${CODE_REVIEWER_BLOCKING}` (default `false` = adviso
 
 ## Reference files
 
+- [Evidence pack & repro recipe](./references/evidence-pack.md) — cross-skill handoff schema (consumed by every skill in the loop)
+- [Definition of Done](./references/definition-of-done.md) — Phase 5 gate artifact verified by the reviewer
 - [Code review checklist](./references/code-review-checklist.md) — full self-review and PR review checklist
 - [Security checklist](./references/security-checklist.md) — OWASP-aligned security review items
 - [SonarQube checklist](./references/sonarqube-checklist.md) — quality gate items to check before commit
