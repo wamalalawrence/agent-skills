@@ -5,7 +5,7 @@ license: MIT
 compatibility: Works with any agent that supports the Agent Skills format (Claude Code, Cursor, Windsurf, Continue, GitHub Copilot Chat, ChatGPT, etc.). Expects workspace `.env` populated by setup.init.
 metadata:
   author: wamalalawrence
-  version: "0.3.0"
+  version: "0.4.0"
   homepage: "https://github.com/wamalalawrence/agent-skills"
 ---
 
@@ -163,8 +163,17 @@ Use the locally installed CLI first, fall back to direct REST only when the CLI 
 - [ ] Identify any service that depends on this repo and could be affected.
 - [ ] For meaningful API or interface changes: design first, share the contract, discuss with the team, then implement.
 - [ ] If product intent or acceptance criteria are unclear, pause and use [`product-owner`](../product-owner/SKILL.md) before writing code.
-- [ ] **Present a brief plan with actionable findings BEFORE writing code.**
+- [ ] **Present a brief plan with actionable findings BEFORE writing code.** Use this 5-line structure so the reviewer can later check the diff against it: _Problem · Hypothesis · Smallest change · Risk · Validation._
 - [ ] For ambiguous, high-risk, or user-facing changes, get confirmation before proceeding. For clearly specified low-risk changes, continue after stating the plan.
+
+### 1.5 Reproduce-before-fix gate (bug fixes only)
+
+For any bug fix, regression, or production incident, do not write the fix until you can reproduce the defect deterministically.
+
+- [ ] Use [`issue-investigator`](./skills/issue-investigator/SKILL.md) to confirm root cause and capture a deterministic reproduction recipe in a safe environment (local, sandbox, snapshot, or replayed input — never against live production data).
+- [ ] **Write the failing regression test FIRST.** Commit it as the first commit on the branch (e.g., `test: failing test for <TICKET>`). The test must fail on the parent commit and pass on the fix commit. The reviewer will verify this by checking out the parent.
+- [ ] If the bug cannot be reproduced or no failing test can be written, escalate via `issue-investigator`'s _Recommended Next Action_ instead of guessing at a fix.
+- [ ] Skip this gate only for: pure refactors, formatting, docs, or new features without a reported defect — and say so explicitly in the plan.
 
 ---
 
@@ -231,6 +240,8 @@ After the implementation is functional locally and the staged diff is what you i
 - Diff scope: staged changes only (`git diff --staged`).
 - Severities surfaced: `${CODE_REVIEWER_INNER_LOOP_SEVERITIES}` (default `blocker,major`).
 - Blocking behaviour: respect `${CODE_REVIEWER_BLOCKING}` — when `true`, do not move to Phase 3 until blocker findings are addressed or explicitly waived with a written justification.
+- Iteration cap: respect `${CODE_REVIEWER_MAX_ROUNDS}` (default `3`). Each round must produce strictly fewer blocker/major findings than the previous one. If the loop is not converging, stop and surface a "not converging" summary to the user instead of grinding indefinitely.
+- For bug fixes, reference the failing-test commit from Phase 1.5 in the evidence pack so the reviewer can verify it fails on the parent commit and passes on the fix.
 
 The reviewer's output goes back to the user; address the findings, then proceed.
 
@@ -312,6 +323,7 @@ Address remaining findings, then proceed.
 - [ ] Edge cases handled?
 - [ ] Error messages clear and helpful?
 - [ ] Logging appropriate (not too verbose, not too sparse)?
+- [ ] **If this defect was hard to investigate because evidence was missing, did the fix add the missing log, metric, or correlation id that would make the next occurrence obvious?**
 - [ ] No horizontal-scaling pitfalls (in-memory state, local-only locks, non-distributed caches)?
 - [ ] No `@SuppressWarnings` / `// eslint-disable` / `# noqa` without documented justification?
 - [ ] No `TODO`/`FIXME` left without a linked ticket?

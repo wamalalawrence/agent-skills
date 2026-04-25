@@ -5,7 +5,7 @@ license: MIT
 compatibility: Works with any agent that supports the Agent Skills format (Claude Code, Cursor, Windsurf, Continue, GitHub Copilot Chat, ChatGPT, etc.). Expects workspace `.env` populated by setup.init.
 metadata:
   author: wamalalawrence
-  version: "0.3.0"
+  version: "0.4.0"
   homepage: "https://github.com/wamalalawrence/agent-skills"
 ---
 
@@ -60,6 +60,7 @@ If the user only provides a broad idea, first ask focused clarification question
 - Identify the user or stakeholder outcome, not just the requested feature.
 - Separate confirmed facts from assumptions and unknowns.
 - If the work is a defect, capture expected behavior, actual behavior, affected users, and business impact.
+- **If the input is a support ticket, incident report, regression complaint, or any bug-flavored request, route it through [`issue-investigator`](../software-engineer/skills/issue-investigator/SKILL.md) FIRST** to confirm whether the actual behavior is a defect, a configuration issue, a misunderstanding, or already-fixed work. Do not invent the "actual behavior" or write acceptance criteria for a fix until the investigation result is in hand.
 
 ### 2. Understand users and stakeholders
 
@@ -83,16 +84,28 @@ If the user only provides a broad idea, first ask focused clarification question
 ### 5. Write requirements and acceptance criteria
 
 - Use clear business language first; include technical wording only when it affects product behavior or constraints.
-- Write acceptance criteria that are observable, testable, and unambiguous.
-- Include happy paths, important edge cases, negative paths, permissions, validation, data states, and error handling.
-- Use Given/When/Then when it improves precision, but do not force it when bullet criteria are clearer.
+- Write acceptance criteria that are observable, testable, and unambiguous. Each AC must be phrased so a manual or automated test could decide pass/fail without re-interviewing the author. Use Given/When/Then when it improves precision; otherwise use observable bullet criteria. Reject phrasing like "works as expected" or "user-friendly".
+- Include happy paths, important edge cases, **at least one negative criterion** (`Given X, the system MUST NOT Y`), permissions, validation, data states, and error handling. Most accuracy bugs come from missing negative paths.
 - Include non-functional requirements when relevant: performance, accessibility, privacy, auditability, reliability, compatibility, localization, or operational visibility.
 
 ### 6. Collaborate before handoff
 
-- Ask [`software-engineer`](../software-engineer/SKILL.md) to assess feasibility, technical risk, implementation impact, and major tradeoffs when the request touches APIs, migrations, integrations, security, shared libraries, or unclear architecture.
+- Ask [`software-engineer`](../software-engineer/SKILL.md) to assess feasibility, technical risk, implementation impact, and major tradeoffs when the request touches APIs, migrations, integrations, security, shared libraries, or unclear architecture. Capture the result as a 1-paragraph **feasibility note** (effort tier S/M/L, key risks, breaking change y/n) attached to the work item before locking acceptance criteria.
 - Ask [`manual-tester`](../manual-tester/SKILL.md) to review acceptance criteria for testability and missing scenarios when behavior is complex or user-facing.
-- Ask [`test-automation-engineer`](../test-automation-engineer/SKILL.md) to flag automation candidates and criteria that need stable identifiers, deterministic data, or clearer observable outcomes.
+- Ask [`test-automation-engineer`](../test-automation-engineer/SKILL.md) to flag automation candidates and criteria that need stable identifiers (test ids, deterministic data, observable outcomes). Stable test hooks are easier to add during refinement than retrofitted later.
+
+#### Definition of Ready (gate before handoff)
+
+Do not produce the Jira-ready output in step 7 until all of these are true:
+
+- Goal, target users, and business value are stated.
+- For bug-flavored input: the [`issue-investigator`](../software-engineer/skills/issue-investigator/SKILL.md) result is attached and root-cause confidence is at least `suspected`.
+- Acceptance criteria are observable/testable, include at least one negative criterion, and cover the relevant edge cases.
+- In-scope and out-of-scope are explicit.
+- Feasibility note from [`software-engineer`](../software-engineer/SKILL.md) is attached for any work touching APIs, migrations, security, or shared libraries.
+- All open questions and assumptions are listed (acceptable to ship as `Spike` or `Discovery` if too many remain).
+
+If any DoR item fails, return the work to refinement instead of handing it off.
 
 ### 7. Prepare Jira-ready output
 

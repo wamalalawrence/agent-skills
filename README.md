@@ -2,7 +2,7 @@
 
 Reusable [Agent Skills](https://agentskills.io/) for software-engineering work — portable, role-shaped workflows your AI assistant can load on demand so the same model produces senior-engineer, product-owner, tester, or reviewer output instead of generic answers.
 
-> **Status:** `0.3.0` — pre-1.0. Core skill set is shipped and stable enough for public use; interfaces may still evolve.
+> **Status:** `0.4.0` — pre-1.0. Core skill set is shipped and stable enough for public use; interfaces may still evolve.
 
 ## Why Skills
 
@@ -33,12 +33,38 @@ See [docs/installation.md](docs/installation.md) for the recommended workspace l
 
 ## Skills
 
-| Role | Nested skills | Purpose |
+The four top-level roles work as one engineering loop, not isolated tools. Each skill explicitly hands off to the others when context, evidence, validation, or scope is missing — see each skill's _Related And Reused Skills_ section for the exact rules.
+
+| Role | Reuses / collaborates with | Purpose |
 |---|---|---|
-| [`software-engineer`](skills/software-engineer/) | [`issue-investigator`](skills/software-engineer/skills/issue-investigator/), [`code-reviewer`](skills/software-engineer/skills/code-reviewer/) | End-to-end engineering: context discovery, implementation, QA, self-review, PR preparation. |
-| [`product-owner`](skills/product-owner/) | — | Clarifies goals, requirements, scope, acceptance criteria, UX concerns, handoff notes. |
-| [`manual-tester`](skills/manual-tester/) | — | Plans and executes manual validation, exploratory testing, defect reporting, retest guidance. |
-| [`test-automation-engineer`](skills/test-automation-engineer/) | — | Designs stable automated tests at the right level and prevents brittle automation. |
+| [`software-engineer`](skills/software-engineer/) | nested [`issue-investigator`](skills/software-engineer/skills/issue-investigator/) + [`code-reviewer`](skills/software-engineer/skills/code-reviewer/); calls `product-owner`, `manual-tester`, `test-automation-engineer` | End-to-end engineering: context discovery, implementation, QA, self-review, PR preparation. |
+| [`product-owner`](skills/product-owner/) | calls `software-engineer` (feasibility), `manual-tester` (testability), `test-automation-engineer` (automation-friendly ACs); routes bug-flavored input through `issue-investigator` first | Clarifies goals, requirements, scope, acceptance criteria, UX concerns, handoff notes. |
+| [`manual-tester`](skills/manual-tester/) | calls `product-owner`, `software-engineer`, `test-automation-engineer`; uses `issue-investigator` for safe defect reproduction | Plans and executes manual validation, exploratory testing, defect reporting, retest guidance. |
+| [`test-automation-engineer`](skills/test-automation-engineer/) | calls `software-engineer` (conventions), `manual-tester` (real scenarios), `product-owner` (ACs); calls `code-reviewer` on its own test code | Designs stable automated tests at the right level and prevents brittle automation. |
+
+Diagram of the actual collaboration graph:
+
+```
+              ┌──────────────────┐
+              │  product-owner   │
+              └─────┬──────┬─────┘
+                    │      │
+       ┌────────────┘      └────────────┐
+       ▼                                 ▼
+┌──────────────────┐  pair-programs  ┌──────────────────┐
+│ software-engineer│ ◄────────────► │  code-reviewer   │
+└─┬──────────┬─────┘                 └────────┬─────────┘
+  │          │                                 │
+  │          ▼                                 │
+  │   ┌──────────────────┐  evidence/repro    │
+  │   │ issue-investigator│ ──────────────────►│
+  │   └─────────┬────────┘                    │
+  │             │                              │
+  ▼             ▼                              ▼
+┌──────────────────┐  regression candidates ┌──────────────────────────┐
+│  manual-tester   │ ─────────────────────► │ test-automation-engineer │
+└──────────────────┘                         └──────────────────────────┘
+```
 
 ## Documentation
 

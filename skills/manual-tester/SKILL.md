@@ -5,7 +5,7 @@ license: MIT
 compatibility: Works with any agent that supports the Agent Skills format (Claude Code, Cursor, Windsurf, Continue, GitHub Copilot Chat, ChatGPT, etc.). Expects workspace `.env` populated by setup.init.
 metadata:
   author: wamalalawrence
-  version: "0.3.0"
+  version: "0.4.0"
   homepage: "https://github.com/wamalalawrence/agent-skills"
 ---
 
@@ -84,14 +84,19 @@ If expected behavior is unclear, stop and ask [`product-owner`](../product-owner
 For each defect, include:
 
 - Title and severity based on user or business impact.
-- Environment and build/version.
-- Preconditions and test data.
-- Steps to reproduce.
+- Environment and build/version (include the **commit SHA** so the engineer can `git checkout <sha>` and reproduce on the exact build).
+- Preconditions and test data (anonymized; never real customer data).
+- Steps to reproduce, captured via the safe-reproduction protocol below where applicable.
 - Expected behavior.
 - Actual behavior.
-- Evidence: screenshot, screen recording, request/response, console error, log excerpt, or data state where useful.
+- Evidence: screenshot, screen recording, request/response, console error, log excerpt, or data state where useful. Replayable artifacts (HAR, Playwright trace, Cypress recording) are strongly preferred over text-only steps because they let [`test-automation-engineer`](../test-automation-engineer/SKILL.md) seed a regression test directly.
 - Scope: how often it happens, affected users, affected browsers/devices, affected roles, or affected data.
 - Retest guidance.
+- **Investigator handoff:** the smallest set of facts [`issue-investigator`](../software-engineer/skills/issue-investigator/SKILL.md) needs to start — environment, build SHA, deterministic recipe, expected vs actual, and any logs/correlation ids you already collected.
+
+#### Safe reproduction protocol
+
+Mirror the [`issue-investigator`](../software-engineer/skills/issue-investigator/SKILL.md) protocol. Reproduce in the cheapest safe environment that still shows the defect (local stack → ephemeral env → read-only inspection of the affected env). Do not mutate production data. Use anonymized fixtures. Time-box exploratory charters (e.g., 30-minute boxes) so investigation does not silently expand.
 
 ### 6. Summarize validation and retest needs
 

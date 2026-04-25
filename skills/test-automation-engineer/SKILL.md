@@ -5,7 +5,7 @@ license: MIT
 compatibility: Works with any agent that supports the Agent Skills format (Claude Code, Cursor, Windsurf, Continue, GitHub Copilot Chat, ChatGPT, etc.). Expects workspace `.env` populated by setup.init.
 metadata:
   author: wamalalawrence
-  version: "0.3.0"
+  version: "0.4.0"
   homepage: "https://github.com/wamalalawrence/agent-skills"
 ---
 
@@ -98,6 +98,9 @@ If behavior is not stable or expected outcomes are unclear, ask [`product-owner`
 - Remove duplicate checks that add runtime without adding confidence.
 - Document what remains manual and why.
 - Share automation candidates and gaps with [`manual-tester`](../manual-tester/SKILL.md) and product-risk gaps with [`product-owner`](../product-owner/SKILL.md).
+- **Invoke [`code-reviewer`](../software-engineer/skills/code-reviewer/SKILL.md) in `manual` mode with the `test-quality` profile on the new or modified test files.** Test code is production code; selector instability, fixed sleeps, ordering coupling, and weak assertions cause the next three incidents.
+- For new e2e or integration tests, run them with a **flake budget**: at least 20 repeat executions in CI before merging (e.g., `--repeat-each=20`, `pytest --count=20`, `mvn -Dsurefire.rerunFailingTestsCount=0` with a repeat plugin). Any failure must be fixed or quarantined with a linked follow-up ticket — silent quarantine is forbidden.
+- For regression tests that originated from an [`issue-investigator`](../software-engineer/skills/issue-investigator/SKILL.md) reproduction recipe, link the investigation result and the introducing commit (when the defect was a regression) in the test's docstring or a code comment.
 
 ## Expected Outputs
 
@@ -144,6 +147,7 @@ Use the smallest useful format for the request.
 
 - Do not automate unclear, unstable, or purely subjective behavior.
 - Do not rely on fixed sleeps, random production-like data, test order, or private customer data.
+- Anti-pattern list (call out as findings): `Thread.sleep`, `cy.wait(N)` with a fixed number, `time.sleep`, `setTimeout` waits, hard-coded dates that drift, ordering-dependent fixtures, shared mutable test data, blind retry loops to mask flakiness.
 - Do not hit real third-party services in routine automated tests unless the project explicitly treats that as an integration environment.
 - Do not add broad UI/e2e coverage when lower-level tests provide clearer, faster confidence.
 - Do not duplicate production implementation logic inside assertions.
