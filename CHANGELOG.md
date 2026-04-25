@@ -4,6 +4,19 @@ All notable project changes should be recorded here.
 
 ## Unreleased
 
+## 0.3.0 - Spec Alignment And Slim README
+
+### Added
+- `compatibility:` and `metadata:` (author, version, homepage) frontmatter on every `SKILL.md`, conforming to the [Agent Skills specification](https://agentskills.io/specification).
+- `scripts/validate_skills.py` — a self-contained validator that checks every `SKILL.md` against the spec (`name` 1-64 chars + matches parent dir, `description` 1-1024 chars, `compatibility` <= 500 chars, `metadata` shape, `license` non-empty when present).
+- GitHub Actions CI workflow at `.github/workflows/ci.yml` that runs the skill validator, exercises `setup.init --yes` and `--verify` end-to-end against a temp git workspace (including idempotency and `$HOME`-refusal assertions), and runs a markdown link check.
+- `npx skills add wamalalawrence/agent-skills` documented as an alternative install path via the [skills.sh](https://skills.sh) ecosystem.
+- `docs/` directory: `installation.md`, `configuration.md`, `assistants.md`, `prompts.md` — long-form material moved out of the README.
+
+### Changed
+- README rewritten to be short and scannable in the GitHub preview (~60 lines vs ~280 before): tagline, why-skills, install, skills table, links into `docs/`, principles, contributing, license. Inspired by `google/skills` README pacing.
+- Skill internal links updated to point at `docs/` for installation/configuration/assistant compatibility/starter prompts.
+
 ## 0.2.0 - Onboarding And Positioning
 
 ### Added

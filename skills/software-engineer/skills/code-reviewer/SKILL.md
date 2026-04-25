@@ -1,6 +1,12 @@
 ---
 name: code-reviewer
 description: 'Issue-aware code review workflow for working diffs, commits, branches, and pull requests. Use when: reviewing implementation against a Jira ticket, GitHub issue, bug report, feature request, task description, acceptance criteria, or general engineering quality bar. Applies two layers: issue/ticket alignment first, then general engineering quality. Reuses issue-investigator when expected behavior, root cause, or issue context is unclear, and reuses software-engineer for architecture, implementation quality, testability, and production-risk judgment.'
+license: MIT
+compatibility: Works with any agent that supports the Agent Skills format (Claude Code, Cursor, Windsurf, Continue, GitHub Copilot Chat, ChatGPT, etc.). Expects workspace `.env` populated by setup.init.
+metadata:
+  author: wamalalawrence
+  version: "0.3.0"
+  homepage: "https://github.com/wamalalawrence/agent-skills"
 argument-hint: 'optional: mode inner|outer, base branch, issue key/URL, PR URL, or task description'
 user-invocable: true
 disable-model-invocation: false

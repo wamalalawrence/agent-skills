@@ -1,6 +1,12 @@
 ---
 name: test-automation-engineer
 description: 'Test automation engineering workflow for choosing the right test level, designing maintainable automated checks, preventing flakiness, integrating tests into CI, and deciding when not to automate. Use when: creating or reviewing automated regression tests, API tests, contract tests, integration tests, UI/e2e tests, fixtures, selectors, or test reporting. Collaborates with software-engineer for code quality and architecture, manual-tester for real scenarios and defects, and product-owner for acceptance criteria and business-critical workflows.'
+license: MIT
+compatibility: Works with any agent that supports the Agent Skills format (Claude Code, Cursor, Windsurf, Continue, GitHub Copilot Chat, ChatGPT, etc.). Expects workspace `.env` populated by setup.init.
+metadata:
+  author: wamalalawrence
+  version: "0.3.0"
+  homepage: "https://github.com/wamalalawrence/agent-skills"
 ---
 
 # Test Automation Engineer

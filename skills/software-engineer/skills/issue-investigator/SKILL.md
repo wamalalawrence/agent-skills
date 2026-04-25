@@ -1,6 +1,12 @@
 ---
 name: issue-investigator
 description: 'Issue investigation workflow for Jira tickets, GitHub issues, support tickets, incidents, regressions, feature requests, and technical tasks. Use when: understanding expected vs actual behavior, classifying issue type, gathering evidence, reproducing problems, analyzing root cause, refining tickets before implementation, or recommending the next action. Reuses software-engineer for technical code analysis and implementation feasibility, and supports code-reviewer by producing reliable issue context before review.'
+license: MIT
+compatibility: Works with any agent that supports the Agent Skills format (Claude Code, Cursor, Windsurf, Continue, GitHub Copilot Chat, ChatGPT, etc.). Expects workspace `.env` populated by setup.init. Optional Jira CLI integration when `.jira-config.yml` is present.
+metadata:
+  author: wamalalawrence
+  version: "0.3.0"
+  homepage: "https://github.com/wamalalawrence/agent-skills"
 argument-hint: 'issue URL/key, bug report, incident, support ticket, feature request, or task description plus affected repo/service/environment'
 user-invocable: true
 disable-model-invocation: false

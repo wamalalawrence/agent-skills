@@ -1,6 +1,12 @@
 ---
 name: manual-tester
 description: 'Manual testing workflow for validating intended behavior, exploring workflows, finding defects, documenting actual vs expected behavior, collecting evidence, and preparing retest guidance. Use when: planning or executing manual tests, validating acceptance criteria, doing exploratory testing, checking edge cases, reporting defects, or identifying regression and automation candidates. Collaborates with product-owner for intended behavior, software-engineer for technical risk areas, and test-automation-engineer for high-value automation candidates.'
+license: MIT
+compatibility: Works with any agent that supports the Agent Skills format (Claude Code, Cursor, Windsurf, Continue, GitHub Copilot Chat, ChatGPT, etc.). Expects workspace `.env` populated by setup.init.
+metadata:
+  author: wamalalawrence
+  version: "0.3.0"
+  homepage: "https://github.com/wamalalawrence/agent-skills"
 ---
 
 # Manual Tester
