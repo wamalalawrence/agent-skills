@@ -1,0 +1,23 @@
+# Real environment file — must NEVER be committed
+.env
+.env.local
+.env.*.local
+
+# Personal Jira CLI config (real one, generated from the example)
+.jira-config.yml
+
+# Skill caches and transient state
+.cache/
+.skills-cache/
+
+# OS / editor noise
+.DS_Store
+Thumbs.db
+.idea/
+.vscode/
+*.swp
+*.swo
+*~
+
+# Logs
+*.log
