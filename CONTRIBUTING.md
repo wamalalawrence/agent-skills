@@ -63,15 +63,16 @@ Recommended sections, in order:
 There is no automated test harness yet. Before opening a PR:
 
 1. Run a realistic task end to end with the edited skill in your own workspace.
-2. Temporarily blank out one required env var and confirm the skill stops with a clear, actionable message.
-3. Check that no organization-specific strings were introduced inside `skills/`:
+2. If onboarding, environment variables, or setup instructions changed, run `./setup.init --yes --no-jira --workspace-root <temp-workspace>` and confirm it creates `.env`, validates `PROJECTS_JSON`, and does not modify tracked secrets.
+3. Temporarily blank out one required env var and confirm the skill stops with a clear, actionable message.
+4. Check that no organization-specific strings were introduced inside `skills/`:
 
 ```bash
 grep -RE "(https?://[^$]|github\.com/[^$]|@[A-Za-z0-9._%+-]+\.[A-Za-z]{2,}|acme|cubic)" skills/
 ```
 
-4. Check that any new environment variable is documented in [`.env.example`](./.env.example).
-5. Update [CHANGELOG.md](./CHANGELOG.md) when the change affects public behavior, documented structure, or skill invocation.
+5. Check that any new environment variable is documented in [`.env.example`](./.env.example) and, if needed, handled by [`setup.init`](./setup.init).
+6. Update [CHANGELOG.md](./CHANGELOG.md) when the change affects public behavior, documented structure, setup flow, or skill invocation.
 
 ## Pull Request Expectations
 

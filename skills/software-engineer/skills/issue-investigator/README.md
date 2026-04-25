@@ -19,4 +19,4 @@ See [SKILL.md](./SKILL.md) for the full workflow.
 
 ## Required environment
 
-See [SKILL.md](./SKILL.md#required-environment). Jira and Confluence variables are required only when those systems are the source of issue context.
+Run [`../../../../setup.init`](../../../../setup.init) from the `agent-skills` folder for the simplest setup path. See [SKILL.md](./SKILL.md#required-environment) for details. Jira and Confluence variables are required only when those systems are the source of issue context.

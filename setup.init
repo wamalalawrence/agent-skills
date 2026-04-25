@@ -1,0 +1,911 @@
+#!/usr/bin/env bash
+# agent-skills first-run setup.
+#
+# Creates or refreshes the workspace-local files agent-skills needs:
+#   - <workspace>/.env                (ORG_NAME, WORKSPACE_ROOT, PROJECTS_JSON, ...)
+#   - <workspace>/.jira-config.yml    (only with --with-jira or interactive yes)
+#   - <workspace>/.skills             (symlink to agent-skills/skills)
+#
+# Tested on macOS and Linux with bash 3.2+. Windows users should run via WSL or
+# Git Bash; native PowerShell is not supported.
+
+set -euo pipefail
+
+START_MARKER="# >>> agent-skills setup.init"
+END_MARKER="# <<< agent-skills setup.init"
+
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+DEFAULT_WORKSPACE_ROOT="$(cd "${SCRIPT_DIR}/.." && pwd)"
+
+ASSUME_YES="false"
+JIRA_MODE="ask"
+SYMLINK_MODE="ask"
+VERIFY_MODE="false"
+WORKSPACE_ROOT=""
+WORKSPACE_ROOT_EXPLICIT="false"
+
+usage() {
+  cat <<'EOF'
+Usage: ./setup.init [options]
+
+Create or update the workspace-local files agent-skills needs for a first run,
+or verify an existing setup.
+
+Options:
+  --workspace-root PATH  Workspace root where .env, .jira-config.yml, and .skills live
+  --yes                  Accept safe defaults for all prompts
+  --with-jira            Create/update .jira-config.yml and Jira env values
+  --no-jira              Skip Jira setup
+  --no-symlink           Do not create the .skills symlink
+  --verify               Check an existing setup and report problems (no writes)
+  --help                 Show this help
+
+Typical use:
+  cd agent-skills
+  ./setup.init                       # interactive first run
+  ./setup.init --verify              # check an existing setup
+
+Non-interactive bootstrap:
+  ./setup.init --yes --no-jira --workspace-root /path/to/workspace
+EOF
+}
+
+while [[ $# -gt 0 ]]; do
+  case "$1" in
+    --workspace-root)
+      WORKSPACE_ROOT="${2:-}"
+      WORKSPACE_ROOT_EXPLICIT="true"
+      shift 2
+      ;;
+    --workspace-root=*)
+      WORKSPACE_ROOT="${1#*=}"
+      WORKSPACE_ROOT_EXPLICIT="true"
+      shift
+      ;;
+    --yes)
+      ASSUME_YES="true"
+      shift
+      ;;
+    --with-jira)
+      JIRA_MODE="yes"
+      shift
+      ;;
+    --no-jira)
+      JIRA_MODE="no"
+      shift
+      ;;
+    --no-symlink)
+      SYMLINK_MODE="no"
+      shift
+      ;;
+    --verify)
+      VERIFY_MODE="true"
+      shift
+      ;;
+    --help|-h)
+      usage
+      exit 0
+      ;;
+    *)
+      echo "Unknown option: $1" >&2
+      usage >&2
+      exit 2
+      ;;
+  esac
+done
+
+is_interactive() {
+  [[ "${ASSUME_YES}" != "true" && -t 0 ]]
+}
+
+prompt() {
+  local label="$1"
+  local default_value="$2"
+  local answer=""
+
+  if is_interactive; then
+    if [[ -n "${default_value}" ]]; then
+      printf '%s [%s]: ' "${label}" "${default_value}" >&2
+    else
+      printf '%s: ' "${label}" >&2
+    fi
+    IFS= read -r answer || true
+    if [[ -z "${answer}" ]]; then
+      answer="${default_value}"
+    fi
+  else
+    answer="${default_value}"
+  fi
+
+  printf '%s' "${answer}"
+}
+
+prompt_secret() {
+  local label="$1"
+  local default_value="$2"
+  local answer=""
+
+  if is_interactive; then
+    printf '%s: ' "${label}" >&2
+    IFS= read -r -s answer || true
+    printf '\n' >&2
+    if [[ -z "${answer}" ]]; then
+      answer="${default_value}"
+    fi
+  else
+    answer="${default_value}"
+  fi
+
+  printf '%s' "${answer}"
+}
+
+confirm() {
+  local label="$1"
+  local default_value="$2"
+  local answer=""
+
+  if [[ "${ASSUME_YES}" == "true" ]]; then
+    [[ "${default_value}" == "yes" ]]
+    return
+  fi
+
+  if ! is_interactive; then
+    [[ "${default_value}" == "yes" ]]
+    return
+  fi
+
+  if [[ "${default_value}" == "yes" ]]; then
+    printf '%s [Y/n]: ' "${label}" >&2
+  else
+    printf '%s [y/N]: ' "${label}" >&2
+  fi
+  IFS= read -r answer || true
+  answer="$(printf '%s' "${answer}" | tr '[:upper:]' '[:lower:]')"
+
+  if [[ -z "${answer}" ]]; then
+    answer="${default_value}"
+  fi
+
+  [[ "${answer}" == "y" || "${answer}" == "yes" ]]
+}
+
+json_escape() {
+  printf '%s' "$1" | sed 's/\\/\\\\/g; s/"/\\"/g'
+}
+
+shell_escape_double_quoted() {
+  printf '%s' "$1" | sed 's/\\/\\\\/g; s/"/\\"/g; s/`/\\`/g; s/\$/\\$/g'
+}
+
+# ------------------------------------------------------------------------------
+# JSON validation: prefer python3 (universally present), fall back to ruby.
+# Returns non-zero if neither interpreter is available or the JSON is invalid.
+# ------------------------------------------------------------------------------
+validate_json_string() {
+  local payload="$1"
+  if command -v python3 >/dev/null 2>&1; then
+    AGENT_SKILLS_JSON="${payload}" python3 -c \
+      'import json,os,sys;sys.exit(0) if json.loads(os.environ["AGENT_SKILLS_JSON"]) is not None else sys.exit(1)' \
+      >/dev/null 2>&1
+    return $?
+  fi
+  if command -v ruby >/dev/null 2>&1; then
+    AGENT_SKILLS_JSON="${payload}" ruby -rjson -e \
+      'JSON.parse(ENV["AGENT_SKILLS_JSON"])' >/dev/null 2>&1
+    return $?
+  fi
+  return 127
+}
+
+# ------------------------------------------------------------------------------
+# Workspace-root safety: refuse paths that look like a home or system directory
+# unless the user explicitly opted in via --workspace-root and confirmed.
+# ------------------------------------------------------------------------------
+is_unsafe_workspace_root() {
+  local path="$1"
+  case "${path}" in
+    "/"|"/root"|"/etc"|"/usr"|"/var"|"/opt"|"/private"|"/Library"|"/System"|"/Applications")
+      return 0
+      ;;
+  esac
+  if [[ -n "${HOME:-}" && "${path}" == "${HOME}" ]]; then
+    return 0
+  fi
+  return 1
+}
+
+guard_workspace_root() {
+  local path="$1"
+  local explicit="$2"
+
+  if ! is_unsafe_workspace_root "${path}"; then
+    return 0
+  fi
+
+  echo "" >&2
+  echo "Refusing to use '${path}' as the workspace root." >&2
+  echo "It looks like your home or a system directory." >&2
+  echo "" >&2
+  echo "Move agent-skills under a parent folder that contains your repos, e.g.:" >&2
+  echo "  ~/work/" >&2
+  echo "    ├── agent-skills/" >&2
+  echo "    ├── repo-a/" >&2
+  echo "    └── repo-b/" >&2
+  echo "" >&2
+  echo "Then run: ./setup.init   (from inside agent-skills)" >&2
+  echo "Or pass an explicit path: ./setup.init --workspace-root /path/to/work" >&2
+
+  if [[ "${explicit}" == "true" ]] && is_interactive; then
+    echo "" >&2
+    if confirm "I really want to write into '${path}' anyway" "no"; then
+      return 0
+    fi
+  fi
+
+  exit 2
+}
+
+# ------------------------------------------------------------------------------
+# Stack and command detection.
+# ------------------------------------------------------------------------------
+detect_stack() {
+  local repo_path="$1"
+  if [[ -f "${repo_path}/pom.xml" || -f "${repo_path}/build.gradle" || -f "${repo_path}/build.gradle.kts" ]]; then
+    printf 'java'
+  elif [[ -f "${repo_path}/package.json" ]]; then
+    printf 'typescript'
+  elif [[ -f "${repo_path}/pyproject.toml" || -f "${repo_path}/requirements.txt" || -f "${repo_path}/setup.py" ]]; then
+    printf 'python'
+  elif [[ -f "${repo_path}/go.mod" ]]; then
+    printf 'go'
+  else
+    printf 'other'
+  fi
+}
+
+detect_node_package_manager() {
+  local repo_path="$1"
+  if [[ -f "${repo_path}/pnpm-lock.yaml" ]]; then
+    printf 'pnpm'
+  elif [[ -f "${repo_path}/yarn.lock" ]]; then
+    printf 'yarn'
+  elif [[ -f "${repo_path}/bun.lockb" ]]; then
+    printf 'bun'
+  else
+    printf 'npm'
+  fi
+}
+
+node_has_script() {
+  local pkg="$1"
+  local script="$2"
+  [[ -f "${pkg}" ]] || return 1
+  if command -v python3 >/dev/null 2>&1; then
+    AGENT_SKILLS_PKG="${pkg}" AGENT_SKILLS_SCRIPT="${script}" python3 -c '
+import json, os, sys
+try:
+    with open(os.environ["AGENT_SKILLS_PKG"]) as fh:
+        data = json.load(fh)
+    sys.exit(0 if (data.get("scripts") or {}).get(os.environ["AGENT_SKILLS_SCRIPT"]) else 1)
+except Exception:
+    sys.exit(1)
+' >/dev/null 2>&1
+    return $?
+  fi
+  # Best-effort fallback when python3 is missing.
+  grep -q "\"${script}\"[[:space:]]*:" "${pkg}"
+}
+
+default_build_for_stack() {
+  local stack="$1"
+  local repo_path="$2"
+  case "${stack}" in
+    java)
+      if [[ -f "${repo_path}/mvnw" ]]; then
+        printf './mvnw test'
+      elif [[ -f "${repo_path}/pom.xml" ]]; then
+        printf 'mvn test'
+      elif [[ -f "${repo_path}/gradlew" ]]; then
+        printf './gradlew test'
+      elif [[ -f "${repo_path}/build.gradle" || -f "${repo_path}/build.gradle.kts" ]]; then
+        printf 'gradle test'
+      else
+        printf ''
+      fi
+      ;;
+    typescript)
+      local mgr
+      mgr="$(detect_node_package_manager "${repo_path}")"
+      if node_has_script "${repo_path}/package.json" "test"; then
+        case "${mgr}" in
+          npm)  printf 'npm test' ;;
+          yarn) printf 'yarn test' ;;
+          pnpm) printf 'pnpm test' ;;
+          bun)  printf 'bun test' ;;
+        esac
+      elif node_has_script "${repo_path}/package.json" "build"; then
+        case "${mgr}" in
+          npm)  printf 'npm run build' ;;
+          yarn) printf 'yarn build' ;;
+          pnpm) printf 'pnpm build' ;;
+          bun)  printf 'bun run build' ;;
+        esac
+      else
+        printf '%s install' "${mgr}"
+      fi
+      ;;
+    python)
+      if [[ -f "${repo_path}/pyproject.toml" ]] && grep -q '\[tool.poetry\]' "${repo_path}/pyproject.toml" 2>/dev/null; then
+        printf 'poetry run pytest'
+      else
+        printf 'pytest'
+      fi
+      ;;
+    go)
+      printf 'go test ./...'
+      ;;
+    *)
+      printf ''
+      ;;
+  esac
+}
+
+default_format_for_stack() {
+  local stack="$1"
+  local repo_path="$2"
+  case "${stack}" in
+    typescript)
+      local mgr
+      mgr="$(detect_node_package_manager "${repo_path}")"
+      if node_has_script "${repo_path}/package.json" "lint"; then
+        case "${mgr}" in
+          npm)  printf 'npm run lint' ;;
+          yarn) printf 'yarn lint' ;;
+          pnpm) printf 'pnpm lint' ;;
+          bun)  printf 'bun run lint' ;;
+        esac
+      else
+        printf ''
+      fi
+      ;;
+    python)
+      printf 'ruff check . && ruff format --check .'
+      ;;
+    go)
+      printf 'gofmt -l .'
+      ;;
+    *)
+      printf ''
+      ;;
+  esac
+}
+
+# ------------------------------------------------------------------------------
+# GitHub org detection: prefer a real org found in sibling repo remotes; fall
+# back to the authenticated gh user; otherwise leave blank.
+# ------------------------------------------------------------------------------
+detect_github_org_from_siblings() {
+  local workspace_root="$1"
+  local repo_path=""
+  local url=""
+  local org=""
+
+  for repo_path in "${workspace_root}"/*; do
+    [[ -d "${repo_path}/.git" ]] || continue
+    [[ "$(basename "${repo_path}")" == "agent-skills" ]] && continue
+    command -v git >/dev/null 2>&1 || continue
+    url="$(git -C "${repo_path}" config --get remote.origin.url 2>/dev/null || true)"
+    [[ -n "${url}" ]] || continue
+    if [[ "${url}" =~ github\.com[:/]+([^/]+)/[^/]+$ ]]; then
+      org="${BASH_REMATCH[1]}"
+      org="${org%.git}"
+      printf '%s' "${org}"
+      return 0
+    fi
+  done
+  return 1
+}
+
+# ------------------------------------------------------------------------------
+# detect_projects_json prints a JSON array of detected sibling repositories.
+# ------------------------------------------------------------------------------
+detect_projects_json() {
+  local workspace_root="$1"
+  local default_branch="$2"
+  local project_count=0
+  local repo_path=""
+  local repo_name=""
+  local repo_rel=""
+  local stack=""
+  local build=""
+  local format=""
+
+  printf '[\n'
+
+  for repo_path in "${workspace_root}"/*; do
+    [[ -d "${repo_path}" ]] || continue
+    [[ -d "${repo_path}/.git" ]] || continue
+    repo_name="$(basename "${repo_path}")"
+    [[ "${repo_name}" == "agent-skills" ]] && continue
+
+    repo_rel="${repo_name}"
+    stack="$(detect_stack "${repo_path}")"
+    build="$(default_build_for_stack "${stack}" "${repo_path}")"
+    format="$(default_format_for_stack "${stack}" "${repo_path}")"
+
+    if [[ "${project_count}" -gt 0 ]]; then
+      printf ',\n'
+    fi
+
+    printf '  {"name":"%s", "path":"%s", "stack":"%s", "base_branch":"%s", "build":"%s", "format":"%s"}' \
+      "$(json_escape "${repo_name}")" \
+      "$(json_escape "${repo_rel}")" \
+      "$(json_escape "${stack}")" \
+      "$(json_escape "${default_branch}")" \
+      "$(json_escape "${build}")" \
+      "$(json_escape "${format}")"
+
+    project_count=$((project_count + 1))
+  done
+
+  if [[ "${project_count}" -eq 0 ]]; then
+    printf '  {"name":"current-workspace", "path":".", "stack":"other", "base_branch":"%s", "build":"", "format":"", "runtime_version":"", "notes":"Bootstrap default. Replace with real repo entries for implementation, review, or PR work."}' \
+      "$(json_escape "${default_branch}")"
+  fi
+
+  printf '\n]'
+}
+
+count_detected_projects() {
+  local workspace_root="$1"
+  local count=0
+  local repo_path=""
+  for repo_path in "${workspace_root}"/*; do
+    [[ -d "${repo_path}/.git" ]] || continue
+    [[ "$(basename "${repo_path}")" == "agent-skills" ]] && continue
+    count=$((count + 1))
+  done
+  printf '%s' "${count}"
+}
+
+# ------------------------------------------------------------------------------
+# Replaces the marked block in target_file with the contents of block_file. If
+# the block does not exist yet, it is appended. Manual edits *outside* the
+# markers are preserved verbatim. Edits *inside* the markers are overwritten.
+# ------------------------------------------------------------------------------
+replace_generated_block() {
+  local target_file="$1"
+  local block_file="$2"
+  local temp_file=""
+  temp_file="$(mktemp)"
+
+  awk -v start="${START_MARKER}" -v end="${END_MARKER}" -v block="${block_file}" '
+    BEGIN { in_block = 0; replaced = 0 }
+    $0 == start {
+      if (!replaced) {
+        while ((getline line < block) > 0) print line
+        close(block)
+        replaced = 1
+      }
+      in_block = 1
+      next
+    }
+    in_block && $0 == end { in_block = 0; next }
+    !in_block { print }
+    END {
+      if (!replaced) {
+        print ""
+        while ((getline line < block) > 0) print line
+        close(block)
+      }
+    }
+  ' "${target_file}" > "${temp_file}"
+
+  mv "${temp_file}" "${target_file}"
+}
+
+write_env_block() {
+  local env_file="$1"
+  local workspace_root="$2"
+  local org_name="$3"
+  local github_org="$4"
+  local default_branch="$5"
+  local use_jira="$6"
+  local jira_host="$7"
+  local jira_auth_type="$8"
+  local jira_login="$9"
+  local jira_token="${10}"
+  local jira_project_keys="${11}"
+  local projects_json="${12}"
+  local block_file=""
+  block_file="$(mktemp)"
+
+  {
+    printf '%s\n' "${START_MARKER}"
+    printf '# Generated by ./setup.init. The block between these markers is\n'
+    printf '# OVERWRITTEN on every rerun. To keep changes, edit values OUTSIDE\n'
+    printf '# the markers, or rerun setup.init with the values you want.\n'
+    printf 'ORG_NAME="%s"\n' "$(shell_escape_double_quoted "${org_name}")"
+    printf 'WORKSPACE_ROOT="%s"\n' "$(shell_escape_double_quoted "${workspace_root}")"
+    printf 'GITHUB_ORG="%s"\n' "$(shell_escape_double_quoted "${github_org}")"
+    printf 'GITHUB_DEFAULT_BRANCH="%s"\n' "$(shell_escape_double_quoted "${default_branch}")"
+    printf "PROJECTS_JSON='%s'\n" "${projects_json}"
+    printf 'JIRA_CONFIG_FILE="${WORKSPACE_ROOT}/.jira-config.yml"\n'
+    if [[ "${use_jira}" == "yes" ]]; then
+      printf 'JIRA_HOST="%s"\n' "$(shell_escape_double_quoted "${jira_host}")"
+      printf 'JIRA_AUTH_TYPE="%s"\n' "$(shell_escape_double_quoted "${jira_auth_type}")"
+      printf 'JIRA_LOGIN="%s"\n' "$(shell_escape_double_quoted "${jira_login}")"
+      printf 'JIRA_API_TOKEN="%s"\n' "$(shell_escape_double_quoted "${jira_token}")"
+      printf 'JIRA_PROJECT_KEYS="%s"\n' "$(shell_escape_double_quoted "${jira_project_keys}")"
+    fi
+    printf '%s\n' "${END_MARKER}"
+  } > "${block_file}"
+
+  replace_generated_block "${env_file}" "${block_file}"
+  rm -f "${block_file}"
+}
+
+update_jira_project_key() {
+  local jira_file="$1"
+  local jira_project_keys="$2"
+  local first_key="${jira_project_keys%%,*}"
+  local temp_file=""
+
+  [[ -n "${first_key}" ]] || return 0
+
+  temp_file="$(mktemp)"
+  awk -v key="${first_key}" '
+    BEGIN { updated = 0 }
+    /^[[:space:]]*key:[[:space:]]*/ && !updated {
+      sub(/key:[[:space:]]*.*/, "key: " key "                    # Default project key (override per command with -p)")
+      updated = 1
+    }
+    { print }
+  ' "${jira_file}" > "${temp_file}"
+  mv "${temp_file}" "${jira_file}"
+}
+
+# ------------------------------------------------------------------------------
+# Workspace .gitignore management.
+#
+# .env, .jira-config.yml, and .skills are all created in the workspace root.
+# When the workspace is itself a git repo, those files would otherwise show up
+# as uncommitted changes (and .env would risk leaking secrets). We add or
+# refresh a clearly marked block in <workspace>/.gitignore so users do not have
+# to remember this themselves. The block is idempotent on rerun.
+# ------------------------------------------------------------------------------
+GITIGNORE_START_MARKER="# >>> agent-skills setup.init"
+GITIGNORE_END_MARKER="# <<< agent-skills setup.init"
+
+update_workspace_gitignore() {
+  local workspace_root="$1"
+  local gitignore_file="${workspace_root}/.gitignore"
+  local block_file=""
+  block_file="$(mktemp)"
+
+  {
+    printf '%s\n' "${GITIGNORE_START_MARKER}"
+    printf '# Local agent-skills workspace files. Safe to keep ignored.\n'
+    printf '.env\n'
+    printf '.env.local\n'
+    printf '.env.*.local\n'
+    printf '.jira-config.yml\n'
+    printf '.skills\n'
+    printf '.cache/\n'
+    printf '%s\n' "${GITIGNORE_END_MARKER}"
+  } > "${block_file}"
+
+  if [[ ! -f "${gitignore_file}" ]]; then
+    # Only create a fresh .gitignore when the workspace is a git repo, so we
+    # do not litter non-git workspaces with new files.
+    if [[ -d "${workspace_root}/.git" ]]; then
+      cp "${block_file}" "${gitignore_file}"
+      rm -f "${block_file}"
+      printf 'created'
+      return 0
+    fi
+    rm -f "${block_file}"
+    printf 'skipped'
+    return 0
+  fi
+
+  local temp_file=""
+  temp_file="$(mktemp)"
+  awk -v start="${GITIGNORE_START_MARKER}" -v end="${GITIGNORE_END_MARKER}" -v block="${block_file}" '
+    BEGIN { in_block = 0; replaced = 0 }
+    $0 == start {
+      if (!replaced) {
+        while ((getline line < block) > 0) print line
+        close(block)
+        replaced = 1
+      }
+      in_block = 1
+      next
+    }
+    in_block && $0 == end { in_block = 0; next }
+    !in_block { print }
+    END {
+      if (!replaced) {
+        print ""
+        while ((getline line < block) > 0) print line
+        close(block)
+      }
+    }
+  ' "${gitignore_file}" > "${temp_file}"
+  mv "${temp_file}" "${gitignore_file}"
+  rm -f "${block_file}"
+  printf 'updated'
+}
+
+# ------------------------------------------------------------------------------
+# Verify mode: read .env, check required variables and that detected projects
+# point at directories that exist. Exits non-zero on the first failure.
+# ------------------------------------------------------------------------------
+verify_setup() {
+  local workspace_root="$1"
+  local env_file="${workspace_root}/.env"
+  local skills_link="${workspace_root}/.skills"
+  local errors=0
+
+  echo "Verifying setup at ${workspace_root}"
+
+  if [[ ! -f "${env_file}" ]]; then
+    echo "  FAIL: ${env_file} not found. Run ./setup.init to create it." >&2
+    return 1
+  fi
+  echo "  ok    .env present"
+
+  set -a
+  # shellcheck disable=SC1090
+  source "${env_file}"
+  set +a
+
+  local var
+  for var in WORKSPACE_ROOT ORG_NAME GITHUB_DEFAULT_BRANCH PROJECTS_JSON; do
+    if [[ -z "${!var:-}" ]]; then
+      echo "  FAIL: required variable ${var} is empty in .env" >&2
+      errors=$((errors + 1))
+    fi
+  done
+
+  if [[ "${WORKSPACE_ROOT:-}" != "${workspace_root}" ]]; then
+    echo "  WARN: WORKSPACE_ROOT in .env (${WORKSPACE_ROOT:-}) does not match the directory being verified (${workspace_root})." >&2
+  fi
+
+  if validate_json_string "${PROJECTS_JSON:-}"; then
+    echo "  ok    PROJECTS_JSON parses"
+  else
+    local rc=$?
+    if [[ "${rc}" == "127" ]]; then
+      echo "  WARN: cannot validate PROJECTS_JSON (no python3 or ruby found)" >&2
+    else
+      echo "  FAIL: PROJECTS_JSON is not valid JSON" >&2
+      errors=$((errors + 1))
+    fi
+  fi
+
+  if command -v python3 >/dev/null 2>&1; then
+    local missing
+    missing="$(AGENT_SKILLS_JSON="${PROJECTS_JSON}" AGENT_SKILLS_ROOT="${workspace_root}" python3 -c '
+import json, os, sys
+root = os.environ["AGENT_SKILLS_ROOT"]
+projects = json.loads(os.environ["AGENT_SKILLS_JSON"])
+missing = []
+for p in projects:
+    path = os.path.normpath(os.path.join(root, p.get("path", "")))
+    if not os.path.isdir(path):
+        missing.append("%s (%s)" % (p.get("name", "?"), path))
+print("\n".join(missing))
+' 2>/dev/null)"
+    if [[ -n "${missing}" ]]; then
+      echo "  WARN: PROJECTS_JSON entries point to missing directories:" >&2
+      printf '         %s\n' ${missing} >&2
+    else
+      echo "  ok    every project path exists"
+    fi
+  fi
+
+  if [[ -L "${skills_link}" ]]; then
+    local target
+    target="$(readlink "${skills_link}")"
+    if [[ -d "${target}" ]]; then
+      echo "  ok    .skills -> ${target}"
+    else
+      echo "  FAIL: .skills points at missing target ${target}" >&2
+      errors=$((errors + 1))
+    fi
+  elif [[ -e "${skills_link}" ]]; then
+    echo "  WARN: ${skills_link} exists but is not a symlink" >&2
+  else
+    echo "  WARN: ${skills_link} not present (rerun with --no-symlink off, or create manually)" >&2
+  fi
+
+  if [[ -n "${JIRA_HOST:-}" ]]; then
+    if [[ -z "${JIRA_API_TOKEN:-}" ]]; then
+      echo "  WARN: JIRA_HOST set but JIRA_API_TOKEN is empty" >&2
+    else
+      echo "  ok    Jira credentials present"
+    fi
+  fi
+
+  if [[ "${errors}" -gt 0 ]]; then
+    echo "" >&2
+    echo "Verification failed with ${errors} error(s)." >&2
+    return 1
+  fi
+  echo ""
+  echo "Verification passed."
+}
+
+# ==============================================================================
+# Main
+# ==============================================================================
+
+if [[ -z "${WORKSPACE_ROOT}" ]]; then
+  if [[ "${VERIFY_MODE}" == "true" ]]; then
+    WORKSPACE_ROOT="${DEFAULT_WORKSPACE_ROOT}"
+  else
+    WORKSPACE_ROOT="$(prompt "Workspace root" "${DEFAULT_WORKSPACE_ROOT}")"
+  fi
+fi
+
+mkdir -p "${WORKSPACE_ROOT}"
+WORKSPACE_ROOT="$(cd "${WORKSPACE_ROOT}" && pwd)"
+
+if [[ "${VERIFY_MODE}" == "true" ]]; then
+  verify_setup "${WORKSPACE_ROOT}"
+  exit $?
+fi
+
+guard_workspace_root "${WORKSPACE_ROOT}" "${WORKSPACE_ROOT_EXPLICIT}"
+
+ENV_FILE="${WORKSPACE_ROOT}/.env"
+JIRA_FILE="${WORKSPACE_ROOT}/.jira-config.yml"
+SKILLS_LINK="${WORKSPACE_ROOT}/.skills"
+
+DEFAULT_ORG_NAME="$(basename "${WORKSPACE_ROOT}")"
+if [[ -z "${DEFAULT_ORG_NAME}" || "${DEFAULT_ORG_NAME}" == "/" ]]; then
+  DEFAULT_ORG_NAME="Local Workspace"
+fi
+
+DEFAULT_GITHUB_ORG=""
+if DEFAULT_GITHUB_ORG="$(detect_github_org_from_siblings "${WORKSPACE_ROOT}" 2>/dev/null)"; then
+  :
+elif command -v gh >/dev/null 2>&1; then
+  DEFAULT_GITHUB_ORG="$(gh api user --jq .login 2>/dev/null || true)"
+else
+  DEFAULT_GITHUB_ORG=""
+fi
+
+ORG_NAME="$(prompt "Display name for this workspace" "${DEFAULT_ORG_NAME}")"
+GITHUB_ORG="$(prompt "GitHub owner/user for repos (optional unless cloning/pushing/PRs)" "${DEFAULT_GITHUB_ORG}")"
+GITHUB_DEFAULT_BRANCH="$(prompt "Default branch" "main")"
+
+if [[ "${JIRA_MODE}" == "yes" ]]; then
+  USE_JIRA="yes"
+elif [[ "${JIRA_MODE}" == "no" ]]; then
+  USE_JIRA="no"
+elif confirm "Use Jira for issue-aware work" "no"; then
+  USE_JIRA="yes"
+else
+  USE_JIRA="no"
+fi
+
+JIRA_HOST=""
+JIRA_AUTH_TYPE="bearer"
+JIRA_LOGIN=""
+JIRA_API_TOKEN=""
+JIRA_PROJECT_KEYS=""
+
+if [[ "${USE_JIRA}" == "yes" ]]; then
+  JIRA_HOST="$(prompt "Jira host URL" "")"
+  JIRA_AUTH_TYPE="$(prompt "Jira auth type" "bearer")"
+  JIRA_LOGIN="$(prompt "Jira login/email (optional for bearer)" "")"
+  JIRA_PROJECT_KEYS="$(prompt "Jira project keys, comma-separated" "")"
+  JIRA_API_TOKEN="$(prompt_secret "Jira API token (optional; written only to gitignored .env)" "")"
+fi
+
+PROJECTS_JSON="$(detect_projects_json "${WORKSPACE_ROOT}" "${GITHUB_DEFAULT_BRANCH}")"
+DETECTED_COUNT="$(count_detected_projects "${WORKSPACE_ROOT}")"
+
+if ! validate_json_string "${PROJECTS_JSON}"; then
+  rc=$?
+  if [[ "${rc}" != "127" ]]; then
+    echo "Internal error: generated PROJECTS_JSON is not valid JSON. Aborting." >&2
+    echo "${PROJECTS_JSON}" >&2
+    exit 1
+  fi
+fi
+
+ENV_CREATED="false"
+if [[ ! -f "${ENV_FILE}" ]]; then
+  cp "${SCRIPT_DIR}/.env.example" "${ENV_FILE}"
+  ENV_CREATED="true"
+  echo "Created ${ENV_FILE}"
+else
+  echo "Updating generated setup block in ${ENV_FILE}"
+fi
+
+write_env_block \
+  "${ENV_FILE}" \
+  "${WORKSPACE_ROOT}" \
+  "${ORG_NAME}" \
+  "${GITHUB_ORG}" \
+  "${GITHUB_DEFAULT_BRANCH}" \
+  "${USE_JIRA}" \
+  "${JIRA_HOST}" \
+  "${JIRA_AUTH_TYPE}" \
+  "${JIRA_LOGIN}" \
+  "${JIRA_API_TOKEN}" \
+  "${JIRA_PROJECT_KEYS}" \
+  "${PROJECTS_JSON}"
+
+JIRA_CREATED="false"
+if [[ "${USE_JIRA}" == "yes" ]]; then
+  if [[ ! -f "${JIRA_FILE}" ]]; then
+    cp "${SCRIPT_DIR}/.jira-config.example.yml" "${JIRA_FILE}"
+    JIRA_CREATED="true"
+    echo "Created ${JIRA_FILE}"
+  else
+    echo "Keeping existing ${JIRA_FILE}"
+  fi
+  update_jira_project_key "${JIRA_FILE}" "${JIRA_PROJECT_KEYS}"
+fi
+
+SYMLINK_STATUS="skipped"
+if [[ "${SYMLINK_MODE}" != "no" ]]; then
+  if [[ -L "${SKILLS_LINK}" ]]; then
+    SYMLINK_STATUS="kept"
+    echo "Keeping existing ${SKILLS_LINK} symlink"
+  elif [[ -e "${SKILLS_LINK}" ]]; then
+    SYMLINK_STATUS="conflict"
+    echo "Skipped ${SKILLS_LINK}: path already exists and is not a symlink"
+  else
+    ln -s "${SCRIPT_DIR}/skills" "${SKILLS_LINK}"
+    SYMLINK_STATUS="created"
+    echo "Created ${SKILLS_LINK} -> ${SCRIPT_DIR}/skills"
+  fi
+fi
+
+GITIGNORE_STATUS="$(update_workspace_gitignore "${WORKSPACE_ROOT}")"
+case "${GITIGNORE_STATUS}" in
+  created) echo "Created ${WORKSPACE_ROOT}/.gitignore with agent-skills entries" ;;
+  updated) echo "Refreshed agent-skills block in ${WORKSPACE_ROOT}/.gitignore" ;;
+  skipped) : ;;  # no .gitignore and workspace is not a git repo, nothing to do
+esac
+
+# Validate the produced .env can be sourced and PROJECTS_JSON parses.
+set -a
+# shellcheck disable=SC1090
+source "${ENV_FILE}"
+set +a
+if validate_json_string "${PROJECTS_JSON:-}"; then
+  echo "Validated ${ENV_FILE}"
+else
+  rc=$?
+  if [[ "${rc}" == "127" ]]; then
+    echo "Skipped JSON validation: neither python3 nor ruby is installed."
+  else
+    echo "Warning: PROJECTS_JSON in ${ENV_FILE} did not parse after write." >&2
+    exit 1
+  fi
+fi
+
+cat <<EOF
+
+----------------------------------------
+Setup complete.
+----------------------------------------
+Workspace root : ${WORKSPACE_ROOT}
+.env           : ${ENV_FILE} ($([[ "${ENV_CREATED}" == "true" ]] && echo "created" || echo "updated"))
+Detected repos : ${DETECTED_COUNT} (under ${WORKSPACE_ROOT})
+.skills        : ${SYMLINK_STATUS}
+.gitignore     : ${GITIGNORE_STATUS}
+Jira           : $([[ "${USE_JIRA}" == "yes" ]] && echo "configured (${JIRA_FILE})" || echo "skipped")
+
+Next steps:
+1. Open ${ENV_FILE} once and confirm build/format/Jira values look correct.
+2. Tell your AI assistant where the skills live (see README "Using With Your AI Assistant").
+3. Try a starter prompt from ${SCRIPT_DIR}/README.md.
+4. To re-check this setup later, run: ./setup.init --verify
+EOF
