@@ -6,6 +6,34 @@ All notable project changes should be recorded here.
 
 - No unreleased changes.
 
+## 0.9.0 - Real Eval Runs and Scored Skill Outputs
+
+### Added
+
+- `eval-runs/` directory with a release-scoped subdirectory `eval-runs/v0.9.0/`
+  containing scored sample runs for each skill plus a multi-skill chained flow.
+- A summary file aggregating per-skill scores, common strengths, common gaps,
+  and follow-up actions.
+- An `eval-runs/README.md` that describes the practice, scoring method, and
+  public-safety rules, and clearly labels the v0.9.0 transcripts as
+  illustrative maintainer-authored examples.
+
+### Changed
+
+- `docs/validation.md`, `docs/release-checklist.md`, and
+  `docs/skill-performance-review.md` now reference eval-runs as the maintainer
+  evidence trail.
+- `README.md` documentation index links to `eval-runs/`.
+- Updated `VERSION`, README status, and all skill metadata to `0.9.0`.
+- Validator `REQUIRED_FILES` extended to ensure the v0.9.0 eval-run files exist.
+
+### Not Changed (deliberate)
+
+- No new skills added.
+- No nested skill promoted to the top level.
+- Skill wording was not rewritten purely to chase higher eval scores; gaps
+  surfaced during eval runs are recorded for future releases.
+
 ## 0.8.2 - Physical Source Formatting Fix
 
 ### Changed

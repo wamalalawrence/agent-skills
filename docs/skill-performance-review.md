@@ -4,6 +4,10 @@ Manual review for target release `v0.8.0`, performed against the scenarios in [`
 and the multi-skill workflows described below. This is a maintainer review note, not a benchmark or
 proof that any model will behave correctly.
 
+From `v0.9.0` onward, release-scoped **scored sample runs** live under
+[`eval-runs/`](../eval-runs/) and are the primary maintainer evidence trail. This document remains
+for historical context.
+
 ## Review Summary
 
 All six skills produced likely useful output during manual review. The main risks

@@ -4,7 +4,7 @@ Reusable [Agent Skills](https://agentskills.io/) for software-engineering work �
 role-shaped workflows your AI assistant can load on demand so the same model produces
 senior-engineer, product-owner, tester, or reviewer output instead of generic answers.
 
-> **Status:** `0.8.2` — pre-1.0. Core skill set is shipped and stable enough for public use;
+> **Status:** `0.9.0` — pre-1.0. Core skill set is shipped and stable enough for public use;
 > interfaces may still evolve.
 
 New here? Start with the [quickstart](docs/quickstart.md), then read [starter
@@ -132,6 +132,7 @@ usage shows they are useful independently.
 - [Validation](docs/validation.md)
 - [Skill quality scorecard](docs/skill-quality-scorecard.md)
 - [Skill performance review](docs/skill-performance-review.md)
+- [Eval runs](eval-runs/README.md)
 - [Release checklist](docs/release-checklist.md)
 - [Skill boundaries](docs/skill-boundaries.md)
 - [Severity and confidence definitions](docs/severity-and-confidence.md)

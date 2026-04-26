@@ -70,6 +70,11 @@ contract-complete output without inventing missing facts?
 Use the [skill quality scorecard](skill-quality-scorecard.md) to judge outputs consistently. Treat
 the scorecard as a maintainer aid, not a scientific benchmark.
 
+Releases also record **scored sample runs** in [`eval-runs/`](../eval-runs/). Each release-scoped
+subdirectory (for example [`eval-runs/v0.9.0/`](../eval-runs/v0.9.0/)) contains the inputs, outputs,
+per-criterion scores, strengths, gaps, and follow-up actions for each skill. Eval runs make skill
+behavior reviewable; they are not benchmarks and do not gate CI.
+
 ## Why This Is Limited
 
 The validator can catch broken structure, missing links, version drift, and obvious public-safety
