@@ -4,6 +4,8 @@ All notable project changes should be recorded here.
 
 ## Unreleased
 
+## 0.6.1 - Documentation Rendering and Public Usability Fixes
+
 ### Added
 
 - **`docs/quickstart.md`** — short first-time user path covering what the repository is, when to use
