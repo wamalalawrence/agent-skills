@@ -4,6 +4,32 @@ All notable project changes should be recorded here.
 
 ## Unreleased
 
+- No unreleased changes.
+
+## 0.8.1 - Source Formatting and Release Hygiene
+
+### Changed
+
+- Reformatted Markdown bodies across the README, changelog, docs, evals, skill files, and support
+  docs so raw GitHub view and Git diffs remain readable.
+- Reformatted `SKILL.md` YAML frontmatter to use folded scalars for long descriptions and
+  compatibility text.
+- Replaced overwide Markdown tables in docs and skill environment sections with readable lists where
+  table rows made raw source hard to review.
+- Updated `VERSION`, README status, and skill metadata for `0.8.1`.
+
+### Fixed
+
+- Moved the v0.8.0 validation/evaluation entries out of `Unreleased` into the released v0.8.0
+  changelog section.
+- Strengthened `scripts/validate-repo.py` so CI fails on maintainability issues such as overlong
+  Markdown lines, mid-line headings, collapsed table rows, and mid-line code fences.
+- Added readability checks for YAML and Python source lines.
+- Updated the release checklist with raw README, table-rendering, changelog hygiene, and validator
+  line-readability checks.
+
+## 0.8.0 - Validation, Evaluation, and Skill Performance Hardening
+
 ### Added
 
 - **`scripts/validate-repo.py`** for repository-wide validation of required files, Markdown
@@ -13,11 +39,11 @@ All notable project changes should be recorded here.
 - **`docs/validation.md`** explaining what validation checks, what it does not check, how to run it,
   and how to interpret warnings vs failures.
 - **`evals/`** with lightweight manual scenarios for `issue-investigator`, `code-reviewer`,
-  `software-engineer`, `product-owner`, `manual-tester`, `test-automation-engineer`, and a
-  multi-skill bug-to-regression workflow.
+  `software-engineer`, `product-owner`, `manual-tester`, `test-automation-engineer`, and a multi-skill
+  bug-to-regression workflow.
 - **`docs/skill-quality-scorecard.md`** with a simple `0` to `3` maintainer scoring aid for skill
-  outputs across context awareness, evidence discipline, handoffs, output completeness,
-  hallucination avoidance, validation realism, risk awareness, stopping behavior, and portability.
+  outputs across context awareness, evidence discipline, handoffs, output completeness, hallucination
+  avoidance, validation realism, risk awareness, stopping behavior, and portability.
 - **`docs/skill-performance-review.md`** recording the v0.8.0 manual review findings and the
   workflow checks for bug fix, feature delivery, and PR review paths.
 - **`docs/release-checklist.md`** covering validation, README rendering, skill links, changelog and
@@ -60,13 +86,13 @@ All notable project changes should be recorded here.
   assumed context, expected behavior, sample output structure, and what to avoid.
 - **`docs/starter-prompts.md`** with copy-paste prompts for each skill plus multi-skill workflows
   (`product-owner -> software-engineer -> manual-tester -> test-automation-engineer`,
-  `issue-investigator -> software-engineer -> code-reviewer`, and
-  `manual-tester defect -> issue-investigator -> test-automation-engineer`).
+  `issue-investigator -> software-engineer -> code-reviewer`, and `manual-tester defect ->
+  issue-investigator -> test-automation-engineer`).
 - **`docs/skill-boundaries.md`** documenting role ownership, handoff rules, nested support-skill
   rationale, and possible future top-level criteria for `issue-investigator` and `code-reviewer`.
 - **`docs/severity-and-confidence.md`** defining `blocker`, `major`, `minor`, `nit`,
-  `low`/`medium`/`high` confidence, and issue-investigator root-cause statuses
-  (`unknown`, `suspected`, `confirmed`, `disproved`).
+  `low`/`medium`/`high` confidence, and issue-investigator root-cause statuses (`unknown`,
+  `suspected`, `confirmed`, `disproved`).
 - **`docs/README.md`** as a documentation index for quickstart, prompts, examples, boundaries,
   severity/confidence, limitations, and versioning.
 
@@ -75,9 +101,9 @@ All notable project changes should be recorded here.
 - Hardened all skill docs with explicit `When Not To Use` and `Stopping Conditions` sections where
   they were missing.
 - Made cross-skill reuse rules explicit: engineering invokes investigation for unclear issues and
-  review at gates; review invokes investigation when ticket/root-cause context is weak; manual
-  testing hands reproducible defects to investigation; automation consumes stable manual/repro
-  scenarios; product ownership routes bug-flavored input through investigation.
+  review at gates; review invokes investigation when ticket/root-cause context is weak; manual testing
+  hands reproducible defects to investigation; automation consumes stable manual/repro scenarios;
+  product ownership routes bug-flavored input through investigation.
 - Updated `code-reviewer` verdicts to `PASS`, `PASS_WITH_NOTES`, `REQUEST_CHANGES`,
   `NEEDS_CONTEXT`, and `NOT_REVIEWABLE`.
 - Aligned public docs and skill metadata with release `0.7.0`.
@@ -96,8 +122,8 @@ All notable project changes should be recorded here.
   it, how to invoke one skill manually, both execution modes, and starter prompts for the four
   top-level skills.
 - **`docs/known-limitations.md`** — public limitations for non-deterministic agent behavior,
-  nested-skill support, external access, company-specific standards, human review, cache behavior,
-  and no-warranty/no-SLA expectations.
+  nested-skill support, external access, company-specific standards, human review, cache behavior, and
+  no-warranty/no-SLA expectations.
 - **`docs/versioning.md`** — pre-1.0 and post-1.0 versioning policy. Before `v1.0.0`, minor releases
   may change structure or output contracts; patch releases should focus on docs, formatting,
   compatibility, examples, validation fixes, and non-breaking clarifications.
@@ -129,9 +155,9 @@ edge case.
 - **`docs/execution-modes.md`** — single source of truth for the two modes (`local-workspace` and
   `in-repo`), how skills detect which one applies, and the variable-resolution order each uses.
 - **`.agent-skills.example.yml`** — committed-to-repo configuration template for `in-repo` mode.
-  Holds the single `project:` block and the org/github/jira-host metadata previously read from
-  `.env`. Contains **no secrets**; credentials still come from environment variables injected by the
-  host platform.
+  Holds the single `project:` block and the org/github/jira-host metadata previously read from `.env`.
+  Contains **no secrets**; credentials still come from environment variables injected by the host
+  platform.
 - README install section now documents both paths explicitly: "Local workspace" (the existing
   `setup.init` flow) and "In-repo" (the new path for online agents).
 - `docs/installation.md` opens with an "in-repo install" section for cloud-agent users.
@@ -167,15 +193,15 @@ contribution/governance/support docs.
 ### Added
 
 - **`skills/software-engineer/references/evidence-pack.md`** — the schema for `evidence-pack.yml`
-  and `repro-recipe.yml`. Cached at `${WORKSPACE_ROOT}/.cache/agent-skills/<issue-key>/`. Defines
-  what each skill reads and writes so `issue-investigator`, `software-engineer`, `code-reviewer`,
+  and `repro-recipe.yml`. Cached at `${WORKSPACE_ROOT}/.cache/agent-skills/<issue-key>/`. Defines what
+  each skill reads and writes so `issue-investigator`, `software-engineer`, `code-reviewer`,
   `manual-tester`, `test-automation-engineer`, and `product-owner` stop re-deriving context on every
   hop.
 - **`skills/software-engineer/references/definition-of-done.md`** — the schema for
   `definition-of-done.json`, the Phase 5 gate artifact the reviewer must verify before declaring
   `PASS`. Includes bug-fix-specific fields (regression-test commit, fails-on-parent, passes-on-head,
-  observability_added) and operational hygiene flags (`no_no_verify`,
-  `branch_starts_with_ticket_key`, `no_unrelated_files`).
+  observability_added) and operational hygiene flags (`no_no_verify`, `branch_starts_with_ticket_key`,
+  `no_unrelated_files`).
 - **`software-engineer` Phase 5.3 — Definition-of-Done artifact step.** The engineer now writes the
   DoD JSON before opening the PR; `--no-verify` is explicitly forbidden without a written waiver.
 - **`software-engineer` Phase 1.4 + 1.5** persist the 5-line plan and reference the repro recipe
@@ -195,9 +221,9 @@ contribution/governance/support docs.
 
 - **README, CONTRIBUTING.md, GOVERNANCE.md, SUPPORT.md rewritten to drop the welcoming-but-ignored
   contradiction.** The project is solo-maintained and exists primarily for the maintainer's own
-  engineering work, shared as a public good. Issues and PRs are not actively solicited; forking is
-  the recommended path for divergent needs. The new files set realistic expectations up front
-  instead of implying a contributor pipeline that does not exist.
+  engineering work, shared as a public good. Issues and PRs are not actively solicited; forking is the
+  recommended path for divergent needs. The new files set realistic expectations up front instead of
+  implying a contributor pipeline that does not exist.
 - README status banner bumped to `0.5.0`.
 - All six `SKILL.md` files: `metadata.version` bumped to `0.5.0`.
 
@@ -233,17 +259,17 @@ pair-programming.
   / config change / monitoring / clarification) to the minimum root-cause confidence required to
   recommend it.
 - **`code-reviewer` hard handoff contract** listing the evidence pack the engineer must supply
-  (project entry, issue brief, root-cause confidence, failing-test commit for bug fixes, 5-line
-  plan, risk areas). Missing handoff is a `major` finding.
+  (project entry, issue brief, root-cause confidence, failing-test commit for bug fixes, 5-line plan,
+  risk areas). Missing handoff is a `major` finding.
 - **`code-reviewer` `test-quality` review profile** for `manual` mode when reviewing test code
   (selector stability, deterministic data, condition-based waits, assertion meaningfulness,
   isolation).
 - **`code-reviewer` iteration convergence rule (`CODE_REVIEWER_MAX_ROUNDS`, default `3`).**
-  Blocker+major finding count must strictly decrease between rounds; non-converging loops escalate
-  to the user instead of grinding indefinitely or silently downgrading blockers.
+  Blocker+major finding count must strictly decrease between rounds; non-converging loops escalate to
+  the user instead of grinding indefinitely or silently downgrading blockers.
 - **`code-reviewer` devil's-advocate self-rebuttal** before any `PASS` verdict, attacking your own
-  conclusion against silent data loss, lost-update / race conditions, auth bypass, secret/PII
-  leakage, broken migration, breaking API contract, and regression risk.
+  conclusion against silent data loss, lost-update / race conditions, auth bypass, secret/PII leakage,
+  broken migration, breaking API contract, and regression risk.
 - **`test-automation-engineer` invokes `code-reviewer`** in `test-quality` mode on its own test
   code, plus a flake-budget rule (≥20 repeat executions in CI before merge), explicit anti-pattern
   list (`Thread.sleep`, `cy.wait(N)`, `time.sleep`, hard-coded dates, ordering-dependent fixtures,
@@ -280,8 +306,8 @@ pair-programming.
   spec (`name` 1-64 chars + matches parent dir, `description` 1-1024 chars, `compatibility` <= 500
   chars, `metadata` shape, `license` non-empty when present).
 - GitHub Actions CI workflow at `.github/workflows/ci.yml` that runs the skill validator, exercises
-  `setup.init --yes` and `--verify` end-to-end against a temp git workspace (including idempotency
-  and `$HOME`-refusal assertions), and runs a markdown link check.
+  `setup.init --yes` and `--verify` end-to-end against a temp git workspace (including idempotency and
+  `$HOME`-refusal assertions), and runs a markdown link check.
 - `npx skills add wamalalawrence/agent-skills` documented as an alternative install path via the
   [skills.sh](https://skills.sh) ecosystem.
 - `docs/` directory: `installation.md`, `configuration.md`, `assistants.md`, `prompts.md` —
@@ -300,8 +326,8 @@ pair-programming.
 ### Added
 
 - `setup.init`: bash automation for first-run workspace setup. Asks a short set of questions, then
-  creates or refreshes `.env`, `.jira-config.yml` (optional), the `.skills` symlink, and an
-  idempotent agent-skills block in the workspace `.gitignore`.
+  creates or refreshes `.env`, `.jira-config.yml` (optional), the `.skills` symlink, and an idempotent
+  agent-skills block in the workspace `.gitignore`.
 - `setup.init --verify`: re-checks an existing setup without writing — required env vars,
   `PROJECTS_JSON` shape, every project path resolves, `.skills` target valid, Jira credentials
   consistent.
@@ -333,9 +359,8 @@ pair-programming.
 - The generated `.env` block carries an explicit warning that contents inside the markers are
   overwritten on rerun and that manual edits belong outside the markers.
 - The generated workspace `.gitignore` block covers `.env`, `.env.local`, `.env.*.local`,
-  `.jira-config.yml`, `.skills`, and `.cache/` so workspaces that are themselves git repos do not
-  show those files as uncommitted changes (and `.env` does not risk leaking secrets). Idempotent on
-  rerun.
+  `.jira-config.yml`, `.skills`, and `.cache/` so workspaces that are themselves git repos do not show
+  those files as uncommitted changes (and `.env` does not risk leaking secrets). Idempotent on rerun.
 
 ### Documentation
 

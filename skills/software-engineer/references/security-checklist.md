@@ -11,14 +11,14 @@ OWASP-aligned security review for any backend service.
 - [ ] IdP roles and scopes mapped correctly to the application's authorities
 - [ ] Session management: stateless with JWT, or properly secured server-side sessions
 - [ ] CORS configured restrictively — no `@CrossOrigin("*")` / `Access-Control-Allow-Origin: *` in
-      production
+  production
 
 ## Secrets management
 
 - [ ] No hardcoded passwords, API keys, tokens, or connection strings in source code
 - [ ] Secrets stored in environment variables, Kubernetes secrets, cloud secret managers, or a vault
 - [ ] Build-config credentials reference env vars (e.g. `${env.VAR}`) or CI/CD secrets, never
-      literals
+  literals
 - [ ] `.env` files are gitignored — never committed
 - [ ] Passwords hashed with a current algorithm (bcrypt, argon2, scrypt)
 
@@ -49,12 +49,12 @@ OWASP-aligned security review for any backend service.
 - [ ] No MD5 or SHA-1 for security purposes — use SHA-256+
 - [ ] `SecureRandom` (or platform equivalent) for security-sensitive random values
 - [ ] Certificate validation **not** disabled (no `TrustAllCerts`, no `ALLOW_ALL_HOSTNAME_VERIFIER`,
-      no `rejectUnauthorized: false`)
+  no `rejectUnauthorized: false`)
 
 ## Dependencies
 
 - [ ] Dependency vulnerability scan passes (`mvn org.owasp:dependency-check-maven:check`,
-      `npm audit`, `pip-audit`, etc.)
+  `npm audit`, `pip-audit`, etc.)
 - [ ] No known critical CVEs in direct dependencies
 - [ ] Dependencies pulled from trusted sources only
 - [ ] Framework version current enough to receive security patches
@@ -62,7 +62,7 @@ OWASP-aligned security review for any backend service.
 ## Logging & monitoring
 
 - [ ] Security-relevant events logged: auth failures, authorization denials, input-validation
-      failures
+  failures
 - [ ] Log entries include a correlation id for traceability
 - [ ] No sensitive data in logs
 - [ ] Log injection prevented: user input sanitized before inclusion in log messages

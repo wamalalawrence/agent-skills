@@ -5,10 +5,13 @@ Tested on macOS and Linux with `bash` and `zsh`. Windows users should run via WS
 `agent-skills` ships two execution modes — pick the one that matches where the agent will actually
 run. See [execution-modes.md](execution-modes.md) for the full comparison.
 
-| You are...                                                                                                                                                                           | Use mode          | What to install                                                               |
-| ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ | ----------------- | ----------------------------------------------------------------------------- |
-| Running an AI assistant **on your laptop**, across several repos                                                                                                                     | `local-workspace` | Clone `agent-skills` next to your repos and run `./setup.init`.               |
-| Running an AI agent **inside one repository** (GitHub Copilot coding agent on github.com, Cursor cloud, Devin, Codex, Codespaces, Gitpod, ChatGPT/Claude web with the repo attached) | `in-repo`         | Add `.agent-skills.yml` and a `skills/` source to that repo. No `setup.init`. |
+Use `local-workspace` mode when you run an AI assistant on your laptop across several repos.
+Install it by cloning `agent-skills` next to your repos and running `./setup.init`.
+
+Use `in-repo` mode when an AI agent runs inside one repository, such as GitHub Copilot coding
+agent on github.com, Cursor cloud, Devin, Codex, Codespaces, Gitpod, or ChatGPT/Claude web with the
+repo attached. Install it by adding `.agent-skills.yml` and a `skills/` source to that repo. No
+`setup.init` is required.
 
 ## `in-repo` install (online / cloud agents)
 
@@ -16,14 +19,14 @@ The cloud agent has no separate workspace and no shell of its own to bootstrap. 
 things into the target repository:
 
 1. **`.agent-skills.yml`** at the repo root. Copy from
-   [`.agent-skills.example.yml`](../.agent-skills.example.yml), fill in the `project:` block (stack,
-   base branch, build/format commands), and commit. It contains **no secrets**.
+  [`.agent-skills.example.yml`](../.agent-skills.example.yml), fill in the `project:` block (stack,
+  base branch, build/format commands), and commit. It contains **no secrets**.
 2. **Skill content** the agent can read. Two options:
    - **Vendor the skills** by copying or git-submoduling [`skills/`](../skills/) into the target
      repo (e.g. at `.agent-skills/skills/`). Best for offline-friendly, reproducible loading.
    - **Reference the skills** from the agent's prompt or rules file (e.g. `.cursor/rules/*.mdc`,
-     `.github/copilot-instructions.md`, attached files in a chat). Lighter-weight, but the agent
-     host must be able to fetch them.
+     `.github/copilot-instructions.md`, attached files in a chat). Lighter-weight, but the agent host
+     must be able to fetch them.
 
 Then add `.cache/` to the repo's `.gitignore` so the evidence-pack/repro-recipe/Definition-of-Done
 artifacts the skills write don't leak into commits.
@@ -114,8 +117,8 @@ $EDITOR /path/to/work/.jira-config.yml
   `GITHUB_DEFAULT_BRANCH`, and `PROJECTS_JSON`. Edits inside the markers are overwritten on rerun;
   edits outside are preserved verbatim.
 - Detects sibling git repositories and writes a starter `PROJECTS_JSON` map. Build and format
-  commands are inferred from `pom.xml` / `build.gradle` / `package.json` (including
-  `pnpm-lock.yaml`, `yarn.lock`, `bun.lockb`) / `pyproject.toml` (Poetry-aware) / `go.mod`.
+  commands are inferred from `pom.xml` / `build.gradle` / `package.json` (including `pnpm-lock.yaml`,
+  `yarn.lock`, `bun.lockb`) / `pyproject.toml` (Poetry-aware) / `go.mod`.
 - Detects the GitHub owner from sibling repo `remote.origin.url` first, then falls back to
   `gh api user --jq .login`, then leaves it blank.
 - Optionally creates `.jira-config.yml` from

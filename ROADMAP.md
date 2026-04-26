@@ -6,8 +6,8 @@ the project should grow through proven usefulness rather than a large up-front f
 ## Current Focus
 
 - Stabilize the four core delivery skills: [`product-owner`](./skills/product-owner/),
-  [`software-engineer`](./skills/software-engineer/), [`manual-tester`](./skills/manual-tester/),
-  and [`test-automation-engineer`](./skills/test-automation-engineer/).
+  [`software-engineer`](./skills/software-engineer/), [`manual-tester`](./skills/manual-tester/), and
+  [`test-automation-engineer`](./skills/test-automation-engineer/).
 - Keep [`software-engineer`](./skills/software-engineer/) strong as the flagship engineering skill.
 - Improve portability across different stacks and workspace layouts.
 - Tighten token-efficient context gathering for Jira, user descriptions, repository discovery,

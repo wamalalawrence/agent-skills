@@ -27,8 +27,8 @@ proof that any model will behave correctly.
 - Stopping behavior: clear `unknown` root-cause status and missing-context stops.
 - Hallucination prevention: strong; root-cause claims require evidence.
 - Related skills: correctly hands implementation to `software-engineer`, review to `code-reviewer`,
-  product ambiguity to `product-owner`, manual evidence to `manual-tester`, and regression coverage
-  to `test-automation-engineer`.
+  product ambiguity to `product-owner`, manual evidence to `manual-tester`, and regression coverage to
+  `test-automation-engineer`.
 - Output/workflow match: yes.
 - Contradictions: none found.
 - Unrealistic assumptions: Jira access is optional when direct issue details are supplied.

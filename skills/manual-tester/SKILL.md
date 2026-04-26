@@ -1,21 +1,22 @@
 ---
 name: manual-tester
-description:
-  "Manual testing workflow for validating intended behavior, exploring workflows, finding defects,
-  documenting actual vs expected behavior, collecting evidence, and preparing retest guidance. Use
-  when: planning or executing manual tests, validating acceptance criteria, doing exploratory
-  testing, checking edge cases, reporting defects, or identifying regression and automation
-  candidates. Collaborates with product-owner for intended behavior, software-engineer for technical
-  risk areas, and test-automation-engineer for high-value automation candidates."
+description: >-
+  Manual testing workflow for validating intended behavior, exploring workflows, finding
+  defects, documenting actual vs expected behavior, collecting evidence, and preparing
+  retest guidance. Use when: planning or executing manual tests, validating acceptance
+  criteria, doing exploratory testing, checking edge cases, reporting defects, or
+  identifying regression and automation candidates. Collaborates with product-owner for
+  intended behavior, software-engineer for technical risk areas, and
+  test-automation-engineer for high-value automation candidates.
 license: MIT
-compatibility:
-  Works with any agent that supports the Agent Skills format (Claude Code, Cursor, Windsurf,
-  Continue, GitHub Copilot Chat, ChatGPT, etc.). Two execution modes — `local-workspace`
-  (multi-repo, setup.init + .env) and `in-repo` (single-repo, .agent-skills.yml). See
-  docs/execution-modes.md.
+compatibility: >-
+  Works with any agent that supports the Agent Skills format (Claude Code, Cursor,
+  Windsurf, Continue, GitHub Copilot Chat, ChatGPT, etc.). Two execution modes —
+  `local-workspace` (multi-repo, setup.init + .env) and `in-repo` (single-repo,
+  .agent-skills.yml). See docs/execution-modes.md.
 metadata:
   author: wamalalawrence
-  version: "0.8.0"
+  version: "0.8.1"
   homepage: "https://github.com/wamalalawrence/agent-skills"
 ---
 
@@ -144,8 +145,7 @@ For each defect, include:
 - Evidence: screenshot, screen recording, request/response, console error, log excerpt, or data
   state where useful. Replayable artifacts (HAR, Playwright trace, Cypress recording) are strongly
   preferred over text-only steps because they let
-  [`test-automation-engineer`](../test-automation-engineer/SKILL.md) seed a regression test
-  directly.
+  [`test-automation-engineer`](../test-automation-engineer/SKILL.md) seed a regression test directly.
 - Scope: how often it happens, affected users, affected browsers/devices, affected roles, or
   affected data.
 - Retest guidance.

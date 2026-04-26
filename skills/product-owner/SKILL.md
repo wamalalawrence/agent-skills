@@ -1,21 +1,21 @@
 ---
 name: product-owner
-description:
-  "Product ownership workflow for turning product goals, stakeholder needs, Jira tickets, and rough
-  ideas into clear, testable, implementation-ready work. Use when: clarifying goals, refining
-  requirements, defining scope, writing acceptance criteria, preparing Jira-ready stories or tasks,
-  or handing work to engineering and testing. Collaborates with software-engineer for feasibility
-  and tradeoffs, manual-tester for scenario coverage, and test-automation-engineer for
-  automation-friendly acceptance criteria."
+description: >-
+  Product ownership workflow for turning product goals, stakeholder needs, Jira tickets,
+  and rough ideas into clear, testable, implementation-ready work. Use when: clarifying
+  goals, refining requirements, defining scope, writing acceptance criteria, preparing
+  Jira-ready stories or tasks, or handing work to engineering and testing. Collaborates
+  with software-engineer for feasibility and tradeoffs, manual-tester for scenario
+  coverage, and test-automation-engineer for automation-friendly acceptance criteria.
 license: MIT
-compatibility:
-  Works with any agent that supports the Agent Skills format (Claude Code, Cursor, Windsurf,
-  Continue, GitHub Copilot Chat, ChatGPT, etc.). Two execution modes — `local-workspace`
-  (multi-repo, setup.init + .env) and `in-repo` (single-repo, .agent-skills.yml). See
-  docs/execution-modes.md.
+compatibility: >-
+  Works with any agent that supports the Agent Skills format (Claude Code, Cursor,
+  Windsurf, Continue, GitHub Copilot Chat, ChatGPT, etc.). Two execution modes —
+  `local-workspace` (multi-repo, setup.init + .env) and `in-repo` (single-repo,
+  .agent-skills.yml). See docs/execution-modes.md.
 metadata:
   author: wamalalawrence
-  version: "0.8.0"
+  version: "0.8.1"
   homepage: "https://github.com/wamalalawrence/agent-skills"
 ---
 
@@ -59,16 +59,16 @@ invent business priorities or prescribe technical architecture when those belong
 ## Related And Reused Skills
 
 - [`issue-investigator`](../software-engineer/skills/issue-investigator/SKILL.md): use first for
-  bug-flavored input, incidents, support complaints, regressions, unclear expected vs actual
-  behavior, and root-cause evidence.
+  bug-flavored input, incidents, support complaints, regressions, unclear expected vs actual behavior,
+  and root-cause evidence.
 - [`software-engineer`](../software-engineer/SKILL.md): use for technical feasibility,
   implementation impact, architecture constraints, API or migration tradeoffs, and risk areas that
   should shape scope.
 - [`manual-tester`](../manual-tester/SKILL.md): collaborate on testable acceptance criteria,
   scenario coverage, workflow coverage, negative cases, and exploratory charters.
 - [`test-automation-engineer`](../test-automation-engineer/SKILL.md): collaborate when acceptance
-  criteria should be automation-friendly or when business-critical workflows should become
-  regression automation.
+  criteria should be automation-friendly or when business-critical workflows should become regression
+  automation.
 
 Do not duplicate these skills. Product ownership defines intent and scope; engineering validates
 feasibility; manual testing validates behavior; automation engineering turns high-value checks into
@@ -114,9 +114,9 @@ Stop and return refinement questions instead of Jira-ready output when:
 - **If the input is a support ticket, incident report, regression complaint, or any bug-flavored
   request, route it through
   [`issue-investigator`](../software-engineer/skills/issue-investigator/SKILL.md) FIRST** to confirm
-  whether the actual behavior is a defect, a configuration issue, a misunderstanding, or
-  already-fixed work. Do not invent the "actual behavior" or write acceptance criteria for a fix
-  until the investigation result is in hand.
+  whether the actual behavior is a defect, a configuration issue, a misunderstanding, or already-fixed
+  work. Do not invent the "actual behavior" or write acceptance criteria for a fix until the
+  investigation result is in hand.
 
 ### 2. Understand users and stakeholders
 
@@ -158,10 +158,10 @@ Stop and return refinement questions instead of Jira-ready output when:
 ### 6. Collaborate before handoff
 
 - Ask [`software-engineer`](../software-engineer/SKILL.md) to assess feasibility, technical risk,
-  implementation impact, and major tradeoffs when the request touches APIs, migrations,
-  integrations, security, shared libraries, or unclear architecture. Capture the result as a
-  1-paragraph **feasibility note** (effort tier S/M/L, key risks, breaking change y/n) attached to
-  the work item before locking acceptance criteria.
+  implementation impact, and major tradeoffs when the request touches APIs, migrations, integrations,
+  security, shared libraries, or unclear architecture. Capture the result as a 1-paragraph
+  **feasibility note** (effort tier S/M/L, key risks, breaking change y/n) attached to the work item
+  before locking acceptance criteria.
 - Ask [`manual-tester`](../manual-tester/SKILL.md) to review acceptance criteria for testability and
   missing scenarios when behavior is complex or user-facing.
 - Ask [`test-automation-engineer`](../test-automation-engineer/SKILL.md) to flag automation
@@ -286,5 +286,6 @@ them.
 - "Split this large request into smaller stories and call out dependencies."
 - "Prepare a handoff for engineering, manual testing, and automation from this product brief."
 
-See [the product-owner story refinement example](../../docs/examples/product-owner-story-refinement.md)
-and [starter prompts](../../docs/starter-prompts.md).
+See [the product-owner story refinement
+example](../../docs/examples/product-owner-story-refinement.md) and [starter
+prompts](../../docs/starter-prompts.md).

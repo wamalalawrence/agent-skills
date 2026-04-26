@@ -25,6 +25,9 @@ GitHub Actions runs the same repository validator on pushes and pull requests to
 - Required repository files, docs, config examples, skill files, and evaluation scenarios exist.
 - Important Markdown files are not collapsed into one or two giant lines.
 - Markdown headings exist and fenced code blocks are balanced.
+- Markdown source remains readable: overlong lines, mid-line headings, collapsed table rows, and
+  mid-line code fences are rejected.
+- YAML and Python source receive similar line-readability checks where reasonable.
 - Basic relative Markdown links resolve to files or folders in the repository.
 - Every `SKILL.md` has the required sections:
   `Purpose`, `When To Use`, `Related And Reused Skills`, `Required Inputs`, `Required Workflow`,
@@ -51,7 +54,8 @@ GitHub Actions runs the same repository validator on pushes and pull requests to
 
 Failures exit with a non-zero status and should block a release. Examples include missing required
 files, broken relative links, malformed skill frontmatter, missing required skill sections, version
-mismatches, unbalanced code fences, tracked cache files, likely secrets, or private absolute paths.
+mismatches, unbalanced code fences, unreadable long source lines, tracked cache files, likely
+secrets, or private absolute paths.
 
 Warnings exit successfully but should still be inspected. Examples include suspicious hostnames,
 possible real emails, hardcoded ticket keys, README/version drift, or local generated/cache files
@@ -60,8 +64,8 @@ that exist in the working tree without an ignore rule.
 ## Evaluation Scenarios
 
 The files in [`evals/`](../evals/) are manual scenario checks for skill behavior. They are designed
-to help maintainers ask: given this input context, would the skill produce evidence-based,
-specific, contract-complete output without inventing missing facts?
+to help maintainers ask: given this input context, would the skill produce evidence-based, specific,
+contract-complete output without inventing missing facts?
 
 Use the [skill quality scorecard](skill-quality-scorecard.md) to judge outputs consistently. Treat
 the scorecard as a maintainer aid, not a scientific benchmark.

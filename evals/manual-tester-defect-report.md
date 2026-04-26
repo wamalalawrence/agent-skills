@@ -2,10 +2,10 @@
 
 ## Input Context
 
-A tester observes that a profile form accepts an invalid phone number and then shows a success toast.
-They know the expected behavior from acceptance criteria: invalid phone numbers must block save and
-show an inline validation message. The tester has a staging URL, browser/version, test account role,
-and anonymized input, but no screenshots yet.
+A tester observes that a profile form accepts an invalid phone number and then shows a success
+toast. They know the expected behavior from acceptance criteria: invalid phone numbers must block
+save and show an inline validation message. The tester has a staging URL, browser/version, test
+account role, and anonymized input, but no screenshots yet.
 
 ## Skill Under Test
 

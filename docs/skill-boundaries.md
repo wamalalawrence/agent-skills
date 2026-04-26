@@ -3,14 +3,57 @@
 These skills are meant to collaborate, not compete. Each role owns a different decision surface and
 must hand off when the task moves outside that surface.
 
-| Skill | Owns | Does not own | Typical handoff |
-| --- | --- | --- | --- |
-| `software-engineer` | Repository context, implementation plan, code changes, validation, PR readiness | Product intent invention, standalone root-cause guessing, final human release approval | To `issue-investigator` for unclear bugs; to `code-reviewer` at review gates; to testing skills for validation coverage |
-| `issue-investigator` | Issue classification, expected vs actual behavior, evidence, reproduction, root-cause status, next action | Implementing fixes, final PR verdicts, invented acceptance criteria | To `software-engineer` for fixes; to `product-owner` for unclear intended behavior; to `test-automation-engineer` for stable regressions |
-| `code-reviewer` | Issue-aware diff review, engineering-quality findings, severity/confidence, final review verdict | Writing the implementation unless asked, guessing issue intent, generic formatting review | To `issue-investigator` when ticket/root-cause context is unclear; to `software-engineer` for fixes |
-| `product-owner` | Product goal, user value, scope, acceptance criteria, UX notes, Jira-ready handoff | Technical architecture, code review, test implementation, deciding bug root cause | To `issue-investigator` for bug-flavored input; to `software-engineer` for feasibility; to testing skills for coverage concerns |
-| `manual-tester` | Manual test scope, scenarios, execution results, defect evidence, retest guidance, automation candidates | Root-cause analysis, product intent invention, automation implementation | To `issue-investigator` for reproducible defects; to `product-owner` for unclear expected behavior; to `test-automation-engineer` for stable regression candidates |
-| `test-automation-engineer` | Automation strategy, test level choice, fixtures, selectors/contracts, CI artifacts, flakiness risk | Automating unclear behavior, manual exploration, product intent, root-cause investigation | To `manual-tester` for unstable/manual scenarios; to `issue-investigator` for repro evidence; to `code-reviewer` for test-quality review |
+## Role Ownership
+
+### `software-engineer`
+
+- Owns: repository context, implementation plan, code changes, validation, and PR readiness.
+- Does not own: product intent invention, standalone root-cause guessing, or final human release
+  approval.
+- Typical handoff: to `issue-investigator` for unclear bugs, to `code-reviewer` at review gates,
+  and to testing skills for validation coverage.
+
+### `issue-investigator`
+
+- Owns: issue classification, expected vs actual behavior, evidence, reproduction, root-cause
+  status, and next action.
+- Does not own: implementing fixes, final PR verdicts, or invented acceptance criteria.
+- Typical handoff: to `software-engineer` for fixes, to `product-owner` for unclear intended
+  behavior, and to `test-automation-engineer` for stable regressions.
+
+### `code-reviewer`
+
+- Owns: issue-aware diff review, engineering-quality findings, severity/confidence, and final
+  review verdict.
+- Does not own: writing the implementation unless asked, guessing issue intent, or generic
+  formatting review.
+- Typical handoff: to `issue-investigator` when ticket/root-cause context is unclear and to
+  `software-engineer` for fixes.
+
+### `product-owner`
+
+- Owns: product goal, user value, scope, acceptance criteria, UX notes, and Jira-ready handoff.
+- Does not own: technical architecture, code review, test implementation, or deciding bug root
+  cause.
+- Typical handoff: to `issue-investigator` for bug-flavored input, to `software-engineer` for
+  feasibility, and to testing skills for coverage concerns.
+
+### `manual-tester`
+
+- Owns: manual test scope, scenarios, execution results, defect evidence, retest guidance, and
+  automation candidates.
+- Does not own: root-cause analysis, product intent invention, or automation implementation.
+- Typical handoff: to `issue-investigator` for reproducible defects, to `product-owner` for unclear
+  expected behavior, and to `test-automation-engineer` for stable regression candidates.
+
+### `test-automation-engineer`
+
+- Owns: automation strategy, test level choice, fixtures, selectors/contracts, CI artifacts, and
+  flakiness risk.
+- Does not own: automating unclear behavior, manual exploration, product intent, or root-cause
+  investigation.
+- Typical handoff: to `manual-tester` for unstable/manual scenarios, to `issue-investigator` for
+  repro evidence, and to `code-reviewer` for test-quality review.
 
 ## Required Handoffs
 
