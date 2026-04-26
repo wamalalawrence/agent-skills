@@ -6,6 +6,28 @@ All notable project changes should be recorded here.
 
 - No unreleased changes.
 
+## 0.8.2 - Physical Source Formatting Fix
+
+### Changed
+
+- Replaced remaining wide Markdown tables in `README.md`,
+  `docs/skill-performance-review.md`, `skills/software-engineer/SKILL.md`, and
+  `skills/software-engineer/skills/issue-investigator/SKILL.md` with readable
+  per-item sections so no Markdown line exceeds the new 200-character limit.
+- Updated `VERSION`, README status, skill metadata, and release checklist for
+  `0.8.2`.
+
+### Fixed
+
+- Tightened `scripts/validate-repo.py` line-length limits to 200 characters for
+  Markdown and source files and lowered the source long-line warning threshold
+  to 140 characters.
+- Added a Markdown file-density check that fails files where the byte-per-line
+  ratio shows the file is physically compressed.
+- Added a YAML minification check that fails when multiple top-level keys
+  collapse onto one physical line or when inline flow values look minified.
+- Added a Python minification check that fails on multiple statements per line.
+
 ## 0.8.1 - Source Formatting and Release Hygiene
 
 ### Changed

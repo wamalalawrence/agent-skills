@@ -17,7 +17,7 @@ compatibility: >-
   docs/execution-modes.md.
 metadata:
   author: wamalalawrence
-  version: "0.8.1"
+  version: "0.8.2"
   homepage: "https://github.com/wamalalawrence/agent-skills"
 argument-hint: >-
   issue URL/key, bug report, incident, support ticket, feature request, or task
@@ -129,16 +129,24 @@ acceptance criteria, key comments, linked-doc excerpts, and affected environment
 supplied but the ticket cannot be read and no direct ticket details are provided, stop instead of
 producing a low-confidence investigation.
 
-| Variable                                        | Required                                   | Used for                                                                                                                             |
-| ----------------------------------------------- | ------------------------------------------ | ------------------------------------------------------------------------------------------------------------------------------------ |
-| `WORKSPACE_ROOT`                                | yes (local-workspace)                      | Resolving repos, cache, and local context. In `in-repo` mode the repository root is used.                                            |
-| `PROJECTS_JSON`                                 | yes (local-workspace)                      | Matching affected repos/services to stack and commands. In `in-repo` mode the `project:` block in `.agent-skills.yml` replaces this. |
-| `JIRA_HOST`, `JIRA_API_TOKEN`, `JIRA_AUTH_TYPE` | only for Jira tickets                      | Jira ticket lookup                                                                                                                   |
-| `JIRA_LOGIN`                                    | yes for basic auth; recommended for bearer | Jira CLI identity                                                                                                                    |
-| `JIRA_CONFIG_FILE`                              | no                                         | Jira CLI config path                                                                                                                 |
-| `CONFLUENCE_HOST`, `CONFLUENCE_API_TOKEN`       | only when linked docs require them         | Confluence lookup                                                                                                                    |
-| `ISSUE_INVESTIGATOR_CACHE_DIR`                  | no                                         | Cache for fetched ticket/doc summaries; default `${AGENT_SKILLS_CACHE_DIR:-${WORKSPACE_ROOT:-$REPO_ROOT}/.cache/issue-investigator}` |
-| `ISSUE_INVESTIGATOR_CACHE_TTL_HOURS`            | no                                         | Cache TTL; default `24`                                                                                                              |
+Required setup variables:
+
+- `WORKSPACE_ROOT` — required in `local-workspace` mode for resolving repos,
+  cache, and local context. In `in-repo` mode the repository root is used.
+- `PROJECTS_JSON` — required in `local-workspace` mode for matching affected
+  repos/services to stack and commands. In `in-repo` mode the `project:` block in
+  `.agent-skills.yml` replaces this.
+- `JIRA_HOST`, `JIRA_API_TOKEN`, `JIRA_AUTH_TYPE` — required only for Jira
+  tickets, used for Jira ticket lookup.
+- `JIRA_LOGIN` — required for basic auth and recommended for bearer auth; used as
+  Jira CLI identity.
+- `JIRA_CONFIG_FILE` — optional Jira CLI config path.
+- `CONFLUENCE_HOST`, `CONFLUENCE_API_TOKEN` — required only when linked docs
+  require them, used for Confluence lookup.
+- `ISSUE_INVESTIGATOR_CACHE_DIR` — optional cache dir for fetched ticket/doc
+  summaries; default
+  `${AGENT_SKILLS_CACHE_DIR:-${WORKSPACE_ROOT:-$REPO_ROOT}/.cache/issue-investigator}`.
+- `ISSUE_INVESTIGATOR_CACHE_TTL_HOURS` — optional cache TTL; default `24`.
 
 For GitHub issues, prefer the authenticated `gh` CLI when available. Do not require new secrets in
 this public skill unless the user's environment already uses them.
