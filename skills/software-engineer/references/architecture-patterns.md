@@ -72,9 +72,9 @@ for breaking-change risk.
 2. **Entities stay in persistence**: never expose JPA entities in API responses — map to DTOs.
 3. **Business logic in services**: controllers stay thin, entities stay data holders.
 4. **Use a mapper**: MapStruct (Java) or equivalent for entity ↔ DTO conversion. Hand-written
-   mappers should be the exception.
+  mappers should be the exception.
 5. **`@Transactional` on services only**: never on controllers, never on entities, never on
-   interfaces.
+  interfaces.
 
 ## Multi-variant / multi-tenant projects
 
@@ -124,6 +124,6 @@ When entering an unfamiliar repo:
 1. Read `README.md` and any `CONTRIBUTING.md`.
 2. Read the build manifest (`pom.xml`, `package.json`, `pyproject.toml`).
 3. Check `.github/workflows/` to see what CI actually runs — that's the real definition of
-   "passing".
+  "passing".
 4. Look at the most recent merged PRs to see commit style, branch style, and review depth.
 5. Identify the test runner and run a single existing test to confirm the local environment works.

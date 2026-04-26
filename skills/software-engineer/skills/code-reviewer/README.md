@@ -16,9 +16,9 @@ See [SKILL.md](./SKILL.md) for the full workflow.
 ## Review layers
 
 1. Issue alignment: checks the diff against Jira, GitHub Issues, support tickets, bug reports,
-   feature requests, task descriptions, acceptance criteria, and linked context.
+  feature requests, task descriptions, acceptance criteria, and linked context.
 2. Engineering quality: checks correctness, maintainability, tests, security, performance,
-   observability, compatibility, and regression risk.
+  observability, compatibility, and regression risk.
 
 ## Collaborates with
 

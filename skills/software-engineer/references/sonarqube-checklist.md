@@ -99,7 +99,7 @@ open coverage/target/site/jacoco-aggregate/index.html
   - Null-check parameters at system boundaries
   - Chain `Optional.map().orElse()` instead of nested null checks
 - [ ] No resource leaks — try-with-resources / `using` / `with` for streams, connections, result
-      sets
+  sets
 - [ ] No `equals()` without `hashCode()` (and vice versa) — Java
 - [ ] No infinite loops without break conditions
 - [ ] No division by zero — validate denominators

@@ -1,25 +1,27 @@
 ---
 name: issue-investigator
-description:
-  "Issue investigation workflow for Jira tickets, GitHub issues, support tickets, incidents,
-  regressions, feature requests, and technical tasks. Use when: understanding expected vs actual
-  behavior, classifying issue type, gathering evidence, reproducing problems, analyzing root cause,
-  refining tickets before implementation, or recommending the next action. Reuses software-engineer
-  for technical code analysis and implementation feasibility, and supports code-reviewer by
-  producing reliable issue context before review."
+description: >-
+  Issue investigation workflow for Jira tickets, GitHub issues, support tickets,
+  incidents, regressions, feature requests, and technical tasks. Use when: understanding
+  expected vs actual behavior, classifying issue type, gathering evidence, reproducing
+  problems, analyzing root cause, refining tickets before implementation, or recommending
+  the next action. Reuses software-engineer for technical code analysis and implementation
+  feasibility, and supports code-reviewer by producing reliable issue context before
+  review.
 license: MIT
-compatibility:
-  Works with any agent that supports the Agent Skills format (Claude Code, Cursor, Windsurf,
-  Continue, GitHub Copilot Chat, ChatGPT, etc.). Two execution modes — `local-workspace`
-  (multi-repo, setup.init + .env) and `in-repo` (single-repo, .agent-skills.yml). Optional Jira CLI
-  integration via `.jira-config.yml`. See docs/execution-modes.md.
+compatibility: >-
+  Works with any agent that supports the Agent Skills format (Claude Code, Cursor,
+  Windsurf, Continue, GitHub Copilot Chat, ChatGPT, etc.). Two execution modes —
+  `local-workspace` (multi-repo, setup.init + .env) and `in-repo` (single-repo,
+  .agent-skills.yml). Optional Jira CLI integration via `.jira-config.yml`. See
+  docs/execution-modes.md.
 metadata:
   author: wamalalawrence
-  version: "0.8.0"
+  version: "0.8.1"
   homepage: "https://github.com/wamalalawrence/agent-skills"
-argument-hint:
-  "issue URL/key, bug report, incident, support ticket, feature request, or task description plus
-  affected repo/service/environment"
+argument-hint: >-
+  issue URL/key, bug report, incident, support ticket, feature request, or task
+  description plus affected repo/service/environment
 user-invocable: true
 disable-model-invocation: false
 ---
@@ -211,9 +213,9 @@ safe environment that still reproduces the behavior:
 1. Local stack (docker-compose, devcontainer, in-process test harness).
 2. Ephemeral branch environment with a snapshot or seeded data set.
 3. Replayed input only: HAR file, recorded log slice, captured request/response pair, or anonymized
-   payload.
+  payload.
 4. Read-only inspection of the affected environment (`SET TRANSACTION READ ONLY`, `--dry-run`,
-   read-replica, snapshot DB) when no other option reproduces it.
+  read-replica, snapshot DB) when no other option reproduces it.
 
 For each reproduction attempt, record: environment chosen, exact commands and inputs, observed
 output, and a deterministic recipe (env vars + commands + expected log lines) that another agent or
@@ -240,10 +242,10 @@ When the root cause is not obvious from evidence already in hand:
 1. List the **top three** candidate causes, ranked by prior likelihood plus evidence already seen.
 2. For each hypothesis, write a one-line **"what would change my mind"** falsifier.
 3. Design the **single cheapest experiment that discriminates between the top two** hypotheses (a
-   query, a log filter, a one-line probe, a unit test, a config flip in a sandbox).
+  query, a log filter, a one-line probe, a unit test, a config flip in a sandbox).
 4. Run it. Update rankings. Eliminate or promote.
 5. Repeat until one hypothesis dominates the evidence or all three are eliminated and a new set is
-   needed.
+  needed.
 
 Do not skip to step 5 by intuition. Recording the discriminating experiment is the artifact that
 distinguishes investigation from guessing.
@@ -406,5 +408,6 @@ missing.
 - "Investigate this regression report and find the likely root cause."
 - "Refine this technical task before implementation and list missing evidence."
 
-See [the issue-investigator bug report example](../../../../docs/examples/issue-investigator-bug-report.md)
-and [starter prompts](../../../../docs/starter-prompts.md).
+See [the issue-investigator bug report
+example](../../../../docs/examples/issue-investigator-bug-report.md) and [starter
+prompts](../../../../docs/starter-prompts.md).

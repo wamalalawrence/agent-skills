@@ -1,21 +1,22 @@
 ---
 name: test-automation-engineer
-description:
-  "Test automation engineering workflow for choosing the right test level, designing maintainable
-  automated checks, preventing flakiness, integrating tests into CI, and deciding when not to
-  automate. Use when: creating or reviewing automated regression tests, API tests, contract tests,
-  integration tests, UI/e2e tests, fixtures, selectors, or test reporting. Collaborates with
-  software-engineer for code quality and architecture, manual-tester for real scenarios and defects,
-  and product-owner for acceptance criteria and business-critical workflows."
+description: >-
+  Test automation engineering workflow for choosing the right test level, designing
+  maintainable automated checks, preventing flakiness, integrating tests into CI, and
+  deciding when not to automate. Use when: creating or reviewing automated regression
+  tests, API tests, contract tests, integration tests, UI/e2e tests, fixtures, selectors,
+  or test reporting. Collaborates with software-engineer for code quality and
+  architecture, manual-tester for real scenarios and defects, and product-owner for
+  acceptance criteria and business-critical workflows.
 license: MIT
-compatibility:
-  Works with any agent that supports the Agent Skills format (Claude Code, Cursor, Windsurf,
-  Continue, GitHub Copilot Chat, ChatGPT, etc.). Two execution modes — `local-workspace`
-  (multi-repo, setup.init + .env) and `in-repo` (single-repo, .agent-skills.yml). See
-  docs/execution-modes.md.
+compatibility: >-
+  Works with any agent that supports the Agent Skills format (Claude Code, Cursor,
+  Windsurf, Continue, GitHub Copilot Chat, ChatGPT, etc.). Two execution modes —
+  `local-workspace` (multi-repo, setup.init + .env) and `in-repo` (single-repo,
+  .agent-skills.yml). See docs/execution-modes.md.
 metadata:
   author: wamalalawrence
-  version: "0.8.0"
+  version: "0.8.1"
   homepage: "https://github.com/wamalalawrence/agent-skills"
 ---
 
@@ -59,8 +60,8 @@ maintainers.
 - [`software-engineer`](../software-engineer/SKILL.md): use for code quality, architecture, test
   framework conventions, implementation patterns, maintainability, and repo validation commands.
 - [`manual-tester`](../manual-tester/SKILL.md): use for real user scenarios, exploratory findings,
-  reproduced defects, regression candidates, and usability observations that should inform
-  automation scope.
+  reproduced defects, regression candidates, and usability observations that should inform automation
+  scope.
 - [`product-owner`](../product-owner/SKILL.md): use for acceptance criteria, business value,
   intended behavior, scope, and business-critical workflows.
 - [`issue-investigator`](../software-engineer/skills/issue-investigator/SKILL.md): consume
@@ -169,14 +170,14 @@ Stop and recommend clarification or manual coverage instead of automation when:
   confidence, run the strongest feasible stability check, and leave visible follow-up. Any failure
   must be fixed or quarantined with a linked follow-up issue — silent quarantine is forbidden.
 - For regression tests that originated from an
-  [`issue-investigator`](../software-engineer/skills/issue-investigator/SKILL.md) reproduction
-  recipe, read
+  [`issue-investigator`](../software-engineer/skills/issue-investigator/SKILL.md) reproduction recipe,
+  read
   `${AGENT_SKILLS_CACHE_DIR:-${WORKSPACE_ROOT:-$REPO_ROOT}/.cache/agent-skills}/<issue-key>/repro-recipe.yml`
-  per the [evidence-pack & repro-recipe schema](../software-engineer/references/evidence-pack.md),
-  use its `prerequisites`, `steps`, `expected_observation`, and `post_fix_observation` to seed the
-  test, and link the investigation result and the introducing commit (when the defect was a
-  regression) in the test's docstring or a code comment. The cache root resolves to the workspace
-  root in `local-workspace` mode and to the repository root in `in-repo` mode — see
+  per the [evidence-pack & repro-recipe schema](../software-engineer/references/evidence-pack.md), use
+  its `prerequisites`, `steps`, `expected_observation`, and `post_fix_observation` to seed the test,
+  and link the investigation result and the introducing commit (when the defect was a regression) in
+  the test's docstring or a code comment. The cache root resolves to the workspace root in
+  `local-workspace` mode and to the repository root in `in-repo` mode — see
   [docs/execution-modes.md](../../docs/execution-modes.md).
 
 ## Expected Output Contract
@@ -258,5 +259,6 @@ Use the smallest useful format for the request, preserving these fields for norm
 - "Turn this manual defect reproduction into an automated regression test plan."
 - "Identify which scenarios should not be automated and why."
 
-See [the test-automation-engineer regression plan example](../../docs/examples/test-automation-engineer-regression-plan.md)
-and [starter prompts](../../docs/starter-prompts.md).
+See [the test-automation-engineer regression plan
+example](../../docs/examples/test-automation-engineer-regression-plan.md) and [starter
+prompts](../../docs/starter-prompts.md).

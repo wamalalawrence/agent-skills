@@ -1,22 +1,23 @@
 ---
 name: software-engineer
-description:
-  "Senior-level pair-programming workflow for software engineering work. Use when: making code
-  changes, bug fixes, refactors, feature implementation, issue-description driven fixes, code
-  review, PR preparation, migration scripts, API changes, or security review. Connects
-  implementation, review, and issue resolution in one context-aware loop. Uses compact project and
-  issue context first, then expands only when risk or ambiguity requires it. Invokes the nested
-  code-reviewer skill at the end of Implementation and again at the end of QA. Reuses
-  issue-investigator when issue context, root cause, or expected behavior needs deeper evidence."
+description: >-
+  Senior-level pair-programming workflow for software engineering work. Use when: making
+  code changes, bug fixes, refactors, feature implementation, issue-description driven
+  fixes, code review, PR preparation, migration scripts, API changes, or security review.
+  Connects implementation, review, and issue resolution in one context-aware loop. Uses
+  compact project and issue context first, then expands only when risk or ambiguity
+  requires it. Invokes the nested code-reviewer skill at the end of Implementation and
+  again at the end of QA. Reuses issue-investigator when issue context, root cause, or
+  expected behavior needs deeper evidence.
 license: MIT
-compatibility:
-  Works with any agent that supports the Agent Skills format (Claude Code, Cursor, Windsurf,
-  Continue, GitHub Copilot Chat, ChatGPT, etc.). Two execution modes — `local-workspace`
-  (multi-repo, setup.init + .env) and `in-repo` (single-repo, .agent-skills.yml). See
-  docs/execution-modes.md.
+compatibility: >-
+  Works with any agent that supports the Agent Skills format (Claude Code, Cursor,
+  Windsurf, Continue, GitHub Copilot Chat, ChatGPT, etc.). Two execution modes —
+  `local-workspace` (multi-repo, setup.init + .env) and `in-repo` (single-repo,
+  .agent-skills.yml). See docs/execution-modes.md.
 metadata:
   author: wamalalawrence
-  version: "0.8.0"
+  version: "0.8.1"
   homepage: "https://github.com/wamalalawrence/agent-skills"
 ---
 
@@ -50,11 +51,11 @@ quality assurance, and code review into a single repeatable pair-programming loo
   [`issue-investigator`](./skills/issue-investigator/SKILL.md) skill when investigation needs
   technical code analysis or implementation feasibility.
 - This skill works with the nested [`code-reviewer`](./skills/code-reviewer/SKILL.md) skill as a
-  pair-programming reviewer, not as an afterthought. Implementation, review, and issue resolution
-  are treated as one workflow.
+  pair-programming reviewer, not as an afterthought. Implementation, review, and issue resolution are
+  treated as one workflow.
 - The engineer owns context gathering, implementation, validation, and final synthesis. The reviewer
-  challenges the diff twice: once after the intended implementation is staged, and once after QA
-  sees the whole branch.
+  challenges the diff twice: once after the intended implementation is staged, and once after QA sees
+  the whole branch.
 - The nested [`issue-investigator`](./skills/issue-investigator/SKILL.md) skill deepens issue
   context, classification, reproduction, and root-cause evidence before implementation or review.
 - Use the top-level [`product-owner`](../product-owner/SKILL.md) skill when product intent, scope,
@@ -91,7 +92,7 @@ You are simultaneously:
 
 1. **Senior software engineer** — clean code, SOLID, proper architecture
 2. **Context steward** — understand the issue source, business impact, and repository conventions
-   before acting
+  before acting
 3. **QA engineer** — think about edge cases, regressions, test coverage
 4. **Review partner** — use the reviewer skill to challenge assumptions and tighten the result
 
@@ -111,7 +112,7 @@ Run this setup preflight before context discovery.
 2. Else if `${WORKSPACE_ROOT}/.env` exists and is readable → `local-workspace`.
 3. Else if `.agent-skills.yml` exists at the repository root → `in-repo`.
 4. Else: stop and tell the user to either run `./setup.init` (multi-repo local) or copy
-   `.agent-skills.example.yml` to `.agent-skills.yml` at the repo root (single-repo / online agent).
+  `.agent-skills.example.yml` to `.agent-skills.yml` at the repo root (single-repo / online agent).
 
 **Step 2 — verify context for the requested task.** Whichever mode applies, if the resolved
 configuration is missing, unreadable, or lacks enough metadata for the requested task, warn the user
@@ -130,22 +131,26 @@ Values are resolved in this order: process environment → `.agent-skills.yml` (
 → stop with `Missing required setup: <NAME>`. Secrets always come from environment variables in both
 modes.
 
-| Variable                                        | Required                                                | Used for                                                                                                                                                                                                             |
-| ----------------------------------------------- | ------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `WORKSPACE_ROOT`                                | yes (local-workspace)                                   | Resolving repos, configs, cache. In `in-repo` mode the repository root is used instead.                                                                                                                              |
-| `ORG_NAME`                                      | yes                                                     | Display in summaries and PR descriptions                                                                                                                                                                             |
-| `GITHUB_ORG`                                    | only for GitHub clone, push, PR, or sibling-repo lookup | Cloning, pushing, looking up sibling repos                                                                                                                                                                           |
-| `GITHUB_DEFAULT_BRANCH`                         | yes                                                     | Default base branch for new work                                                                                                                                                                                     |
-| `PROJECTS_JSON`                                 | yes (local-workspace)                                   | Multi-project map: per-project stack, base branch, build/format commands. See [`agent-skills/.env.example`](../../.env.example). In `in-repo` mode the single `project:` block in `.agent-skills.yml` replaces this. |
-| `GIT_COMMIT_MSG_FORMAT`                         | no                                                      | Hint string for commit message format                                                                                                                                                                                |
-| `GIT_BRANCH_NAME_FORMAT`                        | no                                                      | Hint string for branch name format                                                                                                                                                                                   |
-| `GIT_MERGE_STRATEGY`                            | no                                                      | `squash` \| `merge` \| `rebase`                                                                                                                                                                                      |
-| `JIRA_HOST`, `JIRA_API_TOKEN`, `JIRA_AUTH_TYPE` | only when a Jira ticket is in scope                     | Jira CLI / REST access                                                                                                                                                                                               |
-| `CONFLUENCE_HOST`, `CONFLUENCE_API_TOKEN`       | only if the ticket links Confluence pages               | Confluence REST access                                                                                                                                                                                               |
-| `JDK_MANAGER`, `NODE_MANAGER`, `PYTHON_MANAGER` | no                                                      | Hint for switching language runtime                                                                                                                                                                                  |
-| `DOCKER_REQUIRED`                               | no                                                      | Whether Docker must be running before the build                                                                                                                                                                      |
-| `SHARED_LIBRARY_NAMES`                          | no                                                      | Cross-project impact detection                                                                                                                                                                                       |
-| `SONAR_HOST_URL`                                | no                                                      | Where SonarQube reports live (CI/CD only by default)                                                                                                                                                                 |
+Required setup variables:
+
+- `WORKSPACE_ROOT`: required in `local-workspace` mode. Resolves repos, configs, and cache. In
+  `in-repo` mode, the repository root is used instead.
+- `ORG_NAME`: required. Used for display in summaries and PR descriptions.
+- `GITHUB_ORG`: required only for GitHub clone, push, PR, or sibling-repo lookup.
+- `GITHUB_DEFAULT_BRANCH`: required. Default base branch for new work.
+- `PROJECTS_JSON`: required in `local-workspace` mode. Multi-project map for stack, base branch,
+  build, and format commands. See [`agent-skills/.env.example`](../../.env.example). In `in-repo`
+  mode, the single `project:` block in `.agent-skills.yml` replaces this.
+- `GIT_COMMIT_MSG_FORMAT`: optional. Hint string for commit message format.
+- `GIT_BRANCH_NAME_FORMAT`: optional. Hint string for branch name format.
+- `GIT_MERGE_STRATEGY`: optional. One of `squash`, `merge`, or `rebase`.
+- `JIRA_HOST`, `JIRA_API_TOKEN`, `JIRA_AUTH_TYPE`: required only when a Jira ticket is in scope.
+  Used for Jira CLI or REST access.
+- `CONFLUENCE_HOST`, `CONFLUENCE_API_TOKEN`: required only if the ticket links Confluence pages.
+- `JDK_MANAGER`, `NODE_MANAGER`, `PYTHON_MANAGER`: optional hints for switching language runtime.
+- `DOCKER_REQUIRED`: optional. Indicates whether Docker must be running before the build.
+- `SHARED_LIBRARY_NAMES`: optional. Used for cross-project impact detection.
+- `SONAR_HOST_URL`: optional. Points to SonarQube reports when CI/CD provides them.
 
 If a variable is missing, output:
 
@@ -167,21 +172,20 @@ This skill must work with **real** context. Walk this ladder until you have enou
 step 4 is reached, stop and ask the user.
 
 1. **Project identity** — In `local-workspace` mode, look up the current working directory inside
-   `${PROJECTS_JSON}` to identify the project (`name`, `stack`, `base_branch`, `build`, `format`,
-   `runtime_version`); if the cwd matches multiple entries (or none), ask the user. In `in-repo`
-   mode the single `project:` block in `.agent-skills.yml` is the project; if its required fields
-   (`stack`, `base_branch`, `build`) are blank, infer from repo files (`pom.xml` / `package.json` /
-   `pyproject.toml` / `go.mod`) and ask the user to confirm before any code-changing step.
+  `${PROJECTS_JSON}` to identify the project (`name`, `stack`, `base_branch`, `build`, `format`,
+  `runtime_version`); if the cwd matches multiple entries (or none), ask the user. In `in-repo` mode
+  the single `project:` block in `.agent-skills.yml` is the project; if its required fields (`stack`,
+  `base_branch`, `build`) are blank, infer from repo files (`pom.xml` / `package.json` /
+  `pyproject.toml` / `go.mod`) and ask the user to confirm before any code-changing step.
 2. **Issue source** — Use a Jira ticket when one is supplied or derivable from the branch name.
-   Otherwise use the user's description as the issue brief. For Jira, fetch
-   `jira issue view <KEY> --comments 100` and follow parent / child / linked issues and any linked
-   Confluence pages.
+  Otherwise use the user's description as the issue brief. For Jira, fetch `jira issue view <KEY>
+  --comments 100` and follow parent / child / linked issues and any linked Confluence pages.
 3. **Codebase** — Read the project's `README.md`, build manifest (`pom.xml` / `package.json` /
-   `pyproject.toml` / equivalent), `.github/workflows/`, recent commits touching the affected area,
-   and the tests around it. The CI workflow is the source of truth for "passing".
+  `pyproject.toml` / equivalent), `.github/workflows/`, recent commits touching the affected area, and
+  the tests around it. The CI workflow is the source of truth for "passing".
 4. **The user** — If after the previous three steps the change is still ambiguous, **stop and ask**
-   with a focused list of what you need (acceptance criteria, sample inputs, expected vs actual,
-   related ticket, etc.). Never invent context.
+  with a focused list of what you need (acceptance criteria, sample inputs, expected vs actual,
+  related ticket, etc.). Never invent context.
 
 ### Context budget and token discipline
 
@@ -210,9 +214,9 @@ Required inputs:
 - For non-ticket work: a one-paragraph issue brief covering the desired change, business reason,
   expected behavior, and any known constraints
 
-If the issue source lacks enough context to fully understand the issue or feature being
-implemented, **stop and ask** the user for more context (link, description, sample data,
-screenshots, related ticket) before continuing. Silent guessing is forbidden.
+If the issue source lacks enough context to fully understand the issue or feature being implemented,
+**stop and ask** the user for more context (link, description, sample data, screenshots, related
+ticket) before continuing. Silent guessing is forbidden.
 
 ## Stopping Conditions
 
@@ -261,10 +265,10 @@ Use the locally installed CLI first, fall back to direct REST only when the CLI 
 ### 1.1 Ticket / context
 
 - [ ] Source credentials so they're available to subprocesses:
-      `set -a && source ${WORKSPACE_ROOT}/.env && set +a` (local-workspace mode). In `in-repo` mode
-      credentials come from the host platform's environment-variable injection — nothing to source.
+  `set -a && source ${WORKSPACE_ROOT}/.env && set +a` (local-workspace mode). In `in-repo` mode
+  credentials come from the host platform's environment-variable injection — nothing to source.
 - [ ] If `.env` is missing, unreadable, or still only contains bootstrap values that cannot identify
-      the real project for this task, stop with the missing-setup message from Required Environment.
+  the real project for this task, stop with the missing-setup message from Required Environment.
 - [ ] If working from a Jira ticket: sanity-check access with `jira me` and `jira serverinfo`.
 - [ ] Read ticket details: `jira issue view <TICKET>` and `jira issue view <TICKET> --comments 100`.
 - [ ] Follow linked issues, parent/child relationships, subtasks, and epic context.
@@ -274,49 +278,49 @@ Use the locally installed CLI first, fall back to direct REST only when the CLI 
 ### 1.2 Identify the project
 
 - [ ] Determine which repository (or repositories) under `${WORKSPACE_ROOT}` are affected. Match the
-      cwd against `${PROJECTS_JSON}` to find the entry.
+  cwd against `${PROJECTS_JSON}` to find the entry.
 - [ ] From the matched entry use `stack`, `runtime_version`, `base_branch`, `build`, and `format`
-      for the rest of the workflow. If the entry is missing keys, fall back to reading the project's
-      build manifest (`pom.xml`, `package.json`, `pyproject.toml`, etc.).
+  for the rest of the workflow. If the entry is missing keys, fall back to reading the project's build
+  manifest (`pom.xml`, `package.json`, `pyproject.toml`, etc.).
 - [ ] Switch the active runtime (`${JDK_MANAGER}` / `${NODE_MANAGER}` / `${PYTHON_MANAGER}`) to the
-      project's `runtime_version` before building.
+  project's `runtime_version` before building.
 - [ ] If a change spans multiple projects from `${PROJECTS_JSON}`, treat each project's stack and
-      conventions independently — do not assume the rules are the same across stacks.
+  conventions independently — do not assume the rules are the same across stacks.
 - [ ] Identify cross-project impact: changes to anything matching `${SHARED_LIBRARY_NAMES}` will
-      affect downstream consumers.
+  affect downstream consumers.
 - [ ] If the repo is not cloned, clone it from `https://github.com/${GITHUB_ORG}/<repo-name>`.
 - [ ] If `${DOCKER_REQUIRED}` is `true`, confirm Docker is running.
 
 ### 1.3 Git branching
 
 - [ ] Determine the base branch by looking up the project in `${PROJECTS_JSON}` and reading its
-      `base_branch`; fall back to `${GITHUB_DEFAULT_BRANCH}` if the project has no override.
+  `base_branch`; fall back to `${GITHUB_DEFAULT_BRANCH}` if the project has no override.
 - [ ] `gh auth status` to confirm GitHub authentication.
 - [ ] Verify repo git identity: `git config user.name`, `git config user.email`.
 - [ ] Update the base branch: `git fetch origin && git checkout <base> && git pull origin <base>`.
 - [ ] Create a branch from the updated base. Format hint: `${GIT_BRANCH_NAME_FORMAT}`.
 - [ ] Use prefixes intentionally: `feature/` by default, `bugfix/` for defects, `hotfix/` only for
-      actual hotfix flow, `wip/` or `private/` only for non-public work.
+  actual hotfix flow, `wip/` or `private/` only for non-public work.
 - [ ] Branch name **must** contain the ticket key for ticket-driven public work.
 
 ### 1.4 Research & plan
 
 - [ ] Investigate the codebase to understand affected areas.
 - [ ] Check for multi-tenant / multi-mandate / multi-region implications wherever the codebase has
-      variant configs.
+  variant configs.
 - [ ] Identify any service that depends on this repo and could be affected.
 - [ ] For meaningful API or interface changes: design first, share the contract, discuss with the
-      team, then implement.
+  team, then implement.
 - [ ] If product intent or acceptance criteria are unclear, pause and use
-      [`product-owner`](../product-owner/SKILL.md) before writing code.
+  [`product-owner`](../product-owner/SKILL.md) before writing code.
 - [ ] **Present a brief plan with actionable findings BEFORE writing code.** Use this 5-line
-      structure so the reviewer can later check the diff against it: _Problem · Hypothesis ·
-      Smallest change · Risk · Validation._ Persist it as the `plan` block of
-      `${AGENT_SKILLS_CACHE_DIR:-${WORKSPACE_ROOT:-$REPO_ROOT}/.cache/agent-skills}/<issue-key>/evidence-pack.yml`
-      per the [evidence-pack schema](./references/evidence-pack.md). If `issue-investigator` already
-      wrote the file, append to it; do not overwrite the investigation block.
+  structure so the reviewer can later check the diff against it: _Problem · Hypothesis · Smallest
+  change · Risk · Validation._ Persist it as the `plan` block of
+  `${AGENT_SKILLS_CACHE_DIR:-${WORKSPACE_ROOT:-$REPO_ROOT}/.cache/agent-skills}/<issue-key>/evidence-pack.yml`
+  per the [evidence-pack schema](./references/evidence-pack.md). If `issue-investigator` already wrote
+  the file, append to it; do not overwrite the investigation block.
 - [ ] For ambiguous, high-risk, or user-facing changes, get confirmation before proceeding. For
-      clearly specified low-risk changes, continue after stating the plan.
+  clearly specified low-risk changes, continue after stating the plan.
 
 ### 1.5 Reproduce-before-fix gate (bug fixes only)
 
@@ -324,17 +328,17 @@ For any bug fix, regression, or production incident, do not write the fix until 
 the defect deterministically.
 
 - [ ] Use [`issue-investigator`](./skills/issue-investigator/SKILL.md) to confirm root cause and
-      capture a deterministic reproduction recipe in a safe environment (local, sandbox, snapshot,
-      or replayed input — never against live production data). The recipe lives at
-      `${AGENT_SKILLS_CACHE_DIR:-${WORKSPACE_ROOT:-$REPO_ROOT}/.cache/agent-skills}/<issue-key>/repro-recipe.yml`
-      per the [evidence-pack & repro-recipe schema](./references/evidence-pack.md).
+  capture a deterministic reproduction recipe in a safe environment (local, sandbox, snapshot, or
+  replayed input — never against live production data). The recipe lives at
+  `${AGENT_SKILLS_CACHE_DIR:-${WORKSPACE_ROOT:-$REPO_ROOT}/.cache/agent-skills}/<issue-key>/repro-recipe.yml`
+  per the [evidence-pack & repro-recipe schema](./references/evidence-pack.md).
 - [ ] **Write the failing regression test FIRST.** Commit it as the first commit on the branch
-      (e.g., `test: failing test for <TICKET>`). The test must fail on the parent commit and pass on
-      the fix commit. The reviewer will verify this by checking out the parent.
+  (e.g., `test: failing test for <TICKET>`). The test must fail on the parent commit and pass on the
+  fix commit. The reviewer will verify this by checking out the parent.
 - [ ] If the bug cannot be reproduced or no failing test can be written, escalate via
-      `issue-investigator`'s _Recommended Next Action_ instead of guessing at a fix.
+  `issue-investigator`'s _Recommended Next Action_ instead of guessing at a fix.
 - [ ] Skip this gate only for: pure refactors, formatting, docs, or new features without a reported
-      defect — and say so explicitly in the plan.
+  defect — and say so explicitly in the plan.
 
 ---
 
@@ -354,8 +358,8 @@ full list.
 - Prefer standard framework solutions before adding third-party libraries for convenience.
 - Prefer proper solutions over quick patches — code must make business sense.
 
-**Framework / language specifics:** see
-[architecture patterns](./references/architecture-patterns.md). Key universals:
+**Framework / language specifics:** see [architecture
+patterns](./references/architecture-patterns.md). Key universals:
 
 - Constructor injection over field/setter injection.
 - Transactions on service-layer beans only, never on controllers, never on interfaces.
@@ -422,8 +426,8 @@ before treating the review as issue-aware.
 - Blocking behaviour: respect `${CODE_REVIEWER_BLOCKING}` — when `true`, do not move to Phase 3
   until blocker findings are addressed or explicitly waived with a written justification.
 - Iteration cap: respect `${CODE_REVIEWER_MAX_ROUNDS}` (default `3`). Each round must produce
-  strictly fewer blocker/major findings than the previous one. If the loop is not converging, stop
-  and surface a "not converging" summary to the user instead of grinding indefinitely.
+  strictly fewer blocker/major findings than the previous one. If the loop is not converging, stop and
+  surface a "not converging" summary to the user instead of grinding indefinitely.
 - For bug fixes, reference the failing-test commit from Phase 1.5 in the evidence pack so the
   reviewer can verify it fails on the parent commit and passes on the fix.
 
@@ -439,8 +443,8 @@ A managed code-quality server (e.g., SonarQube at `${SONAR_HOST_URL}`) typically
 **local** alternatives to catch issues before pushing:
 
 - **SonarLint** (recommended) — IDE plugin (VS Code: `SonarSource.sonarlint-vscode`, IntelliJ:
-  "SonarQube for IDE"). Standalone mode covers most rules; optional Connected Mode syncs the exact
-  CI ruleset from `${SONAR_HOST_URL}` when network access exists.
+  "SonarQube for IDE"). Standalone mode covers most rules; optional Connected Mode syncs the exact CI
+  ruleset from `${SONAR_HOST_URL}` when network access exists.
 - **SpotBugs** (Java, where configured): `mvn spotbugs:check`.
 - **PMD / Checkstyle** (Java, where configured): `mvn pmd:check`, `mvn checkstyle:check`.
 - **ESLint / Prettier** (JS/TS, where configured): `npm run lint`, `npm run format:check`.
@@ -463,28 +467,28 @@ Quickly verify by category:
 ### 3.2 Test coverage
 
 - [ ] For user-facing or workflow-heavy changes, use [`manual-tester`](../manual-tester/SKILL.md) to
-      identify manual validation scenarios and regression risk.
+  identify manual validation scenarios and regression risk.
 - [ ] For stable, high-value regression scenarios, use
-      [`test-automation-engineer`](../test-automation-engineer/SKILL.md) to choose the right
-      automation level and avoid brittle tests.
+  [`test-automation-engineer`](../test-automation-engineer/SKILL.md) to choose the right automation
+  level and avoid brittle tests.
 - [ ] New code: target `${COVERAGE_TARGET_PERCENT:-80}` percent at minimum, 100% for safety-critical
-      code paths. Verify every branch and path you added.
+  code paths. Verify every branch and path you added.
 - [ ] Tests should be fast; slow or noisy tests are a design smell unless there is a real
-      integration reason.
+  integration reason.
 - [ ] Service / persistence changes require unit tests. API/interface changes require integration
-      tests plus unit tests for underlying layers.
+  tests plus unit tests for underlying layers.
 - [ ] Test naming is consistent with the rest of the project. Long test names may use underscores to
-      separate scenario and expectation when that helps readability.
+  separate scenario and expectation when that helps readability.
 - [ ] Use the project's preferred assertion library (AssertJ for Java, Vitest/Jest for TS, pytest
-      for Python). Be consistent.
+  for Python). Be consistent.
 - [ ] Keep test data explicit and deterministic; avoid faker/EasyRandom-style generators unless
-      clearly justified.
+  clearly justified.
 - [ ] Tests are the source of truth — do not import production constants into tests just to avoid
-      duplication.
+  duplication.
 - [ ] Prefer composition over inheritance in tests; only use abstract base classes for shared
-      annotations/setup when justified.
+  annotations/setup when justified.
 - [ ] If DB cleanup is needed, do it explicitly in teardown rather than wrapping tests in
-      `@Transactional` rollback.
+  `@Transactional` rollback.
 - [ ] Mock external HTTP services (WireMock / MockServer / msw / responses).
 - [ ] Use Testcontainers (or equivalent) when an in-memory substitute would not be representative.
 - [ ] For multi-variant projects, run the relevant variants' test profile.
@@ -493,19 +497,19 @@ Quickly verify by category:
 ### 3.3 Build & format
 
 - [ ] Run the project's `format` command from `${PROJECTS_JSON}` (typical examples:
-      `mvn fmt:format && mvn fmt:check`, `npm run format`, `ruff format`). Up to three retry passes
-      if a check fails.
+  `mvn fmt:format && mvn fmt:check`, `npm run format`, `ruff format`). Up to three retry passes if a
+  check fails.
 - [ ] Treat formatter configuration as all-or-nothing — do not fight the formatter with personal
-      style tweaks.
+  style tweaks.
 - [ ] Avoid wildcard imports.
 - [ ] Run the project's `build` command from `${PROJECTS_JSON}` (typical examples:
-      `mvn clean verify`, `npm test`, `pytest`). All tests must pass.
+  `mvn clean verify`, `npm test`, `pytest`). All tests must pass.
 - [ ] Investigate any new build warnings.
 
 ### 3.4 Dependency security (where configured)
 
 - [ ] Run the project's dependency vulnerability scanner if configured (e.g.,
-      `mvn org.owasp:dependency-check-maven:check`, `npm audit`, `pip-audit`).
+  `mvn org.owasp:dependency-check-maven:check`, `npm audit`, `pip-audit`).
 - [ ] Review any new findings introduced by your changes.
 
 ### 3.5 Outer-loop code review (call `code-reviewer`)
@@ -537,7 +541,7 @@ Address remaining findings, then proceed.
 - [ ] Error messages clear and helpful?
 - [ ] Logging appropriate (not too verbose, not too sparse)?
 - [ ] **If this defect was hard to investigate because evidence was missing, did the fix add the
-      missing log, metric, or correlation id that would make the next occurrence obvious?**
+  missing log, metric, or correlation id that would make the next occurrence obvious?**
 - [ ] No horizontal-scaling pitfalls (in-memory state, local-only locks, non-distributed caches)?
 - [ ] No `@SuppressWarnings` / `// eslint-disable` / `# noqa` without documented justification?
 - [ ] No `TODO`/`FIXME` left without a linked ticket?
@@ -550,7 +554,7 @@ Address remaining findings, then proceed.
 ### 4.2 Cross-project impact
 
 - [ ] If changing anything matching `${SHARED_LIBRARY_NAMES}`, document which downstream services
-      are affected.
+  are affected.
 - [ ] Flag any breaking API changes.
 - [ ] Consider backward compatibility.
 
@@ -561,15 +565,15 @@ Address remaining findings, then proceed.
 ### 5.1 Commit
 
 - [ ] Commit message format hint: `${GIT_COMMIT_MSG_FORMAT}` — typically
-      `<TICKET> <Brief description>`.
+  `<TICKET> <Brief description>`.
 - [ ] Stage only relevant files — no IDE configs, no unrelated changes.
 - [ ] Never bypass git hooks (`--no-verify`) without an explicit user-approved waiver recorded in
-      the Definition-of-Done artifact.
+  the Definition-of-Done artifact.
 
 ### 5.2 Conflict resolution
 
 - [ ] If resolving merge conflicts: ensure **both** your branch and the base branch are up-to-date
-      with remote.
+  with remote.
 - [ ] After conflict resolution, re-run the full build to confirm nothing broke.
 
 ### 5.3 Definition-of-Done artifact
@@ -581,10 +585,10 @@ part of its hard-handoff contract and must not declare `PASS` if any `false` fla
 written waiver.
 
 - [ ] Build, tests, format, lint/static analysis, security scan all `passed: true` or explicitly
-      waived.
+  waived.
 - [ ] For bug fixes: `bug_fix.is_bug_fix: true`, `regression_test_commit` set,
-      `fails_on_parent: true`, `passes_on_head: true`, `repro_recipe_path` populated,
-      `observability_added` set honestly.
+  `fails_on_parent: true`, `passes_on_head: true`, `repro_recipe_path` populated,
+  `observability_added` set honestly.
 - [ ] `git.no_no_verify: true` and `git.branch_starts_with_ticket_key: true` for ticket-driven work.
 - [ ] `scope.shared_library_changed` truthful; if `true`, list affected downstream consumers.
 
@@ -634,8 +638,8 @@ Normal output should use this shape, trimmed only when a section is genuinely no
 - Final status: complete | blocked | needs-context | needs-review
 ```
 
-Use `proposed` rather than `made` when no files were changed. Do not claim validation, tests, review,
-or root-cause confirmation unless that work actually happened.
+Use `proposed` rather than `made` when no files were changed. Do not claim validation, tests,
+review, or root-cause confirmation unless that work actually happened.
 
 ## Behavior Checklist
 
@@ -657,8 +661,8 @@ or root-cause confirmation unless that work actually happened.
 - Bug fixes must flow through investigation and a reproducible failing-regression-test strategy
   unless explicitly out of scope.
 - Review results must use the nested
-  [`code-reviewer`](./skills/code-reviewer/SKILL.md) contract and the shared
-  [severity/confidence definitions](../../docs/severity-and-confidence.md).
+  [`code-reviewer`](./skills/code-reviewer/SKILL.md) contract and the shared [severity/confidence
+  definitions](../../docs/severity-and-confidence.md).
 
 ## Guardrails
 

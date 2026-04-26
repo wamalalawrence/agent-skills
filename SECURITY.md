@@ -21,9 +21,9 @@ that systematically encourages unsafe output is in scope.
 
 Use GitHub private vulnerability reporting if it is enabled for the repository.
 
-If private reporting is not available yet, open a minimal public issue titled
-`Security contact request` without exploit details, secrets, or private data. The maintainer can
-then provide a private channel for details.
+If private reporting is not available yet, open a minimal public issue titled `Security contact
+request` without exploit details, secrets, or private data. The maintainer can then provide a
+private channel for details.
 
 Please include:
 

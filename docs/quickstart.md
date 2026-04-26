@@ -50,10 +50,10 @@ Cursor cloud/background agents, Codex, Codespaces, Gitpod, Devin, or a web chat 
 attached.
 
 1. Copy [`.agent-skills.example.yml`](../.agent-skills.example.yml) to `.agent-skills.yml` in the
-   target repository.
+  target repository.
 2. Fill in the `project:` block.
 3. Vendor the skills you need into the repository, or reference the relevant `SKILL.md` files from
-   the agent's instruction surface.
+  the agent's instruction surface.
 4. Put secrets in the host platform's secret mechanism, not in `.agent-skills.yml`.
 5. Add `.cache/` to the target repository's `.gitignore`.
 

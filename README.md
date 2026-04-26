@@ -4,11 +4,11 @@ Reusable [Agent Skills](https://agentskills.io/) for software-engineering work �
 role-shaped workflows your AI assistant can load on demand so the same model produces
 senior-engineer, product-owner, tester, or reviewer output instead of generic answers.
 
-> **Status:** `0.8.0` — pre-1.0. Core skill set is shipped and stable enough for public use;
+> **Status:** `0.8.1` — pre-1.0. Core skill set is shipped and stable enough for public use;
 > interfaces may still evolve.
 
-New here? Start with the [quickstart](docs/quickstart.md), then read
-[starter prompts](docs/starter-prompts.md), [examples](docs/examples/README.md),
+New here? Start with the [quickstart](docs/quickstart.md), then read [starter
+prompts](docs/starter-prompts.md), [examples](docs/examples/README.md),
 [validation](docs/validation.md), [known limitations](docs/known-limitations.md), and the
 [versioning policy](docs/versioning.md).
 
@@ -49,13 +49,13 @@ Codespaces, Gitpod, or ChatGPT/Claude on the web with the repo attached — anyw
 workspace folder:
 
 1. Copy [`.agent-skills.example.yml`](.agent-skills.example.yml) to `.agent-skills.yml` at the
-   **target repository's** root and fill in the `project:` block. No secrets in this file.
+  **target repository's** root and fill in the `project:` block. No secrets in this file.
 2. Vendor the `skills/` folder you want to use into the target repo (copy or `git submodule add`),
-   or reference specific `SKILL.md` files from your agent's instruction surface
-   (`.github/copilot-instructions.md`, `.cursor/rules/`, project-attached files, …).
+  or reference specific `SKILL.md` files from your agent's instruction surface
+  (`.github/copilot-instructions.md`, `.cursor/rules/`, project-attached files, …).
 3. Add `.cache/` to the target repo's `.gitignore`.
 4. Inject any required secrets (`JIRA_API_TOKEN`, `GITHUB_TOKEN`, …) via the host platform's secret
-   mechanism.
+  mechanism.
 
 See [docs/installation.md](docs/installation.md) and [docs/assistants.md](docs/assistants.md) for
 per-platform details.

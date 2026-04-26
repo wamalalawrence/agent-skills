@@ -13,6 +13,11 @@ from urllib.parse import unquote, urlparse
 ROOT = Path(__file__).resolve().parent.parent
 NAME_RE = re.compile(r"^[a-z0-9]+(-[a-z0-9]+)*$")
 SEMVER_RE = re.compile(r"^\d+\.\d+\.\d+(?:[-+][0-9A-Za-z.-]+)?$")
+MARKDOWN_MAX_LINE_LENGTH = 300
+MARKDOWN_AVG_LINE_WARN = 115
+SOURCE_MAX_LINE_LENGTH = 300
+SOURCE_WARN_LINE_LENGTH = 180
+SOURCE_AVG_LINE_WARN = 125
 
 REQUIRED_FILES = [
     "README.md",
@@ -277,13 +282,93 @@ def check_markdown_structure(result: Result) -> None:
         line_count = len(text.splitlines())
         if len(text) > 600 and line_count <= 2:
             result.error(f"{rel(path)}: appears compressed into {line_count} giant line(s)")
-        for line_number, line in enumerate(text.splitlines(), start=1):
-            if len(line) > 1200:
-                result.error(f"{rel(path)}:{line_number}: line is too long ({len(line)} chars)")
+        check_markdown_readability(path, text, result)
         if not re.search(r"^#{1,6}\s+\S", body, re.MULTILINE):
             result.error(f"{rel(path)}: missing Markdown heading")
         check_code_fences(path, text, result)
         check_internal_links(path, text, result)
+
+
+def is_long_url_or_reference(line: str) -> bool:
+    stripped = line.strip()
+    if re.match(r"^\[[^\]]+\]:\s+\S+$", stripped):
+        return True
+    return stripped.startswith(("http://", "https://")) and " " not in stripped
+
+
+def is_code_fence_line(line: str) -> bool:
+    stripped = line.lstrip()
+    return stripped.startswith("```") or stripped.startswith("~~~")
+
+
+def check_markdown_readability(path: Path, text: str, result: Result) -> None:
+    in_code_fence = False
+    nonblank_lengths: list[int] = []
+
+    for line_number, line in enumerate(text.splitlines(), start=1):
+        stripped = line.strip()
+        starts_fence = is_code_fence_line(line)
+
+        if ("```" in line or "~~~" in line) and not starts_fence:
+            result.error(f"{rel(path)}:{line_number}: code fence starts mid-line")
+
+        if starts_fence:
+            in_code_fence = not in_code_fence
+            continue
+
+        if in_code_fence:
+            continue
+
+        if stripped:
+            nonblank_lengths.append(len(line))
+
+        if "\t" in line:
+            result.error(f"{rel(path)}:{line_number}: tab character in Markdown source")
+
+        if len(line) > MARKDOWN_MAX_LINE_LENGTH and not is_long_url_or_reference(line):
+            result.error(
+                f"{rel(path)}:{line_number}: Markdown line exceeds "
+                f"{MARKDOWN_MAX_LINE_LENGTH} chars ({len(line)})"
+            )
+
+        if not line.lstrip().startswith("#") and re.search(r"\S\s+#{1,6}\s+\S", line):
+            result.error(f"{rel(path)}:{line_number}: Markdown heading appears mid-line")
+
+        if stripped.startswith("|") and stripped.endswith("|") and stripped.count("|") > 10:
+            result.error(f"{rel(path)}:{line_number}: possible collapsed Markdown table rows")
+
+    if nonblank_lengths:
+        average = sum(nonblank_lengths) / len(nonblank_lengths)
+        if average > MARKDOWN_AVG_LINE_WARN:
+            result.warn(
+                f"{rel(path)}: average Markdown line length is suspiciously high "
+                f"({average:.1f})"
+            )
+
+
+def check_source_readability(result: Result) -> None:
+    for path in text_files():
+        if path.suffix not in {".py", ".yml", ".yaml"}:
+            continue
+        lines = read_text(path).splitlines()
+        nonblank_lengths = [len(line) for line in lines if line.strip()]
+        for line_number, line in enumerate(lines, start=1):
+            if "\t" in line:
+                result.error(f"{rel(path)}:{line_number}: tab character in source file")
+            if len(line) > SOURCE_MAX_LINE_LENGTH and not is_long_url_or_reference(line):
+                result.error(
+                    f"{rel(path)}:{line_number}: source line exceeds "
+                    f"{SOURCE_MAX_LINE_LENGTH} chars ({len(line)})"
+                )
+            elif len(line) > SOURCE_WARN_LINE_LENGTH and not is_long_url_or_reference(line):
+                result.warn(f"{rel(path)}:{line_number}: long source line ({len(line)} chars)")
+        if nonblank_lengths:
+            average = sum(nonblank_lengths) / len(nonblank_lengths)
+            if average > SOURCE_AVG_LINE_WARN:
+                result.warn(
+                    f"{rel(path)}: average source line length is suspiciously high "
+                    f"({average:.1f})"
+                )
 
 
 def check_code_fences(path: Path, text: str, result: Result) -> None:
@@ -536,6 +621,7 @@ def main() -> int:
     check_required_files(result)
     repo_version = check_version_consistency(result)
     check_markdown_structure(result)
+    check_source_readability(result)
     check_skill_files(result, repo_version)
     check_skill_link_consistency(result)
     check_forbidden_content(result)

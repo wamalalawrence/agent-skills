@@ -1,23 +1,25 @@
 ---
 name: code-reviewer
-description:
-  "Issue-aware code review workflow for working diffs, commits, branches, and pull requests. Use
-  when: reviewing implementation against a Jira ticket, GitHub issue, bug report, feature request,
-  task description, acceptance criteria, or general engineering quality bar. Applies two layers:
-  issue/ticket alignment first, then general engineering quality. Reuses issue-investigator when
-  expected behavior, root cause, or issue context is unclear, and reuses software-engineer for
-  architecture, implementation quality, testability, and production-risk judgment."
+description: >-
+  Issue-aware code review workflow for working diffs, commits, branches, and pull
+  requests. Use when: reviewing implementation against a Jira ticket, GitHub issue, bug
+  report, feature request, task description, acceptance criteria, or general engineering
+  quality bar. Applies two layers: issue/ticket alignment first, then general engineering
+  quality. Reuses issue-investigator when expected behavior, root cause, or issue context
+  is unclear, and reuses software-engineer for architecture, implementation quality,
+  testability, and production-risk judgment.
 license: MIT
-compatibility:
-  Works with any agent that supports the Agent Skills format (Claude Code, Cursor, Windsurf,
-  Continue, GitHub Copilot Chat, ChatGPT, etc.). Two execution modes — `local-workspace`
-  (multi-repo, setup.init + .env) and `in-repo` (single-repo, .agent-skills.yml). See
-  docs/execution-modes.md.
+compatibility: >-
+  Works with any agent that supports the Agent Skills format (Claude Code, Cursor,
+  Windsurf, Continue, GitHub Copilot Chat, ChatGPT, etc.). Two execution modes —
+  `local-workspace` (multi-repo, setup.init + .env) and `in-repo` (single-repo,
+  .agent-skills.yml). See docs/execution-modes.md.
 metadata:
   author: wamalalawrence
-  version: "0.8.0"
+  version: "0.8.1"
   homepage: "https://github.com/wamalalawrence/agent-skills"
-argument-hint: "optional: mode inner|outer, base branch, issue key/URL, PR URL, or task description"
+argument-hint: >-
+  optional: mode inner|outer, base branch, issue key/URL, PR URL, or task description
 user-invocable: true
 disable-model-invocation: false
 ---
@@ -125,26 +127,38 @@ always comes from environment variables. `.jira-config.yml` is optional. If the 
 and the user did not provide the ticket summary, acceptance criteria, and key comments directly,
 stop or ask for that context before producing a verdict.
 
-| Variable                                        | Required                           | Default                                                                         | Used for                                                                                                                                      |
-| ----------------------------------------------- | ---------------------------------- | ------------------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------- |
-| `WORKSPACE_ROOT`                                | yes (local-workspace)              | -                                                                               | Resolving repos and cache paths. In `in-repo` mode the repo root is used.                                                                     |
-| `PROJECTS_JSON`                                 | yes (local-workspace)              | -                                                                               | Project identity, stack, base branch, build and format commands. In `in-repo` mode the `project:` block in `.agent-skills.yml` replaces this. |
-| `GITHUB_DEFAULT_BRANCH`                         | yes                                | `main`                                                                          | Base branch fallback                                                                                                                          |
-| `CODE_REVIEWER_MODEL`                           | no                                 | `default`                                                                       | Model id used for review, when the host supports model routing                                                                                |
-| `CODE_REVIEWER_BLOCKING`                        | no                                 | `false`                                                                         | When `true`, blocker findings stop the calling workflow                                                                                       |
-| `CODE_REVIEWER_MAX_FILES`                       | no                                 | `80`                                                                            | Warn when non-trivial changed files exceed this                                                                                               |
-| `CODE_REVIEWER_MAX_DIFF_CHARS`                  | no                                 | `60000`                                                                         | Diff character budget per review pass                                                                                                         |
-| `CODE_REVIEWER_SHOW_SEVERITIES`                 | no                                 | `blocker,major,minor,nit`                                                       | Severities surfaced in outer-loop mode                                                                                                        |
-| `CODE_REVIEWER_INNER_LOOP_SEVERITIES`           | no                                 | `blocker,major`                                                                 | Severities surfaced in inner-loop mode                                                                                                        |
-| `CODE_REVIEWER_MAX_ROUNDS`                      | no                                 | `3`                                                                             | Maximum engineer↔reviewer iteration rounds before escalation                                                                                  |
-| `CODE_REVIEWER_CACHE_DIR`                       | no                                 | `${AGENT_SKILLS_CACHE_DIR:-${WORKSPACE_ROOT:-$REPO_ROOT}/.cache/code-reviewer}` | Cache for fetched issue context summaries                                                                                                     |
-| `CODE_REVIEWER_CACHE_TTL_HOURS`                 | no                                 | `24`                                                                            | Cache TTL                                                                                                                                     |
-| `JIRA_HOST`, `JIRA_API_TOKEN`, `JIRA_AUTH_TYPE` | only for Jira issue-aware review   | -                                                                               | Jira ticket lookup                                                                                                                            |
-| `CONFLUENCE_HOST`, `CONFLUENCE_API_TOKEN`       | only when linked docs require them | -                                                                               | Linked document lookup                                                                                                                        |
-| `SHARED_LIBRARY_NAMES`                          | no                                 | -                                                                               | Cross-project impact detection                                                                                                                |
-| `API_MODULE_PATTERNS`                           | no                                 | -                                                                               | API and contract risk detection                                                                                                               |
-| `SECURITY_CONFIG_PATTERNS`                      | no                                 | -                                                                               | Security-sensitive file detection                                                                                                             |
-| `MIGRATION_PATH_PATTERNS`                       | no                                 | -                                                                               | Migration risk detection                                                                                                                      |
+Review setup variables:
+
+- `WORKSPACE_ROOT`: required in `local-workspace` mode. Resolves repos and cache paths. In
+  `in-repo` mode, the repository root is used.
+- `PROJECTS_JSON`: required in `local-workspace` mode. Provides project identity, stack, base
+  branch, build, and format commands. In `in-repo` mode, the single `project:` block in
+  `.agent-skills.yml` replaces this.
+- `GITHUB_DEFAULT_BRANCH`: required. Defaults to `main`; used as the base branch fallback.
+- `CODE_REVIEWER_MODEL`: optional. Defaults to `default`; used when the host supports model
+  routing.
+- `CODE_REVIEWER_BLOCKING`: optional. Defaults to `false`; when `true`, blocker findings stop the
+  calling workflow.
+- `CODE_REVIEWER_MAX_FILES`: optional. Defaults to `80`; warns when non-trivial changed files
+  exceed this.
+- `CODE_REVIEWER_MAX_DIFF_CHARS`: optional. Defaults to `60000`; sets the diff character budget per
+  review pass.
+- `CODE_REVIEWER_SHOW_SEVERITIES`: optional. Defaults to `blocker,major,minor,nit`; controls
+  severities surfaced in outer-loop mode.
+- `CODE_REVIEWER_INNER_LOOP_SEVERITIES`: optional. Defaults to `blocker,major`; controls severities
+  surfaced in inner-loop mode.
+- `CODE_REVIEWER_MAX_ROUNDS`: optional. Defaults to `3`; maximum engineer-reviewer iteration rounds
+  before escalation.
+- `CODE_REVIEWER_CACHE_DIR`: optional. Defaults to
+  `${AGENT_SKILLS_CACHE_DIR:-${WORKSPACE_ROOT:-$REPO_ROOT}/.cache/code-reviewer}`; caches fetched
+  issue-context summaries.
+- `CODE_REVIEWER_CACHE_TTL_HOURS`: optional. Defaults to `24`; cache TTL.
+- `JIRA_HOST`, `JIRA_API_TOKEN`, `JIRA_AUTH_TYPE`: required only for Jira issue-aware review.
+- `CONFLUENCE_HOST`, `CONFLUENCE_API_TOKEN`: required only when linked docs require them.
+- `SHARED_LIBRARY_NAMES`: optional. Used for cross-project impact detection.
+- `API_MODULE_PATTERNS`: optional. Used for API and contract risk detection.
+- `SECURITY_CONFIG_PATTERNS`: optional. Used for security-sensitive file detection.
+- `MIGRATION_PATH_PATTERNS`: optional. Used for migration risk detection.
 
 If required setup is missing, output:
 
@@ -203,12 +217,12 @@ loop continues.
 - Look for issue keys or URLs from user input, branch name, PR title/body, commit messages, and diff
   text.
 - Fetch or summarize Jira tickets, GitHub issues, task descriptions, support tickets, incidents,
-  feature requests, comments, acceptance criteria, linked docs, screenshots, logs, and related
-  tickets where available.
+  feature requests, comments, acceptance criteria, linked docs, screenshots, logs, and related tickets
+  where available.
 - If expected behavior, root cause, issue type, or acceptance criteria remain unclear, invoke
   [`issue-investigator`](../issue-investigator/SKILL.md) before final review. If issue access is
-  unavailable and the user has not supplied enough issue details directly, stop instead of
-  downgrading silently to non-issue-aware review.
+  unavailable and the user has not supplied enough issue details directly, stop instead of downgrading
+  silently to non-issue-aware review.
 - Record whether the review is issue-aware, partially issue-aware, or non-issue-aware.
 
 Layer 1 review questions:
@@ -388,5 +402,5 @@ context, or tests not verified.
 - "Review this bug fix and tell me if it actually addresses the root cause."
 - "Review this change using the linked architecture guidelines as extra standards."
 
-See [the code-reviewer PR review example](../../../../docs/examples/code-reviewer-pr-review.md)
-and [starter prompts](../../../../docs/starter-prompts.md).
+See [the code-reviewer PR review example](../../../../docs/examples/code-reviewer-pr-review.md) and
+[starter prompts](../../../../docs/starter-prompts.md).

@@ -7,8 +7,8 @@ strong the evidence is.
 ## Severity
 
 - `blocker`: likely wrong behavior, broken build, data loss, security/privacy exposure, unsafe
-  migration, missing core acceptance criteria, or production-incident risk. Blocking unless
-  explicitly waived.
+  migration, missing core acceptance criteria, or production-incident risk. Blocking unless explicitly
+  waived.
 - `major`: meaningful correctness, maintainability, compatibility, test, operational, or
   user-impact risk that should normally be addressed before merge, release, or handoff.
 - `minor`: real issue or improvement with limited blast radius. Worth fixing when nearby, but not
