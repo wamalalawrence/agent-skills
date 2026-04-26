@@ -2,7 +2,29 @@
 
 Tested on macOS and Linux with `bash` and `zsh`. Windows users should run via WSL or Git Bash.
 
-## Recommended workspace layout
+`agent-skills` ships two execution modes — pick the one that matches where the agent will actually run. See [execution-modes.md](execution-modes.md) for the full comparison.
+
+| You are... | Use mode | What to install |
+|---|---|---|
+| Running an AI assistant **on your laptop**, across several repos | `local-workspace` | Clone `agent-skills` next to your repos and run `./setup.init`. |
+| Running an AI agent **inside one repository** (GitHub Copilot coding agent on github.com, Cursor cloud, Devin, Codex, Codespaces, Gitpod, ChatGPT/Claude web with the repo attached) | `in-repo` | Add `.agent-skills.yml` and a `skills/` source to that repo. No `setup.init`. |
+
+## `in-repo` install (online / cloud agents)
+
+The cloud agent has no separate workspace and no shell of its own to bootstrap. You commit two things into the target repository:
+
+1. **`.agent-skills.yml`** at the repo root. Copy from [`.agent-skills.example.yml`](../.agent-skills.example.yml), fill in the `project:` block (stack, base branch, build/format commands), and commit. It contains **no secrets**.
+2. **Skill content** the agent can read. Two options:
+   - **Vendor the skills** by copying or git-submoduling [`skills/`](../skills/) into the target repo (e.g. at `.agent-skills/skills/`). Best for offline-friendly, reproducible loading.
+   - **Reference the skills** from the agent's prompt or rules file (e.g. `.cursor/rules/*.mdc`, `.github/copilot-instructions.md`, attached files in a chat). Lighter-weight, but the agent host must be able to fetch them.
+
+Then add `.cache/` to the repo's `.gitignore` so the evidence-pack/repro-recipe/Definition-of-Done artifacts the skills write don't leak into commits.
+
+Secrets the skills need (`JIRA_API_TOKEN`, `GITHUB_TOKEN`, `CONFLUENCE_API_TOKEN`, …) come from the host platform's environment-variable injection — GitHub Actions secrets, Codespaces secrets, Cursor's secret store, etc. Never put them in `.agent-skills.yml`.
+
+See [assistants.md](assistants.md) for per-agent invocation notes.
+
+## `local-workspace` install — recommended workspace layout
 
 `agent-skills` is designed to live alongside the projects it reasons about, not inside one of them and not at the root of your home directory.
 

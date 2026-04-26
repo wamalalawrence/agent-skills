@@ -5,7 +5,7 @@ Shared cross-skill artifacts that let `issue-investigator`, `software-engineer`,
 Both files are **YAML, human-editable, and small** (target < 100 lines). Cache them at:
 
 ```
-${WORKSPACE_ROOT}/.cache/agent-skills/<issue-key>/
+${AGENT_SKILLS_CACHE_DIR:-${WORKSPACE_ROOT:-$REPO_ROOT}/.cache/agent-skills}/<issue-key>/
 ├── evidence-pack.yml
 ├── repro-recipe.yml
 └── definition-of-done.json
@@ -85,7 +85,7 @@ review:
       verdict: BLOCK
 ```
 
-**Loading rule**: every skill `set -a && source ${WORKSPACE_ROOT}/.env && set +a`, then reads/writes `${WORKSPACE_ROOT}/.cache/agent-skills/${issue_key}/evidence-pack.yml`. Skills append to lists; they do not delete prior entries.
+**Loading rule**: every skill `set -a && source ${WORKSPACE_ROOT}/.env && set +a`, then reads/writes `${AGENT_SKILLS_CACHE_DIR:-${WORKSPACE_ROOT:-$REPO_ROOT}/.cache/agent-skills}/${issue_key}/evidence-pack.yml`. Skills append to lists; they do not delete prior entries.
 
 ---
 

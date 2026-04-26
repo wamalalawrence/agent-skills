@@ -2,10 +2,10 @@
 name: issue-investigator
 description: 'Issue investigation workflow for Jira tickets, GitHub issues, support tickets, incidents, regressions, feature requests, and technical tasks. Use when: understanding expected vs actual behavior, classifying issue type, gathering evidence, reproducing problems, analyzing root cause, refining tickets before implementation, or recommending the next action. Reuses software-engineer for technical code analysis and implementation feasibility, and supports code-reviewer by producing reliable issue context before review.'
 license: MIT
-compatibility: Works with any agent that supports the Agent Skills format (Claude Code, Cursor, Windsurf, Continue, GitHub Copilot Chat, ChatGPT, etc.). Expects workspace `.env` populated by setup.init. Optional Jira CLI integration when `.jira-config.yml` is present.
+compatibility: Works with any agent that supports the Agent Skills format (Claude Code, Cursor, Windsurf, Continue, GitHub Copilot Chat, ChatGPT, etc.). Two execution modes — `local-workspace` (multi-repo, setup.init + .env) and `in-repo` (single-repo, .agent-skills.yml). Optional Jira CLI integration via `.jira-config.yml`. See docs/execution-modes.md.
 metadata:
   author: wamalalawrence
-  version: "0.5.0"
+  version: "0.6.0"
   homepage: "https://github.com/wamalalawrence/agent-skills"
 argument-hint: 'issue URL/key, bug report, incident, support ticket, feature request, or task description plus affected repo/service/environment'
 user-invocable: true
@@ -64,26 +64,28 @@ If the issue source is missing or too vague, ask focused questions. If access to
 
 ## Required Environment
 
-Run this setup preflight before investigating. If `${WORKSPACE_ROOT}/.env` is missing or unreadable, continue only when the user supplied the issue details directly and no repository/Jira/local project lookup is needed. Otherwise warn and stop because the investigation would be based on incomplete context.
+Run this setup preflight before investigating.
+
+**Detect execution mode** ([docs/execution-modes.md](../../../../docs/execution-modes.md)): if `${WORKSPACE_ROOT}/.env` is present → `local-workspace`; else if `.agent-skills.yml` exists at the repo root → `in-repo`; else continue only when the user supplied the issue details directly and no repository/Jira lookup is needed. Otherwise warn and stop because the investigation would be based on incomplete context.
 
 For Jira tickets, usable Jira access is required unless the user provides the ticket summary, acceptance criteria, key comments, linked-doc excerpts, and affected environment details directly. `.jira-config.yml` is optional when the Jira environment variables work. If a Jira key or URL is supplied but the ticket cannot be read and no direct ticket details are provided, stop instead of producing a low-confidence investigation.
 
 | Variable | Required | Used for |
 |---|---|---|
-| `WORKSPACE_ROOT` | yes | Resolving repos, cache, and local context |
-| `PROJECTS_JSON` | yes | Matching affected repos/services to stack and commands |
+| `WORKSPACE_ROOT` | yes (local-workspace) | Resolving repos, cache, and local context. In `in-repo` mode the repository root is used. |
+| `PROJECTS_JSON` | yes (local-workspace) | Matching affected repos/services to stack and commands. In `in-repo` mode the `project:` block in `.agent-skills.yml` replaces this. |
 | `JIRA_HOST`, `JIRA_API_TOKEN`, `JIRA_AUTH_TYPE` | only for Jira tickets | Jira ticket lookup |
 | `JIRA_LOGIN` | yes for basic auth; recommended for bearer | Jira CLI identity |
 | `JIRA_CONFIG_FILE` | no | Jira CLI config path |
 | `CONFLUENCE_HOST`, `CONFLUENCE_API_TOKEN` | only when linked docs require them | Confluence lookup |
-| `ISSUE_INVESTIGATOR_CACHE_DIR` | no | Cache for fetched ticket/doc summaries; default `${WORKSPACE_ROOT}/.cache/issue-investigator` |
+| `ISSUE_INVESTIGATOR_CACHE_DIR` | no | Cache for fetched ticket/doc summaries; default `${AGENT_SKILLS_CACHE_DIR:-${WORKSPACE_ROOT:-$REPO_ROOT}/.cache/issue-investigator}` |
 | `ISSUE_INVESTIGATOR_CACHE_TTL_HOURS` | no | Cache TTL; default `24` |
 
 For GitHub issues, prefer the authenticated `gh` CLI when available. Do not require new secrets in this public skill unless the user's environment already uses them.
 
 If setup is incomplete, output:
 
-> Missing required setup: `<NAME or file>`. I will not continue with issue-aware investigation because the result would be based on incomplete context. Add/update `${WORKSPACE_ROOT}/.env`, provide the missing issue details directly, or rerun without the unavailable issue source.
+> Missing required setup: `<NAME or file>`. I will not continue with issue-aware investigation because the result would be based on incomplete context. Add/update `${WORKSPACE_ROOT}/.env` (local-workspace) or `.agent-skills.yml` at the repo root (in-repo — see `agent-skills/.agent-skills.example.yml`), provide the missing issue details directly, or rerun without the unavailable issue source.
 
 ## Required Workflow
 
@@ -137,11 +139,11 @@ Never reproduce a defect against live production data or by mutating shared stat
 3. Replayed input only: HAR file, recorded log slice, captured request/response pair, or anonymized payload.
 4. Read-only inspection of the affected environment (`SET TRANSACTION READ ONLY`, `--dry-run`, read-replica, snapshot DB) when no other option reproduces it.
 
-For each reproduction attempt, record: environment chosen, exact commands and inputs, observed output, and a deterministic recipe (env vars + commands + expected log lines) that another agent or human can replay verbatim. Persist the recipe to `${WORKSPACE_ROOT}/.cache/agent-skills/<issue-key>/repro-recipe.yml` per the [evidence-pack & repro-recipe schema](../../references/evidence-pack.md). Hand that recipe to [`software-engineer`](../../SKILL.md) and [`test-automation-engineer`](../../../test-automation-engineer/SKILL.md) so it can become the failing regression test before any fix is written.
+For each reproduction attempt, record: environment chosen, exact commands and inputs, observed output, and a deterministic recipe (env vars + commands + expected log lines) that another agent or human can replay verbatim. Persist the recipe to `${AGENT_SKILLS_CACHE_DIR:-${WORKSPACE_ROOT:-$REPO_ROOT}/.cache/agent-skills}/<issue-key>/repro-recipe.yml` per the [evidence-pack & repro-recipe schema](../../references/evidence-pack.md). Hand that recipe to [`software-engineer`](../../SKILL.md) and [`test-automation-engineer`](../../../test-automation-engineer/SKILL.md) so it can become the failing regression test before any fix is written.
 
 #### Evidence-pack output
 
-Persist the full investigation result to `${WORKSPACE_ROOT}/.cache/agent-skills/<issue-key>/evidence-pack.yml` per the [evidence-pack schema](../../references/evidence-pack.md). At minimum populate `issue_*`, `project`, `expected_behavior`, `actual_behavior`, `investigation` (root-cause status, evidence, hypotheses considered, confidence, what-would-change-my-mind), and `risk_areas`. Subsequent skills append to this file rather than re-deriving the context.
+Persist the full investigation result to `${AGENT_SKILLS_CACHE_DIR:-${WORKSPACE_ROOT:-$REPO_ROOT}/.cache/agent-skills}/<issue-key>/evidence-pack.yml` per the [evidence-pack schema](../../references/evidence-pack.md). At minimum populate `issue_*`, `project`, `expected_behavior`, `actual_behavior`, `investigation` (root-cause status, evidence, hypotheses considered, confidence, what-would-change-my-mind), and `risk_areas`. Subsequent skills append to this file rather than re-deriving the context.
 
 #### Three-hypothesis discipline
 
