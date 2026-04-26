@@ -1,6 +1,7 @@
 # Code Review Checklist
 
-Generic self-review and PR-review checklist. Items prefixed by language tags apply only when relevant.
+Generic self-review and PR-review checklist. Items prefixed by language tags apply only when
+relevant.
 
 ## Secure code
 
@@ -79,7 +80,8 @@ Generic self-review and PR-review checklist. Items prefixed by language tags app
 - [ ] No regression to existing functionality
 - [ ] Edge cases handled
 - [ ] Multi-variant / multi-tenant implications considered (if applicable)
-- [ ] Cross-project impact assessed (especially for shared services / libraries listed in `${SHARED_LIBRARY_NAMES}`)
+- [ ] Cross-project impact assessed (especially for shared services / libraries listed in
+      `${SHARED_LIBRARY_NAMES}`)
 
 ## PR hygiene
 

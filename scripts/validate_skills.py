@@ -43,35 +43,76 @@ def parse_frontmatter(text: str) -> dict[str, object] | None:
         return _hand_parse(block)
 
 
+def _strip_quotes(value: str) -> str:
+    if (value.startswith("'") and value.endswith("'")) or (
+        value.startswith('"') and value.endswith('"')
+    ):
+        return value[1:-1]
+    return value
+
+
 def _hand_parse(block: str) -> dict[str, object]:
     result: dict[str, object] = {}
-    current_key: str | None = None
-    nested: dict[str, str] | None = None
-    for raw in block.splitlines():
+    lines = block.splitlines()
+    i = 0
+
+    while i < len(lines):
+        raw = lines[i]
         if not raw.strip() or raw.lstrip().startswith("#"):
+            i += 1
             continue
-        if raw.startswith("  ") and nested is not None and current_key is not None:
-            k, _, v = raw.strip().partition(":")
-            nested[k.strip()] = v.strip().strip('"').strip("'")
+        if raw.startswith(" "):
+            # Stray continuation line; valid frontmatter should have been
+            # consumed while handling the parent key.
+            i += 1
             continue
+
         key, _, value = raw.partition(":")
         key = key.strip()
         value = value.strip()
-        if value == "" or value == ">-":
-            # Could be a nested mapping or a folded scalar; treat as nested
-            # mapping when followed by indented lines, otherwise empty string.
-            nested = {}
-            result[key] = nested
-            current_key = key
-        else:
-            nested = None
-            current_key = key
-            # Strip surrounding quotes if any.
-            if (value.startswith("'") and value.endswith("'")) or (
-                value.startswith('"') and value.endswith('"')
-            ):
-                value = value[1:-1]
-            result[key] = value
+
+        if value in {">", ">-", "|", "|-"}:
+            i += 1
+            scalar_lines: list[str] = []
+            while i < len(lines) and (not lines[i].strip() or lines[i].startswith(" ")):
+                if lines[i].strip() and not lines[i].lstrip().startswith("#"):
+                    scalar_lines.append(lines[i].strip())
+                i += 1
+            result[key] = (
+                " ".join(scalar_lines).strip()
+                if value.startswith(">")
+                else "\n".join(scalar_lines).strip()
+            )
+            continue
+
+        if value == "":
+            i += 1
+            block_lines: list[str] = []
+            while i < len(lines) and (not lines[i].strip() or lines[i].startswith(" ")):
+                if lines[i].strip() and not lines[i].lstrip().startswith("#"):
+                    block_lines.append(lines[i].strip())
+                i += 1
+
+            if not block_lines:
+                result[key] = ""
+                continue
+
+            # Our SKILL.md frontmatter uses `metadata:` as a nested mapping.
+            # Other blank-valued keys may be valid multi-line scalars emitted
+            # by Markdown/YAML formatters.
+            if all(":" in line and not line.startswith(("'", '"')) for line in block_lines):
+                nested: dict[str, str] = {}
+                for line in block_lines:
+                    nested_key, _, nested_value = line.partition(":")
+                    nested[nested_key.strip()] = _strip_quotes(nested_value.strip())
+                result[key] = nested
+            else:
+                result[key] = _strip_quotes(" ".join(block_lines).strip())
+            continue
+
+        result[key] = _strip_quotes(value)
+        i += 1
+
     return result
 
 

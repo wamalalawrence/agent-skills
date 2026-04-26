@@ -1,6 +1,9 @@
 # Configuration
 
-`agent-skills` supports two execution modes — `local-workspace` (multi-repo, with `setup.init`) and `in-repo` (single-repo, for online/cloud agents). Read [execution-modes.md](execution-modes.md) first to pick the one that matches where the agent runs. This page documents the configuration for each.
+`agent-skills` supports two execution modes — `local-workspace` (multi-repo, with `setup.init`) and
+`in-repo` (single-repo, for online/cloud agents). Read [execution-modes.md](execution-modes.md)
+first to pick the one that matches where the agent runs. This page documents the configuration for
+each.
 
 ## `local-workspace` mode
 
@@ -13,7 +16,10 @@
      skills never contain literal hostnames, tokens, repo names, or org names
 ```
 
-The setup command and copied template are intentionally safe: they can describe the current workspace as a single local project, leave external systems blank, and avoid fake credentials. That is enough for generic planning or a first local dry run, but not enough for issue-aware or repository-changing work unless the generated values match the real workspace.
+The setup command and copied template are intentionally safe: they can describe the current
+workspace as a single local project, leave external systems blank, and avoid fake credentials. That
+is enough for generic planning or a first local dry run, but not enough for issue-aware or
+repository-changing work unless the generated values match the real workspace.
 
 When loading `.env` manually in a shell, export the values so child commands can see them:
 
@@ -23,27 +29,32 @@ source .env
 set +a
 ```
 
-If `.env` is missing, a required value is blank, a copied bootstrap value would make the project identity ambiguous, or a Jira ticket cannot be read, the skill warns and stops before doing accuracy-sensitive work. Silent fallbacks are treated as a bug because they produce wrong work.
+If `.env` is missing, a required value is blank, a copied bootstrap value would make the project
+identity ambiguous, or a Jira ticket cannot be read, the skill warns and stops before doing
+accuracy-sensitive work. Silent fallbacks are treated as a bug because they produce wrong work.
 
-`.jira-config.yml` is optional. Jira-driven work can use the environment variables in `.env` directly, but if neither Jira credentials nor a user-supplied ticket summary are available, the issue-aware skills stop and ask for context.
+`.jira-config.yml` is optional. Jira-driven work can use the environment variables in `.env`
+directly, but if neither Jira credentials nor a user-supplied ticket summary are available, the
+issue-aware skills stop and ask for context.
 
 ## Required variables
 
 See [`.env.example`](../.env.example) for the full annotated list. The minimum useful setup is:
 
-| Variable | Why |
-|---|---|
-| `ORG_NAME` | Used in summaries and stakeholder-ready output |
-| `WORKSPACE_ROOT` | Anchor for resolving repos, cache, and configs |
-| `GITHUB_ORG` | Required only for GitHub repository discovery, clone, push, or PR work |
-| `GITHUB_DEFAULT_BRANCH` | Default base branch when a project has no override |
-| `PROJECTS_JSON` | Multi-project map with stack and command metadata |
-| `CODE_REVIEWER_MODEL` | Optional model-routing hint for the nested `code-reviewer` skill |
-| `JIRA_HOST` and `JIRA_API_TOKEN` | Required only for Jira-driven or story-aware modes |
+| Variable                         | Why                                                                    |
+| -------------------------------- | ---------------------------------------------------------------------- |
+| `ORG_NAME`                       | Used in summaries and stakeholder-ready output                         |
+| `WORKSPACE_ROOT`                 | Anchor for resolving repos, cache, and configs                         |
+| `GITHUB_ORG`                     | Required only for GitHub repository discovery, clone, push, or PR work |
+| `GITHUB_DEFAULT_BRANCH`          | Default base branch when a project has no override                     |
+| `PROJECTS_JSON`                  | Multi-project map with stack and command metadata                      |
+| `CODE_REVIEWER_MODEL`            | Optional model-routing hint for the nested `code-reviewer` skill       |
+| `JIRA_HOST` and `JIRA_API_TOKEN` | Required only for Jira-driven or story-aware modes                     |
 
 ## Multi-project workspaces
 
-Declare repositories once via `PROJECTS_JSON` in `.env`. Skills use this to identify the current project, stack, runtime, base branch, build command, and formatting command.
+Declare repositories once via `PROJECTS_JSON` in `.env`. Skills use this to identify the current
+project, stack, runtime, base branch, build command, and formatting command.
 
 ```jsonc
 PROJECTS_JSON='[
@@ -65,22 +76,28 @@ Per-project keys:
 
 ## `in-repo` mode
 
-When the agent runs inside a single target repository (GitHub Copilot coding agent, Cursor cloud, Devin, Codex, Codespaces, Gitpod, Claude.ai web), there is no separate workspace root and no `.env` file. Instead, configuration lives in a committed file at the repository root: [`.agent-skills.yml`](../.agent-skills.example.yml). Secrets still come from environment variables injected by the host platform — never from this file.
+When the agent runs inside a single target repository (GitHub Copilot coding agent, Cursor cloud,
+Devin, Codex, Codespaces, Gitpod, Claude.ai web), there is no separate workspace root and no `.env`
+file. Instead, configuration lives in a committed file at the repository root:
+[`.agent-skills.yml`](../.agent-skills.example.yml). Secrets still come from environment variables
+injected by the host platform — never from this file.
 
 Top-level keys:
 
-| Key | Required | Notes |
-|---|---|---|
-| `mode` | yes | Must be `in-repo`. |
-| `org_name` | yes | Display name in summaries and PRs. |
-| `github_org` | only for clone/push/PR work | GitHub owner. |
-| `github_default_branch` | yes | Default base branch. |
-| `project` | yes | Single project block; replaces `PROJECTS_JSON`. |
-| `jira.host`, `jira.default_project_key` | only for Jira work | Host metadata only; the credential `JIRA_API_TOKEN` is an env var. |
-| `code_reviewer_model` | no | Optional model-routing hint. |
-| `cache_dir` | no | Override; default is `<repo>/.cache/agent-skills/`. Equivalent to `AGENT_SKILLS_CACHE_DIR`. |
+| Key                                     | Required                    | Notes                                                                                       |
+| --------------------------------------- | --------------------------- | ------------------------------------------------------------------------------------------- |
+| `mode`                                  | yes                         | Must be `in-repo`.                                                                          |
+| `org_name`                              | yes                         | Display name in summaries and PRs.                                                          |
+| `github_org`                            | only for clone/push/PR work | GitHub owner.                                                                               |
+| `github_default_branch`                 | yes                         | Default base branch.                                                                        |
+| `project`                               | yes                         | Single project block; replaces `PROJECTS_JSON`.                                             |
+| `jira.host`, `jira.default_project_key` | only for Jira work          | Host metadata only; the credential `JIRA_API_TOKEN` is an env var.                          |
+| `code_reviewer_model`                   | no                          | Optional model-routing hint.                                                                |
+| `cache_dir`                             | no                          | Override; default is `<repo>/.cache/agent-skills/`. Equivalent to `AGENT_SKILLS_CACHE_DIR`. |
 
-`project` keys mirror the per-project schema above (`name`, `stack`, `base_branch`, `build`, `format`, `runtime_version`, `coverage_target`, `notes`) but with no `path` field — the project is the repo itself.
+`project` keys mirror the per-project schema above (`name`, `stack`, `base_branch`, `build`,
+`format`, `runtime_version`, `coverage_target`, `notes`) but with no `path` field — the project is
+the repo itself.
 
 ## Variable resolution order (both modes)
 
@@ -99,4 +116,5 @@ Skills write the evidence-pack, repro-recipe, and definition-of-done artifacts t
 ${AGENT_SKILLS_CACHE_DIR:-${WORKSPACE_ROOT:-$REPO_ROOT}/.cache/agent-skills/<issue-key>/}
 ```
 
-That is the workspace root in `local-workspace` mode and the repository root in `in-repo` mode. Add `.cache/` to `.gitignore` in either case (`setup.init` does it for you in local-workspace mode).
+That is the workspace root in `local-workspace` mode and the repository root in `in-repo` mode. Add
+`.cache/` to `.gitignore` in either case (`setup.init` does it for you in local-workspace mode).

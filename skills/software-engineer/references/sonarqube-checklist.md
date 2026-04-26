@@ -2,18 +2,22 @@
 
 Pre-commit checklist to catch issues that would fail a SonarQube quality gate in CI/CD.
 
-> **SonarQube typically runs in CI/CD only.** When `${SONAR_HOST_URL}` is set, that's where the official report lives. Use these local tools to catch issues before pushing.
+> **SonarQube typically runs in CI/CD only.** When `${SONAR_HOST_URL}` is set, that's where the
+> official report lives. Use these local tools to catch issues before pushing.
 
 ## Local alternatives to SonarQube
 
 ### SonarLint (recommended)
 
-IDE plugin that applies SonarQube rules locally in real time. Hundreds of rules out of the box across Java, JS/TS, Python, and more — bugs, vulnerabilities, code smells, security hotspots.
+IDE plugin that applies SonarQube rules locally in real time. Hundreds of rules out of the box
+across Java, JS/TS, Python, and more — bugs, vulnerabilities, code smells, security hotspots.
 
 - **VS Code**: install `SonarSource.sonarlint-vscode` from the Extensions marketplace
 - **IntelliJ**: install "SonarQube for IDE" from the JetBrains Marketplace
-- **Standalone mode (default)**: works immediately, no configuration. Sufficient for catching most quality-gate failures.
-- **Connected mode (optional)**: when network access to `${SONAR_HOST_URL}` exists, sync the exact CI quality profile so local findings match the pipeline.
+- **Standalone mode (default)**: works immediately, no configuration. Sufficient for catching most
+  quality-gate failures.
+- **Connected mode (optional)**: when network access to `${SONAR_HOST_URL}` exists, sync the exact
+  CI quality profile so local findings match the pipeline.
 
 ### SpotBugs (Java, where configured)
 
@@ -55,6 +59,7 @@ open coverage/target/site/jacoco-aggregate/index.html
 ## Code smells (maintainability)
 
 ### Critical
+
 - [ ] No unused imports
 - [ ] No unused local variables or private fields
 - [ ] No unused method parameters (unless interface/override contract requires them)
@@ -64,6 +69,7 @@ open coverage/target/site/jacoco-aggregate/index.html
 - [ ] No commented-out code (it's in git history)
 
 ### Major
+
 - [ ] No magic numbers — extract to named constants
 - [ ] No magic strings — extract to constants or enums
 - [ ] No hardcoded URLs, file paths, or configuration values
@@ -77,6 +83,7 @@ open coverage/target/site/jacoco-aggregate/index.html
 - [ ] Use diamond operator / type inference where supported
 
 ### Minor
+
 - [ ] Consistent naming conventions
 - [ ] No trailing whitespace, no unnecessary blank lines
 - [ ] Boolean expressions simplified (no `if (x == true)`)
@@ -86,17 +93,20 @@ open coverage/target/site/jacoco-aggregate/index.html
 ## Bugs (reliability)
 
 ### Critical
+
 - [ ] No potential `NullPointerException` / `undefined` access:
   - Return `Optional` (or equivalent) instead of nullable
   - Null-check parameters at system boundaries
   - Chain `Optional.map().orElse()` instead of nested null checks
-- [ ] No resource leaks — try-with-resources / `using` / `with` for streams, connections, result sets
+- [ ] No resource leaks — try-with-resources / `using` / `with` for streams, connections, result
+      sets
 - [ ] No `equals()` without `hashCode()` (and vice versa) — Java
 - [ ] No infinite loops without break conditions
 - [ ] No division by zero — validate denominators
 - [ ] Collections: check `isEmpty()` before `get(0)` / `next()`
 
 ### Major
+
 - [ ] No unchecked type casts — use `instanceof` pattern matching where possible
 - [ ] Thread safety: shared mutable state in singletons is synchronized or avoided
 - [ ] No legacy date types in new Java code — use `java.time.*`
@@ -105,6 +115,7 @@ open coverage/target/site/jacoco-aggregate/index.html
 - [ ] Regex patterns compiled once (cached), not in hot paths
 
 ### Minor
+
 - [ ] String comparisons use `.equals()` (Java) — never `==` for value comparison
 - [ ] Empty-string check uses `isBlank()` / `isEmpty()` helpers
 - [ ] Collection size check uses `isEmpty()` not `size() == 0`
@@ -112,6 +123,7 @@ open coverage/target/site/jacoco-aggregate/index.html
 ## Vulnerabilities (security)
 
 ### Critical
+
 - [ ] No hardcoded passwords, API keys, tokens, or secrets in source code
 - [ ] No SQL injection — parameterized queries / ORM only
 - [ ] No XSS — encode all user-supplied content in responses
@@ -121,6 +133,7 @@ open coverage/target/site/jacoco-aggregate/index.html
 - [ ] No deserialization of untrusted data without type validation
 
 ### Major
+
 - [ ] No `@CrossOrigin("*")` — restrict origins explicitly
 - [ ] Cryptographic algorithms current (no MD5/SHA-1 for security)
 - [ ] `SecureRandom` used for security-sensitive random generation
@@ -129,6 +142,7 @@ open coverage/target/site/jacoco-aggregate/index.html
 - [ ] HttpOnly and Secure flags on cookies
 
 ### Minor
+
 - [ ] No overly permissive file permissions in code
 - [ ] Temp files created securely (`Files.createTempFile()`, `mkstemp`, etc.)
 
@@ -153,17 +167,20 @@ SonarQube default: flags blocks > 10 duplicated lines.
 ## Coverage
 
 Typical SonarQube quality gate:
+
 - **80%+ overall coverage** on new code (project target: `${COVERAGE_TARGET_PERCENT}` percent)
 - **0 bugs** on new code
 - **0 vulnerabilities** on new code
 
 Reports:
+
 - Java / JaCoCo: `target/site/jacoco/index.html`
 - Aggregated multi-module: `coverage/target/site/jacoco-aggregate/index.html`
 - JS/TS: `coverage/index.html`
 - Python: `htmlcov/index.html`
 
 Common exclusions:
+
 - Generated code (JPA metamodel `*_` classes, generated DTOs, gRPC stubs, ORM models)
 - Mappers (when they're declarative and trivially generated)
 

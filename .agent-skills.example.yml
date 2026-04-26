@@ -29,20 +29,20 @@ github_default_branch: "main"
 
 # The single project this repo represents.
 project:
-  name: ""                    # short identifier
-  stack: ""                   # java | typescript | python | go | mixed | other
+  name: "" # short identifier
+  stack: "" # java | typescript | python | go | mixed | other
   base_branch: "main"
-  build: ""                   # full build-and-test command, e.g. "mvn clean verify" or "pytest"
-  format: ""                  # formatter command, e.g. "ruff check . && ruff format --check ."
-  runtime_version: ""         # optional, e.g. "21" / "20" / "3.12"
-  coverage_target: ""         # optional, percentage as a string, e.g. "80"
-  notes: ""                   # optional free-text reminders
+  build: "" # full build-and-test command, e.g. "mvn clean verify" or "pytest"
+  format: "" # formatter command, e.g. "ruff check . && ruff format --check ."
+  runtime_version: "" # optional, e.g. "21" / "20" / "3.12"
+  coverage_target: "" # optional, percentage as a string, e.g. "80"
+  notes: "" # optional free-text reminders
 
 # Optional issue-system context. Credentials still come from env vars
 # (JIRA_API_TOKEN, GITHUB_TOKEN). Only host/project metadata goes here.
 jira:
-  host: ""                    # e.g. "yourorg.atlassian.net" — NO scheme, NO credentials
-  default_project_key: ""     # e.g. "ABC"
+  host: "" # e.g. "yourorg.atlassian.net" — NO scheme, NO credentials
+  default_project_key: "" # e.g. "ABC"
 
 # Optional model-routing hint for the nested code-reviewer skill.
 code_reviewer_model: ""
