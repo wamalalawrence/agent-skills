@@ -1,5 +1,9 @@
 # Configuration
 
+`agent-skills` supports two execution modes — `local-workspace` (multi-repo, with `setup.init`) and `in-repo` (single-repo, for online/cloud agents). Read [execution-modes.md](execution-modes.md) first to pick the one that matches where the agent runs. This page documents the configuration for each.
+
+## `local-workspace` mode
+
 ```text
 .env in the workspace root
    |
@@ -58,3 +62,41 @@ Per-project keys:
 - `build`: full build-and-test command
 - `format`: formatter command to run before commit or PR
 - optional: `runtime_version`, `coverage_target`, `notes`
+
+## `in-repo` mode
+
+When the agent runs inside a single target repository (GitHub Copilot coding agent, Cursor cloud, Devin, Codex, Codespaces, Gitpod, Claude.ai web), there is no separate workspace root and no `.env` file. Instead, configuration lives in a committed file at the repository root: [`.agent-skills.yml`](../.agent-skills.example.yml). Secrets still come from environment variables injected by the host platform — never from this file.
+
+Top-level keys:
+
+| Key | Required | Notes |
+|---|---|---|
+| `mode` | yes | Must be `in-repo`. |
+| `org_name` | yes | Display name in summaries and PRs. |
+| `github_org` | only for clone/push/PR work | GitHub owner. |
+| `github_default_branch` | yes | Default base branch. |
+| `project` | yes | Single project block; replaces `PROJECTS_JSON`. |
+| `jira.host`, `jira.default_project_key` | only for Jira work | Host metadata only; the credential `JIRA_API_TOKEN` is an env var. |
+| `code_reviewer_model` | no | Optional model-routing hint. |
+| `cache_dir` | no | Override; default is `<repo>/.cache/agent-skills/`. Equivalent to `AGENT_SKILLS_CACHE_DIR`. |
+
+`project` keys mirror the per-project schema above (`name`, `stack`, `base_branch`, `build`, `format`, `runtime_version`, `coverage_target`, `notes`) but with no `path` field — the project is the repo itself.
+
+## Variable resolution order (both modes)
+
+For every value the skills need, the order is:
+
+1. Process environment variable.
+2. `.agent-skills.yml` (in-repo) or `${WORKSPACE_ROOT}/.env` (local-workspace).
+3. Repo-file inference — only for `stack`/`build`/`format`.
+4. Stop with `Missing required setup: <NAME>` if still unresolved.
+
+## Cache path
+
+Skills write the evidence-pack, repro-recipe, and definition-of-done artifacts to:
+
+```
+${AGENT_SKILLS_CACHE_DIR:-${WORKSPACE_ROOT:-$REPO_ROOT}/.cache/agent-skills/<issue-key>/}
+```
+
+That is the workspace root in `local-workspace` mode and the repository root in `in-repo` mode. Add `.cache/` to `.gitignore` in either case (`setup.init` does it for you in local-workspace mode).

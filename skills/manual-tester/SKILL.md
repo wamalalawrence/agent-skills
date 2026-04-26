@@ -2,10 +2,10 @@
 name: manual-tester
 description: 'Manual testing workflow for validating intended behavior, exploring workflows, finding defects, documenting actual vs expected behavior, collecting evidence, and preparing retest guidance. Use when: planning or executing manual tests, validating acceptance criteria, doing exploratory testing, checking edge cases, reporting defects, or identifying regression and automation candidates. Collaborates with product-owner for intended behavior, software-engineer for technical risk areas, and test-automation-engineer for high-value automation candidates.'
 license: MIT
-compatibility: Works with any agent that supports the Agent Skills format (Claude Code, Cursor, Windsurf, Continue, GitHub Copilot Chat, ChatGPT, etc.). Expects workspace `.env` populated by setup.init.
+compatibility: Works with any agent that supports the Agent Skills format (Claude Code, Cursor, Windsurf, Continue, GitHub Copilot Chat, ChatGPT, etc.). Two execution modes — `local-workspace` (multi-repo, setup.init + .env) and `in-repo` (single-repo, .agent-skills.yml). See docs/execution-modes.md.
 metadata:
   author: wamalalawrence
-  version: "0.5.0"
+  version: "0.6.0"
   homepage: "https://github.com/wamalalawrence/agent-skills"
 ---
 
@@ -92,7 +92,7 @@ For each defect, include:
 - Evidence: screenshot, screen recording, request/response, console error, log excerpt, or data state where useful. Replayable artifacts (HAR, Playwright trace, Cypress recording) are strongly preferred over text-only steps because they let [`test-automation-engineer`](../test-automation-engineer/SKILL.md) seed a regression test directly.
 - Scope: how often it happens, affected users, affected browsers/devices, affected roles, or affected data.
 - Retest guidance.
-- **Investigator handoff:** the smallest set of facts [`issue-investigator`](../software-engineer/skills/issue-investigator/SKILL.md) needs to start — environment, build SHA, deterministic recipe, expected vs actual, and any logs/correlation ids you already collected. When you have a reproducible defect, write the recipe to `${WORKSPACE_ROOT}/.cache/agent-skills/<issue-key>/repro-recipe.yml` per the [evidence-pack & repro-recipe schema](../software-engineer/references/evidence-pack.md) so the engineer and `test-automation-engineer` can replay it without re-investigation.
+- **Investigator handoff:** the smallest set of facts [`issue-investigator`](../software-engineer/skills/issue-investigator/SKILL.md) needs to start — environment, build SHA, deterministic recipe, expected vs actual, and any logs/correlation ids you already collected. When you have a reproducible defect, write the recipe to `${AGENT_SKILLS_CACHE_DIR:-${WORKSPACE_ROOT:-$REPO_ROOT}/.cache/agent-skills}/<issue-key>/repro-recipe.yml` per the [evidence-pack & repro-recipe schema](../software-engineer/references/evidence-pack.md) so the engineer and `test-automation-engineer` can replay it without re-investigation. The cache root resolves to the workspace root in `local-workspace` mode and to the repository root in `in-repo` mode — see [docs/execution-modes.md](../../docs/execution-modes.md).
 
 #### Safe reproduction protocol
 

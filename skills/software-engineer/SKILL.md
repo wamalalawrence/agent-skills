@@ -2,10 +2,10 @@
 name: software-engineer
 description: 'Senior-level pair-programming workflow for software engineering work. Use when: making code changes, bug fixes, refactors, feature implementation, issue-description driven fixes, code review, PR preparation, migration scripts, API changes, or security review. Connects implementation, review, and issue resolution in one context-aware loop. Uses compact project and issue context first, then expands only when risk or ambiguity requires it. Invokes the nested code-reviewer skill at the end of Implementation and again at the end of QA. Reuses issue-investigator when issue context, root cause, or expected behavior needs deeper evidence.'
 license: MIT
-compatibility: Works with any agent that supports the Agent Skills format (Claude Code, Cursor, Windsurf, Continue, GitHub Copilot Chat, ChatGPT, etc.). Expects workspace `.env` populated by setup.init.
+compatibility: Works with any agent that supports the Agent Skills format (Claude Code, Cursor, Windsurf, Continue, GitHub Copilot Chat, ChatGPT, etc.). Two execution modes — `local-workspace` (multi-repo, setup.init + .env) and `in-repo` (single-repo, .agent-skills.yml). See docs/execution-modes.md.
 metadata:
   author: wamalalawrence
-  version: "0.5.0"
+  version: "0.6.0"
   homepage: "https://github.com/wamalalawrence/agent-skills"
 ---
 
@@ -13,7 +13,7 @@ metadata:
 
 Senior-level engineering workflow for production code. Combines implementation, issue understanding, quality assurance, and code review into a single repeatable pair-programming loop.
 
-> All organisation-, repo-, and tool-specific values come from `${WORKSPACE_ROOT}/.env` (template in [`agent-skills/.env.example`](../../.env.example)). **Never hardcode** company names, hostnames, repo names, ticket prefixes, branch rules, tokens, or paths into this file.
+> All organisation-, repo-, and tool-specific values come from configuration outside this file. In `local-workspace` mode that is `${WORKSPACE_ROOT}/.env` (template in [`agent-skills/.env.example`](../../.env.example)); in `in-repo` mode that is `.agent-skills.yml` at the repo root (template in [`agent-skills/.agent-skills.example.yml`](../../.agent-skills.example.yml)). See [`docs/execution-modes.md`](../../docs/execution-modes.md). **Never hardcode** company names, hostnames, repo names, ticket prefixes, branch rules, tokens, or paths into this file.
 
 ## Collaborative engineering model
 
@@ -48,19 +48,28 @@ When in doubt: **research the codebase or ask** — never assume and proceed. Wh
 
 ## Required Environment
 
-Run this setup preflight before context discovery. If `${WORKSPACE_ROOT}/.env` is missing, unreadable, or not sourced, warn the user and stop before issue-aware, repository-changing, branch, PR, or release work. Generic planning may continue only if the user supplied enough context directly and the output clearly states that local setup was not verified.
+Run this setup preflight before context discovery.
 
-Treat blank values and copied placeholders that would make the requested work inaccurate as missing context. The bootstrap `PROJECTS_JSON` entry from `.env.example` is acceptable only for local exploratory work; for implementation, review, PR, or release work, the project entry must identify the real repo, stack, base branch, and validation commands or the agent must inspect the repo and ask before proceeding.
+**Step 1 — detect execution mode** ([docs/execution-modes.md](../../docs/execution-modes.md)):
 
-Stop and tell the user what to add to `${WORKSPACE_ROOT}/.env` if any of the following are missing or unusable for the requested task.
+1. If `AGENT_SKILLS_MODE` is set to `local-workspace` or `in-repo`, use it.
+2. Else if `${WORKSPACE_ROOT}/.env` exists and is readable → `local-workspace`.
+3. Else if `.agent-skills.yml` exists at the repository root → `in-repo`.
+4. Else: stop and tell the user to either run `./setup.init` (multi-repo local) or copy `.agent-skills.example.yml` to `.agent-skills.yml` at the repo root (single-repo / online agent).
+
+**Step 2 — verify context for the requested task.** Whichever mode applies, if the resolved configuration is missing, unreadable, or lacks enough metadata for the requested task, warn the user and stop before issue-aware, repository-changing, branch, PR, or release work. Generic planning may continue only if the user supplied enough context directly and the output clearly states that setup was not verified.
+
+Treat blank values and copied placeholders that would make the requested work inaccurate as missing context. The bootstrap `PROJECTS_JSON` entry from `.env.example` (or an empty `project:` block in `.agent-skills.yml`) is acceptable only for local exploratory work; for implementation, review, PR, or release work, the project entry must identify the real repo, stack, base branch, and validation commands or the agent must inspect the repo and ask before proceeding.
+
+Values are resolved in this order: process environment → `.agent-skills.yml` (in-repo) or `${WORKSPACE_ROOT}/.env` (local-workspace) → repo-file inference (only for `stack`/`build`/`format`) → stop with `Missing required setup: <NAME>`. Secrets always come from environment variables in both modes.
 
 | Variable | Required | Used for |
 |---|---|---|
-| `WORKSPACE_ROOT` | yes | Resolving repos, configs, cache |
+| `WORKSPACE_ROOT` | yes (local-workspace) | Resolving repos, configs, cache. In `in-repo` mode the repository root is used instead. |
 | `ORG_NAME` | yes | Display in summaries and PR descriptions |
 | `GITHUB_ORG` | only for GitHub clone, push, PR, or sibling-repo lookup | Cloning, pushing, looking up sibling repos |
 | `GITHUB_DEFAULT_BRANCH` | yes | Default base branch for new work |
-| `PROJECTS_JSON` | yes | Multi-project map: per-project stack, base branch, build/format commands. See [`agent-skills/.env.example`](../../.env.example) for the schema. |
+| `PROJECTS_JSON` | yes (local-workspace) | Multi-project map: per-project stack, base branch, build/format commands. See [`agent-skills/.env.example`](../../.env.example). In `in-repo` mode the single `project:` block in `.agent-skills.yml` replaces this. |
 | `GIT_COMMIT_MSG_FORMAT` | no | Hint string for commit message format |
 | `GIT_BRANCH_NAME_FORMAT` | no | Hint string for branch name format |
 | `GIT_MERGE_STRATEGY` | no | `squash` \| `merge` \| `rebase` |
@@ -73,7 +82,7 @@ Stop and tell the user what to add to `${WORKSPACE_ROOT}/.env` if any of the fol
 
 If a variable is missing, output:
 
-> Missing required setup: `<NAME>`. Add it to `${WORKSPACE_ROOT}/.env` (see `agent-skills/.env.example`) and re-run. I will not continue because the result would be based on incomplete local context.
+> Missing required setup: `<NAME>`. Add it to `${WORKSPACE_ROOT}/.env` (local-workspace mode — see [`agent-skills/.env.example`](../../.env.example)) or to `.agent-skills.yml` at the repository root (in-repo mode — see [`agent-skills/.agent-skills.example.yml`](../../.agent-skills.example.yml)) and re-run. I will not continue because the result would be based on incomplete context.
 
 For Jira-driven work, `.jira-config.yml` is optional when `JIRA_HOST`, `JIRA_AUTH_TYPE`, `JIRA_API_TOKEN`, and any required `JIRA_LOGIN` value are present and usable. If a Jira ticket is in scope and neither Jira access nor a user-supplied ticket summary with acceptance criteria/comments is available, stop and ask; do not infer ticket intent from the key, branch name, or code diff alone.
 
@@ -81,7 +90,7 @@ For Jira-driven work, `.jira-config.yml` is optional when `JIRA_HOST`, `JIRA_AUT
 
 This skill must work with **real** context. Walk this ladder until you have enough to act safely; if step 4 is reached, stop and ask the user.
 
-1. **Project identity** — Look up the current working directory inside `${PROJECTS_JSON}` to identify the project (`name`, `stack`, `base_branch`, `build`, `format`, `runtime_version`). If the cwd matches multiple entries (or none), ask the user which project applies.
+1. **Project identity** — In `local-workspace` mode, look up the current working directory inside `${PROJECTS_JSON}` to identify the project (`name`, `stack`, `base_branch`, `build`, `format`, `runtime_version`); if the cwd matches multiple entries (or none), ask the user. In `in-repo` mode the single `project:` block in `.agent-skills.yml` is the project; if its required fields (`stack`, `base_branch`, `build`) are blank, infer from repo files (`pom.xml` / `package.json` / `pyproject.toml` / `go.mod`) and ask the user to confirm before any code-changing step.
 2. **Issue source** — Use a Jira ticket when one is supplied or derivable from the branch name. Otherwise use the user's description as the issue brief. For Jira, fetch `jira issue view <KEY> --comments 100` and follow parent / child / linked issues and any linked Confluence pages.
 3. **Codebase** — Read the project's `README.md`, build manifest (`pom.xml` / `package.json` / `pyproject.toml` / equivalent), `.github/workflows/`, recent commits touching the affected area, and the tests around it. The CI workflow is the source of truth for "passing".
 4. **The user** — If after the previous three steps the change is still ambiguous, **stop and ask** with a focused list of what you need (acceptance criteria, sample inputs, expected vs actual, related ticket, etc.). Never invent context.
@@ -128,7 +137,7 @@ Use the locally installed CLI first, fall back to direct REST only when the CLI 
 
 ### 1.1 Ticket / context
 
-- [ ] Source `.env` so credentials are available: `set -a && source ${WORKSPACE_ROOT}/.env && set +a`
+- [ ] Source credentials so they're available to subprocesses: `set -a && source ${WORKSPACE_ROOT}/.env && set +a` (local-workspace mode). In `in-repo` mode credentials come from the host platform's environment-variable injection — nothing to source.
 - [ ] If `.env` is missing, unreadable, or still only contains bootstrap values that cannot identify the real project for this task, stop with the missing-setup message from Required Environment.
 - [ ] If working from a Jira ticket: sanity-check access with `jira me` and `jira serverinfo`.
 - [ ] Read ticket details: `jira issue view <TICKET>` and `jira issue view <TICKET> --comments 100`.
@@ -163,14 +172,14 @@ Use the locally installed CLI first, fall back to direct REST only when the CLI 
 - [ ] Identify any service that depends on this repo and could be affected.
 - [ ] For meaningful API or interface changes: design first, share the contract, discuss with the team, then implement.
 - [ ] If product intent or acceptance criteria are unclear, pause and use [`product-owner`](../product-owner/SKILL.md) before writing code.
-- [ ] **Present a brief plan with actionable findings BEFORE writing code.** Use this 5-line structure so the reviewer can later check the diff against it: _Problem · Hypothesis · Smallest change · Risk · Validation._ Persist it as the `plan` block of `${WORKSPACE_ROOT}/.cache/agent-skills/<issue-key>/evidence-pack.yml` per the [evidence-pack schema](./references/evidence-pack.md). If `issue-investigator` already wrote the file, append to it; do not overwrite the investigation block.
+- [ ] **Present a brief plan with actionable findings BEFORE writing code.** Use this 5-line structure so the reviewer can later check the diff against it: _Problem · Hypothesis · Smallest change · Risk · Validation._ Persist it as the `plan` block of `${AGENT_SKILLS_CACHE_DIR:-${WORKSPACE_ROOT:-$REPO_ROOT}/.cache/agent-skills}/<issue-key>/evidence-pack.yml` per the [evidence-pack schema](./references/evidence-pack.md). If `issue-investigator` already wrote the file, append to it; do not overwrite the investigation block.
 - [ ] For ambiguous, high-risk, or user-facing changes, get confirmation before proceeding. For clearly specified low-risk changes, continue after stating the plan.
 
 ### 1.5 Reproduce-before-fix gate (bug fixes only)
 
 For any bug fix, regression, or production incident, do not write the fix until you can reproduce the defect deterministically.
 
-- [ ] Use [`issue-investigator`](./skills/issue-investigator/SKILL.md) to confirm root cause and capture a deterministic reproduction recipe in a safe environment (local, sandbox, snapshot, or replayed input — never against live production data). The recipe lives at `${WORKSPACE_ROOT}/.cache/agent-skills/<issue-key>/repro-recipe.yml` per the [evidence-pack & repro-recipe schema](./references/evidence-pack.md).
+- [ ] Use [`issue-investigator`](./skills/issue-investigator/SKILL.md) to confirm root cause and capture a deterministic reproduction recipe in a safe environment (local, sandbox, snapshot, or replayed input — never against live production data). The recipe lives at `${AGENT_SKILLS_CACHE_DIR:-${WORKSPACE_ROOT:-$REPO_ROOT}/.cache/agent-skills}/<issue-key>/repro-recipe.yml` per the [evidence-pack & repro-recipe schema](./references/evidence-pack.md).
 - [ ] **Write the failing regression test FIRST.** Commit it as the first commit on the branch (e.g., `test: failing test for <TICKET>`). The test must fail on the parent commit and pass on the fix commit. The reviewer will verify this by checking out the parent.
 - [ ] If the bug cannot be reproduced or no failing test can be written, escalate via `issue-investigator`'s _Recommended Next Action_ instead of guessing at a fix.
 - [ ] Skip this gate only for: pure refactors, formatting, docs, or new features without a reported defect — and say so explicitly in the plan.
@@ -356,7 +365,7 @@ Address remaining findings, then proceed.
 
 ### 5.3 Definition-of-Done artifact
 
-Write `${WORKSPACE_ROOT}/.cache/agent-skills/<issue-key>/definition-of-done.json` per [definition-of-done.md](./references/definition-of-done.md). The reviewer reads this file as part of its hard-handoff contract and must not declare `PASS` if any `false` flag is missing a written waiver.
+Write `${AGENT_SKILLS_CACHE_DIR:-${WORKSPACE_ROOT:-$REPO_ROOT}/.cache/agent-skills}/<issue-key>/definition-of-done.json` per [definition-of-done.md](./references/definition-of-done.md). The reviewer reads this file as part of its hard-handoff contract and must not declare `PASS` if any `false` flag is missing a written waiver.
 
 - [ ] Build, tests, format, lint/static analysis, security scan all `passed: true` or explicitly waived.
 - [ ] For bug fixes: `bug_fix.is_bug_fix: true`, `regression_test_commit` set, `fails_on_parent: true`, `passes_on_head: true`, `repro_recipe_path` populated, `observability_added` set honestly.

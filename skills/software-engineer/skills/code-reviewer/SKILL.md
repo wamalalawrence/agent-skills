@@ -2,10 +2,10 @@
 name: code-reviewer
 description: 'Issue-aware code review workflow for working diffs, commits, branches, and pull requests. Use when: reviewing implementation against a Jira ticket, GitHub issue, bug report, feature request, task description, acceptance criteria, or general engineering quality bar. Applies two layers: issue/ticket alignment first, then general engineering quality. Reuses issue-investigator when expected behavior, root cause, or issue context is unclear, and reuses software-engineer for architecture, implementation quality, testability, and production-risk judgment.'
 license: MIT
-compatibility: Works with any agent that supports the Agent Skills format (Claude Code, Cursor, Windsurf, Continue, GitHub Copilot Chat, ChatGPT, etc.). Expects workspace `.env` populated by setup.init.
+compatibility: Works with any agent that supports the Agent Skills format (Claude Code, Cursor, Windsurf, Continue, GitHub Copilot Chat, ChatGPT, etc.). Two execution modes — `local-workspace` (multi-repo, setup.init + .env) and `in-repo` (single-repo, .agent-skills.yml). See docs/execution-modes.md.
 metadata:
   author: wamalalawrence
-  version: "0.5.0"
+  version: "0.6.0"
   homepage: "https://github.com/wamalalawrence/agent-skills"
 argument-hint: 'optional: mode inner|outer, base branch, issue key/URL, PR URL, or task description'
 user-invocable: true
@@ -57,14 +57,18 @@ If a review target is missing, stop and ask. If issue context is available but i
 
 ## Required Environment
 
-Run this setup preflight before reviewing. If `${WORKSPACE_ROOT}/.env` is missing, unreadable, or lacks enough project metadata to identify the review target, warn and stop for local branch/PR review. Manual review of a user-supplied diff may continue only when the output clearly states that repository setup, build commands, and issue-system access were not verified.
+Run this setup preflight before reviewing.
 
-If issue-aware review is requested or an issue key/URL is present, usable issue context is required. Jira access can come from `.env` variables directly; `.jira-config.yml` is optional. If the issue cannot be read and the user did not provide the ticket summary, acceptance criteria, and key comments directly, stop or ask for that context before producing a verdict.
+**Detect execution mode** ([docs/execution-modes.md](../../../../docs/execution-modes.md)): if `${WORKSPACE_ROOT}/.env` is present → `local-workspace`; else if `.agent-skills.yml` exists at the repo root → `in-repo`; else stop.
+
+If the resolved configuration is missing, unreadable, or lacks enough project metadata to identify the review target, warn and stop for local branch/PR review. Manual review of a user-supplied diff may continue only when the output clearly states that repository setup, build commands, and issue-system access were not verified.
+
+If issue-aware review is requested or an issue key/URL is present, usable issue context is required. Jira host metadata can come from `.env` or `.agent-skills.yml`; the credential (`JIRA_API_TOKEN`) always comes from environment variables. `.jira-config.yml` is optional. If the issue cannot be read and the user did not provide the ticket summary, acceptance criteria, and key comments directly, stop or ask for that context before producing a verdict.
 
 | Variable | Required | Default | Used for |
 |---|---|---|---|
-| `WORKSPACE_ROOT` | yes | - | Resolving repos and cache paths |
-| `PROJECTS_JSON` | yes | - | Project identity, stack, base branch, build and format commands |
+| `WORKSPACE_ROOT` | yes (local-workspace) | - | Resolving repos and cache paths. In `in-repo` mode the repo root is used. |
+| `PROJECTS_JSON` | yes (local-workspace) | - | Project identity, stack, base branch, build and format commands. In `in-repo` mode the `project:` block in `.agent-skills.yml` replaces this. |
 | `GITHUB_DEFAULT_BRANCH` | yes | `main` | Base branch fallback |
 | `CODE_REVIEWER_MODEL` | no | `default` | Model id used for review, when the host supports model routing |
 | `CODE_REVIEWER_BLOCKING` | no | `false` | When `true`, blocker findings stop the calling workflow |
@@ -73,7 +77,7 @@ If issue-aware review is requested or an issue key/URL is present, usable issue 
 | `CODE_REVIEWER_SHOW_SEVERITIES` | no | `blocker,major,minor,nit` | Severities surfaced in outer-loop mode |
 | `CODE_REVIEWER_INNER_LOOP_SEVERITIES` | no | `blocker,major` | Severities surfaced in inner-loop mode |
 | `CODE_REVIEWER_MAX_ROUNDS` | no | `3` | Maximum engineer↔reviewer iteration rounds before escalation |
-| `CODE_REVIEWER_CACHE_DIR` | no | `${WORKSPACE_ROOT}/.cache/code-reviewer` | Cache for fetched issue context summaries |
+| `CODE_REVIEWER_CACHE_DIR` | no | `${AGENT_SKILLS_CACHE_DIR:-${WORKSPACE_ROOT:-$REPO_ROOT}/.cache/code-reviewer}` | Cache for fetched issue context summaries |
 | `CODE_REVIEWER_CACHE_TTL_HOURS` | no | `24` | Cache TTL |
 | `JIRA_HOST`, `JIRA_API_TOKEN`, `JIRA_AUTH_TYPE` | only for Jira issue-aware review | - | Jira ticket lookup |
 | `CONFLUENCE_HOST`, `CONFLUENCE_API_TOKEN` | only when linked docs require them | - | Linked document lookup |
@@ -84,7 +88,7 @@ If issue-aware review is requested or an issue key/URL is present, usable issue 
 
 If required setup is missing, output:
 
-> Missing required setup: `<NAME or file>`. I will not continue with issue-aware or repository-aware review because the result would be based on incomplete local context. Add/update `${WORKSPACE_ROOT}/.env`, provide the missing issue/project details directly, or explicitly ask for a non-issue-aware manual review.
+> Missing required setup: `<NAME or file>`. I will not continue with issue-aware or repository-aware review because the result would be based on incomplete context. Add/update `${WORKSPACE_ROOT}/.env` (local-workspace) or `.agent-skills.yml` at the repo root (in-repo — see `agent-skills/.agent-skills.example.yml`), provide the missing issue/project details directly, or explicitly ask for a non-issue-aware manual review.
 
 ## Required Workflow
 
@@ -101,7 +105,7 @@ If required setup is missing, output:
 
 #### Hard handoff contract from the engineer
 
-When invoked from [`software-engineer`](../../SKILL.md) (inner or outer loop), read `${WORKSPACE_ROOT}/.cache/agent-skills/<issue-key>/evidence-pack.yml` per the [evidence-pack schema](../../references/evidence-pack.md) and expect every required field. Surface a `major` finding when any of the following is missing or empty:
+When invoked from [`software-engineer`](../../SKILL.md) (inner or outer loop), read `${AGENT_SKILLS_CACHE_DIR:-${WORKSPACE_ROOT:-$REPO_ROOT}/.cache/agent-skills}/<issue-key>/evidence-pack.yml` per the [evidence-pack schema](../../references/evidence-pack.md) and expect every required field. Surface a `major` finding when any of the following is missing or empty:
 
 - `project` block (name, stack, base_branch, build_command).
 - `issue_url`, `summary`, `expected_behavior`, `acceptance_criteria`.
@@ -109,7 +113,7 @@ When invoked from [`software-engineer`](../../SKILL.md) (inner or outer loop), r
 - `plan` (the engineer's 5-line plan: problem · hypothesis · smallest change · risk · validation).
 - `risk_areas`.
 - For bug fixes: a referenced **failing-regression-test commit** that fails on the commit's parent and passes on HEAD (`--repro-verify` mode). Cross-check with `repro-recipe.yml` if present.
-- For outer-loop or PR review: `${WORKSPACE_ROOT}/.cache/agent-skills/<issue-key>/definition-of-done.json` per the [Definition of Done schema](../../references/definition-of-done.md). Any `false` flag without a written waiver is itself a `blocker`.
+- For outer-loop or PR review: `${AGENT_SKILLS_CACHE_DIR:-${WORKSPACE_ROOT:-$REPO_ROOT}/.cache/agent-skills}/<issue-key>/definition-of-done.json` per the [Definition of Done schema](../../references/definition-of-done.md). Any `false` flag without a written waiver is itself a `blocker`.
 - Inner-loop only: `--since-last-review` delta so the reviewer focuses on changes since the previous round, not the whole staged diff again.
 
 If the evidence pack is missing entirely, the reviewer must not re-derive context silently — it surfaces the missing handoff as a `major` finding and asks the engineer to produce it before the loop continues.

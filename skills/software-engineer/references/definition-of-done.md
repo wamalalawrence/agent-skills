@@ -5,7 +5,7 @@ A machine-readable checklist `software-engineer` produces at the end of Phase 5 
 The file is small and explicit. It exists to prevent silent shortcuts (`--no-verify`, skipped tests, missing regression test for a bug fix) from making it into a PR.
 
 ```
-${WORKSPACE_ROOT}/.cache/agent-skills/<issue-key>/definition-of-done.json
+${AGENT_SKILLS_CACHE_DIR:-${WORKSPACE_ROOT:-$REPO_ROOT}/.cache/agent-skills}/<issue-key>/definition-of-done.json
 ```
 
 ## Schema

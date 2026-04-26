@@ -2,7 +2,7 @@
 
 Reusable [Agent Skills](https://agentskills.io/) for software-engineering work — portable, role-shaped workflows your AI assistant can load on demand so the same model produces senior-engineer, product-owner, tester, or reviewer output instead of generic answers.
 
-> **Status:** `0.5.0` — pre-1.0. Core skill set is shipped and stable enough for public use; interfaces may still evolve.
+> **Status:** `0.6.0` — pre-1.0. Core skill set is shipped and stable enough for public use; interfaces may still evolve.
 
 ## Why Skills
 
@@ -13,9 +13,11 @@ A general-purpose LLM is a general practitioner: capable, broad, but not special
 
 ## Install
 
-Two options.
+`agent-skills` runs in two execution modes — pick the one that matches **where the agent actually runs**. Full comparison in [docs/execution-modes.md](docs/execution-modes.md).
 
-**Recommended — one-command setup that wires up your workspace:**
+### Local workspace (your laptop, multiple repos)
+
+For Claude Code, Cursor, Windsurf, Continue, GitHub Copilot Chat in VS Code/JetBrains, or any local assistant working across several sibling repos:
 
 ```bash
 git clone https://github.com/wamalalawrence/agent-skills.git
@@ -23,13 +25,24 @@ cd agent-skills
 ./setup.init
 ```
 
-**Or — install just the skills via the [Agent Skills](https://skills.sh) ecosystem:**
+`setup.init` writes `.env`, optional `.jira-config.yml`, a `.skills` symlink, and a `.gitignore` block into the parent workspace folder. See [docs/installation.md](docs/installation.md) for the workspace layout, all flags, and manual setup.
+
+### In-repo (online / cloud agents, single repository)
+
+For GitHub Copilot coding agent (github.com), Cursor cloud / background agents, Devin, Codex, GitHub Codespaces, Gitpod, or ChatGPT/Claude on the web with the repo attached — anywhere there is no local workspace folder:
+
+1. Copy [`.agent-skills.example.yml`](.agent-skills.example.yml) to `.agent-skills.yml` at the **target repository's** root and fill in the `project:` block. No secrets in this file.
+2. Vendor the `skills/` folder you want to use into the target repo (copy or `git submodule add`), or reference specific `SKILL.md` files from your agent's instruction surface (`.github/copilot-instructions.md`, `.cursor/rules/`, project-attached files, …).
+3. Add `.cache/` to the target repo's `.gitignore`.
+4. Inject any required secrets (`JIRA_API_TOKEN`, `GITHUB_TOKEN`, …) via the host platform's secret mechanism.
+
+See [docs/installation.md](docs/installation.md) and [docs/assistants.md](docs/assistants.md) for per-platform details.
+
+### Or — install just the skills via the [Agent Skills](https://skills.sh) ecosystem
 
 ```bash
 npx skills add wamalalawrence/agent-skills
 ```
-
-See [docs/installation.md](docs/installation.md) for the recommended workspace layout, all flags, manual setup, and what `setup.init` does.
 
 ## Skills
 
@@ -55,7 +68,8 @@ Diagram of the actual collaboration graph:
 │ software-engineer│ ◄────────────► │  code-reviewer   │
 └─┬──────────┬─────┘                 └────────┬─────────┘
   │          │                                 │
-  │          ▼                                 │
+  │Execution modes (`local-workspace` vs `in-repo`)](docs/execution-modes.md)
+- [          ▼                                 │
   │   ┌──────────────────┐  evidence/repro    │
   │   │ issue-investigator│ ──────────────────►│
   │   └─────────┬────────┘                    │

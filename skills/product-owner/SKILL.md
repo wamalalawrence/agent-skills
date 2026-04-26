@@ -2,10 +2,10 @@
 name: product-owner
 description: 'Product ownership workflow for turning product goals, stakeholder needs, Jira tickets, and rough ideas into clear, testable, implementation-ready work. Use when: clarifying goals, refining requirements, defining scope, writing acceptance criteria, preparing Jira-ready stories or tasks, or handing work to engineering and testing. Collaborates with software-engineer for feasibility and tradeoffs, manual-tester for scenario coverage, and test-automation-engineer for automation-friendly acceptance criteria.'
 license: MIT
-compatibility: Works with any agent that supports the Agent Skills format (Claude Code, Cursor, Windsurf, Continue, GitHub Copilot Chat, ChatGPT, etc.). Expects workspace `.env` populated by setup.init.
+compatibility: Works with any agent that supports the Agent Skills format (Claude Code, Cursor, Windsurf, Continue, GitHub Copilot Chat, ChatGPT, etc.). Two execution modes — `local-workspace` (multi-repo, setup.init + .env) and `in-repo` (single-repo, .agent-skills.yml). See docs/execution-modes.md.
 metadata:
   author: wamalalawrence
-  version: "0.5.0"
+  version: "0.6.0"
   homepage: "https://github.com/wamalalawrence/agent-skills"
 ---
 
@@ -99,7 +99,7 @@ If the user only provides a broad idea, first ask focused clarification question
 Do not produce the Jira-ready output in step 7 until all of these are true:
 
 - Goal, target users, and business value are stated.
-- For bug-flavored input: the [`issue-investigator`](../software-engineer/skills/issue-investigator/SKILL.md) result is attached and root-cause confidence is at least `suspected`. Read it from `${WORKSPACE_ROOT}/.cache/agent-skills/<issue-key>/evidence-pack.yml` per the [evidence-pack schema](../software-engineer/references/evidence-pack.md), and write the refined `acceptance_criteria` back to the same file.
+- For bug-flavored input: the [`issue-investigator`](../software-engineer/skills/issue-investigator/SKILL.md) result is attached and root-cause confidence is at least `suspected`. Read it from the shared cache at `${AGENT_SKILLS_CACHE_DIR:-${WORKSPACE_ROOT:-$REPO_ROOT}/.cache/agent-skills}/<issue-key>/evidence-pack.yml` per the [evidence-pack schema](../software-engineer/references/evidence-pack.md), and write the refined `acceptance_criteria` back to the same file. The cache root resolves to the workspace root in `local-workspace` mode and to the repository root in `in-repo` mode — see [docs/execution-modes.md](../../docs/execution-modes.md).
 - Acceptance criteria are observable/testable, include at least one negative criterion, and cover the relevant edge cases.
 - In-scope and out-of-scope are explicit.
 - Feasibility note from [`software-engineer`](../software-engineer/SKILL.md) is attached for any work touching APIs, migrations, security, or shared libraries.

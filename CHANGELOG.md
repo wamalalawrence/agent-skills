@@ -4,6 +4,27 @@ All notable project changes should be recorded here.
 
 ## Unreleased
 
+## 0.6.0 - In-Repo Execution Mode (Online / Cloud Agent Support)
+
+Until now the project assumed every user runs an AI assistant locally with `agent-skills` cloned alongside their other repos. Cloud / online agents (GitHub Copilot coding agent on github.com, Cursor cloud, Devin, Codex, Codespaces, Gitpod, Claude.ai web with the repo attached) operate inside a single target repository — no sibling `agent-skills` checkout, no `setup.init` shell access, no `${WORKSPACE_ROOT}/.env`. v0.6.0 makes this a first-class second mode instead of an undocumented edge case.
+
+### Added
+- **`docs/execution-modes.md`** — single source of truth for the two modes (`local-workspace` and `in-repo`), how skills detect which one applies, and the variable-resolution order each uses.
+- **`.agent-skills.example.yml`** — committed-to-repo configuration template for `in-repo` mode. Holds the single `project:` block and the org/github/jira-host metadata previously read from `.env`. Contains **no secrets**; credentials still come from environment variables injected by the host platform.
+- README install section now documents both paths explicitly: "Local workspace" (the existing `setup.init` flow) and "In-repo" (the new path for online agents).
+- `docs/installation.md` opens with an "in-repo install" section for cloud-agent users.
+- `docs/configuration.md` documents the `.agent-skills.yml` schema, the precedence order (env → file → repo-file inference → stop), and the cache-path resolution.
+- `docs/assistants.md` adds a section covering GitHub Copilot coding agent, Cursor cloud, Devin/Codex, Codespaces/Gitpod, and Claude.ai web.
+
+### Changed
+- **All 6 SKILL.md preflight blocks** updated to detect mode (`AGENT_SKILLS_MODE` → `${WORKSPACE_ROOT}/.env` → `.agent-skills.yml` → stop), then resolve required values in `local-workspace` or `in-repo` mode without assuming `${WORKSPACE_ROOT}/.env` exists. The "Missing required setup" error message now points at whichever config file matches the detected mode.
+- **All 6 SKILL.md `compatibility:` frontmatter** rewritten to declare both modes and link to `docs/execution-modes.md`.
+- **All cache-path references** in skills and reference docs changed from the hardcoded `${WORKSPACE_ROOT}/.cache/agent-skills/...` to `${AGENT_SKILLS_CACHE_DIR:-${WORKSPACE_ROOT:-$REPO_ROOT}/.cache/agent-skills/...}` — works in both modes; can be overridden by setting `AGENT_SKILLS_CACHE_DIR`.
+- README status banner bumped to `0.6.0`. All SKILL.md `metadata.version` bumped to `0.6.0`.
+
+### Not changed
+- `setup.init` behaviour and the `local-workspace` install path are unchanged. v0.5.0 setups continue to work as-is.
+
 ## 0.5.0 - Evidence Pack, Definition of Done, Honest Contribution Framing
 
 The infrastructure half of the v0.4.0 plan (G1, G2, G9, G10) plus an honesty pass on the contribution/governance/support docs.

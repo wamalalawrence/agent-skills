@@ -1,0 +1,52 @@
+# =============================================================================
+# agent-skills — in-repo configuration template
+#
+# Use this file when the AI agent runs INSIDE a single target repository and
+# cannot rely on a separate workspace root with a `.env` file. Typical hosts:
+# GitHub Copilot coding agent (github.com), Cursor cloud / background agents,
+# Devin, Codex, Codespaces, Gitpod, Claude.ai web with the repo attached.
+#
+# How to use:
+#   1. Copy this file to `.agent-skills.yml` at the repository root.
+#   2. Fill in the project block to match this repo.
+#   3. Commit `.agent-skills.yml` (it contains NO secrets).
+#   4. Add `.cache/` to `.gitignore`.
+#   5. Inject secrets (JIRA_API_TOKEN, GITHUB_TOKEN, etc.) via the host
+#      platform's environment-variable mechanism. Never put them in this file.
+#
+# For multi-repo / local-workspace setups use `setup.init` and `.env` instead.
+# See docs/execution-modes.md for the full comparison.
+# =============================================================================
+
+mode: in-repo
+
+# Display name used in summaries and stakeholder-ready output.
+org_name: ""
+
+# Source-control context (only needed for clone/push/PR-aware work).
+github_org: ""
+github_default_branch: "main"
+
+# The single project this repo represents.
+project:
+  name: ""                    # short identifier
+  stack: ""                   # java | typescript | python | go | mixed | other
+  base_branch: "main"
+  build: ""                   # full build-and-test command, e.g. "mvn clean verify" or "pytest"
+  format: ""                  # formatter command, e.g. "ruff check . && ruff format --check ."
+  runtime_version: ""         # optional, e.g. "21" / "20" / "3.12"
+  coverage_target: ""         # optional, percentage as a string, e.g. "80"
+  notes: ""                   # optional free-text reminders
+
+# Optional issue-system context. Credentials still come from env vars
+# (JIRA_API_TOKEN, GITHUB_TOKEN). Only host/project metadata goes here.
+jira:
+  host: ""                    # e.g. "yourorg.atlassian.net" — NO scheme, NO credentials
+  default_project_key: ""     # e.g. "ABC"
+
+# Optional model-routing hint for the nested code-reviewer skill.
+code_reviewer_model: ""
+
+# Optional cache override. Defaults to <repo-root>/.cache/agent-skills/.
+# Useful on ephemeral runners that want to redirect the cache to a tmpfs path.
+cache_dir: ""
