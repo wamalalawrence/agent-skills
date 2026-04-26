@@ -6,6 +6,46 @@ All notable project changes should be recorded here.
 
 - No unreleased changes.
 
+## 0.10.0 - Eval-Driven Skill Improvements
+
+### Added
+
+- `code-reviewer` workflow step "Record review limitations explicitly" plus a
+  matching `Review Limitations / Unavailable Context` section in the output
+  contract. A bare `PASS` verdict is now disallowed while review-limitation
+  items are non-`none`.
+- `issue-investigator` workflow subsection "Safe read-only checks the user
+  can run" plus a matching `Safe Checks The User Can Run` block in the output
+  contract. Each suggested check must be read-only by construction, bounded,
+  labelled with the safe environment, and tied to a specific hypothesis.
+- Two deeper eval scenarios under `evals/` exercising realistic incomplete
+  context: `issue-investigator-read-only-investigation.md` and
+  `code-reviewer-unavailable-context.md`.
+- `eval-runs/v0.10.0/` with the matching scored runs and a release summary.
+- Three explicit eval-run categories in `eval-runs/README.md` (illustrative,
+  real model transcript, future automated). Every new eval-run file must
+  declare its category.
+
+### Changed
+
+- `code-reviewer` and `issue-investigator` behavior checklists updated to
+  require the new sections to be filled.
+- `issue-investigator` guardrails extended to forbid mutating or unbounded
+  checks being labelled "safe".
+- Updated `VERSION`, README status, and all skill metadata to `0.10.0`.
+- Validator `REQUIRED_FILES` extended to require the new eval scenarios and
+  the v0.10.0 eval-run files.
+
+### Not Changed (deliberate)
+
+- No new skills.
+- No nested skill promoted to the top level.
+- Skill philosophy was not rewritten. The two skill changes are wording-level
+  additions that the v0.9.0 eval runs explicitly recommended as future work.
+- No real model transcripts captured this release; the category exists but
+  populating it is a future-release task.
+- Eval runs still do not gate CI.
+
 ## 0.9.0 - Real Eval Runs and Scored Skill Outputs
 
 ### Added

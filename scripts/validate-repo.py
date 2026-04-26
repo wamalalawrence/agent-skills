@@ -60,6 +60,8 @@ REQUIRED_FILES = [
     "evals/manual-tester-defect-report.md",
     "evals/test-automation-engineer-flaky-test-review.md",
     "evals/multi-skill-bug-to-regression-flow.md",
+    "evals/issue-investigator-read-only-investigation.md",
+    "evals/code-reviewer-unavailable-context.md",
     "eval-runs/README.md",
     "eval-runs/v0.9.0/summary.md",
     "eval-runs/v0.9.0/issue-investigator-bug-root-cause.md",
@@ -69,6 +71,9 @@ REQUIRED_FILES = [
     "eval-runs/v0.9.0/manual-tester-defect-report.md",
     "eval-runs/v0.9.0/test-automation-engineer-flaky-test-review.md",
     "eval-runs/v0.9.0/multi-skill-bug-to-regression-flow.md",
+    "eval-runs/v0.10.0/summary.md",
+    "eval-runs/v0.10.0/issue-investigator-read-only-investigation.md",
+    "eval-runs/v0.10.0/code-reviewer-unavailable-context.md",
 ]
 
 REQUIRED_SKILL_SECTIONS = [
