@@ -25,6 +25,8 @@ All notable project changes should be recorded here.
 - Added README links to the quickstart, known limitations, and versioning policy.
 - Polished `SUPPORT.md` and `GOVERNANCE.md` to keep solo-maintainer boundaries while using a more
   neutral public tone.
+- Updated the skill validator fallback parser so CI can validate multi-line frontmatter even when
+  PyYAML is unavailable.
 - Bumped release-prep version references from `0.6.0` to `0.6.1`.
 
 ## 0.6.0 - In-Repo Execution Mode (Online / Cloud Agent Support)
