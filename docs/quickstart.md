@@ -61,7 +61,8 @@ See [execution modes](execution-modes.md) for the full mode comparison.
 
 ## Starter prompts
 
-Use one of these as a first practical prompt.
+Use one of these as a first practical prompt. For copy-paste prompts covering all skills and
+multi-skill workflows, see [starter prompts](starter-prompts.md).
 
 ### `software-engineer`
 
@@ -99,3 +100,7 @@ the right test level, avoid brittle checks, and describe the validation command.
 - They do not provide Jira, GitHub, Confluence, CI, or production access by themselves.
 - They do not include private company standards; supply those from your repository or prompt.
 - They do not come with an SLA, warranty, or guarantee of correctness.
+
+Next, review the [examples](examples/README.md), [skill boundaries](skill-boundaries.md), and
+[severity/confidence definitions](severity-and-confidence.md) to see the expected output contracts
+in practice.

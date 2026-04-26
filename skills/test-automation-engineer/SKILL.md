@@ -15,7 +15,7 @@ compatibility:
   docs/execution-modes.md.
 metadata:
   author: wamalalawrence
-  version: "0.6.1"
+  version: "0.7.0"
   homepage: "https://github.com/wamalalawrence/agent-skills"
 ---
 
@@ -44,6 +44,16 @@ maintainers.
 - CI needs reliable test commands, artifacts, or failure reporting.
 - A team needs to decide which checks belong at unit, integration, API, contract, or UI/e2e level.
 
+## When Not To Use
+
+- Do not automate unclear behavior, unstable requirements, subjective UX judgment, or one-off
+  exploratory checks.
+- Do not create automated coverage before manual/repro scenarios are stable enough to assert.
+- Do not use automation to decide product intent; use
+  [`product-owner`](../product-owner/SKILL.md).
+- Do not use this skill for root-cause investigation; consume
+  [`issue-investigator`](../software-engineer/skills/issue-investigator/SKILL.md) results instead.
+
 ## Related And Reused Skills
 
 - [`software-engineer`](../software-engineer/SKILL.md): use for code quality, architecture, test
@@ -53,6 +63,11 @@ maintainers.
   automation scope.
 - [`product-owner`](../product-owner/SKILL.md): use for acceptance criteria, business value,
   intended behavior, scope, and business-critical workflows.
+- [`issue-investigator`](../software-engineer/skills/issue-investigator/SKILL.md): consume
+  confirmed or suspected root cause, reproduction recipes, and regression evidence before writing
+  defect-derived automation.
+- [`code-reviewer`](../software-engineer/skills/code-reviewer/SKILL.md): use the `test-quality`
+  review profile for new or changed automation code.
 
 Automation should reinforce the delivery workflow. It should not duplicate product definition,
 manual exploration, or production code engineering standards already owned by other skills.
@@ -74,6 +89,17 @@ misleading.
 If behavior is not stable or expected outcomes are unclear, ask
 [`product-owner`](../product-owner/SKILL.md) or [`manual-tester`](../manual-tester/SKILL.md) for
 clarification before automating.
+
+## Stopping Conditions
+
+Stop and recommend clarification or manual coverage instead of automation when:
+
+- Expected behavior or pass/fail assertions are unclear.
+- The scenario is not repeatable, observable, or valuable enough for regression automation.
+- Test data, fixtures, selectors/contracts, or environment ownership are missing.
+- A defect-derived scenario lacks a stable manual reproduction or
+  [`issue-investigator`](../software-engineer/skills/issue-investigator/SKILL.md) recipe.
+- CI integration would be misleading because required services, artifacts, or commands are unknown.
 
 ## Required Workflow
 
@@ -152,25 +178,25 @@ clarification before automating.
   root in `local-workspace` mode and to the repository root in `in-repo` mode — see
   [docs/execution-modes.md](../../docs/execution-modes.md).
 
-## Expected Outputs
+## Expected Output Contract
 
-Use the smallest useful format for the request.
+Use the smallest useful format for the request, preserving these fields for normal automation plans.
 
 ```markdown
 ## Automation Strategy
 
-- Goal:
+- Automation goal:
 - Scenarios to automate:
 - Scenarios not to automate:
-- Test level choices:
+- Chosen test levels:
 
 ## Test Design
 
 - Test data / fixtures:
-- Selectors or API contracts:
-- Assertions:
+- Selectors/contracts/assertions:
 - Cleanup:
 - Flakiness risks:
+- Debug artifacts:
 
 ## Implementation Plan
 
@@ -212,6 +238,7 @@ Use the smallest useful format for the request.
 - Do not ignore existing test conventions in the repository.
 - Do not recommend `develop` branches or GitFlow. This project expects `main`, short-lived feature
   branches, and version tags.
+- Do not claim tests or repeat-run flake checks were executed unless they were actually run.
 
 ## Example Prompts
 
@@ -220,3 +247,6 @@ Use the smallest useful format for the request.
 - "Review this e2e test for flakiness and maintainability risks."
 - "Turn this manual defect reproduction into an automated regression test plan."
 - "Identify which scenarios should not be automated and why."
+
+See [the test-automation-engineer regression plan example](../../docs/examples/test-automation-engineer-regression-plan.md)
+and [starter prompts](../../docs/starter-prompts.md).

@@ -15,7 +15,7 @@ compatibility:
   docs/execution-modes.md.
 metadata:
   author: wamalalawrence
-  version: "0.6.1"
+  version: "0.7.0"
   homepage: "https://github.com/wamalalawrence/agent-skills"
 argument-hint: "optional: mode inner|outer, base branch, issue key/URL, PR URL, or task description"
 user-invocable: true
@@ -48,6 +48,16 @@ implementation.
 - When reviewing a PR, branch, commit range, staged diff, or uncommitted working diff.
 - When a change needs issue-aware review against Jira, GitHub Issues, a support ticket, incident,
   feature request, task description, acceptance criteria, or linked documents.
+
+## When Not To Use
+
+- Do not use to implement fixes unless the user explicitly asks for code changes; this skill
+  reviews and recommends.
+- Do not use for issue-aware approval when issue context, expected behavior, or root cause cannot be
+  read or supplied; use [`issue-investigator`](../issue-investigator/SKILL.md) first.
+- Do not use as a formatter, linter, or broad style-policing tool.
+- Do not review a generated summary without the actual diff, files, or PR context needed to verify
+  the claim.
 
 ## Related And Reused Skills
 
@@ -82,6 +92,18 @@ Accept any of these review targets:
 If a review target is missing, stop and ask. If issue context is available but inaccessible or
 ambiguous, use [`issue-investigator`](../issue-investigator/SKILL.md) or ask the user before
 producing a final verdict.
+
+## Stopping Conditions
+
+Stop and return `final verdict: NEEDS_CONTEXT` or `NOT_REVIEWABLE` when:
+
+- The review target, base branch, or changed files cannot be determined.
+- Issue-aware review is requested but expected behavior, acceptance criteria, or root-cause evidence
+  is missing.
+- The diff is too large or truncated enough that high-confidence findings would be misleading.
+- Required repository setup, build metadata, or supplied standards are inaccessible and the user did
+  not request a manual partial review.
+- A finding depends on private/company standards that were not provided.
 
 ## Required Environment
 
@@ -240,14 +262,8 @@ Each finding must include:
 - Confidence: `high`, `medium`, or `low`.
 - Blocking status: `blocking` or `advisory`.
 
-Severity guidance:
-
-- `blocker`: likely wrong behavior, data loss, security risk, broken build, missing core acceptance
-  criteria, unsafe migration, or production incident risk.
-- `major`: meaningful correctness, maintainability, test, compatibility, or operational risk that
-  should be addressed before merge.
-- `minor`: real improvement with limited risk or localized impact.
-- `nit`: small clarity issue worth mentioning only when it is not formatter/linter noise.
+Use the shared [severity and confidence definitions](../../../../docs/severity-and-confidence.md)
+for severity, confidence, and blocking/advisory decisions.
 
 ### 6. Enforce blocking behavior
 
@@ -273,37 +289,29 @@ Before producing a `PASS` verdict, write one paragraph attacking your own conclu
 most credible scenario in which I am wrong about this diff being safe."_ Cover at least one of:
 silent data loss, lost-update / race condition, auth bypass or missing authorization check, secret
 or PII leakage, broken or non-reversible migration, breaking API contract change, regression in a
-previously-fixed defect. If the rebuttal surfaces a credible risk, downgrade the verdict to `WARN`
-or add a `blocker`/`major` finding accordingly.
+previously-fixed defect. If the rebuttal surfaces a credible risk, downgrade the verdict to
+`PASS_WITH_NOTES` or add a `blocker`/`major` finding and return `REQUEST_CHANGES`.
 
-## Expected Output
+## Expected Output Contract
 
 ```markdown
 ## Code Review - <repo> @ <branch>
 
-Review mode: inner | outer | pr | manual Issue awareness: issue-aware | partially issue-aware |
-non-issue-aware Base: <base branch or comparison target> Files reviewed: <kept>/<total> after
-filtering Standards used: <repo docs / supplied URLs / none>
+- Review scope:
+- Review mode: inner | outer | pr | manual
+- Issue awareness: issue-aware | partially issue-aware | non-issue-aware
+- Base: <base branch or comparison target>
+- Files reviewed: <kept>/<total> after filtering
+- Standards used: <repo docs / supplied URLs / none>
 
-## Issue Alignment
+## Issue/Ticket Alignment Result
 
 - Issue summary:
 - Expected behavior:
 - Acceptance criteria mapping:
 - Alignment verdict: aligned | partially aligned | not aligned | unclear
 
-## Findings
-
-### <severity>: <finding title>
-
-- Affected file/area:
-- Evidence:
-- Why it matters:
-- Suggested fix:
-- Confidence: high | medium | low
-- Blocking: blocking | advisory
-
-## Engineering Quality Summary
+## Engineering Quality Result
 
 - Correctness:
 - Tests:
@@ -312,9 +320,22 @@ filtering Standards used: <repo docs / supplied URLs / none>
 - Observability:
 - Compatibility / regression risk:
 
-## Verdict
+## Findings Grouped By Severity
 
-- BLOCK | WARN | PASS
+### <severity>: <finding title>
+
+- Severity: blocker | major | minor | nit
+- Title:
+- Affected file/area:
+- Evidence:
+- Why it matters:
+- Suggested fix:
+- Confidence: high | medium | low
+- Blocking/advisory decision: blocking | advisory
+
+## Final Verdict
+
+- Verdict: PASS | PASS_WITH_NOTES | REQUEST_CHANGES | NEEDS_CONTEXT | NOT_REVIEWABLE
 - Reason:
 - Follow-up needed:
 ```
@@ -322,7 +343,7 @@ filtering Standards used: <repo docs / supplied URLs / none>
 If no findings are found, say so explicitly and list any review limits, skipped files, missing issue
 context, or tests not verified.
 
-## Quality Bar
+## Quality Standards
 
 - Findings must be actionable and evidence-based.
 - Review must use issue context when available.
@@ -331,6 +352,8 @@ context, or tests not verified.
 - Review must avoid style-only noise that belongs to automated tools.
 - Suggested fixes must be concrete and minimal.
 - Large-diff truncation or skipped files must be disclosed.
+- Final verdict must use only `PASS`, `PASS_WITH_NOTES`, `REQUEST_CHANGES`, `NEEDS_CONTEXT`, or
+  `NOT_REVIEWABLE`.
 
 ## Guardrails
 
@@ -340,6 +363,8 @@ context, or tests not verified.
   unsafe or unmaintainable.
 - Do not rewrite the diff during review unless the user explicitly asks for implementation help.
 - Do not store secrets or private customer data in cache or output.
+- Do not claim tests, builds, or issue-system checks were verified unless they were actually run or
+  inspected.
 - Do not treat formatter, linter, or static-analysis preferences as meaningful review findings
   unless they affect behavior or maintainability.
 
@@ -350,3 +375,6 @@ context, or tests not verified.
 - "Run an outer-loop review before I open a PR."
 - "Review this bug fix and tell me if it actually addresses the root cause."
 - "Review this change using the linked architecture guidelines as extra standards."
+
+See [the code-reviewer PR review example](../../../../docs/examples/code-reviewer-pr-review.md)
+and [starter prompts](../../../../docs/starter-prompts.md).

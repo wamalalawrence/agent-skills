@@ -16,7 +16,7 @@ compatibility:
   docs/execution-modes.md.
 metadata:
   author: wamalalawrence
-  version: "0.6.1"
+  version: "0.7.0"
   homepage: "https://github.com/wamalalawrence/agent-skills"
 ---
 
@@ -33,7 +33,18 @@ quality assurance, and code review into a single repeatable pair-programming loo
 > [`docs/execution-modes.md`](../../docs/execution-modes.md). **Never hardcode** company names,
 > hostnames, repo names, ticket prefixes, branch rules, tokens, or paths into this file.
 
-## Collaborative engineering model
+## Purpose
+
+- Turn feature, bug, refactor, and maintenance requests into reviewed, validated repository
+  changes.
+- Gather the smallest useful evidence before changing files, then expand only when risk or
+  ambiguity requires it.
+- Coordinate investigation, product clarification, manual validation, automation strategy, and code
+  review without replacing those specialist skills.
+- Stop when context is insufficient instead of inventing requirements, root cause, tests, or
+  company standards.
+
+## Related And Reused Skills
 
 - This skill is the implementation base workflow for the nested
   [`issue-investigator`](./skills/issue-investigator/SKILL.md) skill when investigation needs
@@ -62,6 +73,17 @@ quality assurance, and code review into a single repeatable pair-programming loo
 - Database migration script changes
 - API endpoint additions or modifications
 - Security-sensitive changes
+
+## When Not To Use
+
+- Do not use for pure product refinement when no implementation decision is needed; use
+  [`product-owner`](../product-owner/SKILL.md).
+- Do not use for standalone issue triage when expected behavior or root cause is still unknown; use
+  [`issue-investigator`](./skills/issue-investigator/SKILL.md) first.
+- Do not use as a substitute for human approval on production data changes, irreversible
+  migrations, legal/compliance decisions, or release-risk acceptance.
+- Do not use when the repository, task brief, or validation route is too vague to produce an
+  evidence-based plan.
 
 ## Mindset
 
@@ -188,6 +210,20 @@ If any of these are unknown when needed, **stop and ask**:
 If the Jira ticket lacks enough context to fully understand the issue or feature being implemented,
 **stop and ask** the user for more context (link, description, sample data, screenshots, related
 ticket) before continuing. Silent guessing is forbidden.
+
+## Stopping Conditions
+
+Stop and return `final status: needs-context` or `blocked` when:
+
+- Required setup, repository identity, base branch, issue source, or validation command cannot be
+  resolved.
+- Product intent, expected behavior, or acceptance criteria remain ambiguous after the initial
+  evidence pass.
+- A bug fix lacks reproducible evidence or a defensible failing-regression-test path.
+- The change needs production mutation, destructive migration, or secret/customer-data access
+  without explicit approval and rollback notes.
+- Inner or outer [`code-reviewer`](./skills/code-reviewer/SKILL.md) output has unresolved blocking
+  findings and no written waiver.
 
 ---
 
@@ -570,6 +606,62 @@ This skill explicitly delegates to [`code-reviewer`](./skills/code-reviewer/SKIL
 Behaviour is configured by `${CODE_REVIEWER_BLOCKING}` (default `false` = advisory). When blocking
 is enabled, blocker findings must be addressed or explicitly waived (with a written reason) before
 the workflow can advance.
+
+---
+
+## Expected Output Contract
+
+Normal output should use this shape, trimmed only when a section is genuinely not applicable:
+
+```markdown
+## Engineering Result
+
+- Task summary:
+- Context reviewed:
+- Assumptions and missing context:
+- Implementation plan:
+- Files/areas likely affected:
+- Changes made or proposed:
+- Validation performed:
+- Tests run:
+- Risks and rollback notes:
+- Code-reviewer handoff/result:
+- Final status: complete | blocked | needs-context | needs-review
+```
+
+Use `proposed` rather than `made` when no files were changed. Do not claim validation, tests, review,
+or root-cause confirmation unless that work actually happened.
+
+## Quality Standards
+
+- Output must distinguish facts, assumptions, missing evidence, and user decisions.
+- Implementation plans must be small enough for review and tied to observed code or issue evidence.
+- Changes must follow local repository conventions before generic preferences.
+- Bug fixes must flow through investigation and a reproducible failing-regression-test strategy
+  unless explicitly out of scope.
+- Review results must use the nested
+  [`code-reviewer`](./skills/code-reviewer/SKILL.md) contract and the shared
+  [severity/confidence definitions](../../docs/severity-and-confidence.md).
+
+## Guardrails
+
+- Do not invent missing ticket context, expected behavior, root cause, logs, tests, or standards.
+- Do not claim tests were run unless the exact command or manual validation was performed.
+- Do not hard-code private company assumptions into this public skill.
+- Do not bypass review gates, git hooks, or failing checks without a recorded waiver.
+- Do not treat generated output as complete when required evidence is unavailable.
+
+## Example Prompts
+
+- "Use the software-engineer skill to implement this feature from the attached acceptance criteria.
+  Review context first, then propose the smallest safe plan before editing."
+- "Use the software-engineer skill to fix this reproducible bug. Invoke issue-investigator if root
+  cause or expected behavior is unclear."
+- "Use the software-engineer skill to prepare this branch for PR, including validation and
+  code-reviewer handoff."
+
+See [the software-engineer bugfix example](../../docs/examples/software-engineer-bugfix.md) and
+[starter prompts](../../docs/starter-prompts.md).
 
 ---
 
