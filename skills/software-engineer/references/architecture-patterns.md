@@ -1,6 +1,7 @@
 # Architecture Patterns
 
-Common module / project structures and conventions. Use as a reference when reading or extending an unfamiliar repo in `${WORKSPACE_ROOT}`.
+Common module / project structures and conventions. Use as a reference when reading or extending an
+unfamiliar repo in `${WORKSPACE_ROOT}`.
 
 ## Standard multi-module layout (Java / Spring)
 
@@ -29,24 +30,27 @@ project-name/
 
 ## Module naming conventions
 
-| Suffix | Purpose | Contains |
-|---|---|---|
-| `-api` | Public API contracts | DTOs, request/response objects, interfaces, constants, enums |
-| `-persistence` | Data access | JPA entities, repositories, specifications, migration scripts |
-| `-service` / `-application` | Application logic | Spring Boot app, services, controllers, config |
-| `coverage` | Coverage aggregation | JaCoCo aggregator POM only |
+| Suffix                      | Purpose              | Contains                                                      |
+| --------------------------- | -------------------- | ------------------------------------------------------------- |
+| `-api`                      | Public API contracts | DTOs, request/response objects, interfaces, constants, enums  |
+| `-persistence`              | Data access          | JPA entities, repositories, specifications, migration scripts |
+| `-service` / `-application` | Application logic    | Spring Boot app, services, controllers, config                |
+| `coverage`                  | Coverage aggregation | JaCoCo aggregator POM only                                    |
 
-API-module patterns matching `${API_MODULE_PATTERNS}` are automatically flagged by `code-reviewer` for breaking-change risk.
+API-module patterns matching `${API_MODULE_PATTERNS}` are automatically flagged by `code-reviewer`
+for breaking-change risk.
 
 ## Layer responsibilities
 
 ### API module
+
 - DTOs only — what goes over the wire
 - Interfaces for services that other modules may call
 - Constants and enums shared across modules
 - **No framework annotations** except validation (`@NotNull`, `@Size`, etc.)
 
 ### Persistence module
+
 - ORM entities (JPA `@Entity`, Hibernate annotations)
 - Spring Data `JpaRepository` interfaces
 - `Specification` classes for dynamic queries
@@ -54,6 +58,7 @@ API-module patterns matching `${API_MODULE_PATTERNS}` are automatically flagged 
 - Database-specific configuration
 
 ### Service / application module
+
 - `@Service` classes with business logic
 - `@RestController` classes (thin — delegate to services)
 - `@ControllerAdvice` for exception handling
@@ -66,8 +71,10 @@ API-module patterns matching `${API_MODULE_PATTERNS}` are automatically flagged 
 1. **Dependencies flow inward**: Service → Persistence → API (never the other way).
 2. **Entities stay in persistence**: never expose JPA entities in API responses — map to DTOs.
 3. **Business logic in services**: controllers stay thin, entities stay data holders.
-4. **Use a mapper**: MapStruct (Java) or equivalent for entity ↔ DTO conversion. Hand-written mappers should be the exception.
-5. **`@Transactional` on services only**: never on controllers, never on entities, never on interfaces.
+4. **Use a mapper**: MapStruct (Java) or equivalent for entity ↔ DTO conversion. Hand-written
+   mappers should be the exception.
+5. **`@Transactional` on services only**: never on controllers, never on entities, never on
+   interfaces.
 
 ## Multi-variant / multi-tenant projects
 
@@ -79,7 +86,8 @@ Some projects serve multiple variants (clients, tenants, regions). When that's t
 - A change for one variant **must not break others**
 - Always verify cross-variant impact before submitting changes
 
-`SHARED_LIBRARY_NAMES` in `.env` lists the libraries / shared services where cross-variant impact is most likely; the `code-reviewer` skill calls these out automatically when a diff touches them.
+`SHARED_LIBRARY_NAMES` in `.env` lists the libraries / shared services where cross-variant impact is
+most likely; the `code-reviewer` skill calls these out automatically when a diff touches them.
 
 ## Build commands (Java / Maven)
 
@@ -115,6 +123,7 @@ When entering an unfamiliar repo:
 
 1. Read `README.md` and any `CONTRIBUTING.md`.
 2. Read the build manifest (`pom.xml`, `package.json`, `pyproject.toml`).
-3. Check `.github/workflows/` to see what CI actually runs — that's the real definition of "passing".
+3. Check `.github/workflows/` to see what CI actually runs — that's the real definition of
+   "passing".
 4. Look at the most recent merged PRs to see commit style, branch style, and review depth.
 5. Identify the test runner and run a single existing test to confirm the local environment works.

@@ -1,6 +1,8 @@
 # Evidence Pack & Repro Recipe
 
-Shared cross-skill artifacts that let `issue-investigator`, `software-engineer`, `code-reviewer`, `manual-tester`, and `test-automation-engineer` hand off context without re-deriving it on every hop.
+Shared cross-skill artifacts that let `issue-investigator`, `software-engineer`, `code-reviewer`,
+`manual-tester`, and `test-automation-engineer` hand off context without re-deriving it on every
+hop.
 
 Both files are **YAML, human-editable, and small** (target < 100 lines). Cache them at:
 
@@ -11,27 +13,32 @@ ${AGENT_SKILLS_CACHE_DIR:-${WORKSPACE_ROOT:-$REPO_ROOT}/.cache/agent-skills}/<is
 └── definition-of-done.json
 ```
 
-`<issue-key>` is the Jira key, GitHub issue number, or a short slug derived from the user's brief when no ticket exists (e.g., `local-2026-04-flaky-login`). The `.cache/` directory is already covered by the workspace `.gitignore` block managed by `setup.init`, so nothing here ever leaks to a repo.
+`<issue-key>` is the Jira key, GitHub issue number, or a short slug derived from the user's brief
+when no ticket exists (e.g., `local-2026-04-flaky-login`). The `.cache/` directory is already
+covered by the workspace `.gitignore` block managed by `setup.init`, so nothing here ever leaks to a
+repo.
 
-Every skill that consumes one of these files MUST validate its presence and surface a finding when it is missing or stale (older than the issue's last update).
+Every skill that consumes one of these files MUST validate its presence and surface a finding when
+it is missing or stale (older than the issue's last update).
 
 ---
 
 ## 1. `evidence-pack.yml`
 
-Created by `issue-investigator` (or by `software-engineer` for non-ticket work). Updated in place by every skill that touches the issue. Fields:
+Created by `issue-investigator` (or by `software-engineer` for non-ticket work). Updated in place by
+every skill that touches the issue. Fields:
 
 ```yaml
 # Required
-issue_key: PROJ-1234                    # ticket key, GitHub issue, or local slug
-issue_url: https://...                   # canonical link, or the user's brief verbatim
+issue_key: PROJ-1234 # ticket key, GitHub issue, or local slug
+issue_url: https://... # canonical link, or the user's brief verbatim
 issue_type: bug | regression | incident | feature | refactor | spike | task
 title: "Login fails when SAML cookie expires mid-session"
 summary: "One-paragraph plain-language restatement of the problem."
 
 # Project context
 project:
-  name: example-api                      # matches a PROJECTS_JSON entry
+  name: example-api # matches a PROJECTS_JSON entry
   repo: https://github.com/<org>/<repo>
   base_branch: main
   stack: java-spring-boot
@@ -43,7 +50,8 @@ expected_behavior: |
 actual_behavior: |
   Multi-line description of what is happening today (omit for greenfield work).
 acceptance_criteria:
-  - "Given an expired SAML cookie, when the user clicks any nav item, then they are redirected to /login with a one-time toast."
+  - "Given an expired SAML cookie, when the user clicks any nav item, then they are redirected to
+    /login with a one-time toast."
   - "MUST NOT silently 500."
 
 # Investigation
@@ -75,7 +83,7 @@ plan:
 
 # Reviewer iteration tracking (managed by code-reviewer)
 review:
-  round: 0                               # increments each invocation
+  round: 0 # increments each invocation
   open_blocker_count: 0
   open_major_count: 0
   history:
@@ -85,20 +93,24 @@ review:
       verdict: BLOCK
 ```
 
-**Loading rule**: every skill `set -a && source ${WORKSPACE_ROOT}/.env && set +a`, then reads/writes `${AGENT_SKILLS_CACHE_DIR:-${WORKSPACE_ROOT:-$REPO_ROOT}/.cache/agent-skills}/${issue_key}/evidence-pack.yml`. Skills append to lists; they do not delete prior entries.
+**Loading rule**: every skill `set -a && source ${WORKSPACE_ROOT}/.env && set +a`, then reads/writes
+`${AGENT_SKILLS_CACHE_DIR:-${WORKSPACE_ROOT:-$REPO_ROOT}/.cache/agent-skills}/${issue_key}/evidence-pack.yml`.
+Skills append to lists; they do not delete prior entries.
 
 ---
 
 ## 2. `repro-recipe.yml`
 
-Produced by `issue-investigator` (and mirrored by `manual-tester`) whenever a bug or regression is reproduced. Consumed by `software-engineer` to write the failing regression test (Phase 1.5) and by `test-automation-engineer` to seed permanent regression coverage.
+Produced by `issue-investigator` (and mirrored by `manual-tester`) whenever a bug or regression is
+reproduced. Consumed by `software-engineer` to write the failing regression test (Phase 1.5) and by
+`test-automation-engineer` to seed permanent regression coverage.
 
 ```yaml
 # Required
 issue_key: PROJ-1234
 status: reproduced | partially_reproduced | not_reproduced | not_attempted | not_applicable
 environment: local | ephemeral_branch | replayed_input | read_only_inspection
-build_sha: abc1234def                    # exact commit the recipe was captured against
+build_sha: abc1234def # exact commit the recipe was captured against
 captured_at: 2026-04-26T14:03:00Z
 
 # Setup the next agent or human needs to replay the issue
@@ -124,19 +136,22 @@ post_fix_observation:
   log_marker: "AuthFilter redirected to /login"
 ```
 
-**Safety rule**: `environment: replayed_input` and `read_only_inspection` are the defaults when a defect originates in production. Mutating production data, configuration, or environments to reproduce is forbidden without explicit user approval and a written rollback plan inside the recipe.
+**Safety rule**: `environment: replayed_input` and `read_only_inspection` are the defaults when a
+defect originates in production. Mutating production data, configuration, or environments to
+reproduce is forbidden without explicit user approval and a written rollback plan inside the recipe.
 
 ---
 
 ## 3. Skill responsibilities
 
-| Skill | Reads | Writes |
-|---|---|---|
-| `issue-investigator` | env, prior `evidence-pack.yml` | `evidence-pack.yml` (investigation, risk, hypotheses), `repro-recipe.yml` |
-| `software-engineer` | both files | `evidence-pack.yml.plan`, regression test commit referenced from `repro-recipe.yml` |
-| `code-reviewer` | both files | `evidence-pack.yml.review` (round, counts, verdict) |
-| `manual-tester` | `evidence-pack.yml` | `repro-recipe.yml` (when manual repro produces one), defect rows |
-| `test-automation-engineer` | `repro-recipe.yml` | regression test files; references the recipe in test docstring |
-| `product-owner` | `evidence-pack.yml.investigation` | `evidence-pack.yml.acceptance_criteria` |
+| Skill                      | Reads                             | Writes                                                                              |
+| -------------------------- | --------------------------------- | ----------------------------------------------------------------------------------- |
+| `issue-investigator`       | env, prior `evidence-pack.yml`    | `evidence-pack.yml` (investigation, risk, hypotheses), `repro-recipe.yml`           |
+| `software-engineer`        | both files                        | `evidence-pack.yml.plan`, regression test commit referenced from `repro-recipe.yml` |
+| `code-reviewer`            | both files                        | `evidence-pack.yml.review` (round, counts, verdict)                                 |
+| `manual-tester`            | `evidence-pack.yml`               | `repro-recipe.yml` (when manual repro produces one), defect rows                    |
+| `test-automation-engineer` | `repro-recipe.yml`                | regression test files; references the recipe in test docstring                      |
+| `product-owner`            | `evidence-pack.yml.investigation` | `evidence-pack.yml.acceptance_criteria`                                             |
 
-If a consumer skill cannot find the file it needs, it stops with the standard *Missing required setup* message instead of inferring context silently.
+If a consumer skill cannot find the file it needs, it stops with the standard _Missing required
+setup_ message instead of inferring context silently.

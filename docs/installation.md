@@ -2,31 +2,42 @@
 
 Tested on macOS and Linux with `bash` and `zsh`. Windows users should run via WSL or Git Bash.
 
-`agent-skills` ships two execution modes — pick the one that matches where the agent will actually run. See [execution-modes.md](execution-modes.md) for the full comparison.
+`agent-skills` ships two execution modes — pick the one that matches where the agent will actually
+run. See [execution-modes.md](execution-modes.md) for the full comparison.
 
-| You are... | Use mode | What to install |
-|---|---|---|
-| Running an AI assistant **on your laptop**, across several repos | `local-workspace` | Clone `agent-skills` next to your repos and run `./setup.init`. |
-| Running an AI agent **inside one repository** (GitHub Copilot coding agent on github.com, Cursor cloud, Devin, Codex, Codespaces, Gitpod, ChatGPT/Claude web with the repo attached) | `in-repo` | Add `.agent-skills.yml` and a `skills/` source to that repo. No `setup.init`. |
+| You are...                                                                                                                                                                           | Use mode          | What to install                                                               |
+| ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ | ----------------- | ----------------------------------------------------------------------------- |
+| Running an AI assistant **on your laptop**, across several repos                                                                                                                     | `local-workspace` | Clone `agent-skills` next to your repos and run `./setup.init`.               |
+| Running an AI agent **inside one repository** (GitHub Copilot coding agent on github.com, Cursor cloud, Devin, Codex, Codespaces, Gitpod, ChatGPT/Claude web with the repo attached) | `in-repo`         | Add `.agent-skills.yml` and a `skills/` source to that repo. No `setup.init`. |
 
 ## `in-repo` install (online / cloud agents)
 
-The cloud agent has no separate workspace and no shell of its own to bootstrap. You commit two things into the target repository:
+The cloud agent has no separate workspace and no shell of its own to bootstrap. You commit two
+things into the target repository:
 
-1. **`.agent-skills.yml`** at the repo root. Copy from [`.agent-skills.example.yml`](../.agent-skills.example.yml), fill in the `project:` block (stack, base branch, build/format commands), and commit. It contains **no secrets**.
+1. **`.agent-skills.yml`** at the repo root. Copy from
+   [`.agent-skills.example.yml`](../.agent-skills.example.yml), fill in the `project:` block (stack,
+   base branch, build/format commands), and commit. It contains **no secrets**.
 2. **Skill content** the agent can read. Two options:
-   - **Vendor the skills** by copying or git-submoduling [`skills/`](../skills/) into the target repo (e.g. at `.agent-skills/skills/`). Best for offline-friendly, reproducible loading.
-   - **Reference the skills** from the agent's prompt or rules file (e.g. `.cursor/rules/*.mdc`, `.github/copilot-instructions.md`, attached files in a chat). Lighter-weight, but the agent host must be able to fetch them.
+   - **Vendor the skills** by copying or git-submoduling [`skills/`](../skills/) into the target
+     repo (e.g. at `.agent-skills/skills/`). Best for offline-friendly, reproducible loading.
+   - **Reference the skills** from the agent's prompt or rules file (e.g. `.cursor/rules/*.mdc`,
+     `.github/copilot-instructions.md`, attached files in a chat). Lighter-weight, but the agent
+     host must be able to fetch them.
 
-Then add `.cache/` to the repo's `.gitignore` so the evidence-pack/repro-recipe/Definition-of-Done artifacts the skills write don't leak into commits.
+Then add `.cache/` to the repo's `.gitignore` so the evidence-pack/repro-recipe/Definition-of-Done
+artifacts the skills write don't leak into commits.
 
-Secrets the skills need (`JIRA_API_TOKEN`, `GITHUB_TOKEN`, `CONFLUENCE_API_TOKEN`, …) come from the host platform's environment-variable injection — GitHub Actions secrets, Codespaces secrets, Cursor's secret store, etc. Never put them in `.agent-skills.yml`.
+Secrets the skills need (`JIRA_API_TOKEN`, `GITHUB_TOKEN`, `CONFLUENCE_API_TOKEN`, …) come from the
+host platform's environment-variable injection — GitHub Actions secrets, Codespaces secrets,
+Cursor's secret store, etc. Never put them in `.agent-skills.yml`.
 
 See [assistants.md](assistants.md) for per-agent invocation notes.
 
 ## `local-workspace` install — recommended workspace layout
 
-`agent-skills` is designed to live alongside the projects it reasons about, not inside one of them and not at the root of your home directory.
+`agent-skills` is designed to live alongside the projects it reasons about, not inside one of them
+and not at the root of your home directory.
 
 ```text
 ~/work/                       # any folder you control; this is the "workspace root"
@@ -36,7 +47,9 @@ See [assistants.md](assistants.md) for per-agent invocation notes.
 └── .env                      # generated by setup.init, gitignored
 ```
 
-`setup.init` will refuse to write into `$HOME`, `/`, or system directories so it cannot accidentally pollute your shell environment. If you cloned `agent-skills` directly into `$HOME`, move it under a real workspace folder first, or pass `--workspace-root /path/to/work`.
+`setup.init` will refuse to write into `$HOME`, `/`, or system directories so it cannot accidentally
+pollute your shell environment. If you cloned `agent-skills` directly into `$HOME`, move it under a
+real workspace folder first, or pass `--workspace-root /path/to/work`.
 
 ## One-command setup
 
@@ -47,10 +60,12 @@ cd agent-skills
 
 The command asks a short set of questions, then creates or updates:
 
-- `.env` in the workspace root (a clearly marked generated block; manual edits **outside** that block are preserved on rerun, edits **inside** are overwritten).
+- `.env` in the workspace root (a clearly marked generated block; manual edits **outside** that
+  block are preserved on rerun, edits **inside** are overwritten).
 - `.jira-config.yml` in the workspace root, only if you opt in to Jira setup.
 - `.skills` in the workspace root as a symlink to `agent-skills/skills`.
-- `.gitignore` in the workspace root with an idempotent agent-skills block (only when sensible — see below).
+- `.gitignore` in the workspace root with an idempotent agent-skills block (only when sensible — see
+  below).
 
 For non-interactive bootstrap or CI checks:
 
@@ -66,14 +81,14 @@ To re-check an existing setup at any time without writing:
 
 All flags:
 
-| Flag | Purpose |
-|---|---|
-| `--workspace-root PATH` | Override the workspace root (default: parent of `agent-skills`). |
-| `--yes` | Non-interactive; accept all defaults. |
-| `--with-jira` / `--no-jira` | Force Jira config on or off. |
-| `--no-symlink` | Skip creating the `.skills` symlink. |
-| `--verify` | Re-check an existing setup; write nothing. |
-| `--help` | Show usage. |
+| Flag                        | Purpose                                                          |
+| --------------------------- | ---------------------------------------------------------------- |
+| `--workspace-root PATH`     | Override the workspace root (default: parent of `agent-skills`). |
+| `--yes`                     | Non-interactive; accept all defaults.                            |
+| `--with-jira` / `--no-jira` | Force Jira config on or off.                                     |
+| `--no-symlink`              | Skip creating the `.skills` symlink.                             |
+| `--verify`                  | Re-check an existing setup; write nothing.                       |
+| `--help`                    | Show usage.                                                      |
 
 ## Manual setup
 
@@ -91,14 +106,27 @@ $EDITOR /path/to/work/.jira-config.yml
 ## What `setup.init` automates
 
 - Refuses to use `$HOME`, `/`, or system directories as the workspace root.
-- Defaults the workspace root to the parent of `agent-skills`, but always lets you override it with `--workspace-root`.
+- Defaults the workspace root to the parent of `agent-skills`, but always lets you override it with
+  `--workspace-root`.
 - Creates `.env` from [`.env.example`](../.env.example) when missing.
-- Adds or refreshes a marked generated block (`# >>> agent-skills setup.init` ... `# <<< agent-skills setup.init`) for `WORKSPACE_ROOT`, `ORG_NAME`, `GITHUB_ORG`, `GITHUB_DEFAULT_BRANCH`, and `PROJECTS_JSON`. Edits inside the markers are overwritten on rerun; edits outside are preserved verbatim.
-- Detects sibling git repositories and writes a starter `PROJECTS_JSON` map. Build and format commands are inferred from `pom.xml` / `build.gradle` / `package.json` (including `pnpm-lock.yaml`, `yarn.lock`, `bun.lockb`) / `pyproject.toml` (Poetry-aware) / `go.mod`.
-- Detects the GitHub owner from sibling repo `remote.origin.url` first, then falls back to `gh api user --jq .login`, then leaves it blank.
-- Optionally creates `.jira-config.yml` from [`.jira-config.example.yml`](../.jira-config.example.yml) and seeds the default project key.
-- Creates a `.skills` symlink in the workspace root for assistants that can read skills from a workspace folder.
-- Adds an idempotent agent-skills block to `<workspace-root>/.gitignore` covering `.env`, `.env.local`, `.env.*.local`, `.jira-config.yml`, `.skills`, and `.cache/`. The block is created only when a `.gitignore` already exists or the workspace root is a git repo.
-- Validates that `.env` parses by trying `python3` first, then `ruby`. JSON validation is only skipped when neither interpreter is installed.
+- Adds or refreshes a marked generated block (`# >>> agent-skills setup.init` ...
+  `# <<< agent-skills setup.init`) for `WORKSPACE_ROOT`, `ORG_NAME`, `GITHUB_ORG`,
+  `GITHUB_DEFAULT_BRANCH`, and `PROJECTS_JSON`. Edits inside the markers are overwritten on rerun;
+  edits outside are preserved verbatim.
+- Detects sibling git repositories and writes a starter `PROJECTS_JSON` map. Build and format
+  commands are inferred from `pom.xml` / `build.gradle` / `package.json` (including
+  `pnpm-lock.yaml`, `yarn.lock`, `bun.lockb`) / `pyproject.toml` (Poetry-aware) / `go.mod`.
+- Detects the GitHub owner from sibling repo `remote.origin.url` first, then falls back to
+  `gh api user --jq .login`, then leaves it blank.
+- Optionally creates `.jira-config.yml` from
+  [`.jira-config.example.yml`](../.jira-config.example.yml) and seeds the default project key.
+- Creates a `.skills` symlink in the workspace root for assistants that can read skills from a
+  workspace folder.
+- Adds an idempotent agent-skills block to `<workspace-root>/.gitignore` covering `.env`,
+  `.env.local`, `.env.*.local`, `.jira-config.yml`, `.skills`, and `.cache/`. The block is created
+  only when a `.gitignore` already exists or the workspace root is a git repo.
+- Validates that `.env` parses by trying `python3` first, then `ruby`. JSON validation is only
+  skipped when neither interpreter is installed.
 
-After setup, review `.env` once before serious code work. The command can detect obvious defaults, but it cannot know every repository's exact build, format, runtime, deployment, or Jira conventions.
+After setup, review `.env` once before serious code work. The command can detect obvious defaults,
+but it cannot know every repository's exact build, format, runtime, deployment, or Jira conventions.

@@ -1,56 +1,66 @@
 # Execution Modes
 
-`agent-skills` supports two execution modes. The skills detect which mode they're running in during their **Setup Preflight** phase and then resolve configuration accordingly. Pick the mode that matches where the agent is actually running.
+`agent-skills` supports two execution modes. The skills detect which mode they're running in during
+their **Setup Preflight** phase and then resolve configuration accordingly. Pick the mode that
+matches where the agent is actually running.
 
 ## Mode 1 — `local-workspace`
 
-The original, recommended setup for engineers running an AI assistant on their own machine across several repositories.
+The original, recommended setup for engineers running an AI assistant on their own machine across
+several repositories.
 
-| | |
-|---|---|
-| **When it applies** | You cloned `agent-skills` next to your other repos, ran `./setup.init`, and your assistant runs locally with shell access. |
-| **Workspace root** | The directory that contains both `agent-skills/` and your sibling project repos. |
-| **Config source** | `${WORKSPACE_ROOT}/.env` (generated/refreshed by `setup.init`), plus optional `${WORKSPACE_ROOT}/.jira-config.yml`. |
-| **Project metadata** | `PROJECTS_JSON` in `.env` — describes every repo's stack, build, format, base branch. |
-| **Cache path** | `${WORKSPACE_ROOT}/.cache/agent-skills/<issue-key>/` (covered by the gitignore block `setup.init` writes). |
-| **Typical agents** | Claude Code, Cursor (local), Continue, GitHub Copilot Chat in VS Code/JetBrains, Windsurf — anything that runs against your local filesystem. |
+|                      |                                                                                                                                               |
+| -------------------- | --------------------------------------------------------------------------------------------------------------------------------------------- |
+| **When it applies**  | You cloned `agent-skills` next to your other repos, ran `./setup.init`, and your assistant runs locally with shell access.                    |
+| **Workspace root**   | The directory that contains both `agent-skills/` and your sibling project repos.                                                              |
+| **Config source**    | `${WORKSPACE_ROOT}/.env` (generated/refreshed by `setup.init`), plus optional `${WORKSPACE_ROOT}/.jira-config.yml`.                           |
+| **Project metadata** | `PROJECTS_JSON` in `.env` — describes every repo's stack, build, format, base branch.                                                         |
+| **Cache path**       | `${WORKSPACE_ROOT}/.cache/agent-skills/<issue-key>/` (covered by the gitignore block `setup.init` writes).                                    |
+| **Typical agents**   | Claude Code, Cursor (local), Continue, GitHub Copilot Chat in VS Code/JetBrains, Windsurf — anything that runs against your local filesystem. |
 
 See [installation.md](installation.md) and [configuration.md](configuration.md) for setup details.
 
 ## Mode 2 — `in-repo`
 
-For users running the skills inside a **single target repository** with no separate workspace folder — typical of online / cloud AI agents.
+For users running the skills inside a **single target repository** with no separate workspace folder
+— typical of online / cloud AI agents.
 
-| | |
-|---|---|
-| **When it applies** | The agent is running inside one repository (no sibling `agent-skills/` checkout, no `WORKSPACE_ROOT`-style multi-project layout). |
-| **Workspace root** | The repository root itself (`$PWD`, `$GITHUB_WORKSPACE`, or whatever the host platform exposes). |
-| **Config source** | [`.agent-skills.yml`](../.agent-skills.example.yml) checked into the repo, plus environment variables for secrets (`JIRA_API_TOKEN`, `GITHUB_TOKEN`, etc.) injected by the host platform. |
-| **Project metadata** | The single `project:` block inside `.agent-skills.yml`, plus repo-file inference (`pom.xml`, `package.json`, `pyproject.toml`, `go.mod`) as a fallback. |
-| **Cache path** | `${REPO_ROOT}/.cache/agent-skills/<issue-key>/` — add `.cache/` to the repo's `.gitignore`. |
-| **Typical agents** | GitHub Copilot coding agent (github.com), Cursor cloud / background agents, Devin, Codex, Claude on the web with the repo attached, GitHub Codespaces, Gitpod. |
+|                      |                                                                                                                                                                                           |
+| -------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| **When it applies**  | The agent is running inside one repository (no sibling `agent-skills/` checkout, no `WORKSPACE_ROOT`-style multi-project layout).                                                         |
+| **Workspace root**   | The repository root itself (`$PWD`, `$GITHUB_WORKSPACE`, or whatever the host platform exposes).                                                                                          |
+| **Config source**    | [`.agent-skills.yml`](../.agent-skills.example.yml) checked into the repo, plus environment variables for secrets (`JIRA_API_TOKEN`, `GITHUB_TOKEN`, etc.) injected by the host platform. |
+| **Project metadata** | The single `project:` block inside `.agent-skills.yml`, plus repo-file inference (`pom.xml`, `package.json`, `pyproject.toml`, `go.mod`) as a fallback.                                   |
+| **Cache path**       | `${REPO_ROOT}/.cache/agent-skills/<issue-key>/` — add `.cache/` to the repo's `.gitignore`.                                                                                               |
+| **Typical agents**   | GitHub Copilot coding agent (github.com), Cursor cloud / background agents, Devin, Codex, Claude on the web with the repo attached, GitHub Codespaces, Gitpod.                            |
 
-The skills should never assume internet-only agents can write outside the repo, install packages, or persist anything between turns. Anything cached must live under `${REPO_ROOT}/.cache/agent-skills/`.
+The skills should never assume internet-only agents can write outside the repo, install packages, or
+persist anything between turns. Anything cached must live under `${REPO_ROOT}/.cache/agent-skills/`.
 
 ## How a skill detects the mode
 
 Every `SKILL.md`'s **Setup Preflight** runs this resolution in order:
 
-1. **`AGENT_SKILLS_MODE` env var** — if explicitly set to `local-workspace` or `in-repo`, that wins. Used to override detection in CI or sandboxed evaluations.
+1. **`AGENT_SKILLS_MODE` env var** — if explicitly set to `local-workspace` or `in-repo`, that wins.
+   Used to override detection in CI or sandboxed evaluations.
 2. **`${WORKSPACE_ROOT}/.env` exists and is readable** ⇒ `local-workspace` mode.
 3. **`.agent-skills.yml` exists at the repository root** ⇒ `in-repo` mode.
-4. **Neither found** ⇒ stop with the standard "Missing required setup" message, telling the user which file to create for whichever mode fits their environment. Do not silently guess.
+4. **Neither found** ⇒ stop with the standard "Missing required setup" message, telling the user
+   which file to create for whichever mode fits their environment. Do not silently guess.
 
 ## Variable resolution order (both modes)
 
-Each value the skills need (`org_name`, `github_org`, `github_default_branch`, the project's `stack`/`build`/`format`/`base_branch`, etc.) is resolved with this precedence:
+Each value the skills need (`org_name`, `github_org`, `github_default_branch`, the project's
+`stack`/`build`/`format`/`base_branch`, etc.) is resolved with this precedence:
 
 1. Process environment variable (e.g. `GITHUB_ORG`, `JIRA_HOST`).
 2. `.agent-skills.yml` (in-repo mode) **or** `${WORKSPACE_ROOT}/.env` (local-workspace mode).
-3. Repo-file inference — only for `stack`, `build`, `format` derived from `pom.xml` / `package.json` / `pyproject.toml` / `go.mod`. Never for org or credentials.
+3. Repo-file inference — only for `stack`, `build`, `format` derived from `pom.xml` / `package.json`
+   / `pyproject.toml` / `go.mod`. Never for org or credentials.
 4. If still missing for the requested task, stop with `Missing required setup: <NAME>`.
 
-Secrets (Jira tokens, GitHub tokens, API keys) **always** come from environment variables in both modes. They are never written to `.agent-skills.yml`, which is committed to the repository.
+Secrets (Jira tokens, GitHub tokens, API keys) **always** come from environment variables in both
+modes. They are never written to `.agent-skills.yml`, which is committed to the repository.
 
 ## Cache path resolution
 
@@ -60,15 +70,17 @@ Skills write their evidence-pack, repro-recipe, and definition-of-done artifacts
 ${AGENT_SKILLS_CACHE_DIR:-${WORKSPACE_ROOT:-$REPO_ROOT}/.cache/agent-skills/<issue-key>/}
 ```
 
-In `local-workspace` mode this resolves to `${WORKSPACE_ROOT}/.cache/agent-skills/...`. In `in-repo` mode it resolves to `<repo>/.cache/agent-skills/...`. `AGENT_SKILLS_CACHE_DIR` overrides both, useful for ephemeral CI runners that want to redirect the cache to a tmpfs path.
+In `local-workspace` mode this resolves to `${WORKSPACE_ROOT}/.cache/agent-skills/...`. In `in-repo`
+mode it resolves to `<repo>/.cache/agent-skills/...`. `AGENT_SKILLS_CACHE_DIR` overrides both,
+useful for ephemeral CI runners that want to redirect the cache to a tmpfs path.
 
 ## Quick start by environment
 
-| Where the agent runs | Mode | What to do |
-|---|---|---|
-| Your laptop, VS Code + Copilot Chat with several repos | `local-workspace` | `git clone agent-skills && ./setup.init` |
-| Your laptop, Claude Code with several repos | `local-workspace` | `./setup.init`, point client at `<workspace>/.skills` |
-| GitHub Copilot coding agent on github.com | `in-repo` | Commit `.agent-skills.yml` and the `skills/` folder (or a git submodule of `agent-skills`) into the target repo |
-| Cursor cloud / background agent on a single repo | `in-repo` | Same as above |
-| GitHub Codespaces / Gitpod for one repo | `in-repo` | Same as above; `.cache/` must be in the repo's `.gitignore` |
-| ChatGPT / Claude.ai web with files attached | either | Attach the relevant `SKILL.md` plus `.agent-skills.yml` (or paste `.env` values) and tell it which mode to use |
+| Where the agent runs                                   | Mode              | What to do                                                                                                      |
+| ------------------------------------------------------ | ----------------- | --------------------------------------------------------------------------------------------------------------- |
+| Your laptop, VS Code + Copilot Chat with several repos | `local-workspace` | `git clone agent-skills && ./setup.init`                                                                        |
+| Your laptop, Claude Code with several repos            | `local-workspace` | `./setup.init`, point client at `<workspace>/.skills`                                                           |
+| GitHub Copilot coding agent on github.com              | `in-repo`         | Commit `.agent-skills.yml` and the `skills/` folder (or a git submodule of `agent-skills`) into the target repo |
+| Cursor cloud / background agent on a single repo       | `in-repo`         | Same as above                                                                                                   |
+| GitHub Codespaces / Gitpod for one repo                | `in-repo`         | Same as above; `.cache/` must be in the repo's `.gitignore`                                                     |
+| ChatGPT / Claude.ai web with files attached            | either            | Attach the relevant `SKILL.md` plus `.agent-skills.yml` (or paste `.env` values) and tell it which mode to use  |

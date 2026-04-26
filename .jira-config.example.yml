@@ -14,19 +14,19 @@
 # unread ticket. If your Jira CLI does not expand ${VAR_NAME} values in YAML,
 # either replace them here or rely on the environment variables from `.env`.
 
-installation: cloud           # cloud | local
+installation: cloud # cloud | local
 server: ${JIRA_HOST}
 login: ${JIRA_LOGIN}
-auth_type: ${JIRA_AUTH_TYPE}  # bearer | basic
+auth_type: ${JIRA_AUTH_TYPE} # bearer | basic
 project:
-  key: ENG                    # Default project key (override per command with -p)
+  key: ENG # Default project key (override per command with -p)
   type: software
 board:
-  id: 0                       # Optional: default board id
-  name: ""                    # Optional: default board name
+  id: 0 # Optional: default board id
+  name: "" # Optional: default board name
 epic:
-  name: customfield_10100     # Adjust if your Jira instance uses a different field id
+  name: customfield_10100 # Adjust if your Jira instance uses a different field id
   link: customfield_10101
 issue:
   fields:
-    custom: []                # Add any custom fields you want pulled by default
+    custom: [] # Add any custom fields you want pulled by default
