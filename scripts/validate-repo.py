@@ -13,11 +13,15 @@ from urllib.parse import unquote, urlparse
 ROOT = Path(__file__).resolve().parent.parent
 NAME_RE = re.compile(r"^[a-z0-9]+(-[a-z0-9]+)*$")
 SEMVER_RE = re.compile(r"^\d+\.\d+\.\d+(?:[-+][0-9A-Za-z.-]+)?$")
-MARKDOWN_MAX_LINE_LENGTH = 300
+MARKDOWN_MAX_LINE_LENGTH = 200
 MARKDOWN_AVG_LINE_WARN = 115
-SOURCE_MAX_LINE_LENGTH = 300
-SOURCE_WARN_LINE_LENGTH = 180
+MARKDOWN_DENSITY_FAIL_RATIO = 200
+MARKDOWN_DENSITY_MIN_BYTES = 1500
+SOURCE_MAX_LINE_LENGTH = 200
+SOURCE_WARN_LINE_LENGTH = 140
 SOURCE_AVG_LINE_WARN = 125
+SOURCE_DENSITY_FAIL_RATIO = 180
+SOURCE_DENSITY_MIN_BYTES = 1500
 
 REQUIRED_FILES = [
     "README.md",
@@ -279,9 +283,18 @@ def check_markdown_structure(result: Result) -> None:
     for path in markdown_files():
         text = read_text(path)
         body = strip_frontmatter(text)
-        line_count = len(text.splitlines())
+        line_count = len(text.splitlines()) or 1
         if len(text) > 600 and line_count <= 2:
             result.error(f"{rel(path)}: appears compressed into {line_count} giant line(s)")
+        if (
+            len(text) >= MARKDOWN_DENSITY_MIN_BYTES
+            and len(text) / line_count > MARKDOWN_DENSITY_FAIL_RATIO
+        ):
+            result.error(
+                f"{rel(path)}: appears compressed ("
+                f"{len(text)} bytes across {line_count} lines, "
+                f"{len(text) / line_count:.1f} bytes/line)"
+            )
         check_markdown_readability(path, text, result)
         if not re.search(r"^#{1,6}\s+\S", body, re.MULTILINE):
             result.error(f"{rel(path)}: missing Markdown heading")
@@ -350,8 +363,19 @@ def check_source_readability(result: Result) -> None:
     for path in text_files():
         if path.suffix not in {".py", ".yml", ".yaml"}:
             continue
-        lines = read_text(path).splitlines()
+        text = read_text(path)
+        lines = text.splitlines()
         nonblank_lengths = [len(line) for line in lines if line.strip()]
+        line_count = len(lines) or 1
+        if (
+            len(text) >= SOURCE_DENSITY_MIN_BYTES
+            and len(text) / line_count > SOURCE_DENSITY_FAIL_RATIO
+        ):
+            result.error(
+                f"{rel(path)}: appears compressed/minified ("
+                f"{len(text)} bytes across {line_count} lines, "
+                f"{len(text) / line_count:.1f} bytes/line)"
+            )
         for line_number, line in enumerate(lines, start=1):
             if "\t" in line:
                 result.error(f"{rel(path)}:{line_number}: tab character in source file")
@@ -362,6 +386,10 @@ def check_source_readability(result: Result) -> None:
                 )
             elif len(line) > SOURCE_WARN_LINE_LENGTH and not is_long_url_or_reference(line):
                 result.warn(f"{rel(path)}:{line_number}: long source line ({len(line)} chars)")
+        if path.suffix in {".yml", ".yaml"}:
+            check_yaml_minification(path, lines, result)
+        if path.suffix == ".py":
+            check_python_minification(path, lines, result)
         if nonblank_lengths:
             average = sum(nonblank_lengths) / len(nonblank_lengths)
             if average > SOURCE_AVG_LINE_WARN:
@@ -369,6 +397,52 @@ def check_source_readability(result: Result) -> None:
                     f"{rel(path)}: average source line length is suspiciously high "
                     f"({average:.1f})"
                 )
+
+
+YAML_INLINE_KEY_RE = re.compile(r"[A-Za-z_][\w-]*\s*:\s*\S")
+
+
+def check_yaml_minification(path: Path, lines: list[str], result: Result) -> None:
+    for line_number, line in enumerate(lines, start=1):
+        stripped = line.strip()
+        if not stripped or stripped.startswith("#"):
+            continue
+        if stripped.startswith(("{", "[")) and len(stripped) > 80:
+            result.error(
+                f"{rel(path)}:{line_number}: YAML inline flow value looks minified"
+            )
+            continue
+        if not line.startswith((" ", "\t")) and stripped.count(": ") >= 3:
+            inline_keys = len(YAML_INLINE_KEY_RE.findall(stripped))
+            if inline_keys >= 3:
+                result.error(
+                    f"{rel(path)}:{line_number}: multiple YAML keys collapsed onto one line"
+                )
+
+
+def check_python_minification(path: Path, lines: list[str], result: Result) -> None:
+    for line_number, line in enumerate(lines, start=1):
+        stripped = line.strip()
+        if not stripped or stripped.startswith("#"):
+            continue
+        in_string = False
+        quote = ""
+        statements = 0
+        for ch in stripped:
+            if in_string:
+                if ch == quote:
+                    in_string = False
+            elif ch in {'"', "'"}:
+                in_string = True
+                quote = ch
+            elif ch == "#":
+                break
+            elif ch == ";":
+                statements += 1
+        if statements >= 2:
+            result.error(
+                f"{rel(path)}:{line_number}: multiple Python statements on one line"
+            )
 
 
 def check_code_fences(path: Path, text: str, result: Result) -> None:

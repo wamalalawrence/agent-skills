@@ -17,7 +17,7 @@ compatibility: >-
   .agent-skills.yml). See docs/execution-modes.md.
 metadata:
   author: wamalalawrence
-  version: "0.8.1"
+  version: "0.8.2"
   homepage: "https://github.com/wamalalawrence/agent-skills"
 ---
 
@@ -605,12 +605,17 @@ written waiver.
 
 ## Code review hooks
 
-This skill explicitly delegates to [`code-reviewer`](./skills/code-reviewer/SKILL.md) at two points:
+This skill explicitly delegates to [`code-reviewer`](./skills/code-reviewer/SKILL.md) at two
+points:
 
-| Hook       | When                            | Diff scope                                    | Severity filter                          | Purpose                                    |
-| ---------- | ------------------------------- | --------------------------------------------- | ---------------------------------------- | ------------------------------------------ |
-| Inner loop | End of Phase 2 (Implementation) | Staged diff (`git diff --staged`)             | `${CODE_REVIEWER_INNER_LOOP_SEVERITIES}` | Catch major mistakes before testing them   |
-| Outer loop | End of Phase 3 (QA)             | Branch diff (`git diff origin/<base>...HEAD`) | `${CODE_REVIEWER_SHOW_SEVERITIES}`       | Issue-aware review of the whole change set |
+- Inner loop: at the end of Phase 2 (Implementation).
+  - Diff scope: staged diff (`git diff --staged`).
+  - Severity filter: `${CODE_REVIEWER_INNER_LOOP_SEVERITIES}`.
+  - Purpose: catch major mistakes before testing them.
+- Outer loop: at the end of Phase 3 (QA).
+  - Diff scope: branch diff (`git diff origin/<base>...HEAD`).
+  - Severity filter: `${CODE_REVIEWER_SHOW_SEVERITIES}`.
+  - Purpose: issue-aware review of the whole change set.
 
 Behaviour is configured by `${CODE_REVIEWER_BLOCKING}` (default `false` = advisory). When blocking
 is enabled, blocker findings must be addressed or explicitly waived (with a written reason) before

@@ -6,14 +6,25 @@ proof that any model will behave correctly.
 
 ## Review Summary
 
-| Skill | Likely Useful Output | Main Risk Found | Fix Made |
-| --- | --- | --- | --- |
-| `issue-investigator` | Yes | Mode detection was less consistent than other skills. | Added `AGENT_SKILLS_MODE` handling and a behavior checklist. |
-| `software-engineer` | Yes | Wording leaned too much on Jira/GitHub and one heading casing differed. | Generalized issue-source wording, fixed `When To Use`, and added a behavior checklist. |
-| `code-reviewer` | Yes | Mode detection was less consistent than the main engineering skill. | Added `AGENT_SKILLS_MODE` handling and a behavior checklist. |
-| `product-owner` | Yes | Bug-flavored refinement could sound fix-ready before root cause is known. | Clarified unknown-root-cause work should become investigation/discovery, not a fix-ready story. |
-| `manual-tester` | Yes | Output contract was strong, but behavior checklist was implicit. | Added a behavior checklist focused on evidence, environment, defects, and handoff. |
-| `test-automation-engineer` | Yes | The 20-run flake budget could be unrealistic when CI/tooling is unavailable. | Softened it into a default target with lower-confidence fallback and visible follow-up. |
+All six skills produced likely useful output during manual review. The main risks
+found and the fixes made were:
+
+- `issue-investigator`: mode detection was less consistent than other skills.
+  Fix: added `AGENT_SKILLS_MODE` handling and a behavior checklist.
+- `software-engineer`: wording leaned too much on Jira/GitHub and one heading
+  casing differed. Fix: generalized issue-source wording, normalized
+  `When To Use`, and added a behavior checklist.
+- `code-reviewer`: mode detection was less consistent than the main engineering
+  skill. Fix: added `AGENT_SKILLS_MODE` handling and a behavior checklist.
+- `product-owner`: bug-flavored refinement could sound fix-ready before root
+  cause was known. Fix: clarified that unknown-root-cause work should become
+  investigation/discovery, not a fix-ready story.
+- `manual-tester`: output contract was strong, but the behavior checklist was
+  implicit. Fix: added a behavior checklist focused on evidence, environment,
+  defects, and handoff.
+- `test-automation-engineer`: the 20-run flake budget could be unrealistic when
+  CI/tooling is unavailable. Fix: softened into a default target with
+  lower-confidence fallback and a visible follow-up.
 
 ## Per-Skill Findings
 

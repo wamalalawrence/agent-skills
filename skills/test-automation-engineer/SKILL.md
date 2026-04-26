@@ -16,7 +16,7 @@ compatibility: >-
   .agent-skills.yml). See docs/execution-modes.md.
 metadata:
   author: wamalalawrence
-  version: "0.8.1"
+  version: "0.8.2"
   homepage: "https://github.com/wamalalawrence/agent-skills"
 ---
 

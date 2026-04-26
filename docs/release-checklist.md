@@ -6,6 +6,7 @@ Use this before tagging a release.
 
 - [ ] Run `python3 scripts/validate-repo.py` from the repository root.
 - [ ] Confirm validator line-readability checks pass for Markdown, YAML, and Python source.
+- [ ] Confirm validator file-density and minification checks pass for Markdown, YAML, and Python.
 - [ ] Inspect warnings and decide whether they are acceptable.
 - [ ] Confirm GitHub Actions validation passes on the release PR or branch.
 
