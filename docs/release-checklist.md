@@ -18,6 +18,7 @@ Use this before tagging a release.
 - [ ] Inspect [docs/README.md](README.md) and new or changed docs for readable Markdown.
 - [ ] Inspect skill links from the README, docs index, and each changed `SKILL.md`.
 - [ ] Confirm examples and eval scenarios still match the current output contracts.
+- [ ] Confirm release-scoped eval runs exist under `eval-runs/<release>/` with a summary file.
 - [ ] Confirm [known limitations](known-limitations.md) still describe what validation cannot prove.
 
 ## Release Metadata

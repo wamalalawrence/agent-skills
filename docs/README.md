@@ -12,6 +12,7 @@ Start here when reading the repository outside GitHub's main README.
 - [Validation](validation.md) - repository checks, warning/failure rules, and validation limits.
 - [Skill quality scorecard](skill-quality-scorecard.md) - a simple 0-3 maintainer review aid.
 - [Skill performance review](skill-performance-review.md) - v0.8.0 manual review notes.
+- [Eval runs](../eval-runs/README.md) - release-scoped scored sample runs.
 - [Release checklist](release-checklist.md) - repeatable pre-release checks.
 - [Skill boundaries](skill-boundaries.md) - ownership, handoffs, and nested-skill rationale.
 - [Severity and confidence](severity-and-confidence.md) - shared review, defect, and investigation
