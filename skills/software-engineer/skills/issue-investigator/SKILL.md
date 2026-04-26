@@ -17,7 +17,7 @@ compatibility: >-
   docs/execution-modes.md.
 metadata:
   author: wamalalawrence
-  version: "0.9.0"
+  version: "0.10.0"
   homepage: "https://github.com/wamalalawrence/agent-skills"
 argument-hint: >-
   issue URL/key, bug report, incident, support ticket, feature request, or task
@@ -273,6 +273,31 @@ For any reported regression, run these high-signal cheap moves before forming hy
 Document the introducing commit hash and PR link in the investigation result so the fix can
 reference them.
 
+#### Safe read-only checks the user can run
+
+When direct access to the affected environment, database, log aggregator, or ticket system is
+unavailable, do not stop at "missing evidence". Propose a short list of **safe, read-only commands
+or queries** the user can run themselves to narrow the cause. Each suggestion must satisfy all of
+the following:
+
+- Read-only by construction. No `INSERT`, `UPDATE`, `DELETE`, `DROP`, `TRUNCATE`, no flag flips, no
+  config writes, no deploys, no cache busts. SQL examples must be wrapped in
+  `SET TRANSACTION READ ONLY` (or a read-replica) where the engine supports it.
+- Bounded blast radius. Add `LIMIT`, time windows, single-row predicates, or `--dry-run` flags.
+  Never propose a full-table scan on a production-scale table without a bounding clause.
+- Clearly labelled with the environment they are safe in (local, staging, read-replica, snapshot,
+  ephemeral). Do not propose running a check against live production data unless the user has
+  already stated that read-only production access is the only path and the query is bounded.
+- Stated as portable templates with `<placeholders>`. Do not invent table names, column names,
+  service names, hostnames, or ticket keys; mark them as placeholders.
+- Tied to a hypothesis. Each check should discriminate between at least two of the candidate
+  causes from the [three-hypothesis discipline](#three-hypothesis-discipline), or fill a specific
+  evidence gap from `Open Questions Or Missing Evidence`.
+
+If no safe check is possible without access the user does not have, say so and list what access
+(read-replica, snapshot, log slice, anonymized HAR) would unblock the investigation. Do not invent
+commands that pretend to be safe when they are not.
+
 ### 5. Establish root-cause status and confidence
 
 - Mark root cause as `unknown`, `suspected`, `confirmed`, or `disproved`.
@@ -363,6 +388,17 @@ When recommending a code fix, provide implementation guidance and hand off to
 - Fix/clarification/test recommendations:
 - Monitoring / documentation / support follow-up:
 
+## Safe Checks The User Can Run
+
+- Hypothesis being tested:
+- Environment (local | staging | read-replica | snapshot | ephemeral | read-only production):
+- Read-only command/query (with placeholders, bounded scope):
+- What a positive result would mean:
+- What a negative result would mean:
+
+(Repeat one block per check. Write `none — no safe check is possible without <access type>` if no
+safe check exists with the access the user currently has.)
+
 ## Open Questions Or Missing Evidence
 
 - ...
@@ -379,6 +415,9 @@ missing.
 - [ ] Issue type classification is supported by evidence and confidence.
 - [ ] Reproduction status records environment, steps attempted, observed result, and missing data.
 - [ ] Root-cause status is `unknown`, `suspected`, `confirmed`, or `disproved` and never overstated.
+- [ ] When direct environment access is unavailable, `Safe Checks The User Can Run` lists at least
+  one bounded read-only check tied to a hypothesis, or explicitly says no safe check is possible
+  with the current access.
 - [ ] Recommended next action meets the evidence gate and hands implementation/review/testing to
   the right skill.
 
@@ -402,6 +441,9 @@ missing.
   rollback plan.
 - Do not assume every issue is a code bug.
 - Do not treat missing credentials or inaccessible systems as proof of behavior.
+- Do not propose a "safe check" that writes, deletes, deploys, flips a flag, busts a cache, or
+  scans a production-scale table without a bounding clause. Read-only by construction or do not
+  propose it.
 - Do not claim reproduction was attempted, tests were run, or root cause was confirmed unless the
   evidence shows it.
 - Do not hide uncertainty. Mark assumptions and missing evidence clearly.

@@ -16,7 +16,7 @@ compatibility: >-
   .agent-skills.yml). See docs/execution-modes.md.
 metadata:
   author: wamalalawrence
-  version: "0.9.0"
+  version: "0.10.0"
   homepage: "https://github.com/wamalalawrence/agent-skills"
 argument-hint: >-
   optional: mode inner|outer, base branch, issue key/URL, PR URL, or task description
@@ -307,6 +307,27 @@ or PII leakage, broken or non-reversible migration, breaking API contract change
 previously-fixed defect. If the rebuttal surfaces a credible risk, downgrade the verdict to
 `PASS_WITH_NOTES` or add a `blocker`/`major` finding and return `REQUEST_CHANGES`.
 
+### 9. Record review limitations explicitly
+
+Before producing the final verdict, list what could not be reviewed and why. The reviewer must
+never produce a confident verdict without disclosing the gaps that bound that confidence. Cover at
+least:
+
+- Issue context not accessed (Jira/GitHub issue unreachable, comments/linked docs not fetched,
+  acceptance criteria supplied verbally rather than from the source of truth).
+- Code paths not inspected (large diff truncation, files skipped because of the configured budget,
+  generated files, vendored dependencies, binary assets).
+- Tests, builds, or CI runs not executed or not observed (state explicitly when results were
+  reported by the engineer rather than verified directly).
+- Standards or guidelines referenced but not supplied (private architecture docs, security rules,
+  API guidelines, style guides). Do not invent their content.
+- Runtime, deployment, observability, or data evidence that would have changed confidence (logs,
+  metrics, feature-flag rollouts, migration dry-runs).
+
+A review with significant unavailable context must use `PASS_WITH_NOTES` or `NEEDS_CONTEXT`, never
+a bare `PASS`. The unavailable items appear in the `Review Limitations` section of the output
+contract below.
+
 ## Expected Output Contract
 
 ```markdown
@@ -348,6 +369,15 @@ previously-fixed defect. If the rebuttal surfaces a credible risk, downgrade the
 - Confidence: high | medium | low
 - Blocking/advisory decision: blocking | advisory
 
+## Review Limitations / Unavailable Context
+
+- Issue context not accessed:
+- Code paths not inspected:
+- Tests / builds / CI not executed or not observed:
+- Standards / guidelines referenced but not supplied:
+- Runtime / deployment / observability evidence not available:
+- Effect on confidence:
+
 ## Final Verdict
 
 - Verdict: PASS | PASS_WITH_NOTES | REQUEST_CHANGES | NEEDS_CONTEXT | NOT_REVIEWABLE
@@ -355,8 +385,10 @@ previously-fixed defect. If the rebuttal surfaces a credible risk, downgrade the
 - Follow-up needed:
 ```
 
-If no findings are found, say so explicitly and list any review limits, skipped files, missing issue
-context, or tests not verified.
+The `Review Limitations / Unavailable Context` section is required even when the review found no
+findings. If everything was available, write `none` under each item rather than removing the
+section. A bare `PASS` verdict requires every limitation item to be `none` or explicitly waived by
+the user; otherwise use `PASS_WITH_NOTES` or `NEEDS_CONTEXT`.
 
 ## Behavior Checklist
 
@@ -365,6 +397,8 @@ context, or tests not verified.
 - [ ] Issue/ticket alignment is checked before generic engineering quality when context exists.
 - [ ] Findings include severity, evidence, impact, suggested fix, confidence, and blocking/advisory
   decision.
+- [ ] `Review Limitations / Unavailable Context` section is filled in (each item either lists what
+  was missing or says `none`); a bare `PASS` is not used while items are non-`none`.
 - [ ] Missing evidence, skipped files, unverified tests, and review limits are disclosed.
 - [ ] Final verdict uses only `PASS`, `PASS_WITH_NOTES`, `REQUEST_CHANGES`, `NEEDS_CONTEXT`, or
   `NOT_REVIEWABLE`.
