@@ -15,7 +15,7 @@ compatibility:
   docs/execution-modes.md.
 metadata:
   author: wamalalawrence
-  version: "0.6.1"
+  version: "0.7.0"
   homepage: "https://github.com/wamalalawrence/agent-skills"
 ---
 
@@ -46,8 +46,21 @@ invent business priorities or prescribe technical architecture when those belong
 - Engineering or testing needs a clear statement of intended behavior.
 - Product, UX, engineering, and testing perspectives need to be aligned before delivery.
 
+## When Not To Use
+
+- Do not use to decide whether a reported behavior is truly a defect; route bug-flavored input to
+  [`issue-investigator`](../software-engineer/skills/issue-investigator/SKILL.md).
+- Do not use to implement, review, or test code; hand those outputs to the relevant delivery skill.
+- Do not use to invent business priorities, legal/compliance rules, analytics, deadlines, or private
+  company standards that were not supplied.
+- Do not produce Jira-ready work when the goal, user value, scope, or expected behavior is still
+  unresolved.
+
 ## Related And Reused Skills
 
+- [`issue-investigator`](../software-engineer/skills/issue-investigator/SKILL.md): use first for
+  bug-flavored input, incidents, support complaints, regressions, unclear expected vs actual
+  behavior, and root-cause evidence.
 - [`software-engineer`](../software-engineer/SKILL.md): use for technical feasibility,
   implementation impact, architecture constraints, API or migration tradeoffs, and risk areas that
   should shape scope.
@@ -77,6 +90,17 @@ assumptions are clearly marked.
 
 If the user only provides a broad idea, first ask focused clarification questions. Prefer a short
 list of high-impact questions over a long interview.
+
+## Stopping Conditions
+
+Stop and return refinement questions instead of Jira-ready output when:
+
+- Product goal, user/stakeholder value, or problem statement is unknown.
+- Expected behavior is unclear and the request is bug-flavored.
+- Acceptance criteria would require inventing facts, standards, data, UX decisions, or business
+  rules.
+- Dependencies or feasibility risks are material but unreviewed by the appropriate skill.
+- Scope cannot be split or bounded enough for engineering and testing to act.
 
 ## Required Workflow
 
@@ -151,7 +175,7 @@ Do not produce the Jira-ready output in step 7 until all of these are true:
 - Goal, target users, and business value are stated.
 - For bug-flavored input: the
   [`issue-investigator`](../software-engineer/skills/issue-investigator/SKILL.md) result is attached
-  and root-cause confidence is at least `suspected`. Read it from the shared cache at
+  and root-cause status is `suspected` or `confirmed`. Read it from the shared cache at
   `${AGENT_SKILLS_CACHE_DIR:-${WORKSPACE_ROOT:-$REPO_ROOT}/.cache/agent-skills}/<issue-key>/evidence-pack.yml`
   per the [evidence-pack schema](../software-engineer/references/evidence-pack.md), and write the
   refined `acceptance_criteria` back to the same file. The cache root resolves to the workspace root
@@ -174,16 +198,17 @@ If any DoR item fails, return the work to refinement instead of handing it off.
   assumptions, and handoff notes.
 - Include testing notes and automation notes without prescribing test implementation details.
 
-## Expected Outputs
+## Expected Output Contract
 
-When producing final output, include only sections that are useful for the request.
+When producing final output, include this structure. Mark unknowns explicitly rather than hiding
+them.
 
 ```markdown
 ## Product Summary
 
-- Goal:
-- Users / stakeholders:
-- Business value:
+- Product goal:
+- User/stakeholder value:
+- Problem statement:
 
 ## Scope
 
@@ -191,21 +216,23 @@ When producing final output, include only sections that are useful for the reque
 - Out of scope:
 - Assumptions:
 - Dependencies:
+- UX notes:
+- Non-functional requirements:
 - Open questions:
 
-## Jira-Ready Work Item
+## Jira-Ready Story/Task Format
 
-Title: Type: Story | Task | Bug | Spike Description:
+- Title:
+- Type: Story | Task | Bug | Spike
+- Description:
 
 ## Acceptance Criteria
 
 - [ ] ...
 
-## Edge Cases And Non-Functional Requirements
+## Edge Cases
 
 - Edge cases:
-- UX considerations:
-- Non-functional requirements:
 
 ## Handoff Notes
 
@@ -235,6 +262,8 @@ Title: Type: Story | Task | Bug | Spike Description:
 - Do not force automation for exploratory, subjective, one-off, or unstable behavior.
 - Do not recommend `develop` branches or GitFlow. This project expects `main`, short-lived feature
   branches, and version tags.
+- Do not claim stakeholder approval, investigation results, or feasibility review happened unless
+  they actually happened.
 
 ## Example Prompts
 
@@ -243,3 +272,6 @@ Title: Type: Story | Task | Bug | Spike Description:
 - "Review these acceptance criteria for gaps before engineering starts."
 - "Split this large request into smaller stories and call out dependencies."
 - "Prepare a handoff for engineering, manual testing, and automation from this product brief."
+
+See [the product-owner story refinement example](../../docs/examples/product-owner-story-refinement.md)
+and [starter prompts](../../docs/starter-prompts.md).

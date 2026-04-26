@@ -56,7 +56,7 @@ acceptance_criteria:
 
 # Investigation
 investigation:
-  root_cause_status: confirmed | suspected | not_found | not_applicable
+  root_cause_status: unknown | suspected | confirmed | disproved
   root_cause: "Filter chain swallows the AuthenticationException and returns 500."
   supporting_evidence:
     - "stacktrace at <log link or excerpt>"
@@ -90,7 +90,7 @@ review:
     - round: 1
       blocker_count: 2
       major_count: 4
-      verdict: BLOCK
+      verdict: REQUEST_CHANGES
 ```
 
 **Loading rule**: every skill `set -a && source ${WORKSPACE_ROOT}/.env && set +a`, then reads/writes

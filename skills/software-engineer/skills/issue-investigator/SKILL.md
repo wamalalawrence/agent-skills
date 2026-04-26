@@ -15,7 +15,7 @@ compatibility:
   integration via `.jira-config.yml`. See docs/execution-modes.md.
 metadata:
   author: wamalalawrence
-  version: "0.6.1"
+  version: "0.7.0"
   homepage: "https://github.com/wamalalawrence/agent-skills"
 argument-hint:
   "issue URL/key, bug report, incident, support ticket, feature request, or task description plus
@@ -57,6 +57,16 @@ implementation.
 - Root-cause analysis before fixing.
 - Review preparation when expected behavior or issue context is unclear.
 
+## When Not To Use
+
+- Do not use to implement the fix; hand confirmed or suspected fix work to
+  [`software-engineer`](../../SKILL.md).
+- Do not use to invent acceptance criteria for unclear product behavior; hand that to
+  [`product-owner`](../../../product-owner/SKILL.md).
+- Do not use for final PR approval; hand the diff to [`code-reviewer`](../code-reviewer/SKILL.md).
+- Do not continue when the only available input is a vague symptom with no issue source, affected
+  area, expected behavior, or reproduction clue.
+
 ## Related And Reused Skills
 
 - [`software-engineer`](../../SKILL.md): use for technical code-path analysis, architecture
@@ -89,6 +99,16 @@ Accept any of these as the starting issue source:
 
 If the issue source is missing or too vague, ask focused questions. If access to a referenced system
 is unavailable, say what could not be inspected and request the smallest useful excerpt.
+
+## Stopping Conditions
+
+Stop and return a `root cause status` of `unknown` when:
+
+- The issue source cannot be accessed and the user did not provide enough direct detail.
+- Expected behavior cannot be established from ticket, product, docs, tests, or user context.
+- Reproduction would require unsafe production mutation or sensitive data exposure.
+- Evidence is too weak to support the recommended next action.
+- Root-cause hypotheses are plausible but untested; mark them `suspected`, not `confirmed`.
 
 ## Required Environment
 
@@ -242,22 +262,24 @@ For any reported regression, run these high-signal cheap moves before forming hy
 Document the introducing commit hash and PR link in the investigation result so the fix can
 reference them.
 
-### 5. Establish root cause confidence
+### 5. Establish root-cause status and confidence
 
-- Mark root cause as `confirmed`, `suspected`, `not found`, or `not applicable`.
+- Mark root cause as `unknown`, `suspected`, `confirmed`, or `disproved`.
 - Tie every suspected or confirmed cause to evidence.
 - State what evidence would be needed to raise confidence.
 - If the issue cannot be reproduced, document what was attempted and why confidence is limited.
+- Use [the shared severity/confidence definitions](../../../../docs/severity-and-confidence.md) for
+  `confidence level` and root-cause status semantics.
 
-**Confidence gate for the next-action recommendation:**
+**Evidence gate for the next-action recommendation:**
 
-| Recommended next action                                        | Minimum required confidence                                                            |
+| Recommended next action                                        | Minimum required root-cause status / evidence                                          |
 | -------------------------------------------------------------- | -------------------------------------------------------------------------------------- |
 | `code fix`                                                     | `confirmed`, or `suspected` plus a reproducible recipe and a falsifiable hypothesis    |
 | `rollback` / `revert`                                          | `suspected` or higher, plus a clear introducing change identified by regression triage |
 | `configuration change` / `data correction`                     | `confirmed` (mutation in a real environment requires evidence, not a hunch)            |
-| `monitoring or alerting improvement`                           | any confidence (always safe to add observability)                                      |
-| `product clarification` / `documentation` / `support response` | any confidence                                                                         |
+| `monitoring or alerting improvement`                           | any status (safe to add observability when scoped correctly)                           |
+| `product clarification` / `documentation` / `support response` | any status                                                                             |
 
 If the evidence does not meet the bar for the action you want to recommend, choose a lower-impact
 action (typically `monitoring` or `clarification`) and state explicitly what evidence is missing.
@@ -281,12 +303,14 @@ When recommending a code fix, provide implementation guidance and hand off to
 [`software-engineer`](../../SKILL.md). After a fix exists, use
 [`code-reviewer`](../code-reviewer/SKILL.md) to review issue alignment and engineering quality.
 
-## Expected Output
+## Expected Output Contract
 
 ```markdown
 ## Investigation Result
 
-Issue summary: Issue type classification: Confidence: high | medium | low
+- Issue summary:
+- Issue type classification:
+- Confidence level: low | medium | high
 
 ## Behavior
 
@@ -310,7 +334,7 @@ Issue summary: Issue type classification: Confidence: high | medium | low
 
 ## Root Cause
 
-- Status: confirmed | suspected | not found | not applicable
+- Root cause status: unknown | suspected | confirmed | disproved
 - Root cause:
 - Supporting evidence:
 - Assumptions:
@@ -325,8 +349,7 @@ Issue summary: Issue type classification: Confidence: high | medium | low
 
 - Recommendation:
 - Why:
-- Implementation guidance, if appropriate:
-- Tests or validation needed:
+- Fix/clarification/test recommendations:
 - Monitoring / documentation / support follow-up:
 
 ## Open Questions Or Missing Evidence
@@ -334,7 +357,11 @@ Issue summary: Issue type classification: Confidence: high | medium | low
 - ...
 ```
 
-## Quality Bar
+Normal output must include every section above unless the user asked only for a narrow partial
+analysis. If a section cannot be completed, write `not available` and explain what evidence is
+missing.
+
+## Quality Standards
 
 - Investigation results must distinguish facts, assumptions, and unknowns.
 - Root-cause claims must cite evidence.
@@ -342,6 +369,8 @@ Issue summary: Issue type classification: Confidence: high | medium | low
 - Recommendations must match the classification and evidence.
 - The skill must be useful even when no code change is needed.
 - Reproduction attempts, skipped evidence, access limits, and uncertainty must be disclosed.
+- Root-cause status and confidence must follow the shared
+  [severity/confidence definitions](../../../../docs/severity-and-confidence.md).
 
 ## Guardrails
 
@@ -352,6 +381,8 @@ Issue summary: Issue type classification: Confidence: high | medium | low
   rollback plan.
 - Do not assume every issue is a code bug.
 - Do not treat missing credentials or inaccessible systems as proof of behavior.
+- Do not claim reproduction was attempted, tests were run, or root cause was confirmed unless the
+  evidence shows it.
 - Do not hide uncertainty. Mark assumptions and missing evidence clearly.
 - Do not hard-code private company practices into this public skill.
 
@@ -363,3 +394,6 @@ Issue summary: Issue type classification: Confidence: high | medium | low
 - "Read this support ticket and identify expected vs actual behavior."
 - "Investigate this regression report and find the likely root cause."
 - "Refine this technical task before implementation and list missing evidence."
+
+See [the issue-investigator bug report example](../../../../docs/examples/issue-investigator-bug-report.md)
+and [starter prompts](../../../../docs/starter-prompts.md).

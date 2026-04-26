@@ -4,6 +4,44 @@ All notable project changes should be recorded here.
 
 ## Unreleased
 
+## 0.7.0 - Skill Output Contracts, Examples, and Operational Behavior Hardening
+
+### Added
+
+- **Expected output contracts for all six skills** so agents produce predictable summaries,
+  evidence, validation notes, handoffs, and final status/verdict fields.
+- **`docs/examples/`** with one realistic, portable example per skill covering input prompt,
+  assumed context, expected behavior, sample output structure, and what to avoid.
+- **`docs/starter-prompts.md`** with copy-paste prompts for each skill plus multi-skill workflows
+  (`product-owner -> software-engineer -> manual-tester -> test-automation-engineer`,
+  `issue-investigator -> software-engineer -> code-reviewer`, and
+  `manual-tester defect -> issue-investigator -> test-automation-engineer`).
+- **`docs/skill-boundaries.md`** documenting role ownership, handoff rules, nested support-skill
+  rationale, and possible future top-level criteria for `issue-investigator` and `code-reviewer`.
+- **`docs/severity-and-confidence.md`** defining `blocker`, `major`, `minor`, `nit`,
+  `low`/`medium`/`high` confidence, and issue-investigator root-cause statuses
+  (`unknown`, `suspected`, `confirmed`, `disproved`).
+- **`docs/README.md`** as a documentation index for quickstart, prompts, examples, boundaries,
+  severity/confidence, limitations, and versioning.
+
+### Changed
+
+- Hardened all skill docs with explicit `When Not To Use` and `Stopping Conditions` sections where
+  they were missing.
+- Made cross-skill reuse rules explicit: engineering invokes investigation for unclear issues and
+  review at gates; review invokes investigation when ticket/root-cause context is weak; manual
+  testing hands reproducible defects to investigation; automation consumes stable manual/repro
+  scenarios; product ownership routes bug-flavored input through investigation.
+- Updated `code-reviewer` verdicts to `PASS`, `PASS_WITH_NOTES`, `REQUEST_CHANGES`,
+  `NEEDS_CONTEXT`, and `NOT_REVIEWABLE`.
+- Aligned public docs and skill metadata with release `0.7.0`.
+
+### Guardrails
+
+- Reinforced public usability disclaimers across skills: do not invent evidence, distinguish facts
+  from assumptions, stop when context is insufficient, do not claim tests were run unless actually
+  run, do not confirm root cause without evidence, and do not assume private company standards.
+
 ## 0.6.1 - Documentation Rendering and Public Usability Fixes
 
 ### Added

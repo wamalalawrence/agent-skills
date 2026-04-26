@@ -15,7 +15,7 @@ compatibility:
   docs/execution-modes.md.
 metadata:
   author: wamalalawrence
-  version: "0.6.1"
+  version: "0.7.0"
   homepage: "https://github.com/wamalalawrence/agent-skills"
 ---
 
@@ -44,6 +44,16 @@ on.
 - A defect needs reproduction steps, evidence, severity, and retest guidance.
 - Product, engineering, or automation needs a concise view of observed risks.
 
+## When Not To Use
+
+- Do not use to invent expected behavior when acceptance criteria or product intent are unclear; use
+  [`product-owner`](../product-owner/SKILL.md).
+- Do not use to root-cause a reproducible defect beyond the tester evidence; hand it to
+  [`issue-investigator`](../software-engineer/skills/issue-investigator/SKILL.md).
+- Do not use to design or maintain automated tests; use
+  [`test-automation-engineer`](../test-automation-engineer/SKILL.md).
+- Do not report complete validation when the environment, build, user role, or test data is unknown.
+
 ## Related And Reused Skills
 
 - [`product-owner`](../product-owner/SKILL.md): use for intended behavior, scope, user value,
@@ -51,6 +61,8 @@ on.
 - [`software-engineer`](../software-engineer/SKILL.md): use for technical risk areas, changed
   components, regression zones, environment setup, and implementation details that influence test
   focus.
+- [`issue-investigator`](../software-engineer/skills/issue-investigator/SKILL.md): use for
+  reproducible defects, unclear root cause, regression triage, and recommended next action.
 - [`test-automation-engineer`](../test-automation-engineer/SKILL.md): collaborate to identify manual
   scenarios that are valuable, stable, and worth automating later.
 
@@ -71,6 +83,19 @@ Ask for missing information when it affects test validity.
 
 If expected behavior is unclear, stop and ask [`product-owner`](../product-owner/SKILL.md) or the
 user before treating an observation as a defect.
+
+## Stopping Conditions
+
+Stop or mark execution `blocked` when:
+
+- Expected behavior, acceptance criteria, or test scope is unavailable.
+- Environment/build/version/commit, user role, feature flag, or test data is unknown and materially
+  affects the result.
+- Testing would require destructive production actions, real secrets, or private customer data.
+- A defect is reproducible and needs root-cause analysis; hand off the evidence to
+  [`issue-investigator`](../software-engineer/skills/issue-investigator/SKILL.md).
+- Evidence is insufficient to distinguish product question, environment issue, and functional
+  defect.
 
 ## Required Workflow
 
@@ -149,16 +174,17 @@ Time-box exploratory charters (e.g., 30-minute boxes) so investigation does not 
 - Hand stable, high-value regression candidates to
   [`test-automation-engineer`](../test-automation-engineer/SKILL.md).
 
-## Expected Outputs
+## Expected Output Contract
 
-Use the smallest useful format for the request.
+Use the smallest useful format for the request, but preserve these fields for normal test plans and
+execution reports.
 
 ```markdown
 ## Manual Test Plan
 
-- Scope:
-- Environment:
-- Test data / roles:
+- Test scope:
+- Environment/build/version/commit:
+- Test data and user roles:
 - Risks:
 
 ## Test Scenarios
@@ -167,7 +193,7 @@ Use the smallest useful format for the request.
   - Expected:
   - Notes:
 
-## Execution Summary
+## Execution Result
 
 - Passed:
 - Failed:
@@ -175,16 +201,15 @@ Use the smallest useful format for the request.
 - Not tested:
 - Residual risk:
 
-## Defects
+## Defects Found
 
 ### <Defect title>
 
 - Severity:
 - Environment:
 - Steps to reproduce:
-- Expected:
-- Actual:
-- Evidence:
+- Actual vs expected behavior:
+- Defect evidence:
 - Retest guidance:
 
 ## Automation Candidates
@@ -204,12 +229,15 @@ Use the smallest useful format for the request.
 - Test reports must separate functional failures, usability observations, environment issues, and
   product questions.
 - Automation candidates should be stable, valuable, repeatable, and not purely subjective.
+- Defect severity and confidence should follow the shared
+  [severity/confidence definitions](../../docs/severity-and-confidence.md).
 
 ## Guardrails
 
 - Do not invent expected behavior when product intent is unclear.
 - Do not report a defect without actual behavior and reproduction context.
 - Do not claim testing is complete when scenarios were skipped, blocked, or environment-limited.
+- Do not claim a build, version, commit, browser, or role was tested when it was only assumed.
 - Do not modify production data or run destructive tests without explicit approval and a safe
   environment.
 - Do not use real secrets, private customer data, or sensitive personal data in evidence.
@@ -224,3 +252,6 @@ Use the smallest useful format for the request.
 - "Write a defect report from these reproduction notes and screenshots."
 - "Summarize what passed, failed, and needs retesting after this bug fix."
 - "Identify which manual scenarios are worth automating later."
+
+See [the manual-tester test plan example](../../docs/examples/manual-tester-test-plan.md) and
+[starter prompts](../../docs/starter-prompts.md).
