@@ -16,7 +16,7 @@ compatibility:
   docs/execution-modes.md.
 metadata:
   author: wamalalawrence
-  version: "0.7.0"
+  version: "0.8.0"
   homepage: "https://github.com/wamalalawrence/agent-skills"
 ---
 
@@ -65,11 +65,11 @@ quality assurance, and code review into a single repeatable pair-programming loo
   changed behavior should become stable regression automation or when test-level choice, fixtures,
   selectors, CI reporting, or flakiness risk need specialist attention.
 
-## When to use
+## When To Use
 
-- Any code change, bug fix, feature, or refactor in a repository under `${GITHUB_ORG}`
+- Any code change, bug fix, feature, or refactor in a repository the agent can inspect
 - Code review or self-review before opening a PR
-- Working with a Jira ticket (investigation, implementation, PR)
+- Working with a Jira ticket, GitHub issue, support report, or supplied task brief
 - Database migration script changes
 - API endpoint additions or modifications
 - Security-sensitive changes
@@ -197,19 +197,22 @@ Expand context only when the first pass leaves a real uncertainty, the change is
 (security, migration, API contract, shared library), or the reviewer needs more evidence to verify a
 finding. Summarize large tickets, logs, docs, and diffs before carrying them forward.
 
-## Required Inputs (must be supplied by the user)
+## Required Inputs
 
-If any of these are unknown when needed, **stop and ask**:
+These must be supplied by the user or established through repository/issue context. If any are
+unknown when needed, **stop and ask**.
+
+Required inputs:
 
 - The repository being changed, or a clear hint that lets the agent identify it within
   `${WORKSPACE_ROOT}`
-- For ticket-driven work: the Jira ticket key (e.g., `${JIRA_PROJECT_KEYS%%,*}-1234`)
+- For ticket-driven work: the Jira ticket key, GitHub issue URL/number, or supplied issue source
 - For non-ticket work: a one-paragraph issue brief covering the desired change, business reason,
   expected behavior, and any known constraints
 
-If the Jira ticket lacks enough context to fully understand the issue or feature being implemented,
-**stop and ask** the user for more context (link, description, sample data, screenshots, related
-ticket) before continuing. Silent guessing is forbidden.
+If the issue source lacks enough context to fully understand the issue or feature being
+implemented, **stop and ask** the user for more context (link, description, sample data,
+screenshots, related ticket) before continuing. Silent guessing is forbidden.
 
 ## Stopping Conditions
 
@@ -226,6 +229,8 @@ Stop and return `final status: needs-context` or `blocked` when:
   findings and no written waiver.
 
 ---
+
+## Required Workflow
 
 ## Access & local tooling
 
@@ -587,7 +592,7 @@ written waiver.
 
 - [ ] PR title follows the same format as the commit.
 - [ ] PR description explains: **what** changed, **why**, and **how it was tested**.
-- [ ] Link the Jira ticket in the PR.
+- [ ] Link the Jira ticket, GitHub issue, or supplied issue source in the PR when one exists.
 - [ ] Merge strategy: `${GIT_MERGE_STRATEGY}` (commonly `squash`).
 - [ ] Squash merge commit must start with the ticket key.
 - [ ] If a checklist item was intentionally overridden, leave a PR comment explaining why.
@@ -631,6 +636,18 @@ Normal output should use this shape, trimmed only when a section is genuinely no
 
 Use `proposed` rather than `made` when no files were changed. Do not claim validation, tests, review,
 or root-cause confirmation unless that work actually happened.
+
+## Behavior Checklist
+
+- [ ] Required setup, repository identity, base branch, issue source, and validation route are
+  resolved or the final status is `needs-context` / `blocked`.
+- [ ] Facts, assumptions, missing evidence, and user decisions are separated before editing.
+- [ ] Bug fixes include investigation, reproducible evidence, and a failing-regression-test strategy
+  unless explicitly out of scope with a stated reason.
+- [ ] Plan, implementation, validation, and `code-reviewer` handoff all point at the same intended
+  behavior.
+- [ ] Test, build, review, and root-cause claims are backed by commands, outputs, or supplied
+  evidence.
 
 ## Quality Standards
 

@@ -15,7 +15,7 @@ compatibility:
   integration via `.jira-config.yml`. See docs/execution-modes.md.
 metadata:
   author: wamalalawrence
-  version: "0.7.0"
+  version: "0.8.0"
   homepage: "https://github.com/wamalalawrence/agent-skills"
 argument-hint:
   "issue URL/key, bug report, incident, support ticket, feature request, or task description plus
@@ -115,6 +115,7 @@ Stop and return a `root cause status` of `unknown` when:
 Run this setup preflight before investigating.
 
 **Detect execution mode** ([docs/execution-modes.md](../../../../docs/execution-modes.md)): if
+`AGENT_SKILLS_MODE` is set to `local-workspace` or `in-repo`, use it; else if
 `${WORKSPACE_ROOT}/.env` is present → `local-workspace`; else if `.agent-skills.yml` exists at the
 repo root → `in-repo`; else continue only when the user supplied the issue details directly and no
 repository/Jira lookup is needed. Otherwise warn and stop because the investigation would be based
@@ -360,6 +361,16 @@ When recommending a code fix, provide implementation guidance and hand off to
 Normal output must include every section above unless the user asked only for a narrow partial
 analysis. If a section cannot be completed, write `not available` and explain what evidence is
 missing.
+
+## Behavior Checklist
+
+- [ ] Issue source, affected area, expected behavior source, actual behavior evidence, and access
+  limits are stated.
+- [ ] Issue type classification is supported by evidence and confidence.
+- [ ] Reproduction status records environment, steps attempted, observed result, and missing data.
+- [ ] Root-cause status is `unknown`, `suspected`, `confirmed`, or `disproved` and never overstated.
+- [ ] Recommended next action meets the evidence gate and hands implementation/review/testing to
+  the right skill.
 
 ## Quality Standards
 

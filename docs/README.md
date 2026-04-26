@@ -9,6 +9,10 @@ Start here when reading the repository outside GitHub's main README.
 - [Assistant setup](assistants.md) - using the skills with common AI assistants.
 - [Starter prompts](starter-prompts.md) - copy-paste prompts for single-skill and multi-skill work.
 - [Examples](examples/README.md) - realistic input/output examples for each skill.
+- [Validation](validation.md) - repository checks, warning/failure rules, and validation limits.
+- [Skill quality scorecard](skill-quality-scorecard.md) - a simple 0-3 maintainer review aid.
+- [Skill performance review](skill-performance-review.md) - v0.8.0 manual review notes.
+- [Release checklist](release-checklist.md) - repeatable pre-release checks.
 - [Skill boundaries](skill-boundaries.md) - ownership, handoffs, and nested-skill rationale.
 - [Severity and confidence](severity-and-confidence.md) - shared review, defect, and investigation
   vocabulary.

@@ -1,0 +1,561 @@
+#!/usr/bin/env python3
+"""Validate repository structure, skill contracts, links, versions, and public-safety guardrails."""
+from __future__ import annotations
+
+import os
+import re
+import subprocess
+import sys
+from dataclasses import dataclass
+from pathlib import Path
+from urllib.parse import unquote, urlparse
+
+ROOT = Path(__file__).resolve().parent.parent
+NAME_RE = re.compile(r"^[a-z0-9]+(-[a-z0-9]+)*$")
+SEMVER_RE = re.compile(r"^\d+\.\d+\.\d+(?:[-+][0-9A-Za-z.-]+)?$")
+
+REQUIRED_FILES = [
+    "README.md",
+    "CHANGELOG.md",
+    "CONTRIBUTING.md",
+    "LICENSE",
+    "VERSION",
+    ".agent-skills.example.yml",
+    ".env.example",
+    ".jira-config.example.yml",
+    ".github/markdown-link-check.json",
+    ".github/workflows/ci.yml",
+    "docs/README.md",
+    "docs/quickstart.md",
+    "docs/known-limitations.md",
+    "docs/versioning.md",
+    "docs/validation.md",
+    "docs/skill-quality-scorecard.md",
+    "docs/release-checklist.md",
+    "scripts/validate-repo.py",
+    "scripts/validate_skills.py",
+    "skills/software-engineer/SKILL.md",
+    "skills/software-engineer/README.md",
+    "skills/software-engineer/skills/issue-investigator/SKILL.md",
+    "skills/software-engineer/skills/code-reviewer/SKILL.md",
+    "skills/product-owner/SKILL.md",
+    "skills/product-owner/README.md",
+    "skills/manual-tester/SKILL.md",
+    "skills/manual-tester/README.md",
+    "skills/test-automation-engineer/SKILL.md",
+    "skills/test-automation-engineer/README.md",
+    "evals/issue-investigator-bug-root-cause.md",
+    "evals/code-reviewer-issue-aware-review.md",
+    "evals/software-engineer-bugfix-flow.md",
+    "evals/product-owner-story-refinement.md",
+    "evals/manual-tester-defect-report.md",
+    "evals/test-automation-engineer-flaky-test-review.md",
+    "evals/multi-skill-bug-to-regression-flow.md",
+]
+
+REQUIRED_SKILL_SECTIONS = [
+    "Purpose",
+    "When To Use",
+    "Related And Reused Skills",
+    "Required Inputs",
+    "Required Workflow",
+    "Expected Output Contract",
+    "Quality Standards",
+    "Guardrails",
+    "Example Prompts",
+]
+
+LINK_REQUIREMENTS = {
+    "skills/software-engineer/SKILL.md": [
+        "skills/software-engineer/skills/issue-investigator/SKILL.md",
+        "skills/software-engineer/skills/code-reviewer/SKILL.md",
+    ],
+    "skills/manual-tester/SKILL.md": [
+        "skills/software-engineer/SKILL.md",
+        "skills/product-owner/SKILL.md",
+        "skills/test-automation-engineer/SKILL.md",
+    ],
+    "skills/test-automation-engineer/SKILL.md": [
+        "skills/software-engineer/SKILL.md",
+        "skills/manual-tester/SKILL.md",
+        "skills/product-owner/SKILL.md",
+    ],
+    "skills/product-owner/SKILL.md": [
+        "skills/software-engineer/SKILL.md",
+        "skills/manual-tester/SKILL.md",
+        "skills/test-automation-engineer/SKILL.md",
+        "skills/software-engineer/skills/issue-investigator/SKILL.md",
+    ],
+}
+
+TEXT_SUFFIXES = {".md", ".py", ".yml", ".yaml", ".json", ".example", ".init", ".txt"}
+TEXT_NAMES = {"VERSION", "LICENSE", "setup.init", ".gitignore"}
+SKIP_DIRS = {
+    ".git",
+    ".venv",
+    "venv",
+    "env",
+    "node_modules",
+    "dist",
+    "build",
+    "coverage",
+    ".cache",
+    ".mypy_cache",
+    ".pytest_cache",
+    ".ruff_cache",
+    "__pycache__",
+}
+GENERATED_NAMES = {
+    ".DS_Store",
+    "Thumbs.db",
+    ".venv",
+    "venv",
+    "__pycache__",
+    ".pytest_cache",
+    ".mypy_cache",
+    ".ruff_cache",
+    "node_modules",
+    "dist",
+    "build",
+    "coverage",
+    ".cache",
+    ".skills-cache",
+}
+FORBIDDEN_TRACKED = GENERATED_NAMES | {".env", ".env.local", ".jira-config.yml", ".skills"}
+ALLOWED_HOSTS = {
+    "agentskills.io",
+    "code.visualstudio.com",
+    "skills.sh",
+    "github.com",
+    "docs.github.com",
+    "example.com",
+    "example.org",
+    "example.net",
+    "localhost",
+}
+PLACEHOLDER_TICKET_PREFIXES = {"ABC", "DEMO", "EXAMPLE", "PROJ", "SHA", "TEST"}
+
+
+@dataclass
+class Result:
+    errors: list[str]
+    warnings: list[str]
+
+    def error(self, message: str) -> None:
+        self.errors.append(message)
+
+    def warn(self, message: str) -> None:
+        self.warnings.append(message)
+
+
+def rel(path: Path) -> str:
+    return path.relative_to(ROOT).as_posix()
+
+
+def read_text(path: Path) -> str:
+    return path.read_text(encoding="utf-8")
+
+
+def parse_frontmatter(text: str) -> dict[str, object] | None:
+    if not text.startswith("---\n"):
+        return None
+    end = text.find("\n---", 4)
+    if end == -1:
+        return None
+    return _hand_parse(text[4:end])
+
+
+def _strip_quotes(value: str) -> str:
+    if (value.startswith("'") and value.endswith("'")) or (
+        value.startswith('"') and value.endswith('"')
+    ):
+        return value[1:-1]
+    return value
+
+
+def _hand_parse(block: str) -> dict[str, object]:
+    result: dict[str, object] = {}
+    lines = block.splitlines()
+    index = 0
+
+    while index < len(lines):
+        raw = lines[index]
+        if not raw.strip() or raw.lstrip().startswith("#"):
+            index += 1
+            continue
+        if raw.startswith(" "):
+            index += 1
+            continue
+
+        key, separator, value = raw.partition(":")
+        if not separator:
+            index += 1
+            continue
+
+        key = key.strip()
+        value = value.strip()
+
+        if value in {">", ">-", "|", "|-"}:
+            index += 1
+            scalar_lines: list[str] = []
+            while index < len(lines) and (not lines[index].strip() or lines[index].startswith(" ")):
+                if lines[index].strip() and not lines[index].lstrip().startswith("#"):
+                    scalar_lines.append(lines[index].strip())
+                index += 1
+            result[key] = (
+                " ".join(scalar_lines).strip()
+                if value.startswith(">")
+                else "\n".join(scalar_lines).strip()
+            )
+            continue
+
+        if value == "":
+            index += 1
+            block_lines: list[str] = []
+            while index < len(lines) and (not lines[index].strip() or lines[index].startswith(" ")):
+                if lines[index].strip() and not lines[index].lstrip().startswith("#"):
+                    block_lines.append(lines[index].strip())
+                index += 1
+
+            if not block_lines:
+                result[key] = ""
+            elif all(":" in line and not line.startswith(("'", '"')) for line in block_lines):
+                nested: dict[str, str] = {}
+                for line in block_lines:
+                    nested_key, _, nested_value = line.partition(":")
+                    nested[nested_key.strip()] = _strip_quotes(nested_value.strip())
+                result[key] = nested
+            else:
+                result[key] = _strip_quotes(" ".join(block_lines).strip())
+            continue
+
+        result[key] = _strip_quotes(value)
+        index += 1
+
+    return result
+
+
+def strip_frontmatter(text: str) -> str:
+    if not text.startswith("---\n"):
+        return text
+    end = text.find("\n---", 4)
+    return text[end + 4 :] if end != -1 else text
+
+
+def normalize_heading(heading: str) -> str:
+    return re.sub(r"\s+", " ", heading.strip().lower())
+
+
+def markdown_files() -> list[Path]:
+    return sorted(path for path in ROOT.rglob("*.md") if not should_skip_path(path))
+
+
+def text_files() -> list[Path]:
+    files: list[Path] = []
+    for path in ROOT.rglob("*"):
+        if path.is_dir() or should_skip_path(path):
+            continue
+        if path.suffix in TEXT_SUFFIXES or path.name in TEXT_NAMES:
+            files.append(path)
+    return sorted(files)
+
+
+def should_skip_path(path: Path) -> bool:
+    return any(part in SKIP_DIRS for part in path.relative_to(ROOT).parts)
+
+
+def check_required_files(result: Result) -> None:
+    for required in REQUIRED_FILES:
+        if not (ROOT / required).exists():
+            result.error(f"missing required file: {required}")
+
+
+def check_markdown_structure(result: Result) -> None:
+    for path in markdown_files():
+        text = read_text(path)
+        body = strip_frontmatter(text)
+        line_count = len(text.splitlines())
+        if len(text) > 600 and line_count <= 2:
+            result.error(f"{rel(path)}: appears compressed into {line_count} giant line(s)")
+        for line_number, line in enumerate(text.splitlines(), start=1):
+            if len(line) > 1200:
+                result.error(f"{rel(path)}:{line_number}: line is too long ({len(line)} chars)")
+        if not re.search(r"^#{1,6}\s+\S", body, re.MULTILINE):
+            result.error(f"{rel(path)}: missing Markdown heading")
+        check_code_fences(path, text, result)
+        check_internal_links(path, text, result)
+
+
+def check_code_fences(path: Path, text: str, result: Result) -> None:
+    stack: list[tuple[str, int]] = []
+    for line_number, line in enumerate(text.splitlines(), start=1):
+        stripped = line.lstrip()
+        if stripped.startswith("```") or stripped.startswith("~~~"):
+            marker = stripped[:3]
+            if stack and stack[-1][0] == marker:
+                stack.pop()
+            else:
+                stack.append((marker, line_number))
+    if stack:
+        marker, line_number = stack[-1]
+        result.error(f"{rel(path)}:{line_number}: unbalanced code fence {marker}")
+
+
+INLINE_LINK_RE = re.compile(r"(?<!!)\[[^\]]+\]\(([^)]+)\)")
+REFERENCE_LINK_RE = re.compile(r"^\[[^\]]+\]:\s+(\S+)", re.MULTILINE)
+
+
+def markdown_link_targets(text: str) -> list[str]:
+    targets = [match.group(1).strip() for match in INLINE_LINK_RE.finditer(text)]
+    targets.extend(match.group(1).strip() for match in REFERENCE_LINK_RE.finditer(text))
+    return targets
+
+
+def is_external_or_anchor(target: str) -> bool:
+    parsed = urlparse(target)
+    return bool(parsed.scheme or parsed.netloc) or target.startswith("#")
+
+
+def resolve_markdown_target(path: Path, target: str) -> Path | None:
+    clean = target.strip("<>")
+    if is_external_or_anchor(clean):
+        return None
+    clean = clean.split("#", 1)[0]
+    if not clean:
+        return None
+    return (path.parent / unquote(clean)).resolve()
+
+
+def check_internal_links(path: Path, text: str, result: Result) -> None:
+    for target in markdown_link_targets(text):
+        resolved = resolve_markdown_target(path, target)
+        if resolved is None:
+            continue
+        try:
+            resolved.relative_to(ROOT)
+        except ValueError:
+            result.warn(f"{rel(path)}: relative link leaves repo: {target}")
+            continue
+        if not resolved.exists():
+            result.error(f"{rel(path)}: broken relative link: {target}")
+
+
+def check_skill_files(result: Result, repo_version: str) -> None:
+    skill_files = sorted(ROOT.glob("skills/**/SKILL.md"))
+    if not skill_files:
+        result.error("no SKILL.md files found under skills/")
+        return
+
+    for path in skill_files:
+        text = read_text(path)
+        fm = parse_frontmatter(text)
+        if fm is None:
+            result.error(f"{rel(path)}: missing or malformed YAML frontmatter")
+            continue
+
+        validate_frontmatter(path, fm, repo_version, result)
+        validate_skill_sections(path, text, result)
+
+
+def validate_frontmatter(path: Path, fm: dict[str, object], repo_version: str, result: Result) -> None:
+    name = fm.get("name")
+    if not isinstance(name, str) or not name:
+        result.error(f"{rel(path)}: frontmatter 'name' is required")
+    else:
+        if len(name) > 64 or not NAME_RE.match(name):
+            result.error(f"{rel(path)}: invalid skill name {name!r}")
+        if name != path.parent.name:
+            result.error(f"{rel(path)}: name {name!r} must match parent directory {path.parent.name!r}")
+
+    for field in ("description", "license", "compatibility"):
+        value = fm.get(field)
+        if not isinstance(value, str) or not value.strip():
+            result.error(f"{rel(path)}: frontmatter '{field}' is required and must be non-empty")
+
+    metadata = fm.get("metadata")
+    if not isinstance(metadata, dict):
+        result.error(f"{rel(path)}: frontmatter 'metadata' mapping is required")
+        return
+
+    for field in ("author", "version", "homepage"):
+        value = metadata.get(field)
+        if not isinstance(value, str) or not value.strip():
+            result.error(f"{rel(path)}: metadata.{field} is required and must be non-empty")
+
+    version = metadata.get("version")
+    if isinstance(version, str) and version != repo_version:
+        result.error(f"{rel(path)}: metadata.version {version!r} must match VERSION {repo_version!r}")
+
+
+def validate_skill_sections(path: Path, text: str, result: Result) -> None:
+    body = strip_frontmatter(text)
+    headings = {
+        normalize_heading(match.group(1))
+        for match in re.finditer(r"^##\s+(.+?)\s*$", body, re.MULTILINE)
+    }
+    for section in REQUIRED_SKILL_SECTIONS:
+        if normalize_heading(section) not in headings:
+            result.error(f"{rel(path)}: missing required section '## {section}'")
+
+
+def check_version_consistency(result: Result) -> str:
+    version_path = ROOT / "VERSION"
+    version = read_text(version_path).strip() if version_path.exists() else ""
+    if not version:
+        result.error("VERSION is empty")
+        return version
+    if not SEMVER_RE.match(version):
+        result.error(f"VERSION is not semver-shaped: {version!r}")
+
+    expected = os.environ.get("AGENT_SKILLS_EXPECTED_VERSION")
+    if expected and version != expected:
+        result.error(f"VERSION {version!r} does not match AGENT_SKILLS_EXPECTED_VERSION {expected!r}")
+
+    changelog = read_text(ROOT / "CHANGELOG.md") if (ROOT / "CHANGELOG.md").exists() else ""
+    if not re.search(r"^##\s+\[?Unreleased\]?\s*$", changelog, re.MULTILINE):
+        result.error("CHANGELOG.md is missing an Unreleased section")
+
+    readme = read_text(ROOT / "README.md") if (ROOT / "README.md").exists() else ""
+    if version and version not in readme:
+        result.warn(f"README.md does not mention current VERSION {version}")
+
+    return version
+
+
+def check_skill_link_consistency(result: Result) -> None:
+    for skill, required_targets in LINK_REQUIREMENTS.items():
+        path = ROOT / skill
+        if not path.exists():
+            continue
+        resolved_links = {
+            rel(resolved)
+            for target in markdown_link_targets(read_text(path))
+            if (resolved := resolve_markdown_target(path, target)) is not None and resolved.exists()
+        }
+        for required in required_targets:
+            if required not in resolved_links:
+                result.error(f"{skill}: missing required cross-skill link to {required}")
+
+
+def check_forbidden_content(result: Result) -> None:
+    secret_patterns = [
+        re.compile(r"\bAKIA[0-9A-Z]{16}\b"),
+        re.compile(r"\bgh[pousr]_[A-Za-z0-9_]{20,}\b"),
+        re.compile(r"-----BEGIN (?:RSA |EC |OPENSSH )?PRIVATE KEY-----"),
+        re.compile(
+            r"(?i)\b(?:api[_-]?key|token|secret|password)\b\s*[:=]\s*['\"]?[A-Za-z0-9_./+=-]{20,}"
+        ),
+    ]
+    private_path_re = re.compile(r"(?:/Users/[^\s)]+|/home/[^\s)]+|[A-Za-z]:\\\\Users\\\\[^\s)]+)")
+    email_re = re.compile(r"\b[A-Za-z0-9._%+-]+@([A-Za-z0-9.-]+\.[A-Za-z]{2,})\b")
+    ticket_re = re.compile(r"\b([A-Z][A-Z0-9]{1,9})-\d+\b")
+    url_host_re = re.compile(r"https?://([^/\s)]+)")
+    internal_host_re = re.compile(
+        r"(?<![A-Za-z0-9_.-])(?:[a-z0-9-]+\.)+[a-z0-9-]+\.(?:corp|internal|local)\b",
+        re.I,
+    )
+
+    for path in text_files():
+        text = read_text(path)
+        for line_number, line in enumerate(text.splitlines(), start=1):
+            if line.strip().startswith("#") and path.suffix != ".md":
+                continue
+            if "$" not in line and "<" not in line:
+                for pattern in secret_patterns:
+                    if pattern.search(line):
+                        result.error(f"{rel(path)}:{line_number}: possible committed secret or token")
+            if "private_path_re =" not in line and private_path_re.search(line):
+                result.error(f"{rel(path)}:{line_number}: private local absolute path detected")
+            for host in url_host_re.findall(line):
+                host = host.split(":", 1)[0].lower()
+                if not re.search(r"[a-z0-9]", host):
+                    continue
+                if not is_allowed_host(host):
+                    result.warn(f"{rel(path)}:{line_number}: review hardcoded hostname {host!r}")
+            if internal_host_re.search(line):
+                result.warn(f"{rel(path)}:{line_number}: possible private/internal hostname")
+            for match in email_re.finditer(line):
+                domain = match.group(1).lower()
+                if not (domain.startswith("example.") or domain in {"localhost"}):
+                    result.warn(f"{rel(path)}:{line_number}: possible real email/customer data")
+            if "ticket_re =" not in line:
+                for match in ticket_re.finditer(line):
+                    prefix = match.group(1)
+                    if prefix not in PLACEHOLDER_TICKET_PREFIXES:
+                        result.warn(f"{rel(path)}:{line_number}: review hardcoded ticket key {match.group(0)!r}")
+
+
+def is_allowed_host(host: str) -> bool:
+    if host in ALLOWED_HOSTS:
+        return True
+    return any(host.endswith(f".{allowed}") for allowed in ALLOWED_HOSTS)
+
+
+def git_ls_files() -> list[str]:
+    try:
+        completed = subprocess.run(
+            ["git", "ls-files"],
+            cwd=ROOT,
+            check=True,
+            stdout=subprocess.PIPE,
+            stderr=subprocess.PIPE,
+            text=True,
+        )
+    except (OSError, subprocess.CalledProcessError):
+        return []
+    return [line for line in completed.stdout.splitlines() if line]
+
+
+def is_git_ignored(path: Path) -> bool:
+    try:
+        subprocess.run(
+            ["git", "check-ignore", "-q", rel(path)],
+            cwd=ROOT,
+            check=True,
+            stdout=subprocess.DEVNULL,
+            stderr=subprocess.DEVNULL,
+        )
+    except (OSError, subprocess.CalledProcessError):
+        return False
+    return True
+
+
+def check_generated_files(result: Result) -> None:
+    for tracked in git_ls_files():
+        parts = Path(tracked).parts
+        if Path(tracked).name in FORBIDDEN_TRACKED or any(part in FORBIDDEN_TRACKED for part in parts):
+            result.error(f"generated/cache/private file is tracked: {tracked}")
+
+    for path in ROOT.iterdir():
+        if path.name in GENERATED_NAMES and not path.name.startswith(".git") and not is_git_ignored(path):
+            result.warn(f"local generated/cache file exists and should not be committed: {path.name}")
+
+
+def main() -> int:
+    result = Result(errors=[], warnings=[])
+    check_required_files(result)
+    repo_version = check_version_consistency(result)
+    check_markdown_structure(result)
+    check_skill_files(result, repo_version)
+    check_skill_link_consistency(result)
+    check_forbidden_content(result)
+    check_generated_files(result)
+
+    for warning in result.warnings:
+        print(f"WARN {warning}")
+    for error in result.errors:
+        print(f"FAIL {error}", file=sys.stderr)
+
+    if result.errors:
+        print(
+            f"\n{len(result.errors)} validation failure(s), {len(result.warnings)} warning(s)",
+            file=sys.stderr,
+        )
+        return 1
+
+    print(f"ok: repository validation passed with {len(result.warnings)} warning(s)")
+    return 0
+
+
+if __name__ == "__main__":
+    sys.exit(main())

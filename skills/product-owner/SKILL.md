@@ -15,7 +15,7 @@ compatibility:
   docs/execution-modes.md.
 metadata:
   author: wamalalawrence
-  version: "0.7.0"
+  version: "0.8.0"
   homepage: "https://github.com/wamalalawrence/agent-skills"
 ---
 
@@ -173,9 +173,11 @@ Stop and return refinement questions instead of Jira-ready output when:
 Do not produce the Jira-ready output in step 7 until all of these are true:
 
 - Goal, target users, and business value are stated.
-- For bug-flavored input: the
+- For bug-flavored input that is being refined into fix-ready work: the
   [`issue-investigator`](../software-engineer/skills/issue-investigator/SKILL.md) result is attached
-  and root-cause status is `suspected` or `confirmed`. Read it from the shared cache at
+  and root-cause status is `suspected` or `confirmed`. If root cause is still `unknown`, frame the
+  output as an investigation/discovery item instead of a fix-ready story. Read it from the shared
+  cache at
   `${AGENT_SKILLS_CACHE_DIR:-${WORKSPACE_ROOT:-$REPO_ROOT}/.cache/agent-skills}/<issue-key>/evidence-pack.yml`
   per the [evidence-pack schema](../software-engineer/references/evidence-pack.md), and write the
   refined `acceptance_criteria` back to the same file. The cache root resolves to the workspace root
@@ -241,6 +243,17 @@ them.
 - Automation notes:
 ```
 
+## Behavior Checklist
+
+- [ ] Goal, users/stakeholders, value, scope, and open questions are visible.
+- [ ] Bug-flavored input is routed through `issue-investigator` before fix-ready acceptance
+  criteria are finalized.
+- [ ] Acceptance criteria are observable, testable, and include at least one negative criterion when
+  final output is produced.
+- [ ] Feasibility, manual testing, and automation concerns are handed to the relevant skills instead
+  of invented.
+- [ ] Assumptions remain labeled and unresolved decisions are not hidden as requirements.
+
 ## Quality Standards
 
 - Acceptance criteria must be independently testable.
@@ -268,7 +281,7 @@ them.
 ## Example Prompts
 
 - "Refine this rough feature idea into a Jira-ready story with acceptance criteria."
-- "Turn this support complaint into a bug report and clarify expected behavior."
+- "Route this support complaint through investigation, then refine the expected behavior."
 - "Review these acceptance criteria for gaps before engineering starts."
 - "Split this large request into smaller stories and call out dependencies."
 - "Prepare a handoff for engineering, manual testing, and automation from this product brief."

@@ -10,6 +10,8 @@
 .skills
 .cache/
 .skills-cache/
+.venv/
+venv/
 
 # OS / editor noise
 .DS_Store

@@ -15,7 +15,7 @@ compatibility:
   docs/execution-modes.md.
 metadata:
   author: wamalalawrence
-  version: "0.7.0"
+  version: "0.8.0"
   homepage: "https://github.com/wamalalawrence/agent-skills"
 ---
 
@@ -163,10 +163,11 @@ Stop and recommend clarification or manual coverage instead of automation when:
   with the `test-quality` profile on the new or modified test files.** Test code is production code;
   selector instability, fixed sleeps, ordering coupling, and weak assertions cause the next three
   incidents.
-- For new e2e or integration tests, run them with a **flake budget**: at least 20 repeat executions
-  in CI before merging (e.g., `--repeat-each=20`, `pytest --count=20`,
-  `mvn -Dsurefire.rerunFailingTestsCount=0` with a repeat plugin). Any failure must be fixed or
-  quarantined with a linked follow-up ticket — silent quarantine is forbidden.
+- For new high-risk e2e or integration tests, define a **flake budget** before merging. The default
+  target is at least 20 repeat executions when CI and tooling support it (e.g., `--repeat-each=20`,
+  `pytest --count=20`, or a repeat plugin). If repeat execution is not available, state the lower
+  confidence, run the strongest feasible stability check, and leave visible follow-up. Any failure
+  must be fixed or quarantined with a linked follow-up issue — silent quarantine is forbidden.
 - For regression tests that originated from an
   [`issue-investigator`](../software-engineer/skills/issue-investigator/SKILL.md) reproduction
   recipe, read
@@ -212,6 +213,15 @@ Use the smallest useful format for the request, preserving these fields for norm
 - Remaining manual coverage:
 - Follow-up work:
 ```
+
+## Behavior Checklist
+
+- [ ] Scenario value, repeatability, observability, and stability are established before automation
+  is recommended.
+- [ ] Test level is justified by confidence, speed, failure clarity, and existing repo conventions.
+- [ ] Data setup, selectors/contracts, waits, cleanup, and debug artifacts are deterministic.
+- [ ] CI command, artifacts, flake budget, and limits are stated without claiming unrun checks.
+- [ ] Manual/product/investigation gaps are handed back to the right skill instead of automated.
 
 ## Quality Standards
 

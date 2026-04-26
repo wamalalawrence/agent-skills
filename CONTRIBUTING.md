@@ -38,7 +38,7 @@ If you still want to send a small focused improvement, the rules below are the b
    file. Use `${ENV_VAR}` references and add the variable to [`.env.example`](./.env.example).
 2. **Skills compose, they do not duplicate.** Reference another skill by relative path; do not copy
    its content.
-3. **Run `python3 scripts/validate_skills.py`** locally — it must pass.
+3. **Run `python3 scripts/validate-repo.py`** locally — it must pass.
 4. **Update `CHANGELOG.md`** under `## Unreleased` if your change affects public behavior,
    structure, setup, or skill invocation.
 5. **No new dependencies, no new install steps, no new required env vars** without prior issue
@@ -49,7 +49,7 @@ If you still want to send a small focused improvement, the rules below are the b
 Before opening a PR:
 
 ```bash
-python3 scripts/validate_skills.py                # must pass
+python3 scripts/validate-repo.py                  # must pass
 ./setup.init --yes --no-jira --workspace-root $(mktemp -d)  # if you touched setup
 grep -RE "(https?://[^$]|github\.com/[^$]|@[A-Za-z0-9._%+-]+\.[A-Za-z]{2,})" skills/  # no leaked URLs/handles in skills/
 ```

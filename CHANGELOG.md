@@ -4,6 +4,52 @@ All notable project changes should be recorded here.
 
 ## Unreleased
 
+### Added
+
+- **`scripts/validate-repo.py`** for repository-wide validation of required files, Markdown
+  structure, balanced code fences, internal relative links, skill frontmatter, required skill
+  sections, version consistency, cross-skill links, forbidden public-safety content, and tracked
+  generated/cache files.
+- **`docs/validation.md`** explaining what validation checks, what it does not check, how to run it,
+  and how to interpret warnings vs failures.
+- **`evals/`** with lightweight manual scenarios for `issue-investigator`, `code-reviewer`,
+  `software-engineer`, `product-owner`, `manual-tester`, `test-automation-engineer`, and a
+  multi-skill bug-to-regression workflow.
+- **`docs/skill-quality-scorecard.md`** with a simple `0` to `3` maintainer scoring aid for skill
+  outputs across context awareness, evidence discipline, handoffs, output completeness,
+  hallucination avoidance, validation realism, risk awareness, stopping behavior, and portability.
+- **`docs/skill-performance-review.md`** recording the v0.8.0 manual review findings and the
+  workflow checks for bug fix, feature delivery, and PR review paths.
+- **`docs/release-checklist.md`** covering validation, README rendering, skill links, changelog and
+  version updates, examples/evals, secrets/private-reference review, GitHub release notes, tags, and
+  funding-link rendering.
+
+### Changed
+
+- Updated CI to run the broader repository validator instead of only skill frontmatter checks.
+- Kept `scripts/validate_skills.py` as a backward-compatible wrapper around the repository
+  validator.
+- Added behavior checklists to all six skills so expected behavior can be reviewed independently of
+  the longer workflows.
+- Bumped `VERSION`, README status, and all skill metadata versions to `0.8.0`.
+- Generalized `software-engineer` issue-source wording so non-Jira issue sources and supplied task
+  briefs are handled without implying a private workflow.
+- Clarified `product-owner` behavior for bug-flavored input: unknown-root-cause work should become
+  investigation/discovery, not a fix-ready story.
+- Aligned `issue-investigator` and `code-reviewer` execution-mode detection with
+  `AGENT_SKILLS_MODE`.
+- Softened the `test-automation-engineer` flake-budget rule into a default target with a disclosed
+  fallback when CI/tooling cannot support repeat execution.
+
+### Guardrails
+
+- Validation now fails on likely committed secrets, private absolute paths, missing required skill
+  structure, malformed metadata, broken relative links, and version mismatches.
+- Validation warns on suspicious hostnames, possible real email/customer data, hardcoded ticket
+  keys, README/version drift, and local generated/cache files that lack ignore coverage.
+- Documentation explicitly states that validation and scorecards do not guarantee AI model
+  correctness.
+
 ## 0.7.0 - Skill Output Contracts, Examples, and Operational Behavior Hardening
 
 ### Added
