@@ -15,7 +15,7 @@ compatibility:
   docs/execution-modes.md.
 metadata:
   author: wamalalawrence
-  version: "0.7.0"
+  version: "0.8.0"
   homepage: "https://github.com/wamalalawrence/agent-skills"
 ---
 
@@ -218,6 +218,16 @@ execution reports.
 - Why it is worth automating:
 - Suggested level: API | integration | UI/e2e | other
 ```
+
+## Behavior Checklist
+
+- [ ] Intended behavior, acceptance criteria, scope, environment, build/version/commit, user role,
+  and test data are known or marked as blocking/unknown.
+- [ ] Scenarios map to acceptance criteria, user workflows, explicit risks, or exploratory charters.
+- [ ] Defects include expected vs actual behavior, reproduction context, evidence, severity, and
+  retest guidance.
+- [ ] Reproducible defects are handed to `issue-investigator` for root-cause analysis.
+- [ ] Automation candidates are stable, valuable, repeatable, and safe to automate.
 
 ## Quality Standards
 

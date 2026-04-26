@@ -4,12 +4,13 @@ Reusable [Agent Skills](https://agentskills.io/) for software-engineering work �
 role-shaped workflows your AI assistant can load on demand so the same model produces
 senior-engineer, product-owner, tester, or reviewer output instead of generic answers.
 
-> **Status:** `0.7.0` — pre-1.0. Core skill set is shipped and stable enough for public use;
+> **Status:** `0.8.0` — pre-1.0. Core skill set is shipped and stable enough for public use;
 > interfaces may still evolve.
 
 New here? Start with the [quickstart](docs/quickstart.md), then read
 [starter prompts](docs/starter-prompts.md), [examples](docs/examples/README.md),
-[known limitations](docs/known-limitations.md), and the [versioning policy](docs/versioning.md).
+[validation](docs/validation.md), [known limitations](docs/known-limitations.md), and the
+[versioning policy](docs/versioning.md).
 
 ## Why Skills
 
@@ -100,6 +101,10 @@ usage shows they are useful independently.
 - [Using with your AI assistant](docs/assistants.md)
 - [Starter prompts](docs/starter-prompts.md)
 - [Examples](docs/examples/README.md)
+- [Validation](docs/validation.md)
+- [Skill quality scorecard](docs/skill-quality-scorecard.md)
+- [Skill performance review](docs/skill-performance-review.md)
+- [Release checklist](docs/release-checklist.md)
 - [Skill boundaries](docs/skill-boundaries.md)
 - [Severity and confidence definitions](docs/severity-and-confidence.md)
 - [Known limitations](docs/known-limitations.md)

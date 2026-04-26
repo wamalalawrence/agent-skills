@@ -15,7 +15,7 @@ compatibility:
   docs/execution-modes.md.
 metadata:
   author: wamalalawrence
-  version: "0.7.0"
+  version: "0.8.0"
   homepage: "https://github.com/wamalalawrence/agent-skills"
 argument-hint: "optional: mode inner|outer, base branch, issue key/URL, PR URL, or task description"
 user-invocable: true
@@ -110,6 +110,7 @@ Stop and return `final verdict: NEEDS_CONTEXT` or `NOT_REVIEWABLE` when:
 Run this setup preflight before reviewing.
 
 **Detect execution mode** ([docs/execution-modes.md](../../../../docs/execution-modes.md)): if
+`AGENT_SKILLS_MODE` is set to `local-workspace` or `in-repo`, use it; else if
 `${WORKSPACE_ROOT}/.env` is present → `local-workspace`; else if `.agent-skills.yml` exists at the
 repo root → `in-repo`; else stop.
 
@@ -342,6 +343,17 @@ previously-fixed defect. If the rebuttal surfaces a credible risk, downgrade the
 
 If no findings are found, say so explicitly and list any review limits, skipped files, missing issue
 context, or tests not verified.
+
+## Behavior Checklist
+
+- [ ] Review target, base, changed files, review mode, and issue-awareness level are resolved or the
+  verdict is `NEEDS_CONTEXT` / `NOT_REVIEWABLE`.
+- [ ] Issue/ticket alignment is checked before generic engineering quality when context exists.
+- [ ] Findings include severity, evidence, impact, suggested fix, confidence, and blocking/advisory
+  decision.
+- [ ] Missing evidence, skipped files, unverified tests, and review limits are disclosed.
+- [ ] Final verdict uses only `PASS`, `PASS_WITH_NOTES`, `REQUEST_CHANGES`, `NEEDS_CONTEXT`, or
+  `NOT_REVIEWABLE`.
 
 ## Quality Standards
 
