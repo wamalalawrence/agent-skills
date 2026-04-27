@@ -16,7 +16,7 @@ compatibility: >-
   .agent-skills.yml). See docs/execution-modes.md.
 metadata:
   author: wamalalawrence
-  version: "0.13.0"
+  version: "0.14.0"
   homepage: "https://github.com/wamalalawrence/agent-skills"
 ---
 
@@ -127,6 +127,12 @@ Stop and recommend clarification or manual coverage instead of automation when:
 
 - Follow [`software-engineer`](../software-engineer/SKILL.md) for repository conventions, build
   commands, code quality, architecture, test naming, fixtures, and validation.
+- **Read the repository `README.md`, `CONTRIBUTING.md`, and the per-module `README.md` of any
+  module whose tests you will add or change.** They typically document the supported test runner,
+  required services (Docker / Testcontainers / fixture generators), profile flags, environment
+  variables, and conventions like "all DB tests live under `*-it/` and run with `mvn verify
+  -P integration`". Designing automation without these almost always produces tests that pass
+  locally and break in CI (or vice-versa).
 - Read existing tests before proposing new patterns.
 - Keep automation code as maintainable as production code: clear names, small helpers, deterministic
   setup, and focused assertions.

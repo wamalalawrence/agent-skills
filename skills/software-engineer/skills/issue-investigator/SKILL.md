@@ -17,7 +17,7 @@ compatibility: >-
   docs/execution-modes.md.
 metadata:
   author: wamalalawrence
-  version: "0.13.0"
+  version: "0.14.0"
   homepage: "https://github.com/wamalalawrence/agent-skills"
 argument-hint: >-
   issue URL/key, bug report, incident, support ticket, feature request, or task
@@ -207,6 +207,13 @@ Classify the most likely type, and explain the evidence:
 
 ### 4. Investigate evidence
 
+- **Read project documentation before guessing.** Start with the repository `README.md`,
+  `CONTRIBUTING.md`, any `docs/` index, and the **per-module `README.md`** of each module
+  involved in the report. They commonly document expected setup, runtime versions, required
+  services, supported configurations, and known constraints — facts that change classification
+  ("env issue" vs "bug") and prevent investigations from labelling a documented-but-unmet
+  prerequisite as a defect. For build/test failures specifically, read the affected module's
+  README before treating the failure as the root cause.
 - Inspect relevant code paths, configuration, data, logs, CI output, deployment history, feature
   flags, and environment-specific behavior where available.
 - Prefer the actual affected environment when access and safety allow; operate read-only unless

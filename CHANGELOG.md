@@ -6,6 +6,79 @@ All notable project changes should be recorded here.
 
 - No unreleased changes.
 
+## 0.14.0 - Mandatory Project-Docs Discovery (README / CONTRIBUTING / Per-Module README)
+
+### Changed
+
+- `software-engineer/SKILL.md` Phase 1.2 ("Identify the project") now requires
+  reading the repository `README.md` and `CONTRIBUTING.md` (and any `docs/`
+  setup pages they link to) **before** falling back to the build manifest.
+  `${PROJECTS_JSON}` / `.agent-skills.yml` still own the canonical commands,
+  but the README is now treated as the source of truth for *prerequisites*
+  those commands silently assume (Docker services, fixture generators, env
+  vars, profile flags, generated sources, license keys).
+- `software-engineer/SKILL.md` Phase 1.2 adds an explicit checklist item for
+  **multi-module / nested-submodule repositories**: the agent must read each
+  affected module's own `README.md` before invoking that module's build or
+  tests. Module-level setup is frequently documented only at the module
+  level and is invisible from the parent README or the build manifest. This
+  is the most common cause of "tests fail before any change is made"
+  reports.
+- `software-engineer/SKILL.md` Phase 3.3 ("Build & format") gains two new
+  guardrails: a **pre-flight before invoking the test command** that
+  verifies README-documented setup has been performed, and a
+  **diagnose-before-blame rule** for failing tests on a clean tree (re-read
+  README/CONTRIBUTING, check `.github/workflows/` for the exact CI command
+  and `services:`/`env:` setup, scan output for missing-prereq signals
+  before reporting the suite as broken).
+- `issue-investigator/SKILL.md` Step 4 ("Investigate evidence") makes
+  project documentation a first-class evidence source: read repository and
+  per-module READMEs and `CONTRIBUTING.md` before guessing root cause.
+  Documented-but-unmet prerequisites are reclassified from "defect" to
+  "environment setup gap".
+- `manual-tester/SKILL.md` Step 1 ("Align on intended behavior") requires
+  reading repository / per-module READMEs before declaring the environment
+  blocked or test data missing — a documented prerequisite is a setup gap,
+  not a blocker on the change under test.
+- `test-automation-engineer/SKILL.md` Step 3 ("Reuse engineering context")
+  requires reading repository, `CONTRIBUTING.md`, and per-module READMEs of
+  any module whose tests will be added or changed, so automation matches the
+  documented test runner, services, profile flags, and conventions.
+- `software-engineer/references/architecture-patterns.md` "Discovering
+  project-specific conventions" now leads with README + CONTRIBUTING and
+  promotes per-module READMEs to a top-level step, with a short note on why
+  CI workflows are also required reading (`services:` / `env:` blocks that
+  local docs may omit).
+
+### Why
+
+Production-grade response to a real failure mode: an agent ran tests in a
+nested-submodule project, the tests failed because a module-specific test
+infrastructure step documented in the per-module README was not performed,
+and the agent reported "tests are broken" instead of completing setup. The
+README discovery instruction existed only as one line of narrative inside
+"Context discovery" and was not present as a hard checklist item in any
+phase, nor before the build/test command, nor in the sibling skills. After
+this release, the four affected skills (`software-engineer`,
+`issue-investigator`, `manual-tester`, `test-automation-engineer`) all
+treat repository and per-module documentation as required first-pass
+context, and `software-engineer` Phase 3.3 specifically forbids reporting
+test failure on a clean tree before the documentation ladder has been
+walked.
+
+### Not Changed (deliberate)
+
+- No new top-level or nested skills.
+- No skill renames or contract changes; evidence-pack and definition-of-done
+  schemas are unchanged.
+- `code-reviewer` is intentionally not modified — the reviewer consumes the
+  engineer's evidence pack and inherits the new discovery discipline through
+  the engineer↔reviewer hard handoff contract that was introduced earlier.
+- No new environment variables, no `setup.init` changes, no `.env.example`
+  changes, no CI changes — pure SKILL content sharpening.
+- `VERSION` and all six `SKILL.md` `metadata.version` values bumped to
+  `0.14.0`.
+
 ## 0.13.0 - Investigator Environment Access, Sonar In Setup, Connectivity Check, Reviewer-Model Clarity
 
 ### Added

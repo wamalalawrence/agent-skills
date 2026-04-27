@@ -17,7 +17,7 @@ compatibility: >-
   .agent-skills.yml). See docs/execution-modes.md.
 metadata:
   author: wamalalawrence
-  version: "0.13.0"
+  version: "0.14.0"
   homepage: "https://github.com/wamalalawrence/agent-skills"
 ---
 
@@ -180,9 +180,15 @@ step 4 is reached, stop and ask the user.
 2. **Issue source** — Use a Jira ticket when one is supplied or derivable from the branch name.
   Otherwise use the user's description as the issue brief. For Jira, fetch `jira issue view <KEY>
   --comments 100` and follow parent / child / linked issues and any linked Confluence pages.
-3. **Codebase** — Read the project's `README.md`, build manifest (`pom.xml` / `package.json` /
-  `pyproject.toml` / equivalent), `.github/workflows/`, recent commits touching the affected area, and
-  the tests around it. The CI workflow is the source of truth for "passing".
+3. **Codebase** — Read the project's `README.md` and `CONTRIBUTING.md` (if present) **before**
+  reading source files. They are the single most reliable place to learn how to build, run, and test
+  the project, what runtime/services it expects, and what conventions it enforces. For multi-module
+  or nested-submodule projects, also read the **per-module `README.md`** of each affected module
+  before running its build or tests — module-level setup (database fixtures, Testcontainers,
+  generators, env vars, Make targets, profile flags) is frequently documented only there. Then read
+  the build manifest (`pom.xml` / `package.json` / `pyproject.toml` / `go.mod` / `Cargo.toml` /
+  equivalent), `.github/workflows/`, recent commits touching the affected area, and the tests around
+  it. The CI workflow is the source of truth for "passing".
 4. **The user** — If after the previous three steps the change is still ambiguous, **stop and ask**
   with a focused list of what you need (acceptance criteria, sample inputs, expected vs actual,
   related ticket, etc.). Never invent context.
@@ -279,9 +285,23 @@ Use the locally installed CLI first, fall back to direct REST only when the CLI 
 
 - [ ] Determine which repository (or repositories) under `${WORKSPACE_ROOT}` are affected. Match the
   cwd against `${PROJECTS_JSON}` to find the entry.
+- [ ] **Read the repository's `README.md` and `CONTRIBUTING.md` (if present) first.** Skim both for
+  build, test, runtime, services, env vars, and contribution rules. `${PROJECTS_JSON}` /
+  `.agent-skills.yml` provide the canonical commands, but the README is the source of truth for
+  *prerequisites* (Docker services, seed data, generated code, license keys, secrets, profile
+  flags) that those commands silently assume. Skipping this step is the most common cause of
+  "tests fail before any change" reports.
+- [ ] **For multi-module / nested-submodule repositories, read the per-module `README.md` of each
+  affected module** before running its build or tests. Module-level setup (Testcontainers, fixture
+  generators, env vars, Make targets, `--profile` flags) is frequently documented only at the
+  module level and is invisible from the parent README or the build manifest.
+- [ ] Note any `docs/` index, `Makefile` / `justfile` targets, `scripts/` directory, or
+  `.tool-versions` / `.nvmrc` / `.python-version` / `.sdkmanrc` files surfaced by the README and
+  follow them. If the README links to additional setup pages, read those before invoking commands
+  that depend on them.
 - [ ] From the matched entry use `stack`, `runtime_version`, `base_branch`, `build`, and `format`
   for the rest of the workflow. If the entry is missing keys, fall back to reading the project's build
-  manifest (`pom.xml`, `package.json`, `pyproject.toml`, etc.).
+  manifest (`pom.xml`, `package.json`, `pyproject.toml`, etc.) AFTER the README pass above.
 - [ ] Switch the active runtime (`${JDK_MANAGER}` / `${NODE_MANAGER}` / `${PYTHON_MANAGER}`) to the
   project's `runtime_version` before building.
 - [ ] If a change spans multiple projects from `${PROJECTS_JSON}`, treat each project's stack and
@@ -502,8 +522,23 @@ Quickly verify by category:
 - [ ] Treat formatter configuration as all-or-nothing — do not fight the formatter with personal
   style tweaks.
 - [ ] Avoid wildcard imports.
+- [ ] **Pre-flight before running tests:** confirm the test setup steps documented in the project /
+  per-module `README.md` (and `CONTRIBUTING.md` if present) have been performed — Docker services
+  started, fixture generators run, environment variables exported, generated sources built,
+  required profiles selected. If you skipped Phase 1.2's README pass, do it now before invoking
+  the build command. Do not run tests against a half-configured environment and then report
+  failures; run them against the configuration the README expects.
 - [ ] Run the project's `build` command from `${PROJECTS_JSON}` (typical examples:
   `mvn clean verify`, `npm test`, `pytest`). All tests must pass.
+- [ ] **Diagnose-before-blame rule for failing tests on a clean tree.** If tests fail and you
+  have made no production-code changes (or only changes that cannot plausibly explain the failure),
+  do not report "tests are broken" or "blocked" yet. First re-read the project / per-module
+  `README.md` and `CONTRIBUTING.md` for required setup, then check `.github/workflows/` for the
+  exact command CI runs and any `services:` / `env:` / setup steps it relies on, then check the
+  test output for missing-prereq signals (connection refused, missing env var, missing fixture,
+  missing generated source, wrong runtime version). Only after that ladder still leaves the
+  failures unexplained is the suite legitimately broken — say so explicitly and cite which
+  documented prerequisite, if any, was unverifiable.
 - [ ] Investigate any new build warnings.
 
 ### 3.4 Dependency security (where configured)
