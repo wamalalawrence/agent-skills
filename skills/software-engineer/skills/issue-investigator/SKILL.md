@@ -17,7 +17,7 @@ compatibility: >-
   docs/execution-modes.md.
 metadata:
   author: wamalalawrence
-  version: "0.12.0"
+  version: "0.13.0"
   homepage: "https://github.com/wamalalawrence/agent-skills"
 argument-hint: >-
   issue URL/key, bug report, incident, support ticket, feature request, or task
@@ -147,6 +147,13 @@ Required setup variables:
   summaries; default
   `${AGENT_SKILLS_CACHE_DIR:-${WORKSPACE_ROOT:-$REPO_ROOT}/.cache/issue-investigator}`.
 - `ISSUE_INVESTIGATOR_CACHE_TTL_HOURS` — optional cache TTL; default `24`.
+- `ENVIRONMENTS_JSON` — optional JSON array of deployed-environment pointers
+  (name, type, access, ssh_target, kubectl_context, namespace, log_paths,
+  log_aggregator, notes). Stores POINTERS ONLY — never credentials. When
+  present, the investigator uses these handles for the read-only environment
+  evidence channel described in [Environment evidence
+  access](#environment-evidence-access). When absent, the investigator falls
+  back to asking the user where the affected environment lives.
 
 For GitHub issues, prefer the authenticated `gh` CLI when available. Do not require new secrets in
 this public skill unless the user's environment already uses them.
@@ -233,6 +240,58 @@ per the [evidence-pack & repro-recipe schema](../../references/evidence-pack.md)
 to [`software-engineer`](../../SKILL.md) and
 [`test-automation-engineer`](../../../test-automation-engineer/SKILL.md) so it can become the
 failing regression test before any fix is written.
+
+#### Environment evidence access
+
+The single most useful piece of evidence for many production and regression issues is a log line,
+metric, or deployed-config value from the environment where the issue actually occurred. Local
+repros are useful but they cannot prove root cause when the trigger is environment-specific (RBAC
+rules, feature flags, secrets, network policy, data shape, traffic volume, deploy timing).
+
+When `ENVIRONMENTS_JSON` is configured, treat its entries as the **first-class evidence channel**
+for the affected environment. For each entry the investigator may use:
+
+- `access: ssh` — read-only shell evidence: `tail`, `grep`, `journalctl --since`, `zgrep` over
+  `log_paths`, `cat` of deployed config files, `systemctl status <unit>`, `ps`, `ss -tlnp`, `df`,
+  `free`, `uptime`, `dmesg | tail`. Never `>`, `>>`, `tee`, `kill`, `systemctl restart`,
+  `iptables`, `rm`, `mv`, package installs, `sudo` mutations, or anything that touches state.
+- `access: kubectl` — read-only k8s evidence: `kubectl --context <kubectl_context> -n <namespace>`
+  with `get`, `describe`, `logs`, `top`, `events`, `get pod -o yaml`, `get configmap -o yaml`,
+  `get secret <name>` (metadata only — do not exfiltrate values). Never `apply`, `patch`,
+  `delete`, `exec` into a writable shell, `port-forward` to a write endpoint, `scale`, `rollout
+  restart`, or any imperative mutation.
+- `access: log-aggregator` — a read-only saved search or query string against the URL in
+  `log_aggregator` (Splunk, ELK/Kibana, Datadog, CloudWatch Logs Insights, Grafana Loki).
+  Bound every query with a time window and a service/host filter; never propose an unbounded
+  scan over a multi-day window.
+- `access: cloud-console` — propose the exact navigation path ("AWS Console → CloudWatch → Log
+  groups → `/aws/lambda/<function>` → last 1h") so the user can read it themselves.
+- `access: none` — do not attempt access. Describe what evidence would help and what access
+  would unblock it.
+
+**Production guardrails (`type: prod`).** For any environment whose `type` is `prod`, the default
+behaviour is *propose, do not run*: print the exact read-only command and ask the user to run it
+and paste back the output. The agent runs the command itself only when the user has explicitly
+authorized it for that investigation, the command is read-only by construction, and the entry's
+`notes` do not say otherwise (e.g. `agent-must-not-run-itself`, `ticket-required-for-prod`).
+
+**Credentials boundary.** `ENVIRONMENTS_JSON` stores pointers only. SSH keys live in `~/.ssh`,
+cluster credentials in kubeconfig, log-aggregator login in the user's session. The investigator
+must never propose copying private keys, tokens, or passwords into agent-skills files, prompts, or
+the evidence pack. If a command would expose a secret value (e.g. `kubectl get secret <name> -o
+yaml`), redact the value before persisting and prefer metadata-only inspection.
+
+**Evidence quoting.** When evidence comes from a real environment, capture: environment name and
+type, command actually run (or proposed and confirmed by the user), timestamp, the relevant log
+lines or query result *verbatim and bounded*, and any redactions applied. Persist to the evidence
+pack so downstream skills (software-engineer, code-reviewer, test-automation-engineer) can reuse
+the same proof without re-querying production.
+
+**When `ENVIRONMENTS_JSON` is absent.** Ask the user once which environment the issue occurred in
+and whether they have read-only access (own SSH, kubectl context, log-aggregator login). Do not
+invent hostnames, contexts, or log paths. If access is unavailable, fall back to [Safe read-only
+checks the user can run](#safe-read-only-checks-the-user-can-run) and clearly state that
+environment evidence is missing.
 
 #### Evidence-pack output
 
@@ -360,6 +419,7 @@ When recommending a code fix, provide implementation guidance and hand off to
 - Comments / linked docs:
 - Logs / screenshots / traces:
 - Code / config / data / CI / deployment evidence:
+- Environment evidence (env name, type, access method, command run or proposed, redactions):
 
 ## Reproduction Status
 
@@ -444,6 +504,13 @@ missing.
 - Do not propose a "safe check" that writes, deletes, deploys, flips a flag, busts a cache, or
   scans a production-scale table without a bounding clause. Read-only by construction or do not
   propose it.
+- Do not run any command against an environment whose `type` is `prod` in `ENVIRONMENTS_JSON`
+  without explicit per-investigation user approval; default to *propose, do not run*. The agent
+  may run commands itself only when the command is read-only by construction, the user has
+  authorized this investigation, and the entry's `notes` do not forbid it.
+- Do not copy SSH private keys, cluster credentials, API tokens, passwords, or any secret value
+  into agent-skills files, prompts, or the evidence pack. `ENVIRONMENTS_JSON` stores pointers
+  only; real credentials live in `~/.ssh`, kubeconfig, the user's log-aggregator session, etc.
 - Do not claim reproduction was attempted, tests were run, or root cause was confirmed unless the
   evidence shows it.
 - Do not hide uncertainty. Mark assumptions and missing evidence clearly.

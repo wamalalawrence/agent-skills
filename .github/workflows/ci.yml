@@ -52,6 +52,7 @@ jobs:
           MANAGED="$MANAGED|JIRA_LOGIN|JIRA_API_TOKEN|JIRA_PROJECT_KEYS|JIRA_KEY_REGEX"
           MANAGED="$MANAGED|CONFLUENCE_HOST|CONFLUENCE_LOGIN"
           MANAGED="$MANAGED|CONFLUENCE_API_TOKEN|CONFLUENCE_SPACE_KEYS"
+          MANAGED="$MANAGED|SONAR_HOST_URL|SONAR_TOKEN|ENVIRONMENTS_JSON"
           awk -v keys="$MANAGED" '
             BEGIN { inb = 0; bad = 0; pat = "^[[:space:]]*(export[[:space:]]+)?(" keys ")[[:space:]]*=" }
             /# >>> agent-skills setup\.init/ { inb = 1; next }

@@ -41,6 +41,9 @@ MANAGED_KEYS=(
   CONFLUENCE_LOGIN
   CONFLUENCE_API_TOKEN
   CONFLUENCE_SPACE_KEYS
+  SONAR_HOST_URL
+  SONAR_TOKEN
+  ENVIRONMENTS_JSON
 )
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
@@ -49,8 +52,11 @@ DEFAULT_WORKSPACE_ROOT="$(cd "${SCRIPT_DIR}/.." && pwd)"
 ASSUME_YES="false"
 JIRA_MODE="ask"
 CONFLUENCE_MODE="ask"
+SONAR_MODE="ask"
+ENVIRONMENTS_MODE="ask"
 SYMLINK_MODE="ask"
 VERIFY_MODE="false"
+CHECK_CONNECTIVITY="true"
 WORKSPACE_ROOT=""
 WORKSPACE_ROOT_EXPLICIT="false"
 
@@ -69,6 +75,15 @@ Options:
   --no-jira                Skip Jira setup
   --with-confluence        Prompt for Confluence host/login/token
   --no-confluence          Skip Confluence setup
+  --with-sonar             Prompt for SonarQube host/token
+  --no-sonar               Skip SonarQube setup
+  --with-environments      Prompt for deployed environment access pointers
+                           (read-only ssh/kubectl/log-aggregator targets used
+                           by the issue-investigator skill)
+  --no-environments        Skip environment-access pointers
+  --no-connectivity-check  Skip the optional curl reachability check on the
+                           Jira/Confluence/Sonar hosts (useful behind a VPN
+                           that blocks the host)
   --no-symlink             Do not create the .skills symlink
   --verify                 Check an existing setup and report problems
                            (no writes)
@@ -102,6 +117,11 @@ while [[ $# -gt 0 ]]; do
     --no-jira) JIRA_MODE="no"; shift ;;
     --with-confluence) CONFLUENCE_MODE="yes"; shift ;;
     --no-confluence) CONFLUENCE_MODE="no"; shift ;;
+    --with-sonar) SONAR_MODE="yes"; shift ;;
+    --no-sonar) SONAR_MODE="no"; shift ;;
+    --with-environments) ENVIRONMENTS_MODE="yes"; shift ;;
+    --no-environments) ENVIRONMENTS_MODE="no"; shift ;;
+    --no-connectivity-check) CHECK_CONNECTIVITY="false"; shift ;;
     --no-symlink) SYMLINK_MODE="no"; shift ;;
     --verify) VERIFY_MODE="true"; shift ;;
     --help|-h) usage; exit 0 ;;
@@ -392,6 +412,31 @@ json_escape() {
 
 shell_escape_double_quoted() {
   printf '%s' "$1" | sed 's/\\/\\\\/g; s/"/\\"/g; s/`/\\`/g; s/\$/\\$/g'
+}
+
+# ------------------------------------------------------------------------------
+# Connectivity check (warn-only)
+#
+# Probes a host with a HEAD request and a short timeout. ANY HTTP response
+# (including 401/403) counts as reachable, because credentials may not be
+# valid yet at setup time. Prints WARN lines but never fails the run; corp
+# VPNs / firewalls are a common false negative.
+# ------------------------------------------------------------------------------
+check_url_reachable() {
+  local label="$1"
+  local url="$2"
+  [[ -z "${url}" ]] && return 0
+  [[ "${CHECK_CONNECTIVITY}" == "true" ]] || return 0
+  command -v curl >/dev/null 2>&1 || return 0
+  local code=""
+  code="$(curl -ksS --head -m 5 -o /dev/null -w '%{http_code}' "${url}" 2>/dev/null || true)"
+  if [[ -z "${code}" || "${code}" == "000" ]]; then
+    echo "  WARN: ${label} (${url}) is not reachable from this network." >&2
+    echo "        This may be expected on VPN-only or air-gapped setups." >&2
+    echo "        Re-run with --no-connectivity-check to skip this probe." >&2
+    return 0
+  fi
+  echo "  ok    ${label} reachable (HTTP ${code})"
 }
 
 # ------------------------------------------------------------------------------
@@ -747,6 +792,10 @@ write_env_block() {
   local conf_token="${16}"
   local conf_spaces="${17}"
   local projects_json="${18}"
+  local use_sonar="${19}"
+  local sonar_host="${20}"
+  local sonar_token="${21}"
+  local environments_json="${22}"
   local block_file
   block_file="$(mktemp)"
 
@@ -788,6 +837,14 @@ write_env_block() {
       printf 'CONFLUENCE_API_TOKEN=""\n'
       printf 'CONFLUENCE_SPACE_KEYS=""\n'
     fi
+    if [[ "${use_sonar}" == "yes" ]]; then
+      printf 'SONAR_HOST_URL="%s"\n' "$(shell_escape_double_quoted "${sonar_host}")"
+      printf 'SONAR_TOKEN="%s"\n' "$(shell_escape_double_quoted "${sonar_token}")"
+    else
+      printf 'SONAR_HOST_URL=""\n'
+      printf 'SONAR_TOKEN=""\n'
+    fi
+    printf "ENVIRONMENTS_JSON='%s'\n" "${environments_json}"
     printf '%s\n' "${END_MARKER}"
   } > "${block_file}"
 
@@ -1013,6 +1070,29 @@ print("\n".join(missing))
     fi
   fi
 
+  if [[ -n "${SONAR_HOST_URL:-}" ]] && ! validate_url "${SONAR_HOST_URL}" >/dev/null 2>&1; then
+    echo "  WARN: SONAR_HOST_URL does not look like a URL" >&2
+  fi
+  if [[ -n "${SONAR_HOST_URL:-}" ]]; then
+    if [[ -z "${SONAR_TOKEN:-}" ]]; then
+      echo "  WARN: SONAR_HOST_URL set but SONAR_TOKEN is empty" >&2
+    else
+      echo "  ok    Sonar credentials present"
+    fi
+  fi
+
+  if [[ -n "${ENVIRONMENTS_JSON:-}" ]]; then
+    if validate_json_string "${ENVIRONMENTS_JSON}" >/dev/null 2>&1; then
+      echo "  ok    ENVIRONMENTS_JSON parses"
+    else
+      local rc=$?
+      if [[ "${rc}" != "127" ]]; then
+        echo "  FAIL: ENVIRONMENTS_JSON is not valid JSON" >&2
+        errors=$((errors + 1))
+      fi
+    fi
+  fi
+
   if [[ "${errors}" -gt 0 ]]; then
     echo "" >&2
     echo "Verification failed with ${errors} error(s)." >&2
@@ -1172,6 +1252,130 @@ EXAMPLES:
 EXAMPLE: ENG,ARCH,RUN")"
 fi
 
+# Sonar (optional)
+if [[ "${SONAR_MODE}" == "yes" ]]; then
+  USE_SONAR="yes"
+elif [[ "${SONAR_MODE}" == "no" ]]; then
+  USE_SONAR="no"
+elif confirm "Configure SonarQube / SonarCloud (optional, only if your CI publishes a Sonar report)" "no"; then
+  USE_SONAR="yes"
+else
+  USE_SONAR="no"
+fi
+
+SONAR_HOST_URL_VAL=""
+SONAR_TOKEN_VAL=""
+if [[ "${USE_SONAR}" == "yes" ]]; then
+  echo "" >&2
+  echo "SonarQube setup. Values are written to ${ENV_FILE} which is gitignored." >&2
+
+  SONAR_HOST_URL_VAL="$(prompt "Sonar host URL" "" \
+"OPTIONAL. Full URL with scheme.
+EXAMPLES:
+  https://sonarcloud.io        (SonarCloud)
+  https://sonar.example.com    (self-hosted SonarQube)" \
+    validate_url)"
+
+  echo "" >&2
+  echo "    Sonar user token. Stored ONLY in ${ENV_FILE} (gitignored)." >&2
+  SONAR_TOKEN_VAL="$(prompt_secret "Sonar user token (leave blank to skip)" "")"
+fi
+
+# Environment access pointers (optional)
+if [[ "${ENVIRONMENTS_MODE}" == "yes" ]]; then
+  USE_ENVS="yes"
+elif [[ "${ENVIRONMENTS_MODE}" == "no" ]]; then
+  USE_ENVS="no"
+elif confirm "Configure deployed-environment pointers for read-only investigation (recommended for production teams)" "no"; then
+  USE_ENVS="yes"
+else
+  USE_ENVS="no"
+fi
+
+ENVIRONMENTS_JSON_VAL='[]'
+if [[ "${USE_ENVS}" == "yes" ]]; then
+  echo "" >&2
+  echo "Environment-access setup." >&2
+  echo "  This stores POINTERS ONLY (env name, host, log paths, kubectl context)." >&2
+  echo "  Never put SSH private keys, passwords, or production credentials here." >&2
+  echo "  The investigator skill enforces read-only discipline (see SKILL.md)." >&2
+  echo "" >&2
+
+  envs_first=1
+  ENVIRONMENTS_JSON_VAL='['
+  while :; do
+    if [[ "${envs_first}" -eq 1 ]]; then
+      env_prompt="First environment name (e.g. qa, staging, prod-eu)"
+    else
+      env_prompt="Add another environment name (blank to finish)"
+    fi
+    env_name="$(prompt "${env_prompt}" "")"
+    [[ -z "${env_name}" ]] && break
+
+    env_type="$(prompt "  Type for ${env_name} (test|qa|staging|prod|other)" "qa" \
+"REQUIRED. Used by the investigator to apply prod-only guardrails.")"
+
+    env_access="$(prompt "  Access method (ssh|kubectl|log-aggregator|cloud-console|none)" "none" \
+"REQUIRED. 'none' means the agent will only describe what to look for.")"
+
+    env_ssh="" env_kctx="" env_ns="" env_logs="" env_logagg="" env_notes=""
+    case "${env_access}" in
+      ssh)
+        env_ssh="$(prompt "  SSH target (user@host or ~/.ssh/config alias)" "" \
+"OPTIONAL. Leave blank if you prefer to type it yourself each time.")"
+        env_logs="$(prompt "  Typical log paths (comma-separated)" "/var/log/app/*.log" \
+"OPTIONAL. Examples: /var/log/app/*.log, /var/log/syslog")"
+        ;;
+      kubectl)
+        env_kctx="$(prompt "  kubectl context name" "" \
+"OPTIONAL. The context as listed by 'kubectl config get-contexts'.")"
+        env_ns="$(prompt "  Default namespace" "default" \
+"OPTIONAL. The namespace the agent should default to.")"
+        ;;
+      log-aggregator)
+        env_logagg="$(prompt "  Log aggregator URL" "" \
+"OPTIONAL. URL to Splunk/ELK/Datadog/CloudWatch where logs live." validate_url)"
+        ;;
+    esac
+
+    env_notes="$(prompt "  Notes for the investigator (RBAC, jump host, approval rules)" "" \
+"OPTIONAL. The investigator reads this verbatim before suggesting commands.")"
+
+    [[ "${envs_first}" -eq 0 ]] && ENVIRONMENTS_JSON_VAL+=","
+    ENVIRONMENTS_JSON_VAL+="$(printf '{"name":"%s","type":"%s","access":"%s","ssh_target":"%s","kubectl_context":"%s","namespace":"%s","log_paths":"%s","log_aggregator":"%s","notes":"%s"}' \
+      "$(json_escape "${env_name}")" \
+      "$(json_escape "${env_type}")" \
+      "$(json_escape "${env_access}")" \
+      "$(json_escape "${env_ssh}")" \
+      "$(json_escape "${env_kctx}")" \
+      "$(json_escape "${env_ns}")" \
+      "$(json_escape "${env_logs}")" \
+      "$(json_escape "${env_logagg}")" \
+      "$(json_escape "${env_notes}")")"
+    envs_first=0
+
+    is_interactive || break
+  done
+  ENVIRONMENTS_JSON_VAL+=']'
+
+  if ! validate_json_string "${ENVIRONMENTS_JSON_VAL}"; then
+    rc=$?
+    if [[ "${rc}" != "127" ]]; then
+      echo "Internal error: generated ENVIRONMENTS_JSON is not valid JSON. Resetting to []." >&2
+      ENVIRONMENTS_JSON_VAL='[]'
+    fi
+  fi
+fi
+
+# Optional non-blocking connectivity probe.
+if [[ "${USE_JIRA}" == "yes" || "${USE_CONF}" == "yes" || "${USE_SONAR}" == "yes" ]]; then
+  echo ""
+  echo "Connectivity check (warn-only; --no-connectivity-check to skip):"
+  [[ "${USE_JIRA}" == "yes" ]] && check_url_reachable "Jira host"      "${JIRA_HOST}"
+  [[ "${USE_CONF}" == "yes" ]] && check_url_reachable "Confluence host" "${CONF_HOST}"
+  [[ "${USE_SONAR}" == "yes" ]] && check_url_reachable "Sonar host"    "${SONAR_HOST_URL_VAL}"
+fi
+
 # Now derive defaults that depend on Jira/Confluence answers.
 DEFAULT_ORG_NAME=""
 if [[ -n "${JIRA_HOST}" ]]; then
@@ -1245,7 +1449,11 @@ write_env_block \
   "${CONF_LOGIN}" \
   "${CONF_TOKEN}" \
   "${CONF_SPACES}" \
-  "${PROJECTS_JSON}"
+  "${PROJECTS_JSON}" \
+  "${USE_SONAR}" \
+  "${SONAR_HOST_URL_VAL}" \
+  "${SONAR_TOKEN_VAL}" \
+  "${ENVIRONMENTS_JSON_VAL}"
 
 JIRA_CREATED="false"
 if [[ "${USE_JIRA}" == "yes" ]]; then
@@ -1324,6 +1532,8 @@ Detected repos : ${DETECTED_COUNT} (under ${WORKSPACE_ROOT})
 .gitignore     : ${GITIGNORE_STATUS}
 Jira           : $([[ "${USE_JIRA}" == "yes" ]] && echo "configured (${JIRA_FILE})" || echo "skipped")
 Confluence     : $([[ "${USE_CONF}" == "yes" ]] && echo "configured" || echo "skipped")
+Sonar          : $([[ "${USE_SONAR}" == "yes" ]] && echo "configured" || echo "skipped")
+Environments   : $([[ "${USE_ENVS}" == "yes" ]] && echo "configured (read-only pointers only)" || echo "skipped")
 
 Next steps:
 1. Open ${ENV_FILE} once and confirm build/format/Jira values look correct.

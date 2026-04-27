@@ -6,6 +6,68 @@ All notable project changes should be recorded here.
 
 - No unreleased changes.
 
+## 0.13.0 - Investigator Environment Access, Sonar In Setup, Connectivity Check, Reviewer-Model Clarity
+
+### Added
+
+- `setup.init` learns four new optional flags: `--with-sonar` /
+  `--no-sonar` and `--with-environments` / `--no-environments`. Both flows
+  also have an interactive opt-in prompt for users who run `setup.init` with
+  no flags.
+- `setup.init` runs an opt-in non-blocking connectivity probe (`curl --head`,
+  5 s timeout) against `JIRA_HOST`, `CONFLUENCE_HOST`, and `SONAR_HOST_URL`
+  when those are configured. Any HTTP response (including 401/403) counts
+  as reachable; connection errors print a `WARN` and never fail setup.
+  Use `--no-connectivity-check` on captive networks / VPNs.
+- `SONAR_HOST_URL` and `SONAR_TOKEN` are now setup-managed keys and live
+  inside the `# >>> agent-skills setup.init` marker block in `.env`. The
+  prior unmanaged placeholders in `.env.example` are removed; the loader's
+  "last assignment wins" rule no longer creates silent overrides.
+- `ENVIRONMENTS_JSON` is a new optional setup-managed key. It is a JSON
+  array of read-only POINTERS (env name, type, access method, ssh target,
+  kubectl context, namespace, log paths, log-aggregator URL, notes) to the
+  deployed environments where issues actually occur. Credentials are never
+  stored — SSH keys stay in `~/.ssh`, cluster credentials in kubeconfig,
+  log-aggregator login in the user's session.
+- `issue-investigator` SKILL.md gains a new **Environment evidence access**
+  subsection that treats `ENVIRONMENTS_JSON` as a first-class evidence
+  channel for production and regression issues, with explicit per-access
+  read-only command lists (ssh, kubectl, log-aggregator, cloud-console),
+  a `propose-do-not-run` default for `type: prod`, and a strict credentials
+  boundary. New guardrails forbid running commands against `prod` without
+  explicit approval and forbid copying secrets into agent-skills files.
+- `issue-investigator` Output Contract now includes an **Environment
+  evidence** line under `Evidence Reviewed` so live-environment proof is
+  recorded the same way as ticket and code evidence.
+- `setup.init --verify` checks `SONAR_HOST_URL`/`SONAR_TOKEN` pairing and
+  validates `ENVIRONMENTS_JSON` parses.
+
+### Changed
+
+- `.env.example` rewrites the `CODE_REVIEWER_MODEL` comment block. The
+  literal value `"default"` is now documented as a SENTINEL meaning
+  "use the host's default model routing." The misleading "uncomment the
+  one you want" wording is removed; users are told to *replace the value*
+  with one of the listed model ids and given an explicit override example.
+- `scripts/validate-repo.py` and the CI smoke test add `SONAR_HOST_URL`,
+  `SONAR_TOKEN`, and `ENVIRONMENTS_JSON` to the setup-managed-key list, so
+  the marker-block discipline introduced in 0.11.0 also covers the new
+  keys.
+- `docs/configuration.md` documents the new keys and the `default`
+  sentinel for `CODE_REVIEWER_MODEL`.
+- `VERSION` and all six `SKILL.md` `metadata.version` values bumped to
+  `0.13.0`.
+
+### Not Changed (deliberate)
+
+- No new top-level or nested skills.
+- No skill renames; investigator/code-reviewer/software-engineer hand-off
+  contract is unchanged.
+- `ENVIRONMENTS_JSON` defaults to `[]`. Users who don't opt in see no
+  behavioural change in `issue-investigator`; the existing "Safe read-only
+  checks the user can run" path remains the fallback.
+- No credentials are introduced into `.env`. Pointers only.
+
 ## 0.12.0 - Workspace-Root Prompt Clarity
 
 ### Changed

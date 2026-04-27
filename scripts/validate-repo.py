@@ -100,6 +100,9 @@ SETUP_MANAGED_KEYS = [
     "CONFLUENCE_LOGIN",
     "CONFLUENCE_API_TOKEN",
     "CONFLUENCE_SPACE_KEYS",
+    "SONAR_HOST_URL",
+    "SONAR_TOKEN",
+    "ENVIRONMENTS_JSON",
 ]
 SETUP_MARKER_START = "# >>> agent-skills setup.init"
 SETUP_MARKER_END = "# <<< agent-skills setup.init"
