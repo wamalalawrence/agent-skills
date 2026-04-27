@@ -121,9 +121,15 @@ mypy <package>
 
 When entering an unfamiliar repo:
 
-1. Read `README.md` and any `CONTRIBUTING.md`.
-2. Read the build manifest (`pom.xml`, `package.json`, `pyproject.toml`).
-3. Check `.github/workflows/` to see what CI actually runs — that's the real definition of
-  "passing".
-4. Look at the most recent merged PRs to see commit style, branch style, and review depth.
-5. Identify the test runner and run a single existing test to confirm the local environment works.
+1. Read `README.md` and any `CONTRIBUTING.md` **first**, before opening source files. Together
+  they document the build/test commands, runtime/services prerequisites, and contribution rules
+  that the rest of the workflow assumes.
+2. **For multi-module / nested-submodule repos, also read each affected module's
+  `README.md`.** Module-level setup (Testcontainers profiles, fixture generators, env vars,
+  Make targets, integration-test profiles) is frequently documented only there and is the most
+  common cause of "tests fail before any change" reports.
+3. Read the build manifest (`pom.xml`, `package.json`, `pyproject.toml`).
+4. Check `.github/workflows/` to see what CI actually runs — that's the real definition of
+  "passing". CI workflows also reveal `services:` / `env:` / setup steps that local docs may omit.
+5. Look at the most recent merged PRs to see commit style, branch style, and review depth.
+6. Identify the test runner and run a single existing test to confirm the local environment works.

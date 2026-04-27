@@ -16,7 +16,7 @@ compatibility: >-
   .agent-skills.yml). See docs/execution-modes.md.
 metadata:
   author: wamalalawrence
-  version: "0.13.0"
+  version: "0.14.0"
   homepage: "https://github.com/wamalalawrence/agent-skills"
 ---
 
@@ -105,7 +105,12 @@ Stop or mark execution `blocked` when:
 - Restate the goal, scope, acceptance criteria, and expected outcomes.
 - Identify out-of-scope behavior so testing does not drift.
 - Capture assumptions and open questions.
-- Confirm environment and data prerequisites.
+- Confirm environment and data prerequisites. **Before declaring the environment blocked or
+  test data missing, read the repository `README.md`, `CONTRIBUTING.md`, any `docs/` setup
+  pages, and the per-module `README.md` of the area under test.** They are the most common
+  place where seed data, service prerequisites, fixture generators, feature flags, and "how to
+  run tests locally" instructions are documented. A missing prerequisite that is documented is
+  an environment setup gap, not a blocker on the change itself.
 
 ### 2. Identify risk areas
 
