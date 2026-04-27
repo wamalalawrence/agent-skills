@@ -84,14 +84,15 @@ To re-check an existing setup at any time without writing:
 
 All flags:
 
-| Flag                        | Purpose                                                          |
-| --------------------------- | ---------------------------------------------------------------- |
-| `--workspace-root PATH`     | Override the workspace root (default: parent of `agent-skills`). |
-| `--yes`                     | Non-interactive; accept all defaults.                            |
-| `--with-jira` / `--no-jira` | Force Jira config on or off.                                     |
-| `--no-symlink`              | Skip creating the `.skills` symlink.                             |
-| `--verify`                  | Re-check an existing setup; write nothing.                       |
-| `--help`                    | Show usage.                                                      |
+| Flag                                              | Purpose                                                          |
+| ------------------------------------------------- | ---------------------------------------------------------------- |
+| `--workspace-root PATH`                           | Override the workspace root (default: parent of `agent-skills`). |
+| `--yes`                                           | Non-interactive; accept all defaults.                            |
+| `--with-jira` / `--no-jira`                       | Force Jira config on or off.                                     |
+| `--with-confluence` / `--no-confluence`           | Force Confluence config on or off.                               |
+| `--no-symlink`                                    | Skip creating the `.skills` symlink.                             |
+| `--verify`                                        | Re-check an existing setup; write nothing.                       |
+| `--help`                                          | Show usage.                                                      |
 
 ## Manual setup
 
@@ -111,25 +112,36 @@ $EDITOR /path/to/work/.jira-config.yml
 - Refuses to use `$HOME`, `/`, or system directories as the workspace root.
 - Defaults the workspace root to the parent of `agent-skills`, but always lets you override it with
   `--workspace-root`.
-- Creates `.env` from [`.env.example`](../.env.example) when missing.
-- Adds or refreshes a marked generated block (`# >>> agent-skills setup.init` ...
-  `# <<< agent-skills setup.init`) for `WORKSPACE_ROOT`, `ORG_NAME`, `GITHUB_ORG`,
-  `GITHUB_DEFAULT_BRANCH`, and `PROJECTS_JSON`. Edits inside the markers are overwritten on rerun;
-  edits outside are preserved verbatim.
+- Creates `.env` from [`.env.example`](../.env.example) when missing, and writes generated files
+  with `0600` permissions.
+- Adds or refreshes the marked generated block (`# >>> agent-skills setup.init` ...
+  `# <<< agent-skills setup.init`) for every setup-managed key (`ORG_NAME`, `ORG_DOMAIN`,
+  `WORKSPACE_ROOT`, `GITHUB_ORG`, `GITHUB_DEFAULT_BRANCH`, `PROJECTS_JSON`, `JIRA_*`,
+  `CONFLUENCE_*`). Edits inside the markers are overwritten on rerun; edits outside are preserved.
+- Strips legacy duplicate definitions of any setup-managed key found OUTSIDE the marker block, so
+  `.env` files from earlier releases are migrated cleanly on first rerun.
 - Detects sibling git repositories and writes a starter `PROJECTS_JSON` map. Build and format
   commands are inferred from `pom.xml` / `build.gradle` / `package.json` (including `pnpm-lock.yaml`,
   `yarn.lock`, `bun.lockb`) / `pyproject.toml` (Poetry-aware) / `go.mod`.
 - Detects the GitHub owner from sibling repo `remote.origin.url` first, then falls back to
   `gh api user --jq .login`, then leaves it blank.
+- Infers `ORG_NAME` from the Jira host (e.g. `acme.atlassian.net` -> `Acme`) or the GitHub org;
+  infers `ORG_DOMAIN` from the Jira login email, host, or GitHub org; infers the Confluence host
+  from the Jira host; extracts a Jira project key from a pasted ticket key (`ABC-123`) or URL.
+- Validates user-entered values: URL shape, email-or-login shape, Jira project-key shape, and
+  rejects API-token-shaped values when project keys are requested.
 - Optionally creates `.jira-config.yml` from
   [`.jira-config.example.yml`](../.jira-config.example.yml) and seeds the default project key.
+- Optionally configures Confluence (`CONFLUENCE_HOST`, `CONFLUENCE_LOGIN`, `CONFLUENCE_API_TOKEN`,
+  `CONFLUENCE_SPACE_KEYS`) when `--with-confluence` is passed or the user opts in interactively.
 - Creates a `.skills` symlink in the workspace root for assistants that can read skills from a
   workspace folder.
 - Adds an idempotent agent-skills block to `<workspace-root>/.gitignore` covering `.env`,
   `.env.local`, `.env.*.local`, `.jira-config.yml`, `.skills`, and `.cache/`. The block is created
   only when a `.gitignore` already exists or the workspace root is a git repo.
-- Validates that `.env` parses by trying `python3` first, then `ruby`. JSON validation is only
-  skipped when neither interpreter is installed.
+- Validates that `.env` parses by trying `python3` first, then `ruby`, and fails the rerun if any
+  setup-managed key is duplicated outside the marker block.
 
 After setup, review `.env` once before serious code work. The command can detect obvious defaults,
 but it cannot know every repository's exact build, format, runtime, deployment, or Jira conventions.
+Secret prompts (Jira and Confluence tokens) read with hidden input and never echo the value.

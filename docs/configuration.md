@@ -44,12 +44,49 @@ See [`.env.example`](../.env.example) for the full annotated list. The minimum u
 | Variable                         | Why                                                                    |
 | -------------------------------- | ---------------------------------------------------------------------- |
 | `ORG_NAME`                       | Used in summaries and stakeholder-ready output                         |
+| `ORG_DOMAIN`                     | Identity domain for PR / release-note text (optional, defaults to `localhost`) |
 | `WORKSPACE_ROOT`                 | Anchor for resolving repos, cache, and configs                         |
 | `GITHUB_ORG`                     | Required only for GitHub repository discovery, clone, push, or PR work |
 | `GITHUB_DEFAULT_BRANCH`          | Default base branch when a project has no override                     |
 | `PROJECTS_JSON`                  | Multi-project map with stack and command metadata                      |
 | `CODE_REVIEWER_MODEL`            | Optional model-routing hint for the nested `code-reviewer` skill       |
 | `JIRA_HOST` and `JIRA_API_TOKEN` | Required only for Jira-driven or story-aware modes                     |
+| `CONFLUENCE_HOST` and `CONFLUENCE_API_TOKEN` | Required only for Confluence-aware doc lookups             |
+
+`setup.init` auto-populates several of these where it safely can:
+
+- `ORG_NAME` is inferred from the Jira host (e.g. `acme.atlassian.net` -> `Acme`), then from the
+  GitHub org, then from the workspace root directory name.
+- `ORG_DOMAIN` is inferred from the Jira login email, the Jira host, or the GitHub org.
+- `GITHUB_ORG` is inferred from sibling repo `remote.origin.url` first, then from `gh api user`.
+- `JIRA_PROJECT_KEYS` accepts a pasted ticket key (`ABC-123`) or ticket URL and extracts the
+  project key prefix.
+- `CONFLUENCE_HOST` is inferred from the Jira host (Atlassian Cloud uses `<host>/wiki`; self-hosted
+  `jira.<domain>` becomes `confluence.<domain>`).
+
+You can always override the inferred default at the prompt.
+
+## Setup-managed marker block
+
+`setup.init` owns one block in `.env`, delimited by:
+
+```text
+# >>> agent-skills setup.init
+... managed keys ...
+# <<< agent-skills setup.init
+```
+
+All setup-managed keys (org identity, workspace, projects, Jira, Confluence) live INSIDE that
+block. The block is overwritten on every rerun. Edits OUTSIDE the block (custom env vars,
+code-reviewer overrides, build tooling hints) are preserved verbatim.
+
+Never define a setup-managed key a second time outside the block. The shell loader's
+"last assignment wins" rule turns duplicates into silent overrides. `setup.init --verify` and
+`scripts/validate-repo.py` both fail when a managed key is defined outside the block.
+
+If you upgrade from v0.10.0 or earlier and your `.env` carries duplicate top-level definitions of
+managed keys, just rerun `./setup.init`. It strips the legacy duplicates and reports how many it
+removed.
 
 ## Multi-project workspaces
 
@@ -92,6 +129,7 @@ Top-level keys:
 | `github_default_branch`                 | yes                         | Default base branch.                                                                        |
 | `project`                               | yes                         | Single project block; replaces `PROJECTS_JSON`.                                             |
 | `jira.host`, `jira.default_project_key` | only for Jira work          | Host metadata only; the credential `JIRA_API_TOKEN` is an env var.                          |
+| `confluence.host`                       | only for Confluence work    | Host metadata only; the credential `CONFLUENCE_API_TOKEN` is an env var.                    |
 | `code_reviewer_model`                   | no                          | Optional model-routing hint.                                                                |
 | `cache_dir`                             | no                          | Override; default is `<repo>/.cache/agent-skills/`. Equivalent to `AGENT_SKILLS_CACHE_DIR`. |
 

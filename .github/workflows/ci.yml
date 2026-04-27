@@ -38,11 +38,37 @@ jobs:
           test -f "$tmp/work/.env"
           test -L "$tmp/work/.skills"
           test -f "$tmp/work/.gitignore"
-          grep -q ">>> agent-skills setup.init" "$tmp/work/.env"
+          grep -q "^# >>> agent-skills setup\.init$" "$tmp/work/.env"
           grep -q ">>> agent-skills setup.init" "$tmp/work/.gitignore"
           # Idempotency: rerun must not duplicate the gitignore block.
           (cd "$tmp/work/agent-skills" && ./setup.init --yes --no-jira --workspace-root "$tmp/work")
           test "$(grep -c '>>> agent-skills setup.init' "$tmp/work/.gitignore")" = "1"
+          # Marker block in .env must appear exactly once.
+          test "$(grep -c '^# >>> agent-skills setup\.init$' "$tmp/work/.env")" = "1"
+          # No setup-managed key may appear outside the marker block.
+          MANAGED='ORG_NAME|ORG_DOMAIN|WORKSPACE_ROOT|GITHUB_ORG'
+          MANAGED="$MANAGED|GITHUB_DEFAULT_BRANCH|PROJECTS_JSON"
+          MANAGED="$MANAGED|JIRA_CONFIG_FILE|JIRA_HOST|JIRA_AUTH_TYPE"
+          MANAGED="$MANAGED|JIRA_LOGIN|JIRA_API_TOKEN|JIRA_PROJECT_KEYS|JIRA_KEY_REGEX"
+          MANAGED="$MANAGED|CONFLUENCE_HOST|CONFLUENCE_LOGIN"
+          MANAGED="$MANAGED|CONFLUENCE_API_TOKEN|CONFLUENCE_SPACE_KEYS"
+          awk -v keys="$MANAGED" '
+            BEGIN { inb = 0; bad = 0; pat = "^[[:space:]]*(export[[:space:]]+)?(" keys ")[[:space:]]*=" }
+            /# >>> agent-skills setup\.init/ { inb = 1; next }
+            /# <<< agent-skills setup\.init/ { inb = 0; next }
+            inb { next }
+            $0 ~ pat { print "duplicate-outside-marker: " $0; bad = 1 }
+            END { exit bad }
+          ' "$tmp/work/.env"
+          # Confluence opt-in flow must place CONFLUENCE_* keys inside the marker block.
+          rm -rf "$tmp/conf"
+          mkdir -p "$tmp/conf/work"
+          (cd "$tmp/conf/work" && git init -q)
+          cp -R . "$tmp/conf/work/agent-skills"
+          (cd "$tmp/conf/work/agent-skills" && ./setup.init --yes --no-jira --with-confluence --workspace-root "$tmp/conf/work")
+          grep -q "^CONFLUENCE_HOST=" "$tmp/conf/work/.env"
+          grep -q "^CONFLUENCE_API_TOKEN=" "$tmp/conf/work/.env"
+          test "$(grep -c '^CONFLUENCE_HOST=' "$tmp/conf/work/.env")" = "1"
           # Safety: must refuse unsafe roots like $HOME.
           if (cd "$tmp/work/agent-skills" && ./setup.init --yes --no-jira --workspace-root "$HOME"); then
             echo "ERROR: setup.init accepted \$HOME as workspace root" >&2

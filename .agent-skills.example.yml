@@ -21,9 +21,15 @@
 mode: in-repo
 
 # Display name used in summaries and stakeholder-ready output.
+# REQUIRED. EXAMPLE: "Acme Platform".
 org_name: ""
 
+# Email/identity domain for the org. OPTIONAL.
+# EXAMPLE: "acme.example.com". Defaults to "localhost" for local dry runs.
+org_domain: "localhost"
+
 # Source-control context (only needed for clone/push/PR-aware work).
+# github_org EXAMPLE: "acme-eng". Leave blank for read-only planning.
 github_org: ""
 github_default_branch: "main"
 
@@ -41,8 +47,20 @@ project:
 # Optional issue-system context. Credentials still come from env vars
 # (JIRA_API_TOKEN, GITHUB_TOKEN). Only host/project metadata goes here.
 jira:
-  host: "" # e.g. "yourorg.atlassian.net" — NO scheme, NO credentials
-  default_project_key: "" # e.g. "ABC"
+  host: "" # e.g. "https://acme.atlassian.net" — full URL, NO credentials
+  default_project_key: "" # e.g. "ABC". Project key prefix from ticket IDs
+                          # like ABC-123. NOT the API token.
+  project_keys: "" # OPTIONAL. Comma-separated, e.g. "ABC,PLAT,KVB".
+  login: "" # OPTIONAL. e.g. "person@acme.example.com". Required for basic auth.
+  auth_type: "bearer" # bearer | basic
+
+# Optional Confluence context (often paired with Jira). Credentials come from
+# env vars (CONFLUENCE_API_TOKEN). Only host metadata goes here.
+confluence:
+  host: "" # e.g. "https://acme.atlassian.net/wiki" (Cloud)
+           # or "https://confluence.acme.example.com" (self-hosted)
+  login: "" # OPTIONAL. Usually same as jira.login on Atlassian Cloud.
+  space_keys: "" # OPTIONAL. Comma-separated, e.g. "ENG,ARCH,RUN".
 
 # Optional model-routing hint for the nested code-reviewer skill.
 code_reviewer_model: ""
