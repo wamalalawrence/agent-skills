@@ -6,6 +6,88 @@ All notable project changes should be recorded here.
 
 - No unreleased changes.
 
+## 0.11.0 - Setup Flow Hardening
+
+### Added
+
+- `setup.init` now prompts with help text that states REQUIRED-WHEN, gives an
+  EXAMPLE, and indicates whether a value is optional or whether blank is
+  allowed. Secret prompts state explicitly that input is hidden and that the
+  value is written only to the gitignored `.env`.
+- Auto-population of setup values:
+  - `ORG_NAME` is inferred from the Jira host (e.g. `acme.atlassian.net` ->
+    `Acme`), then from the GitHub org, then from the workspace root.
+  - `ORG_DOMAIN` is inferred from the Jira login email, the Jira host, or the
+    GitHub org.
+  - The Confluence host is inferred from the Jira host (Atlassian Cloud uses
+    `<host>/wiki`; self-hosted `jira.<domain>` becomes `confluence.<domain>`).
+  - The Jira project key is extracted from a pasted ticket key (`ABC-123`) or
+    ticket URL (`/browse/ABC-123`).
+- Optional Confluence configuration: `CONFLUENCE_HOST`, `CONFLUENCE_LOGIN`,
+  `CONFLUENCE_API_TOKEN`, `CONFLUENCE_SPACE_KEYS`. New flags
+  `--with-confluence` / `--no-confluence` and matching verify output.
+- Input validators in `setup.init`: URL shape, email-or-login shape, Jira
+  project-key shape, and an explicit rejection of API-token-shaped values
+  when project keys are requested.
+- `scripts/validate-repo.py` `check_env_example_marker_block`: fails CI if any
+  setup-managed key (`ORG_NAME`, `WORKSPACE_ROOT`, `PROJECTS_JSON`, `JIRA_*`,
+  `CONFLUENCE_*`) is defined outside the `# >>> agent-skills setup.init` ...
+  `# <<< agent-skills setup.init` block in `.env.example`.
+- `setup.init --verify` now reports "no duplicate managed keys" and "Confluence
+  credentials present" when applicable.
+- `eval-runs/v0.11.0/` with the release summary and the
+  `setup-flow-hardening.md` scenario.
+
+### Changed
+
+- `.env.example` restructured so every setup-managed key lives inside the
+  marker block. Non-managed keys (code-reviewer overrides, build tooling
+  hints, etc.) remain outside the block and are preserved across reruns.
+- `setup.init` strips legacy duplicate setup-managed keys defined outside the
+  marker block during a one-time migration on rerun, reporting how many
+  duplicates it removed.
+- `setup.init` sets `chmod 600` on generated `.env` and `.jira-config.yml`.
+- `.agent-skills.example.yml` now documents `org_domain`, the optional
+  `confluence` block, and richer Jira metadata (`project_keys`, `login`,
+  `auth_type`). Secrets are still injected via host environment variables.
+- `docs/configuration.md`, `docs/installation.md`, `docs/quickstart.md`, and
+  `docs/execution-modes.md` updated for the new managed-block discipline,
+  Confluence support, and inference behaviour.
+- CI workflow exercises a `--with-confluence` non-interactive flow and
+  asserts no duplicate managed keys appear in `.env` after rerun.
+- `VERSION` and all `SKILL.md` `metadata.version` values bumped to `0.11.0`.
+
+### Fixed
+
+- Root cause of duplicated `PROJECTS_JSON`, `JIRA_HOST`, `JIRA_API_TOKEN`,
+  `JIRA_LOGIN`, and `JIRA_PROJECT_KEYS` keys in `.env`: the previous
+  `.env.example` contained literal definitions of those keys outside the
+  generated marker block, so copying the example and then writing the
+  generated block produced two definitions per key. The example now keeps
+  exactly one definition per key, inside the block.
+- `setup.init` no longer renders an empty `JIRA_*` block when Jira is
+  declined; it emits explicit empty assignments inside the marker block so
+  the variables are always defined and the order is deterministic.
+
+### Not Changed (deliberate)
+
+- No `SKILL.md` content changed.
+- No new top-level or nested skills.
+- No changes to the eval scoring rubric.
+- Local-workspace and in-repo modes remain the only two supported execution
+  modes.
+
+### Security
+
+- Secrets (Jira API token, Confluence API token) are read with hidden input
+  and never echoed.
+- Generated files containing or potentially containing secrets are written
+  with `0600` permissions.
+- Workspace `.gitignore` continues to ignore `.env`, `.env.local`,
+  `.env.*.local`, `.jira-config.yml`, `.skills`, and `.cache/`.
+- Examples and templates use `acme.example.com` / `example.org` placeholders
+  only.
+
 ## 0.10.0 - Eval-Driven Skill Improvements
 
 ### Added

@@ -2,23 +2,53 @@
 # agent-skills first-run setup.
 #
 # Creates or refreshes the workspace-local files agent-skills needs:
-#   - <workspace>/.env                (ORG_NAME, WORKSPACE_ROOT, PROJECTS_JSON, ...)
-#   - <workspace>/.jira-config.yml    (only with --with-jira or interactive yes)
-#   - <workspace>/.skills             (symlink to agent-skills/skills)
+#   - <workspace>/.env                 (managed marker block: org, projects,
+#                                       Jira, Confluence)
+#   - <workspace>/.jira-config.yml     (only with --with-jira or interactive yes)
+#   - <workspace>/.skills              (symlink to agent-skills/skills)
+#   - <workspace>/.gitignore           (idempotent agent-skills block)
 #
 # Tested on macOS and Linux with bash 3.2+. Windows users should run via WSL or
 # Git Bash; native PowerShell is not supported.
+#
+# Security:
+#   - Secrets (Jira / Confluence tokens) are read silently and NEVER echoed.
+#   - Generated `.env` and `.jira-config.yml` are added to `.gitignore`.
+#   - The script never logs token values.
 
 set -euo pipefail
 
 START_MARKER="# >>> agent-skills setup.init"
 END_MARKER="# <<< agent-skills setup.init"
 
+# Setup-managed keys must appear inside the marker block exactly once.
+# Used to deduplicate legacy `.env` files that pre-date the marker discipline.
+MANAGED_KEYS=(
+  ORG_NAME
+  ORG_DOMAIN
+  WORKSPACE_ROOT
+  GITHUB_ORG
+  GITHUB_DEFAULT_BRANCH
+  PROJECTS_JSON
+  JIRA_CONFIG_FILE
+  JIRA_HOST
+  JIRA_AUTH_TYPE
+  JIRA_LOGIN
+  JIRA_API_TOKEN
+  JIRA_PROJECT_KEYS
+  JIRA_KEY_REGEX
+  CONFLUENCE_HOST
+  CONFLUENCE_LOGIN
+  CONFLUENCE_API_TOKEN
+  CONFLUENCE_SPACE_KEYS
+)
+
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 DEFAULT_WORKSPACE_ROOT="$(cd "${SCRIPT_DIR}/.." && pwd)"
 
 ASSUME_YES="false"
 JIRA_MODE="ask"
+CONFLUENCE_MODE="ask"
 SYMLINK_MODE="ask"
 VERIFY_MODE="false"
 WORKSPACE_ROOT=""
@@ -32,21 +62,26 @@ Create or update the workspace-local files agent-skills needs for a first run,
 or verify an existing setup.
 
 Options:
-  --workspace-root PATH  Workspace root where .env, .jira-config.yml, and .skills live
-  --yes                  Accept safe defaults for all prompts
-  --with-jira            Create/update .jira-config.yml and Jira env values
-  --no-jira              Skip Jira setup
-  --no-symlink           Do not create the .skills symlink
-  --verify               Check an existing setup and report problems (no writes)
-  --help                 Show this help
+  --workspace-root PATH    Workspace root where .env, .jira-config.yml, and
+                           .skills live
+  --yes                    Accept safe defaults for all prompts
+  --with-jira              Create/update .jira-config.yml and Jira env values
+  --no-jira                Skip Jira setup
+  --with-confluence        Prompt for Confluence host/login/token
+  --no-confluence          Skip Confluence setup
+  --no-symlink             Do not create the .skills symlink
+  --verify                 Check an existing setup and report problems
+                           (no writes)
+  --help                   Show this help
 
 Typical use:
   cd agent-skills
-  ./setup.init                       # interactive first run
-  ./setup.init --verify              # check an existing setup
+  ./setup.init                        # interactive first run
+  ./setup.init --verify               # check an existing setup
 
 Non-interactive bootstrap:
-  ./setup.init --yes --no-jira --workspace-root /path/to/workspace
+  ./setup.init --yes --no-jira --no-confluence \
+      --workspace-root /path/to/workspace
 EOF
 }
 
@@ -62,30 +97,14 @@ while [[ $# -gt 0 ]]; do
       WORKSPACE_ROOT_EXPLICIT="true"
       shift
       ;;
-    --yes)
-      ASSUME_YES="true"
-      shift
-      ;;
-    --with-jira)
-      JIRA_MODE="yes"
-      shift
-      ;;
-    --no-jira)
-      JIRA_MODE="no"
-      shift
-      ;;
-    --no-symlink)
-      SYMLINK_MODE="no"
-      shift
-      ;;
-    --verify)
-      VERIFY_MODE="true"
-      shift
-      ;;
-    --help|-h)
-      usage
-      exit 0
-      ;;
+    --yes) ASSUME_YES="true"; shift ;;
+    --with-jira) JIRA_MODE="yes"; shift ;;
+    --no-jira) JIRA_MODE="no"; shift ;;
+    --with-confluence) CONFLUENCE_MODE="yes"; shift ;;
+    --no-confluence) CONFLUENCE_MODE="no"; shift ;;
+    --no-symlink) SYMLINK_MODE="no"; shift ;;
+    --verify) VERIFY_MODE="true"; shift ;;
+    --help|-h) usage; exit 0 ;;
     *)
       echo "Unknown option: $1" >&2
       usage >&2
@@ -98,44 +117,71 @@ is_interactive() {
   [[ "${ASSUME_YES}" != "true" && -t 0 ]]
 }
 
+# ------------------------------------------------------------------------------
+# Prompt helpers
+#
+# show_help_block() prints the example/required guidance to stderr exactly once
+# per prompt so the user understands what value is expected.
+# ------------------------------------------------------------------------------
+show_help_block() {
+  local help_text="$1"
+  [[ -n "${help_text}" ]] || return 0
+  if is_interactive; then
+    while IFS= read -r line; do
+      printf '    %s\n' "${line}" >&2
+    done <<< "${help_text}"
+  fi
+}
+
 prompt() {
   local label="$1"
   local default_value="$2"
+  local help_text="${3:-}"
+  local validator="${4:-}"
   local answer=""
+  local attempts=0
 
-  if is_interactive; then
-    if [[ -n "${default_value}" ]]; then
-      printf '%s [%s]: ' "${label}" "${default_value}" >&2
+  while :; do
+    attempts=$((attempts + 1))
+    if is_interactive; then
+      show_help_block "${help_text}"
+      if [[ -n "${default_value}" ]]; then
+        printf '%s [%s]: ' "${label}" "${default_value}" >&2
+      else
+        printf '%s: ' "${label}" >&2
+      fi
+      IFS= read -r answer || true
+      [[ -z "${answer}" ]] && answer="${default_value}"
     else
-      printf '%s: ' "${label}" >&2
-    fi
-    IFS= read -r answer || true
-    if [[ -z "${answer}" ]]; then
       answer="${default_value}"
     fi
-  else
-    answer="${default_value}"
-  fi
 
-  printf '%s' "${answer}"
+    if [[ -z "${validator}" ]] || "${validator}" "${answer}"; then
+      printf '%s' "${answer}"
+      return 0
+    fi
+
+    if ! is_interactive || [[ "${attempts}" -ge 3 ]]; then
+      # Non-interactive or exhausted retries: return whatever we have so the
+      # caller can decide. Validation errors are surfaced by the validator.
+      printf '%s' "${answer}"
+      return 0
+    fi
+  done
 }
 
 prompt_secret() {
   local label="$1"
-  local default_value="$2"
+  local help_text="${2:-}"
   local answer=""
 
   if is_interactive; then
+    show_help_block "${help_text}"
+    printf '    NOTE: input is hidden. The value is written ONLY to gitignored .env.\n' >&2
     printf '%s: ' "${label}" >&2
     IFS= read -r -s answer || true
     printf '\n' >&2
-    if [[ -z "${answer}" ]]; then
-      answer="${default_value}"
-    fi
-  else
-    answer="${default_value}"
   fi
-
   printf '%s' "${answer}"
 }
 
@@ -148,7 +194,6 @@ confirm() {
     [[ "${default_value}" == "yes" ]]
     return
   fi
-
   if ! is_interactive; then
     [[ "${default_value}" == "yes" ]]
     return
@@ -161,12 +206,184 @@ confirm() {
   fi
   IFS= read -r answer || true
   answer="$(printf '%s' "${answer}" | tr '[:upper:]' '[:lower:]')"
-
-  if [[ -z "${answer}" ]]; then
-    answer="${default_value}"
-  fi
-
+  [[ -z "${answer}" ]] && answer="${default_value}"
   [[ "${answer}" == "y" || "${answer}" == "yes" ]]
+}
+
+# ------------------------------------------------------------------------------
+# Validators (return 0 on accept, non-zero on reject; print rejection to stderr)
+# ------------------------------------------------------------------------------
+validate_optional() {
+  return 0
+}
+
+validate_url() {
+  local value="$1"
+  [[ -z "${value}" ]] && return 0
+  if [[ "${value}" =~ ^https?://[A-Za-z0-9._-]+(:[0-9]+)?(/.*)?$ ]]; then
+    return 0
+  fi
+  echo "    ! Value does not look like a URL (expected https://host[/path])." >&2
+  return 1
+}
+
+validate_email_or_blank() {
+  local value="$1"
+  [[ -z "${value}" ]] && return 0
+  if [[ "${value}" =~ ^[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Za-z]{2,}$ ]]; then
+    return 0
+  fi
+  # Allow plain logins (e.g. service accounts) but warn.
+  if [[ "${value}" =~ ^[A-Za-z0-9._-]+$ ]]; then
+    return 0
+  fi
+  echo "    ! Value does not look like an email or login." >&2
+  return 1
+}
+
+validate_project_keys() {
+  local value="$1"
+  [[ -z "${value}" ]] && return 0
+  # Reject obvious API-token shapes (long random string with no comma).
+  if [[ "${#value}" -ge 20 && ! "${value}" =~ , && ! "${value}" =~ -[0-9]+ ]]; then
+    if [[ "${value}" =~ [a-z] && "${value}" =~ [A-Z0-9] ]]; then
+      echo "    ! That looks like an API token, not project keys. Project keys are short uppercase codes like ABC,PLAT,KVB." >&2
+      return 1
+    fi
+  fi
+  local IFS=','
+  local part
+  for part in ${value}; do
+    part="$(printf '%s' "${part}" | sed -E 's/^[[:space:]]+|[[:space:]]+$//g')"
+    [[ -z "${part}" ]] && continue
+    if [[ ! "${part}" =~ ^[A-Z][A-Z0-9_]{1,9}$ ]]; then
+      echo "    ! '${part}' does not look like a Jira project key (uppercase, 2-10 chars, e.g. ABC, PLAT, KVB)." >&2
+      return 1
+    fi
+  done
+  return 0
+}
+
+validate_org_name() {
+  local value="$1"
+  [[ -n "${value}" ]] && return 0
+  echo "    ! Display name cannot be empty." >&2
+  return 1
+}
+
+validate_branch_name() {
+  local value="$1"
+  [[ -z "${value}" ]] && return 1
+  if [[ "${value}" =~ ^[A-Za-z0-9._/-]+$ ]]; then
+    return 0
+  fi
+  echo "    ! Branch name contains unusual characters." >&2
+  return 1
+}
+
+# ------------------------------------------------------------------------------
+# Inference helpers
+# ------------------------------------------------------------------------------
+
+# Infer "Acme Platform" from "acme-platform" / "acme_platform" / "AcmePlatform".
+prettify_slug() {
+  local slug="$1"
+  printf '%s' "${slug}" \
+    | sed -E 's/[._-]+/ /g; s/([a-z])([A-Z])/\1 \2/g' \
+    | awk '{
+        for (i = 1; i <= NF; i++) {
+          $i = toupper(substr($i, 1, 1)) tolower(substr($i, 2));
+        }
+        print
+      }'
+}
+
+# Extract host from "https://acme.atlassian.net/wiki" => "acme.atlassian.net".
+extract_host() {
+  local url="$1"
+  printf '%s' "${url}" | sed -E 's#^https?://##; s#/.*$##; s#:.*$##'
+}
+
+# Infer org slug from a Jira host: acme.atlassian.net -> acme.
+infer_org_from_jira_host() {
+  local host
+  host="$(extract_host "$1")"
+  if [[ "${host}" == *.atlassian.net ]]; then
+    printf '%s' "${host%%.atlassian.net}"
+    return 0
+  fi
+  # Self-hosted: jira.acme.example.com -> acme; confluence.acme.com -> acme.
+  if [[ "${host}" =~ ^(jira|confluence|wiki)\.(.+)$ ]]; then
+    local rest="${BASH_REMATCH[2]}"
+    printf '%s' "${rest%%.*}"
+    return 0
+  fi
+  printf '%s' "${host%%.*}"
+}
+
+# Infer the likely Confluence host from a Jira host.
+infer_confluence_from_jira() {
+  local jira="$1"
+  [[ -z "${jira}" ]] && return 1
+  local host
+  host="$(extract_host "${jira}")"
+  if [[ "${host}" == *.atlassian.net ]]; then
+    printf 'https://%s/wiki' "${host}"
+    return 0
+  fi
+  # Self-hosted: replace leading "jira." with "confluence." if present.
+  if [[ "${host}" == jira.* ]]; then
+    printf 'https://confluence.%s' "${host#jira.}"
+    return 0
+  fi
+  printf 'https://%s' "${host}"
+}
+
+# Infer the org email domain from a login email, GitHub org, or Jira host.
+infer_org_domain() {
+  local jira_login="$1"
+  local github_org="$2"
+  local jira_host="$3"
+  if [[ "${jira_login}" =~ @([A-Za-z0-9.-]+\.[A-Za-z]{2,})$ ]]; then
+    printf '%s' "${BASH_REMATCH[1]}"
+    return 0
+  fi
+  if [[ -n "${jira_host}" ]]; then
+    local host
+    host="$(extract_host "${jira_host}")"
+    [[ -n "${host}" ]] && { printf '%s' "${host}"; return 0; }
+  fi
+  if [[ -n "${github_org}" ]]; then
+    printf '%s.example.com' "${github_org}"
+    return 0
+  fi
+  printf 'localhost'
+}
+
+# Detect a Jira project key from a ticket key (ABC-123) or ticket URL.
+extract_project_key_from_ticket() {
+  local input="$1"
+  [[ -z "${input}" ]] && return 1
+  if [[ "${input}" =~ /browse/([A-Z][A-Z0-9_]+)-[0-9]+ ]]; then
+    printf '%s' "${BASH_REMATCH[1]}"
+    return 0
+  fi
+  if [[ "${input}" =~ ^([A-Z][A-Z0-9_]+)-[0-9]+$ ]]; then
+    printf '%s' "${BASH_REMATCH[1]}"
+    return 0
+  fi
+  return 1
+}
+
+# Mask a secret for display (never used for real secrets in practice).
+mask_secret() {
+  local value="$1"
+  local len="${#value}"
+  if [[ "${len}" -le 6 ]]; then
+    [[ "${len}" -gt 0 ]] && printf '****'
+  else
+    printf '****%s' "${value: -4}"
+  fi
 }
 
 json_escape() {
@@ -178,8 +395,7 @@ shell_escape_double_quoted() {
 }
 
 # ------------------------------------------------------------------------------
-# JSON validation: prefer python3 (universally present), fall back to ruby.
-# Returns non-zero if neither interpreter is available or the JSON is invalid.
+# JSON validation: prefer python3, fall back to ruby. 127 if neither exists.
 # ------------------------------------------------------------------------------
 validate_json_string() {
   local payload="$1"
@@ -198,15 +414,13 @@ validate_json_string() {
 }
 
 # ------------------------------------------------------------------------------
-# Workspace-root safety: refuse paths that look like a home or system directory
-# unless the user explicitly opted in via --workspace-root and confirmed.
+# Workspace-root safety
 # ------------------------------------------------------------------------------
 is_unsafe_workspace_root() {
   local path="$1"
   case "${path}" in
     "/"|"/root"|"/etc"|"/usr"|"/var"|"/opt"|"/private"|"/Library"|"/System"|"/Applications")
-      return 0
-      ;;
+      return 0 ;;
   esac
   if [[ -n "${HOME:-}" && "${path}" == "${HOME}" ]]; then
     return 0
@@ -217,11 +431,9 @@ is_unsafe_workspace_root() {
 guard_workspace_root() {
   local path="$1"
   local explicit="$2"
-
   if ! is_unsafe_workspace_root "${path}"; then
     return 0
   fi
-
   echo "" >&2
   echo "Refusing to use '${path}' as the workspace root." >&2
   echo "It looks like your home or a system directory." >&2
@@ -234,19 +446,17 @@ guard_workspace_root() {
   echo "" >&2
   echo "Then run: ./setup.init   (from inside agent-skills)" >&2
   echo "Or pass an explicit path: ./setup.init --workspace-root /path/to/work" >&2
-
   if [[ "${explicit}" == "true" ]] && is_interactive; then
     echo "" >&2
     if confirm "I really want to write into '${path}' anyway" "no"; then
       return 0
     fi
   fi
-
   exit 2
 }
 
 # ------------------------------------------------------------------------------
-# Stack and command detection.
+# Stack and command detection
 # ------------------------------------------------------------------------------
 detect_stack() {
   local repo_path="$1"
@@ -265,14 +475,10 @@ detect_stack() {
 
 detect_node_package_manager() {
   local repo_path="$1"
-  if [[ -f "${repo_path}/pnpm-lock.yaml" ]]; then
-    printf 'pnpm'
-  elif [[ -f "${repo_path}/yarn.lock" ]]; then
-    printf 'yarn'
-  elif [[ -f "${repo_path}/bun.lockb" ]]; then
-    printf 'bun'
-  else
-    printf 'npm'
+  if [[ -f "${repo_path}/pnpm-lock.yaml" ]]; then printf 'pnpm'
+  elif [[ -f "${repo_path}/yarn.lock" ]]; then printf 'yarn'
+  elif [[ -f "${repo_path}/bun.lockb" ]]; then printf 'bun'
+  else printf 'npm'
   fi
 }
 
@@ -292,7 +498,6 @@ except Exception:
 ' >/dev/null 2>&1
     return $?
   fi
-  # Best-effort fallback when python3 is missing.
   grep -q "\"${script}\"[[:space:]]*:" "${pkg}"
 }
 
@@ -301,16 +506,11 @@ default_build_for_stack() {
   local repo_path="$2"
   case "${stack}" in
     java)
-      if [[ -f "${repo_path}/mvnw" ]]; then
-        printf './mvnw test'
-      elif [[ -f "${repo_path}/pom.xml" ]]; then
-        printf 'mvn test'
-      elif [[ -f "${repo_path}/gradlew" ]]; then
-        printf './gradlew test'
-      elif [[ -f "${repo_path}/build.gradle" || -f "${repo_path}/build.gradle.kts" ]]; then
-        printf 'gradle test'
-      else
-        printf ''
+      if [[ -f "${repo_path}/mvnw" ]]; then printf './mvnw test'
+      elif [[ -f "${repo_path}/pom.xml" ]]; then printf 'mvn test'
+      elif [[ -f "${repo_path}/gradlew" ]]; then printf './gradlew test'
+      elif [[ -f "${repo_path}/build.gradle" || -f "${repo_path}/build.gradle.kts" ]]; then printf 'gradle test'
+      else printf ''
       fi
       ;;
     typescript)
@@ -341,12 +541,8 @@ default_build_for_stack() {
         printf 'pytest'
       fi
       ;;
-    go)
-      printf 'go test ./...'
-      ;;
-    *)
-      printf ''
-      ;;
+    go) printf 'go test ./...' ;;
+    *) printf '' ;;
   esac
 }
 
@@ -368,28 +564,18 @@ default_format_for_stack() {
         printf ''
       fi
       ;;
-    python)
-      printf 'ruff check . && ruff format --check .'
-      ;;
-    go)
-      printf 'gofmt -l .'
-      ;;
-    *)
-      printf ''
-      ;;
+    python) printf 'ruff check . && ruff format --check .' ;;
+    go) printf 'gofmt -l .' ;;
+    *) printf '' ;;
   esac
 }
 
 # ------------------------------------------------------------------------------
-# GitHub org detection: prefer a real org found in sibling repo remotes; fall
-# back to the authenticated gh user; otherwise leave blank.
+# GitHub org detection
 # ------------------------------------------------------------------------------
 detect_github_org_from_siblings() {
   local workspace_root="$1"
-  local repo_path=""
-  local url=""
-  local org=""
-
+  local repo_path="" url="" org=""
   for repo_path in "${workspace_root}"/*; do
     [[ -d "${repo_path}/.git" ]] || continue
     [[ "$(basename "${repo_path}")" == "agent-skills" ]] && continue
@@ -406,60 +592,42 @@ detect_github_org_from_siblings() {
   return 1
 }
 
-# ------------------------------------------------------------------------------
-# detect_projects_json prints a JSON array of detected sibling repositories.
-# ------------------------------------------------------------------------------
 detect_projects_json() {
   local workspace_root="$1"
   local default_branch="$2"
   local project_count=0
-  local repo_path=""
-  local repo_name=""
-  local repo_rel=""
-  local stack=""
-  local build=""
-  local format=""
-
+  local repo_path="" repo_name="" stack="" build="" format=""
   printf '[\n'
-
   for repo_path in "${workspace_root}"/*; do
     [[ -d "${repo_path}" ]] || continue
     [[ -d "${repo_path}/.git" ]] || continue
     repo_name="$(basename "${repo_path}")"
     [[ "${repo_name}" == "agent-skills" ]] && continue
-
-    repo_rel="${repo_name}"
     stack="$(detect_stack "${repo_path}")"
     build="$(default_build_for_stack "${stack}" "${repo_path}")"
     format="$(default_format_for_stack "${stack}" "${repo_path}")"
-
     if [[ "${project_count}" -gt 0 ]]; then
       printf ',\n'
     fi
-
     printf '  {"name":"%s", "path":"%s", "stack":"%s", "base_branch":"%s", "build":"%s", "format":"%s"}' \
       "$(json_escape "${repo_name}")" \
-      "$(json_escape "${repo_rel}")" \
+      "$(json_escape "${repo_name}")" \
       "$(json_escape "${stack}")" \
       "$(json_escape "${default_branch}")" \
       "$(json_escape "${build}")" \
       "$(json_escape "${format}")"
-
     project_count=$((project_count + 1))
   done
-
   if [[ "${project_count}" -eq 0 ]]; then
     printf '  {"name":"current-workspace", "path":".", "stack":"other", "base_branch":"%s", "build":"", "format":"", "runtime_version":"", "notes":"Bootstrap default. Replace with real repo entries for implementation, review, or PR work."}' \
       "$(json_escape "${default_branch}")"
   fi
-
   printf '\n]'
 }
 
 count_detected_projects() {
   local workspace_root="$1"
-  local count=0
-  local repo_path=""
+  local count=0 repo_path=""
   for repo_path in "${workspace_root}"/*; do
     [[ -d "${repo_path}/.git" ]] || continue
     [[ "$(basename "${repo_path}")" == "agent-skills" ]] && continue
@@ -469,16 +637,13 @@ count_detected_projects() {
 }
 
 # ------------------------------------------------------------------------------
-# Replaces the marked block in target_file with the contents of block_file. If
-# the block does not exist yet, it is appended. Manual edits *outside* the
-# markers are preserved verbatim. Edits *inside* the markers are overwritten.
+# Marker-block management
 # ------------------------------------------------------------------------------
 replace_generated_block() {
   local target_file="$1"
   local block_file="$2"
-  local temp_file=""
+  local temp_file
   temp_file="$(mktemp)"
-
   awk -v start="${START_MARKER}" -v end="${END_MARKER}" -v block="${block_file}" '
     BEGIN { in_block = 0; replaced = 0 }
     $0 == start {
@@ -500,24 +665,89 @@ replace_generated_block() {
       }
     }
   ' "${target_file}" > "${temp_file}"
-
   mv "${temp_file}" "${target_file}"
+}
+
+# Strip stray top-level assignments of MANAGED_KEYS that live OUTSIDE the
+# marker block. Legacy `.env` files (created before marker discipline) often
+# contain duplicates. We always normalize so the marker block is the single
+# source of truth.
+strip_managed_keys_outside_block() {
+  local target_file="$1"
+  local removed=0
+  local key=""
+  local pattern=""
+  local temp_file
+  temp_file="$(mktemp)"
+
+  # Build alternation of MANAGED_KEYS once.
+  local joined=""
+  for key in "${MANAGED_KEYS[@]}"; do
+    [[ -n "${joined}" ]] && joined+="|"
+    joined+="${key}"
+  done
+  pattern="^[[:space:]]*(export[[:space:]]+)?(${joined})[[:space:]]*="
+
+  awk -v start="${START_MARKER}" -v end="${END_MARKER}" -v pat="${pattern}" '
+    BEGIN { in_block = 0; in_quote = 0; quote_char = ""; removed = 0 }
+    {
+      line = $0
+      if (line == start) { in_block = 1; print; next }
+      if (line == end)   { in_block = 0; print; next }
+
+      if (in_block || in_quote) {
+        # Track multiline single-quoted JSON inside the marker block.
+        if (in_quote) {
+          if (index(line, quote_char) > 0) { in_quote = 0; quote_char = "" }
+        } else if (in_block) {
+          # Detect start of a single-quoted multi-line value.
+          if (match(line, /=[[:space:]]*'\''[^'\'']*$/)) {
+            in_quote = 1; quote_char = "'\''"
+          }
+        }
+        print
+        next
+      }
+
+      if (match(line, pat)) {
+        removed++
+        next
+      }
+      print
+    }
+    END { exit removed > 127 ? 127 : removed }
+  ' "${target_file}" > "${temp_file}" || removed=$?
+
+  if ! cmp -s "${target_file}" "${temp_file}"; then
+    mv "${temp_file}" "${target_file}"
+    if [[ "${removed}" -gt 0 ]]; then
+      echo "  Removed ${removed} duplicate setup-managed key(s) outside the marker block."
+    fi
+  else
+    rm -f "${temp_file}"
+  fi
 }
 
 write_env_block() {
   local env_file="$1"
   local workspace_root="$2"
   local org_name="$3"
-  local github_org="$4"
-  local default_branch="$5"
-  local use_jira="$6"
-  local jira_host="$7"
-  local jira_auth_type="$8"
-  local jira_login="$9"
-  local jira_token="${10}"
-  local jira_project_keys="${11}"
-  local projects_json="${12}"
-  local block_file=""
+  local org_domain="$4"
+  local github_org="$5"
+  local default_branch="$6"
+  local use_jira="$7"
+  local jira_host="$8"
+  local jira_auth_type="$9"
+  local jira_login="${10}"
+  local jira_token="${11}"
+  local jira_project_keys="${12}"
+  local use_confluence="${13}"
+  local conf_host="${14}"
+  local conf_login="${15}"
+  local conf_token="${16}"
+  local conf_spaces="${17}"
+  local projects_json="${18}"
+  local block_file
   block_file="$(mktemp)"
 
   {
@@ -526,6 +756,7 @@ write_env_block() {
     printf '# OVERWRITTEN on every rerun. To keep changes, edit values OUTSIDE\n'
     printf '# the markers, or rerun setup.init with the values you want.\n'
     printf 'ORG_NAME="%s"\n' "$(shell_escape_double_quoted "${org_name}")"
+    printf 'ORG_DOMAIN="%s"\n' "$(shell_escape_double_quoted "${org_domain}")"
     printf 'WORKSPACE_ROOT="%s"\n' "$(shell_escape_double_quoted "${workspace_root}")"
     printf 'GITHUB_ORG="%s"\n' "$(shell_escape_double_quoted "${github_org}")"
     printf 'GITHUB_DEFAULT_BRANCH="%s"\n' "$(shell_escape_double_quoted "${default_branch}")"
@@ -537,22 +768,41 @@ write_env_block() {
       printf 'JIRA_LOGIN="%s"\n' "$(shell_escape_double_quoted "${jira_login}")"
       printf 'JIRA_API_TOKEN="%s"\n' "$(shell_escape_double_quoted "${jira_token}")"
       printf 'JIRA_PROJECT_KEYS="%s"\n' "$(shell_escape_double_quoted "${jira_project_keys}")"
+      printf 'JIRA_KEY_REGEX="[A-Z][A-Z0-9_]+-[0-9]+"\n'
+    else
+      printf 'JIRA_HOST=""\n'
+      printf 'JIRA_AUTH_TYPE="bearer"\n'
+      printf 'JIRA_LOGIN=""\n'
+      printf 'JIRA_API_TOKEN=""\n'
+      printf 'JIRA_PROJECT_KEYS=""\n'
+      printf 'JIRA_KEY_REGEX="[A-Z][A-Z0-9_]+-[0-9]+"\n'
+    fi
+    if [[ "${use_confluence}" == "yes" ]]; then
+      printf 'CONFLUENCE_HOST="%s"\n' "$(shell_escape_double_quoted "${conf_host}")"
+      printf 'CONFLUENCE_LOGIN="%s"\n' "$(shell_escape_double_quoted "${conf_login}")"
+      printf 'CONFLUENCE_API_TOKEN="%s"\n' "$(shell_escape_double_quoted "${conf_token}")"
+      printf 'CONFLUENCE_SPACE_KEYS="%s"\n' "$(shell_escape_double_quoted "${conf_spaces}")"
+    else
+      printf 'CONFLUENCE_HOST=""\n'
+      printf 'CONFLUENCE_LOGIN=""\n'
+      printf 'CONFLUENCE_API_TOKEN=""\n'
+      printf 'CONFLUENCE_SPACE_KEYS=""\n'
     fi
     printf '%s\n' "${END_MARKER}"
   } > "${block_file}"
 
   replace_generated_block "${env_file}" "${block_file}"
   rm -f "${block_file}"
+  strip_managed_keys_outside_block "${env_file}"
 }
 
 update_jira_project_key() {
   local jira_file="$1"
   local jira_project_keys="$2"
   local first_key="${jira_project_keys%%,*}"
-  local temp_file=""
-
+  first_key="$(printf '%s' "${first_key}" | sed -E 's/^[[:space:]]+|[[:space:]]+$//g')"
   [[ -n "${first_key}" ]] || return 0
-
+  local temp_file
   temp_file="$(mktemp)"
   awk -v key="${first_key}" '
     BEGIN { updated = 0 }
@@ -566,13 +816,7 @@ update_jira_project_key() {
 }
 
 # ------------------------------------------------------------------------------
-# Workspace .gitignore management.
-#
-# .env, .jira-config.yml, and .skills are all created in the workspace root.
-# When the workspace is itself a git repo, those files would otherwise show up
-# as uncommitted changes (and .env would risk leaking secrets). We add or
-# refresh a clearly marked block in <workspace>/.gitignore so users do not have
-# to remember this themselves. The block is idempotent on rerun.
+# Workspace .gitignore management
 # ------------------------------------------------------------------------------
 GITIGNORE_START_MARKER="# >>> agent-skills setup.init"
 GITIGNORE_END_MARKER="# <<< agent-skills setup.init"
@@ -580,9 +824,8 @@ GITIGNORE_END_MARKER="# <<< agent-skills setup.init"
 update_workspace_gitignore() {
   local workspace_root="$1"
   local gitignore_file="${workspace_root}/.gitignore"
-  local block_file=""
+  local block_file
   block_file="$(mktemp)"
-
   {
     printf '%s\n' "${GITIGNORE_START_MARKER}"
     printf '# Local agent-skills workspace files. Safe to keep ignored.\n'
@@ -596,8 +839,6 @@ update_workspace_gitignore() {
   } > "${block_file}"
 
   if [[ ! -f "${gitignore_file}" ]]; then
-    # Only create a fresh .gitignore when the workspace is a git repo, so we
-    # do not litter non-git workspaces with new files.
     if [[ -d "${workspace_root}/.git" ]]; then
       cp "${block_file}" "${gitignore_file}"
       rm -f "${block_file}"
@@ -609,7 +850,7 @@ update_workspace_gitignore() {
     return 0
   fi
 
-  local temp_file=""
+  local temp_file
   temp_file="$(mktemp)"
   awk -v start="${GITIGNORE_START_MARKER}" -v end="${GITIGNORE_END_MARKER}" -v block="${block_file}" '
     BEGIN { in_block = 0; replaced = 0 }
@@ -638,9 +879,25 @@ update_workspace_gitignore() {
 }
 
 # ------------------------------------------------------------------------------
-# Verify mode: read .env, check required variables and that detected projects
-# point at directories that exist. Exits non-zero on the first failure.
+# Verify mode
 # ------------------------------------------------------------------------------
+count_managed_key_duplicates() {
+  local env_file="$1"
+  local key="$2"
+  awk -v start="${START_MARKER}" -v stop="${END_MARKER}" -v key="${key}" '
+    BEGIN { in_block = 0; total = 0 }
+    {
+      if ($0 == start) { in_block = 1; next }
+      if ($0 == stop)  { in_block = 0; next }
+      if (in_block) next
+      if (match($0, "^[[:space:]]*(export[[:space:]]+)?" key "[[:space:]]*=")) {
+        total++
+      }
+    }
+    END { print total }
+  ' "${env_file}"
+}
+
 verify_setup() {
   local workspace_root="$1"
   local env_file="${workspace_root}/.env"
@@ -648,12 +905,22 @@ verify_setup() {
   local errors=0
 
   echo "Verifying setup at ${workspace_root}"
-
   if [[ ! -f "${env_file}" ]]; then
     echo "  FAIL: ${env_file} not found. Run ./setup.init to create it." >&2
     return 1
   fi
   echo "  ok    .env present"
+
+  # Check duplicate managed keys (any appearance outside the marker block).
+  local key total
+  for key in "${MANAGED_KEYS[@]}"; do
+    total="$(count_managed_key_duplicates "${env_file}" "${key}")"
+    if [[ "${total}" -gt 0 ]]; then
+      echo "  FAIL: managed key ${key} appears ${total} time(s) OUTSIDE the marker block in ${env_file}" >&2
+      errors=$((errors + 1))
+    fi
+  done
+  [[ "${errors}" -eq 0 ]] && echo "  ok    no duplicate managed keys"
 
   set -a
   # shellcheck disable=SC1090
@@ -717,7 +984,18 @@ print("\n".join(missing))
   elif [[ -e "${skills_link}" ]]; then
     echo "  WARN: ${skills_link} exists but is not a symlink" >&2
   else
-    echo "  WARN: ${skills_link} not present (rerun with --no-symlink off, or create manually)" >&2
+    echo "  WARN: ${skills_link} not present (rerun without --no-symlink)" >&2
+  fi
+
+  # URL / project-key shape checks (do not echo secrets).
+  if [[ -n "${JIRA_HOST:-}" ]] && ! validate_url "${JIRA_HOST}" >/dev/null 2>&1; then
+    echo "  WARN: JIRA_HOST does not look like a URL" >&2
+  fi
+  if [[ -n "${CONFLUENCE_HOST:-}" ]] && ! validate_url "${CONFLUENCE_HOST}" >/dev/null 2>&1; then
+    echo "  WARN: CONFLUENCE_HOST does not look like a URL" >&2
+  fi
+  if [[ -n "${JIRA_PROJECT_KEYS:-}" ]] && ! validate_project_keys "${JIRA_PROJECT_KEYS}" >/dev/null 2>&1; then
+    echo "  WARN: JIRA_PROJECT_KEYS does not look like comma-separated project keys" >&2
   fi
 
   if [[ -n "${JIRA_HOST:-}" ]]; then
@@ -725,6 +1003,13 @@ print("\n".join(missing))
       echo "  WARN: JIRA_HOST set but JIRA_API_TOKEN is empty" >&2
     else
       echo "  ok    Jira credentials present"
+    fi
+  fi
+  if [[ -n "${CONFLUENCE_HOST:-}" ]]; then
+    if [[ -z "${CONFLUENCE_API_TOKEN:-}" ]]; then
+      echo "  WARN: CONFLUENCE_HOST set but CONFLUENCE_API_TOKEN is empty" >&2
+    else
+      echo "  ok    Confluence credentials present"
     fi
   fi
 
@@ -745,7 +1030,9 @@ if [[ -z "${WORKSPACE_ROOT}" ]]; then
   if [[ "${VERIFY_MODE}" == "true" ]]; then
     WORKSPACE_ROOT="${DEFAULT_WORKSPACE_ROOT}"
   else
-    WORKSPACE_ROOT="$(prompt "Workspace root" "${DEFAULT_WORKSPACE_ROOT}")"
+    WORKSPACE_ROOT="$(prompt "Workspace root" "${DEFAULT_WORKSPACE_ROOT}" \
+      "Folder that contains agent-skills and your repos. setup.init will write
+.env, .jira-config.yml, .skills, and a .gitignore block here.")"
   fi
 fi
 
@@ -763,29 +1050,20 @@ ENV_FILE="${WORKSPACE_ROOT}/.env"
 JIRA_FILE="${WORKSPACE_ROOT}/.jira-config.yml"
 SKILLS_LINK="${WORKSPACE_ROOT}/.skills"
 
-DEFAULT_ORG_NAME="$(basename "${WORKSPACE_ROOT}")"
-if [[ -z "${DEFAULT_ORG_NAME}" || "${DEFAULT_ORG_NAME}" == "/" ]]; then
-  DEFAULT_ORG_NAME="Local Workspace"
-fi
-
+# Pre-detect GitHub org so we can offer a richer ORG_NAME default.
 DEFAULT_GITHUB_ORG=""
 if DEFAULT_GITHUB_ORG="$(detect_github_org_from_siblings "${WORKSPACE_ROOT}" 2>/dev/null)"; then
   :
 elif command -v gh >/dev/null 2>&1; then
   DEFAULT_GITHUB_ORG="$(gh api user --jq .login 2>/dev/null || true)"
-else
-  DEFAULT_GITHUB_ORG=""
 fi
 
-ORG_NAME="$(prompt "Display name for this workspace" "${DEFAULT_ORG_NAME}")"
-GITHUB_ORG="$(prompt "GitHub owner/user for repos (optional unless cloning/pushing/PRs)" "${DEFAULT_GITHUB_ORG}")"
-GITHUB_DEFAULT_BRANCH="$(prompt "Default branch" "main")"
-
+# Decide on Jira/Confluence first so we can chain inferences.
 if [[ "${JIRA_MODE}" == "yes" ]]; then
   USE_JIRA="yes"
 elif [[ "${JIRA_MODE}" == "no" ]]; then
   USE_JIRA="no"
-elif confirm "Use Jira for issue-aware work" "no"; then
+elif confirm "Configure Jira for issue-aware work" "no"; then
   USE_JIRA="yes"
 else
   USE_JIRA="no"
@@ -798,12 +1076,130 @@ JIRA_API_TOKEN=""
 JIRA_PROJECT_KEYS=""
 
 if [[ "${USE_JIRA}" == "yes" ]]; then
-  JIRA_HOST="$(prompt "Jira host URL" "")"
-  JIRA_AUTH_TYPE="$(prompt "Jira auth type" "bearer")"
-  JIRA_LOGIN="$(prompt "Jira login/email (optional for bearer)" "")"
-  JIRA_PROJECT_KEYS="$(prompt "Jira project keys, comma-separated" "")"
-  JIRA_API_TOKEN="$(prompt_secret "Jira API token (optional; written only to gitignored .env)" "")"
+  echo "" >&2
+  echo "Jira setup. Values are written to ${ENV_FILE} which is gitignored." >&2
+
+  JIRA_HOST="$(prompt "Jira host URL" "" \
+"REQUIRED for Jira. Full URL with scheme.
+EXAMPLES:
+  https://acme.atlassian.net   (Atlassian Cloud)
+  https://jira.acme.example.com (self-hosted)" \
+    validate_url)"
+
+  JIRA_AUTH_TYPE="$(prompt "Jira auth type (bearer | basic)" "bearer" \
+"OPTIONAL. 'bearer' for API tokens / PATs, 'basic' for email + token.")"
+
+  local_login_help="OPTIONAL for bearer; REQUIRED for basic.
+EXAMPLE: person@acme.example.com"
+  JIRA_LOGIN="$(prompt "Jira login / email" "" "${local_login_help}" validate_email_or_blank)"
+
+  # Suggest a project key derived from a ticket if the user pastes one.
+  jira_keys_help="REQUIRED for Jira. Comma-separated project keys (the prefix in ticket IDs).
+EXAMPLE: ABC,PLAT,KVB  -> recognises ABC-123, PLAT-9, KVB-42.
+This is NOT the API token. Tip: paste a ticket key (e.g. ABC-123) or ticket URL
+and setup.init will pick the project key for you."
+  raw_keys="$(prompt "Jira project keys" "" "${jira_keys_help}")"
+  if inferred_key="$(extract_project_key_from_ticket "${raw_keys}")"; then
+    if is_interactive; then
+      echo "    Detected project key '${inferred_key}' from ticket input." >&2
+    fi
+    raw_keys="${inferred_key}"
+  fi
+  # Re-validate; in non-interactive mode we accept whatever default came in.
+  if validate_project_keys "${raw_keys}" >/dev/null 2>&1; then
+    JIRA_PROJECT_KEYS="${raw_keys}"
+  else
+    JIRA_PROJECT_KEYS="${raw_keys}"
+    if is_interactive; then
+      echo "    Storing the value as-is. Re-run setup.init to fix." >&2
+    fi
+  fi
+
+  echo "" >&2
+  echo "    Jira API token / PAT. Generate one at your Jira instance's" >&2
+  echo "    'Personal Access Tokens' or 'API tokens' page." >&2
+  echo "    The token is stored ONLY in ${ENV_FILE} (gitignored)." >&2
+  JIRA_API_TOKEN="$(prompt_secret "Jira API token (leave blank to skip)" "")"
 fi
+
+# Confluence
+if [[ "${CONFLUENCE_MODE}" == "yes" ]]; then
+  USE_CONF="yes"
+elif [[ "${CONFLUENCE_MODE}" == "no" ]]; then
+  USE_CONF="no"
+elif [[ "${USE_JIRA}" == "yes" ]] && confirm "Also configure Confluence (often paired with Jira)" "no"; then
+  USE_CONF="yes"
+elif [[ "${USE_JIRA}" != "yes" ]] && confirm "Configure Confluence for docs-aware work" "no"; then
+  USE_CONF="yes"
+else
+  USE_CONF="no"
+fi
+
+CONF_HOST=""
+CONF_LOGIN=""
+CONF_TOKEN=""
+CONF_SPACES=""
+
+if [[ "${USE_CONF}" == "yes" ]]; then
+  echo "" >&2
+  echo "Confluence setup. Values are written to ${ENV_FILE} which is gitignored." >&2
+
+  default_conf_host=""
+  if [[ -n "${JIRA_HOST}" ]]; then
+    default_conf_host="$(infer_confluence_from_jira "${JIRA_HOST}" || true)"
+    if [[ -n "${default_conf_host}" ]] && is_interactive; then
+      echo "    Inferred Confluence host from Jira host." >&2
+    fi
+  fi
+  CONF_HOST="$(prompt "Confluence host URL" "${default_conf_host}" \
+"OPTIONAL. Full URL with scheme.
+EXAMPLES:
+  https://acme.atlassian.net/wiki  (Atlassian Cloud)
+  https://confluence.acme.example.com (self-hosted)" \
+    validate_url)"
+
+  CONF_LOGIN="$(prompt "Confluence login / email" "${JIRA_LOGIN}" \
+"OPTIONAL. Usually the same email as Jira on Atlassian Cloud." validate_email_or_blank)"
+
+  echo "" >&2
+  echo "    Confluence API token. Stored ONLY in ${ENV_FILE} (gitignored)." >&2
+  CONF_TOKEN="$(prompt_secret "Confluence API token (leave blank to skip)" "")"
+
+  CONF_SPACES="$(prompt "Confluence space keys (comma-separated, optional)" "" \
+"OPTIONAL. Spaces the agent may consult.
+EXAMPLE: ENG,ARCH,RUN")"
+fi
+
+# Now derive defaults that depend on Jira/Confluence answers.
+DEFAULT_ORG_NAME=""
+if [[ -n "${JIRA_HOST}" ]]; then
+  DEFAULT_ORG_NAME="$(prettify_slug "$(infer_org_from_jira_host "${JIRA_HOST}")")"
+elif [[ -n "${CONF_HOST}" ]]; then
+  DEFAULT_ORG_NAME="$(prettify_slug "$(infer_org_from_jira_host "${CONF_HOST}")")"
+elif [[ -n "${DEFAULT_GITHUB_ORG}" ]]; then
+  DEFAULT_ORG_NAME="$(prettify_slug "${DEFAULT_GITHUB_ORG}")"
+else
+  DEFAULT_ORG_NAME="$(basename "${WORKSPACE_ROOT}")"
+  [[ -z "${DEFAULT_ORG_NAME}" || "${DEFAULT_ORG_NAME}" == "/" ]] && DEFAULT_ORG_NAME="Local Workspace"
+fi
+
+ORG_NAME="$(prompt "Display name for this workspace" "${DEFAULT_ORG_NAME}" \
+"REQUIRED. Used in summaries, PR descriptions, and stakeholder output.
+EXAMPLES: 'Acme Platform', 'Open Banking Team', 'Local Workspace'." \
+  validate_org_name)"
+
+DEFAULT_ORG_DOMAIN="$(infer_org_domain "${JIRA_LOGIN}" "${DEFAULT_GITHUB_ORG}" "${JIRA_HOST}")"
+ORG_DOMAIN="$(prompt "Org email/identity domain" "${DEFAULT_ORG_DOMAIN}" \
+"OPTIONAL. Used when generating PR / release-note text.
+EXAMPLE: acme.example.com. Use 'localhost' for purely local dry runs.")"
+
+GITHUB_ORG="$(prompt "GitHub owner/user for repos" "${DEFAULT_GITHUB_ORG}" \
+"OPTIONAL. Required only for clone, push, or PR work.
+EXAMPLE: acme-eng. Leave blank for offline / read-only planning.")"
+
+GITHUB_DEFAULT_BRANCH="$(prompt "Default base branch" "main" \
+"REQUIRED. Default base branch for new feature work.
+COMMON VALUES: main, master, develop, trunk." validate_branch_name)"
 
 PROJECTS_JSON="$(detect_projects_json "${WORKSPACE_ROOT}" "${GITHUB_DEFAULT_BRANCH}")"
 DETECTED_COUNT="$(count_detected_projects "${WORKSPACE_ROOT}")"
@@ -826,10 +1222,14 @@ else
   echo "Updating generated setup block in ${ENV_FILE}"
 fi
 
+# Restrict permissions on .env (it may carry secrets).
+chmod 600 "${ENV_FILE}" 2>/dev/null || true
+
 write_env_block \
   "${ENV_FILE}" \
   "${WORKSPACE_ROOT}" \
   "${ORG_NAME}" \
+  "${ORG_DOMAIN}" \
   "${GITHUB_ORG}" \
   "${GITHUB_DEFAULT_BRANCH}" \
   "${USE_JIRA}" \
@@ -838,6 +1238,11 @@ write_env_block \
   "${JIRA_LOGIN}" \
   "${JIRA_API_TOKEN}" \
   "${JIRA_PROJECT_KEYS}" \
+  "${USE_CONF}" \
+  "${CONF_HOST}" \
+  "${CONF_LOGIN}" \
+  "${CONF_TOKEN}" \
+  "${CONF_SPACES}" \
   "${PROJECTS_JSON}"
 
 JIRA_CREATED="false"
@@ -849,6 +1254,7 @@ if [[ "${USE_JIRA}" == "yes" ]]; then
   else
     echo "Keeping existing ${JIRA_FILE}"
   fi
+  chmod 600 "${JIRA_FILE}" 2>/dev/null || true
   update_jira_project_key "${JIRA_FILE}" "${JIRA_PROJECT_KEYS}"
 fi
 
@@ -871,7 +1277,7 @@ GITIGNORE_STATUS="$(update_workspace_gitignore "${WORKSPACE_ROOT}")"
 case "${GITIGNORE_STATUS}" in
   created) echo "Created ${WORKSPACE_ROOT}/.gitignore with agent-skills entries" ;;
   updated) echo "Refreshed agent-skills block in ${WORKSPACE_ROOT}/.gitignore" ;;
-  skipped) : ;;  # no .gitignore and workspace is not a git repo, nothing to do
+  skipped) : ;;
 esac
 
 # Validate the produced .env can be sourced and PROJECTS_JSON parses.
@@ -891,6 +1297,19 @@ else
   fi
 fi
 
+# Final duplicate-key sanity check.
+DUP_FOUND=0
+for k in "${MANAGED_KEYS[@]}"; do
+  c="$(count_managed_key_duplicates "${ENV_FILE}" "${k}")"
+  if [[ "${c}" -gt 0 ]]; then
+    echo "Warning: ${k} appears ${c} time(s) outside the marker block in ${ENV_FILE}" >&2
+    DUP_FOUND=1
+  fi
+done
+if [[ "${DUP_FOUND}" -eq 1 ]]; then
+  echo "Run ./setup.init --verify for details." >&2
+fi
+
 cat <<EOF
 
 ----------------------------------------
@@ -902,6 +1321,7 @@ Detected repos : ${DETECTED_COUNT} (under ${WORKSPACE_ROOT})
 .skills        : ${SYMLINK_STATUS}
 .gitignore     : ${GITIGNORE_STATUS}
 Jira           : $([[ "${USE_JIRA}" == "yes" ]] && echo "configured (${JIRA_FILE})" || echo "skipped")
+Confluence     : $([[ "${USE_CONF}" == "yes" ]] && echo "configured" || echo "skipped")
 
 Next steps:
 1. Open ${ENV_FILE} once and confirm build/format/Jira values look correct.

@@ -40,8 +40,10 @@ cd agent-skills
 ./setup.init
 ```
 
-This creates workspace-level configuration and a `.skills` link that local assistants can reference.
-See [installation](installation.md) and [configuration](configuration.md) for details.
+`setup.init` asks a short set of questions, infers safe defaults from your Jira host / GitHub org /
+sibling repos where possible, and writes everything to a managed marker block in
+`<workspace-root>/.env`. Confluence configuration is optional and offered after Jira. Re-run
+`./setup.init --verify` at any time.
 
 ## In-repo / cloud-agent mode
 
@@ -51,10 +53,11 @@ attached.
 
 1. Copy [`.agent-skills.example.yml`](../.agent-skills.example.yml) to `.agent-skills.yml` in the
   target repository.
-2. Fill in the `project:` block.
+2. Fill in the `project:` block. Optionally fill in `jira:` and `confluence:` host metadata.
 3. Vendor the skills you need into the repository, or reference the relevant `SKILL.md` files from
   the agent's instruction surface.
-4. Put secrets in the host platform's secret mechanism, not in `.agent-skills.yml`.
+4. Put secrets (`JIRA_API_TOKEN`, `CONFLUENCE_API_TOKEN`, `GITHUB_TOKEN`) in the host platform's
+  secret mechanism, not in `.agent-skills.yml`.
 5. Add `.cache/` to the target repository's `.gitignore`.
 
 See [execution modes](execution-modes.md) for the full mode comparison.

@@ -74,7 +74,35 @@ REQUIRED_FILES = [
     "eval-runs/v0.10.0/summary.md",
     "eval-runs/v0.10.0/issue-investigator-read-only-investigation.md",
     "eval-runs/v0.10.0/code-reviewer-unavailable-context.md",
+    "eval-runs/v0.11.0/summary.md",
+    "eval-runs/v0.11.0/setup-flow-hardening.md",
 ]
+
+# Setup-managed environment keys. They MUST appear inside the
+# `# >>> agent-skills setup.init` ... `# <<< agent-skills setup.init` marker
+# block in `.env.example` (and any user-generated `.env`) — never as a second
+# top-level definition outside the block. Duplicates cause silent overrides.
+SETUP_MANAGED_KEYS = [
+    "ORG_NAME",
+    "ORG_DOMAIN",
+    "WORKSPACE_ROOT",
+    "GITHUB_ORG",
+    "GITHUB_DEFAULT_BRANCH",
+    "PROJECTS_JSON",
+    "JIRA_CONFIG_FILE",
+    "JIRA_HOST",
+    "JIRA_AUTH_TYPE",
+    "JIRA_LOGIN",
+    "JIRA_API_TOKEN",
+    "JIRA_PROJECT_KEYS",
+    "JIRA_KEY_REGEX",
+    "CONFLUENCE_HOST",
+    "CONFLUENCE_LOGIN",
+    "CONFLUENCE_API_TOKEN",
+    "CONFLUENCE_SPACE_KEYS",
+]
+SETUP_MARKER_START = "# >>> agent-skills setup.init"
+SETUP_MARKER_END = "# <<< agent-skills setup.init"
 
 REQUIRED_SKILL_SECTIONS = [
     "Purpose",
@@ -704,6 +732,53 @@ def check_generated_files(result: Result) -> None:
             result.warn(f"local generated/cache file exists and should not be committed: {path.name}")
 
 
+def check_env_example_marker_block(result: Result) -> None:
+    """`.env.example` must keep all setup-managed keys inside one marker block.
+
+    A duplicate top-level definition outside the block silently overrides the
+    generated value at runtime ("last assignment wins" in shell sourcing).
+    """
+    path = ROOT / ".env.example"
+    if not path.exists():
+        return
+    text = read_text(path)
+    starts = [i for i, line in enumerate(text.splitlines()) if line == SETUP_MARKER_START]
+    ends = [i for i, line in enumerate(text.splitlines()) if line == SETUP_MARKER_END]
+    if len(starts) != 1 or len(ends) != 1 or starts[0] >= ends[0]:
+        result.error(
+            f".env.example: must contain exactly one '{SETUP_MARKER_START}' ... "
+            f"'{SETUP_MARKER_END}' block (found {len(starts)} start, {len(ends)} end)"
+        )
+        return
+
+    in_block_start, in_block_end = starts[0], ends[0]
+    lines = text.splitlines()
+    inside_pattern = re.compile(
+        r"^\s*(?:export\s+)?(" + "|".join(SETUP_MANAGED_KEYS) + r")\s*="
+    )
+    in_quote = False
+    quote_char = ""
+    for index, line in enumerate(lines):
+        if in_quote:
+            if quote_char in line:
+                in_quote = False
+                quote_char = ""
+            continue
+        if in_block_start <= index <= in_block_end:
+            # Track multi-line single-quoted values (PROJECTS_JSON).
+            stripped = line.rstrip()
+            if re.search(r"=\s*'[^']*$", stripped):
+                in_quote = True
+                quote_char = "'"
+            continue
+        match = inside_pattern.match(line)
+        if match:
+            result.error(
+                f".env.example:{index + 1}: setup-managed key {match.group(1)} "
+                f"defined OUTSIDE the marker block; move it inside or remove it"
+            )
+
+
 def main() -> int:
     result = Result(errors=[], warnings=[])
     check_required_files(result)
@@ -714,6 +789,7 @@ def main() -> int:
     check_skill_link_consistency(result)
     check_forbidden_content(result)
     check_generated_files(result)
+    check_env_example_marker_block(result)
 
     for warning in result.warnings:
         print(f"WARN {warning}")

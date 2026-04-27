@@ -60,14 +60,15 @@ Every `SKILL.md`'s **Setup Preflight** runs this resolution in order:
 Each value the skills need (`org_name`, `github_org`, `github_default_branch`, the project's
 `stack`/`build`/`format`/`base_branch`, etc.) is resolved with this precedence:
 
-1. Process environment variable (e.g. `GITHUB_ORG`, `JIRA_HOST`).
+1. Process environment variable (e.g. `GITHUB_ORG`, `JIRA_HOST`, `CONFLUENCE_HOST`).
 2. `.agent-skills.yml` (in-repo mode) **or** `${WORKSPACE_ROOT}/.env` (local-workspace mode).
 3. Repo-file inference — only for `stack`, `build`, `format` derived from `pom.xml` / `package.json`
   / `pyproject.toml` / `go.mod`. Never for org or credentials.
 4. If still missing for the requested task, stop with `Missing required setup: <NAME>`.
 
-Secrets (Jira tokens, GitHub tokens, API keys) **always** come from environment variables in both
-modes. They are never written to `.agent-skills.yml`, which is committed to the repository.
+Secrets (Jira tokens, Confluence tokens, GitHub tokens, API keys) **always** come from environment
+variables in both modes. They are never written to `.agent-skills.yml`, which is committed to the
+repository.
 
 ## Cache path resolution
 
