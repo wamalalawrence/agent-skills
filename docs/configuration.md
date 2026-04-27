@@ -49,9 +49,11 @@ See [`.env.example`](../.env.example) for the full annotated list. The minimum u
 | `GITHUB_ORG`                     | Required only for GitHub repository discovery, clone, push, or PR work |
 | `GITHUB_DEFAULT_BRANCH`          | Default base branch when a project has no override                     |
 | `PROJECTS_JSON`                  | Multi-project map with stack and command metadata                      |
-| `CODE_REVIEWER_MODEL`            | Optional model-routing hint for the nested `code-reviewer` skill       |
+| `CODE_REVIEWER_MODEL`            | Optional model-routing hint. The literal `default` is a sentinel meaning "let the host pick its model"; replace the value to pin a specific model |
 | `JIRA_HOST` and `JIRA_API_TOKEN` | Required only for Jira-driven or story-aware modes                     |
 | `CONFLUENCE_HOST` and `CONFLUENCE_API_TOKEN` | Required only for Confluence-aware doc lookups             |
+| `SONAR_HOST_URL` and `SONAR_TOKEN` | Optional. Required only when CI/CD publishes a Sonar report the agent should reference |
+| `ENVIRONMENTS_JSON`              | Optional. Read-only pointers (host, log paths, kubectl context) to deployed environments used by `issue-investigator` for live evidence collection |
 
 `setup.init` auto-populates several of these where it safely can:
 
