@@ -61,6 +61,10 @@ cd agent-skills
 ./setup.init
 ```
 
+You do not copy `agent-skills` into a second workspace after cloning it. In local-workspace mode,
+the workspace root is simply the common parent folder that already contains your `agent-skills`
+clone and the sibling repos it should reason about.
+
 The command asks a short set of questions, then creates or updates:
 
 - `.env` in the workspace root (a clearly marked generated block; manual edits **outside** that

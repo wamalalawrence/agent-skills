@@ -6,6 +6,28 @@ All notable project changes should be recorded here.
 
 - No unreleased changes.
 
+## 0.12.0 - Workspace-Root Prompt Clarity
+
+### Changed
+
+- `setup.init` workspace-root prompt now states explicitly that the answer
+  is the **parent folder of your `agent-skills` clone and any sibling repos
+  it should manage** (example: `/path/to/work` containing `agent-skills/`,
+  `repo-a/`, `repo-b/`). Removes the prior wording that some users read as
+  "copy `agent-skills` into a new workspace folder."
+- `docs/installation.md` and `docs/quickstart.md` add a one-paragraph
+  clarification to the local-workspace section restating the same
+  expectation in the same words as the prompt, so prompt and docs no longer
+  drift.
+- `VERSION` and all `SKILL.md` `metadata.version` values bumped to `0.12.0`.
+
+### Not Changed (deliberate)
+
+- No `SKILL.md` content changed.
+- No new top-level or nested skills.
+- No changes to setup-managed keys, marker-block discipline, validators, or
+  CI behaviour introduced in 0.11.0.
+
 ## 0.11.0 - Setup Flow Hardening
 
 ### Added

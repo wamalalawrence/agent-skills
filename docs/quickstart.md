@@ -40,6 +40,10 @@ cd agent-skills
 ./setup.init
 ```
 
+Here, the workspace root is the parent folder that contains the `agent-skills` clone plus any
+sibling repos you want the assistant to work across. You are not expected to copy `agent-skills`
+into another folder after cloning it.
+
 `setup.init` asks a short set of questions, infers safe defaults from your Jira host / GitHub org /
 sibling repos where possible, and writes everything to a managed marker block in
 `<workspace-root>/.env`. Confluence configuration is optional and offered after Jira. Re-run

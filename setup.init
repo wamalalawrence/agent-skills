@@ -1031,8 +1031,10 @@ if [[ -z "${WORKSPACE_ROOT}" ]]; then
     WORKSPACE_ROOT="${DEFAULT_WORKSPACE_ROOT}"
   else
     WORKSPACE_ROOT="$(prompt "Workspace root" "${DEFAULT_WORKSPACE_ROOT}" \
-      "Folder that contains agent-skills and your repos. setup.init will write
-.env, .jira-config.yml, .skills, and a .gitignore block here.")"
+      "Parent folder of your agent-skills clone and any sibling repos it
+should manage. Example: /path/to/work contains agent-skills/, repo-a/, and
+repo-b/. setup.init will write .env, .jira-config.yml, .skills, and a
+.gitignore block in that parent folder.")"
   fi
 fi
 
