@@ -256,6 +256,34 @@ table, removing a deprecated bucket, retiring a cluster). The agent may particip
 Even with all of the above, the agent's role is to author the runbook, not to invoke the
 destructive command itself.
 
+## Enforcement artifacts
+
+The policy is reinforced by two concrete artifacts in this repository:
+
+- **`safety_acknowledgement` block in
+  [definition-of-done.json](../skills/software-engineer/references/definition-of-done.md#schema).**
+  `software-engineer` Phase 5.3 writes it whenever the change introduces or performs any
+  mutating action against a deployed environment, or touches credentials / IAM / secrets /
+  backups / monitoring / network policy. It captures the environment, how it was confirmed
+  (a concrete pointer, not a guess), the credential used and its source, the blast radius,
+  the execution path (`agent` / `ci-pipeline` / `operator-runbook` / `not-applicable`), and
+  explicit `no_discovered_credentials_invoked` and `no_in_repo_tokens_invoked` flags.
+  `code-reviewer` refuses to advance — surfaces a `blocker` finding — when the block is
+  missing on a diff that obviously requires it, when a discovered/in-repo credential was
+  invoked, when a destructive command was used without a populated authorization
+  (approver + ticket + runbook_path), when `execution_path: agent` for a
+  destructive/IAM/secret/backup change, or when monitoring/IAM/network-policy was changed
+  without an explicit waiver. See the schema and rules in
+  [definition-of-done.md](../skills/software-engineer/references/definition-of-done.md).
+- **Credential blast-radius probe in `setup.init`.** A warn-only heuristic that runs on
+  first setup and on `setup.init --verify`. It scans the configured `.env` and the current
+  shell for destructive-capable cloud / orchestrator / database credentials
+  (`AWS_ACCESS_KEY_ID`, `KUBECONFIG`, `DATABASE_ADMIN_URL`, etc.) and warns the operator to
+  scope them to a least-privilege role with no delete-bucket / terminate-instance /
+  drop-database / delete-snapshot / IAM-modify / backup-mutation privileges. The probe
+  cannot inspect cloud-provider IAM policies — it flags the *presence* of broad
+  credentials so the operator can confirm scoping. Skip with `--no-credential-probe`.
+
 ## Skill self-check (every skill must pass)
 
 Each `SKILL.md` in this repository must, at any time:

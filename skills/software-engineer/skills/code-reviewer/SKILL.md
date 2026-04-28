@@ -16,7 +16,7 @@ compatibility: >-
   .agent-skills.yml). See docs/execution-modes.md.
 metadata:
   author: wamalalawrence
-  version: "0.15.0"
+  version: "0.16.0"
   homepage: "https://github.com/wamalalawrence/agent-skills"
 argument-hint: >-
   optional: mode inner|outer, base branch, issue key/URL, PR URL, or task description
@@ -214,6 +214,22 @@ Surface a `major` finding when any of the following is missing or empty:
   `${AGENT_SKILLS_CACHE_DIR:-${WORKSPACE_ROOT:-$REPO_ROOT}/.cache/agent-skills}/<issue-key>/definition-of-done.json`
   per the [Definition of Done schema](../../references/definition-of-done.md). Any `false` flag
   without a written waiver is itself a `blocker`.
+- **`safety_acknowledgement` block in `definition-of-done.json` whenever the diff touches a
+  deployed environment, credentials, IAM, secrets, backups, monitoring, or network policy.**
+  The reviewer must refuse to advance — surface a `blocker` finding — when any of:
+  the block is missing on a diff that obviously requires it (changes to IaC, CI deployment,
+  IAM, secret stores, migrations, or any cloud-provider command);
+  `safety_acknowledgement.applies: true` but `no_discovered_credentials_invoked: false` or
+  `no_in_repo_tokens_invoked: false`;
+  `destructive_command_used: true` without a populated `destructive_command_authorization`
+  (approver + ticket + runbook_path);
+  `execution_path: agent` for a destructive / IAM / secret / backup change;
+  `monitoring_unchanged: false` / `iam_unchanged: false` /
+  `network_policy_unchanged: false` without an explicit waiver in `waivers[]`;
+  `environment: production` with `execution_path: agent`;
+  `backup_restore_tested` is `null` or older than 90 days when the runbook depends on
+  restoring from backup. See the
+  [destructive-action safety policy](../../../../docs/destructive-action-safety.md).
 - Inner-loop only: `--since-last-review` delta so the reviewer focuses on changes since the previous
   round, not the whole staged diff again.
 

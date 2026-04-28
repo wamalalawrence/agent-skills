@@ -6,6 +6,109 @@ All notable project changes should be recorded here.
 
 - No unreleased changes.
 
+## 0.16.0 - Safety-Acknowledgement Artifact And Credential Blast-Radius Probe
+
+### Added
+
+- New `safety_acknowledgement` block in
+  `references/definition-of-done.md` schema. `software-engineer` Phase 5.3
+  now writes it whenever the change introduces or performs any mutating
+  action against a deployed environment, or touches credentials / IAM /
+  secrets / backups / monitoring / network policy. The block captures
+  environment, how it was confirmed (a concrete pointer, not a guess),
+  the credential used and its source (`host-secret-manager` /
+  `env-var` / `user-session`), the blast radius, the execution path
+  (`agent` / `ci-pipeline` / `operator-runbook` / `not-applicable`),
+  explicit `no_discovered_credentials_invoked` and
+  `no_in_repo_tokens_invoked` flags, backup-isolation status, and
+  monitoring/IAM/network-policy unchanged flags.
+- `code-reviewer` hard handoff contract requires the
+  `safety_acknowledgement` block whenever the diff touches a deployed
+  environment, credentials, IAM, secrets, backups, monitoring, or
+  network policy. The reviewer surfaces a `blocker` finding when the
+  block is missing on a diff that obviously requires it, when a
+  discovered/in-repo credential was invoked, when a destructive command
+  was used without a populated authorization
+  (approver + ticket + runbook_path), when `execution_path: agent` for
+  a destructive/IAM/secret/backup change, when monitoring/IAM/network
+  policy was changed without a written waiver, when `environment:
+  production` is paired with `execution_path: agent`, or when
+  `backup_restore_tested` is null/older than 90 days for a runbook that
+  depends on restore.
+- `setup.init` gains a warn-only **credential blast-radius probe** that
+  runs at the end of first setup and on `setup.init --verify`. It
+  scans the configured `.env` and the current shell for
+  destructive-capable cloud / orchestrator / database credentials
+  (`AWS_ACCESS_KEY_ID`, `AWS_SECRET_ACCESS_KEY`, `AWS_SESSION_TOKEN`,
+  `GOOGLE_APPLICATION_CREDENTIALS`, `GCP_SERVICE_ACCOUNT_KEY`,
+  `AZURE_CLIENT_SECRET`, `DIGITALOCEAN_TOKEN`, `DO_API_TOKEN`,
+  `LINODE_TOKEN`, `HCLOUD_TOKEN`, `KUBECONFIG`, `DATABASE_ADMIN_URL`,
+  `POSTGRES_ADMIN_PASSWORD`, `MONGODB_ADMIN_URI`, others) and warns the
+  operator to scope them to a least-privilege role with no delete-bucket
+  / terminate-instance / drop-database / delete-snapshot / IAM-modify /
+  backup-mutation privileges. The probe cannot inspect cloud-provider
+  IAM policies — it flags the *presence* of broad credentials so the
+  operator can confirm scoping in the provider console. Skip with
+  `--no-credential-probe`.
+- `eval-runs/v0.16.0/` directory with `summary.md` and the
+  `safety-ack-and-cred-probe.md` scenario evaluating the new artifact
+  and probe against the `v0.15.0` failure-mode chain.
+
+### Changed
+
+- `software-engineer/SKILL.md` Phase 5.3 ("Definition-of-Done artifact")
+  has a new checklist item enforcing the `safety_acknowledgement`
+  writeback (with the omit-when-not-applicable escape: `applies: false`
+  + one-line reason for purely local changes).
+- `references/definition-of-done.md` Rules section adds explicit
+  reviewer-blocking conditions for the new block, including the
+  "missing on a diff that obviously requires it" case (changes to IaC,
+  CI deployment, IAM, secret stores, migrations, or any cloud-provider
+  command).
+- `docs/destructive-action-safety.md` gains an
+  "Enforcement artifacts" section documenting the
+  `safety_acknowledgement` block and the `setup.init` credential probe
+  as the two concrete artifacts that reinforce the policy.
+- `setup.init` `--help` and flag parsing add `--no-credential-probe`
+  alongside the existing `--no-connectivity-check` flag.
+- `VERSION`, README status line, and all six `SKILL.md`
+  `metadata.version` values bumped to `0.16.0`.
+
+### Why
+
+`v0.15.0` introduced the destructive-action safety floor as policy +
+SKILL content. The two follow-ups in this release operationalise that
+policy at two new points:
+
+- The reviewer now has a structured artifact to gate on, not just prose
+  in the SKILL.md. A diff that touches a deployed environment cannot
+  reach `PASS` without an explicit, machine-checkable acknowledgement
+  that the engineer used scoped credentials, did not invoke discovered
+  or in-repo tokens, confirmed the environment via a concrete pointer,
+  isolated backups, and is not asking the agent itself to execute the
+  destructive step.
+- The operator now sees a warning at `setup.init` time when the shell
+  or `.env` carries credentials that a future agent process would
+  inherit and that, combined with the failure mode in `v0.15.0`, would
+  let the agent perform destructive cloud operations. The probe is
+  warn-only and heuristic; it does not promise to catch every misscope.
+  It does promise to surface the most common cases (long-lived AWS
+  access keys, broad kubeconfig, admin DB URIs) at a moment when the
+  operator can act.
+
+### Not Changed (deliberate)
+
+- No new top-level or nested skills.
+- No skill renames; existing collaboration handoffs unchanged.
+- No new required environment variables (the probe reads the existing
+  `.env` and the current shell). No `.env.example` change.
+- The probe does not block setup, fail CI, or touch state. It is
+  intentionally warn-only because IAM scoping cannot be inferred from
+  a shell variable name alone.
+- The `safety_acknowledgement` block is intentionally optional for
+  purely local changes (`applies: false` with a one-line reason) so the
+  artifact does not become busywork on docs/refactor/format diffs.
+
 ## 0.15.0 - Destructive-Action Safety Floor
 
 ### Added

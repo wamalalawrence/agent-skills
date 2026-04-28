@@ -17,7 +17,7 @@ compatibility: >-
   .agent-skills.yml). See docs/execution-modes.md.
 metadata:
   author: wamalalawrence
-  version: "0.15.0"
+  version: "0.16.0"
   homepage: "https://github.com/wamalalawrence/agent-skills"
 ---
 
@@ -642,6 +642,18 @@ written waiver.
   `observability_added` set honestly.
 - [ ] `git.no_no_verify: true` and `git.branch_starts_with_ticket_key: true` for ticket-driven work.
 - [ ] `scope.shared_library_changed` truthful; if `true`, list affected downstream consumers.
+- [ ] **`safety_acknowledgement` block written truthfully.** Required whenever the change
+  introduces or performs any mutating action against a deployed environment, or touches
+  credentials / IAM / secrets / backups / monitoring / network policy. Capture the
+  environment, how it was confirmed (a concrete pointer such as a key in `${ENVIRONMENTS_JSON}`,
+  not a guess from a hostname), the credential used and its source
+  (`host-secret-manager` / `env-var` / `user-session`), the blast radius, the execution path
+  (`agent` / `ci-pipeline` / `operator-runbook` / `not-applicable`), and explicit
+  `no_discovered_credentials_invoked: true` and `no_in_repo_tokens_invoked: true` flags.
+  When the change is local-only with no such surface, set
+  `safety_acknowledgement.applies: false` with a one-line reason and skip the remaining
+  fields. See [destructive-action safety policy](../../docs/destructive-action-safety.md)
+  and the [Destructive Action Guardrails](#destructive-action-guardrails) section above.
 
 ### 5.4 Pull request
 
