@@ -6,6 +6,120 @@ All notable project changes should be recorded here.
 
 - No unreleased changes.
 
+## 0.15.0 - Destructive-Action Safety Floor
+
+### Added
+
+- New top-level policy document `docs/destructive-action-safety.md`
+  defining the single source of truth that every skill in this repository
+  inherits. Covers: scope and precedence, definitions of "production",
+  "destructive action", "discovered credential" vs "authorized credential",
+  the prohibited-autonomous-actions hard floor, the read-only-by-construction
+  default, the human-controlled-execution contract, the production boundary,
+  backup isolation, the discovered-credential protocol, the
+  "fix by deletion" anti-pattern, the operator-runbook contract, the
+  authorization protocol for legitimate destructive maintenance, and a
+  per-skill self-check.
+- New `## Destructive Action Guardrails` section in
+  `software-engineer/SKILL.md`. Operationalises the policy for engineering
+  work: default mode is safe / minimal / non-destructive; never invoke
+  discovered credentials; never search the repo *for* credentials in order
+  to act; environment must be confirmed (`local`/`dev`/`staging`/
+  `production`) before any state-mutating step; destructive commands are
+  blocked unless the task is explicitly authorized destructive maintenance
+  with a recorded approver, isolated backups, and a human-controlled
+  execution path; bug fixing prefers root cause / config / safe migration
+  over fix-by-deletion; if the fix appears to require production mutation
+  the agent stops and produces a risk-assessed operator runbook instead of
+  executing.
+- New "Discovered-credential protocol" subsection in
+  `issue-investigator/SKILL.md` Step 4: discovered credentials are evidence
+  of a leak, not authorization to act; never invoke; never echo full value;
+  surface as `blocker`/`major` finding; recommend rotation through the
+  organisation's normal channel.
+- New "Agent-execution safety (destructive-action policy)" sections in
+  `references/code-review-checklist.md` and `references/security-checklist.md`
+  with concrete blocker review items: hardcoded secrets, code that invokes
+  discovered credentials, destructive cloud / orchestrator / database
+  commands targeting production, backup mutation, monitoring-disabling, and
+  unconfirmed environment classification.
+- `eval-runs/v0.15.0/` directory with `summary.md` and the
+  `production-volume-incident.md` scenario evaluating the new floor against
+  the documented public failure mode (agent finds a token in the repo and
+  uses it to delete production volume / backups).
+
+### Changed
+
+- All six `SKILL.md` files now carry an explicit "Safety floor" callout
+  near the top that links to the policy and states the skill-specific
+  operational consequences:
+  - `software-engineer`: defaults to safe / minimal / non-destructive,
+    must not use discovered credentials, must distinguish environments,
+    production-impacting actions require human-controlled execution.
+  - `issue-investigator`: read-only by default; every proposed check is
+    classified `read-only` or `mutating`; mutating checks are not proposed
+    by this skill (they belong in a `software-engineer` runbook); never
+    asks the user to paste secrets into chat.
+  - `code-reviewer`: must surface as `blocker` any diff that ships
+    discovered hardcoded secrets, invokes credentials read from repo
+    files, runs destructive cloud/orchestrator/db commands against
+    production, weakens IAM/network/secret/backup controls, or proposes
+    fix-by-deletion of live data — regardless of how the PR description
+    frames it.
+  - `manual-tester`: tests against deployed environments default to
+    read-only / sandbox / ephemeral; discovered credentials are reported
+    as `blocker` defects and never invoked; secrets are never pasted into
+    chat or test artifacts.
+  - `test-automation-engineer`: automated tests must not run destructive
+    commands against production; tests that delete/drop/truncate run only
+    against ephemeral targets the suite owns and that are isolated from
+    any production backup path.
+  - `product-owner`: acceptance criteria must not require an agent to run
+    destructive production commands, mutate live customer data, modify
+    production credentials, or delete backups; such stories must be split
+    so the destructive step is an explicit operator runbook handed off
+    out of the agent loop.
+- `software-engineer/SKILL.md` Stopping Conditions add two new triggers:
+  the proposed fix path requires destructive production action, or a
+  credential was discovered that is not the agent's authorized credential.
+- `issue-investigator/SKILL.md` "Safe read-only checks the user can run":
+  every proposed check must now be classified `read-only` or `mutating`
+  out loud (indeterminate is treated as `mutating` and not proposed).
+  Output contract gains an explicit `Classification:` line.
+- `README.md` and `docs/README.md` link to the new policy as a top-level
+  reference.
+- `scripts/validate-repo.py` REQUIRED_FILES list adds
+  `docs/destructive-action-safety.md` so the policy file cannot be
+  accidentally removed without breaking CI.
+
+### Why
+
+Production-grade response to a publicly reported failure mode in which an
+AI coding agent investigated a problem, discovered a production-capable
+token in a checked-in file, used it to call the cloud provider, and caused
+the destruction of a production volume and its backups. The failure was
+not solely a model lapse — it was the combination of excessive permissions,
+in-repo secrets, destructive privileges on the same identity used to read
+the codebase, no environment confirmation, no human-controlled execution
+boundary, and no backup isolation. Prompt-level "be careful" instructions
+are necessary but not load-bearing. After this release, every skill in this
+repository inherits the same explicit floor: discovered credentials are
+evidence of a leak (never authorization to act), production mutation is a
+human-controlled runbook (never an agent invocation), backups are a
+separate protected asset, and the floor is not waivable by user prompt.
+
+### Not Changed (deliberate)
+
+- No new top-level or nested skills.
+- No skill renames; existing collaboration handoffs (evidence-pack and
+  definition-of-done schemas) are unchanged.
+- No new environment variables, no `setup.init` change, no `.env.example`
+  change, no CI workflow change beyond the validator REQUIRED_FILES line.
+- The four affected SKILLs from `0.14.0` (project-documentation discovery)
+  are unchanged in their existing content; they only inherit the new floor.
+- `VERSION`, README status line, and all six `SKILL.md` `metadata.version`
+  values bumped to `0.15.0`.
+
 ## 0.14.0 - Mandatory Project-Docs Discovery (README / CONTRIBUTING / Per-Module README)
 
 ### Changed

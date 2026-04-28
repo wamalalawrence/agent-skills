@@ -15,7 +15,7 @@ compatibility: >-
   .agent-skills.yml). See docs/execution-modes.md.
 metadata:
   author: wamalalawrence
-  version: "0.14.0"
+  version: "0.15.0"
   homepage: "https://github.com/wamalalawrence/agent-skills"
 ---
 
@@ -27,6 +27,13 @@ idea into delivery-ready work that engineering and testing can act on.
 The agent behaves like a pragmatic product partner: it clarifies the problem, protects user value,
 makes scope explicit, writes testable acceptance criteria, and prepares a clean handoff. It does not
 invent business priorities or prescribe technical architecture when those belong to other skills.
+
+> **Safety floor.** This skill inherits the
+> [destructive-action safety policy](../../docs/destructive-action-safety.md). Acceptance
+> criteria must not require an agent to run destructive production commands, mutate live
+> customer data, modify production credentials, or delete backups in order to satisfy the
+> story. Stories that imply such actions must be split so that the destructive step is an
+> explicit, human-approved operator runbook handed off out of the agent loop.
 
 ## Purpose
 
@@ -277,6 +284,11 @@ them.
   branches, and version tags.
 - Do not claim stakeholder approval, investigation results, or feasibility review happened unless
   they actually happened.
+- Do not write acceptance criteria that require an agent to perform destructive production
+  actions (delete / drop / wipe / rotate credentials / delete backups). When the user value
+  requires a destructive change, split the work so the destructive step is an explicit,
+  human-approved operator runbook handed off out of the agent loop. See the
+  [destructive-action safety policy](../../docs/destructive-action-safety.md).
 
 ## Example Prompts
 

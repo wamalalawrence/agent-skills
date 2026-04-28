@@ -66,3 +66,32 @@ OWASP-aligned security review for any backend service.
 - [ ] Log entries include a correlation id for traceability
 - [ ] No sensitive data in logs
 - [ ] Log injection prevented: user input sanitized before inclusion in log messages
+
+## Destructive-action and agent-execution safety
+
+See the [destructive-action safety policy](../../../docs/destructive-action-safety.md) for
+the full rules. Quick review items for any change that touches deployed environments,
+credentials, or backups:
+
+- [ ] No credential, token, key, password, kubeconfig, or connection string committed in
+  source, config, CI YAML, container images, or test fixtures (rotate any found via the
+  organisation's normal channel before merging)
+- [ ] No code path invokes a credential read from repository files; credentials come from
+  the host secret manager or environment, scoped to the operation
+- [ ] Destructive cloud / orchestrator / database commands (`terraform destroy`,
+  `kubectl delete`, `aws … delete-* / terminate-* / delete-bucket / delete-db-* /
+  delete-snapshot`, `gcloud … delete`, `gsutil rm -r`, `az … delete`, `helm uninstall`,
+  `docker volume rm`, `DROP`, `TRUNCATE`, `DELETE` without a reviewed `WHERE`) are gated
+  behind a human-controlled execution path, not invoked by the agent or the application
+- [ ] Production-environment commands use a separate, least-privileged credential without
+  destructive, IAM, key-management, or backup-deletion privileges
+- [ ] Backups, snapshots, replication targets, and retention policies are not modified by
+  this change; if they are, the change is explicitly authorized destructive maintenance
+  with a recorded approver
+- [ ] No "fix by deletion" of live resources; root-cause analysis preferred, runbook
+  authored when destructive maintenance is genuinely required
+- [ ] Monitoring, alerts, audit logs, and security tooling are not disabled or weakened by
+  this change
+- [ ] Environment is confirmed explicitly (`local` / `dev` / `staging` / `production`)
+  before any state-mutating step; not inferred from hostname / branch name / kubeconfig
+  context

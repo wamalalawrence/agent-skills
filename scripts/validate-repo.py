@@ -41,6 +41,7 @@ REQUIRED_FILES = [
     "docs/validation.md",
     "docs/skill-quality-scorecard.md",
     "docs/release-checklist.md",
+    "docs/destructive-action-safety.md",
     "scripts/validate-repo.py",
     "scripts/validate_skills.py",
     "skills/software-engineer/SKILL.md",

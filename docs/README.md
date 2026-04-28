@@ -19,3 +19,6 @@ Start here when reading the repository outside GitHub's main README.
   vocabulary.
 - [Known limitations](known-limitations.md) - what the skills cannot guarantee.
 - [Versioning](versioning.md) - release and compatibility policy.
+- [Destructive-action safety policy](destructive-action-safety.md) - the safety floor every
+  skill in this repository inherits; what an agent must never do autonomously, what counts as
+  a discovered credential, and how human-controlled execution must work.
