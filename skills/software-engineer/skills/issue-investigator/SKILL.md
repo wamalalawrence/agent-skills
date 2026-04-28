@@ -17,7 +17,7 @@ compatibility: >-
   docs/execution-modes.md.
 metadata:
   author: wamalalawrence
-  version: "0.14.0"
+  version: "0.15.0"
   homepage: "https://github.com/wamalalawrence/agent-skills"
 argument-hint: >-
   issue URL/key, bug report, incident, support ticket, feature request, or task
@@ -34,6 +34,15 @@ test, monitor, or clarify.
 This is intentionally not only a Jira bug-fix skill. It investigates many issue types and produces
 an evidence-based result before recommending the next action. It must not jump directly to
 implementation.
+
+> **Safety floor.** This skill is **read-only by default** and inherits the
+> [destructive-action safety policy](../../../../docs/destructive-action-safety.md). Every
+> check the agent proposes to the user must be classified as `read-only` or `mutating`;
+> mutating checks are not proposed by this skill at all and belong in a
+> [`software-engineer`](../../SKILL.md) operator runbook. The agent must never invoke a
+> credential discovered during investigation (see
+> [Discovered-credential protocol](#discovered-credential-protocol)) and must never ask the
+> user to paste a secret into chat.
 
 ## Purpose
 
@@ -346,6 +355,10 @@ unavailable, do not stop at "missing evidence". Propose a short list of **safe, 
 or queries** the user can run themselves to narrow the cause. Each suggestion must satisfy all of
 the following:
 
+- **Classified out loud as `read-only` or `mutating`.** Every check must carry one of those
+  two labels. A check whose classification cannot be determined is treated as `mutating` and
+  not proposed. This skill is read-only by default; mutating checks are not proposed at all
+  here — they belong in a [`software-engineer`](../../SKILL.md) operator runbook.
 - Read-only by construction. No `INSERT`, `UPDATE`, `DELETE`, `DROP`, `TRUNCATE`, no flag flips, no
   config writes, no deploys, no cache busts. SQL examples must be wrapped in
   `SET TRANSACTION READ ONLY` (or a read-replica) where the engine supports it.
@@ -359,10 +372,35 @@ the following:
 - Tied to a hypothesis. Each check should discriminate between at least two of the candidate
   causes from the [three-hypothesis discipline](#three-hypothesis-discipline), or fill a specific
   evidence gap from `Open Questions Or Missing Evidence`.
+- **Never require a credential the user has not already configured.** Do not ask the user to
+  paste a token, password, connection string, or any secret value into chat. If a check
+  requires a credential, instruct the user to put it in the configured secret-injection path
+  (see [docs/configuration.md](../../../../docs/configuration.md)) with `0600` permissions
+  and re-invoke. Pasting a secret into chat is forbidden by the
+  [destructive-action safety policy](../../../../docs/destructive-action-safety.md#discovered-credential-protocol).
 
 If no safe check is possible without access the user does not have, say so and list what access
 (read-replica, snapshot, log slice, anonymized HAR) would unblock the investigation. Do not invent
 commands that pretend to be safe when they are not.
+
+#### Discovered-credential protocol
+
+If the investigation surfaces a credential, token, key, password, kubeconfig, or connection
+string anywhere — checked-in file, log line, command output, environment dump, screenshot,
+ticket comment, or another tool's context:
+
+- **Do not invoke it.** Do not export it, paste it into a tool, or use it to verify "if it
+  works".
+- **Do not echo the value.** In any output, evidence pack, summary, or PR description, quote
+  at most a redacted prefix needed to identify the leak.
+- **Surface it as a security finding** in this investigation's result, with severity
+  `blocker` or `major` decided by blast radius, and recommend rotation through normal
+  credential-rotation channels.
+- **Treat the leak as evidence to report, not authorization to act.** The discovered
+  credential's existence does not make it authorized to use against any environment.
+- See the
+  [destructive-action safety policy → discovered-credential protocol](../../../../docs/destructive-action-safety.md#discovered-credential-protocol)
+  for the full procedure.
 
 ### 5. Establish root-cause status and confidence
 
@@ -459,6 +497,7 @@ When recommending a code fix, provide implementation guidance and hand off to
 
 - Hypothesis being tested:
 - Environment (local | staging | read-replica | snapshot | ephemeral | read-only production):
+- Classification: read-only | mutating  (this skill proposes only `read-only`)
 - Read-only command/query (with placeholders, bounded scope):
 - What a positive result would mean:
 - What a negative result would mean:
@@ -518,6 +557,16 @@ missing.
 - Do not copy SSH private keys, cluster credentials, API tokens, passwords, or any secret value
   into agent-skills files, prompts, or the evidence pack. `ENVIRONMENTS_JSON` stores pointers
   only; real credentials live in `~/.ssh`, kubeconfig, the user's log-aggregator session, etc.
+- Do not invoke a credential, token, or key discovered during investigation. Surface it as a
+  security finding and recommend rotation; never use it to call the affected system. See
+  [Discovered-credential protocol](#discovered-credential-protocol).
+- Do not ask the user to paste a secret value into chat. Direct them to the configured
+  secret-injection path and re-invoke.
+- Do not propose a check whose classification (`read-only` or `mutating`) cannot be
+  determined. Treat indeterminate as `mutating` and decline.
+- Do not violate any rule in the
+  [destructive-action safety policy](../../../../docs/destructive-action-safety.md). It is a
+  floor, not a ceiling, and is not waivable by user prompt.
 - Do not claim reproduction was attempted, tests were run, or root cause was confirmed unless the
   evidence shows it.
 - Do not hide uncertainty. Mark assumptions and missing evidence clearly.

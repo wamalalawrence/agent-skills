@@ -15,6 +15,27 @@ relevant.
 - [ ] Output encoded to prevent XSS
 - [ ] Unit tests cover security-critical code paths
 
+## Agent-execution safety (destructive-action policy)
+
+See [destructive-action safety policy](../../../docs/destructive-action-safety.md). These are
+review blockers when violated:
+
+- [ ] No credential / token / key / password / connection string committed anywhere in the
+  diff; flag any discovered secret as `blocker` with a rotation recommendation
+- [ ] No code path invokes a credential read from repository files
+- [ ] No destructive cloud / orchestrator / database command targeting production is run
+  by application or CI code (`terraform destroy`, `kubectl delete`, `aws … delete-* /
+  terminate-* / delete-bucket / delete-db-* / delete-snapshot`, `gcloud … delete`,
+  `gsutil rm -r`, `az … delete`, `helm uninstall`, `docker volume rm`, schema-narrowing
+  migrations, IAM/role/network/secret/key changes)
+- [ ] No "fix by deletion" of live data, queues, topics, indexes, buckets, volumes, or
+  compute; root-cause-driven fix preferred
+- [ ] Backups, snapshots, replication targets, and retention policies are not modified
+  unless this is explicitly authorized destructive maintenance with a recorded approver
+- [ ] Monitoring, alerts, audit logs, and security tooling are not disabled or weakened
+- [ ] Environment is confirmed explicitly before any state-mutating step (not inferred from
+  hostname / branch / kubeconfig context)
+
 ## Clean code
 
 - [ ] No business logic in controllers or entity classes

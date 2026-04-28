@@ -16,7 +16,7 @@ compatibility: >-
   .agent-skills.yml). See docs/execution-modes.md.
 metadata:
   author: wamalalawrence
-  version: "0.14.0"
+  version: "0.15.0"
   homepage: "https://github.com/wamalalawrence/agent-skills"
 ---
 
@@ -28,6 +28,14 @@ discovers workflow issues, and produces clear evidence for decisions and fixes.
 The agent behaves like a careful tester: it checks what should happen, explores what might go wrong,
 records what actually happened, and reports defects in a way that product and engineering can act
 on.
+
+> **Safety floor.** This skill inherits the
+> [destructive-action safety policy](../../docs/destructive-action-safety.md). Manual tests
+> must never mutate production data, customer records, or shared infrastructure; tests against
+> deployed environments default to read-only / sandbox / ephemeral targets. Discovered
+> credentials in the application under test are reported as a `blocker` defect, never invoked
+> against any environment. Test data must be anonymized; secrets must never be pasted into
+> chat or test artifacts.
 
 ## Purpose
 
@@ -256,6 +264,14 @@ execution reports.
 - Do not modify production data or run destructive tests without explicit approval and a safe
   environment.
 - Do not use real secrets, private customer data, or sensitive personal data in evidence.
+- Do not invoke a credential discovered in the application under test or its source — report
+  it as a `blocker` defect with a recommendation to rotate, per the
+  [destructive-action safety policy](../../docs/destructive-action-safety.md#discovered-credential-protocol).
+- Do not ask the user to paste a token, password, or secret into chat or into a test
+  artifact. Direct them to the configured secret-injection path and re-invoke.
+- Do not violate any rule in the
+  [destructive-action safety policy](../../docs/destructive-action-safety.md). It is a floor,
+  not a ceiling, and is not waivable by user prompt.
 - Do not replace exploratory testing with a rigid checklist when user workflows are uncertain.
 - Do not recommend `develop` branches or GitFlow. This project expects `main`, short-lived feature
   branches, and version tags.

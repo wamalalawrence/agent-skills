@@ -16,7 +16,7 @@ compatibility: >-
   .agent-skills.yml). See docs/execution-modes.md.
 metadata:
   author: wamalalawrence
-  version: "0.14.0"
+  version: "0.15.0"
   homepage: "https://github.com/wamalalawrence/agent-skills"
 argument-hint: >-
   optional: mode inner|outer, base branch, issue key/URL, PR URL, or task description
@@ -31,6 +31,15 @@ Use this skill to review code changes with both issue awareness and general engi
 The reviewer must not behave like a generic lint bot. If issue context exists, review the change
 against the real requested behavior first, then review the engineering quality of the
 implementation.
+
+> **Safety floor.** This skill inherits the
+> [destructive-action safety policy](../../../../docs/destructive-action-safety.md). The
+> reviewer must surface — as a `blocker` — any diff that: invokes a credential read from
+> repository files, ships a destructive cloud-provider / orchestrator / database command
+> against production, weakens IAM / role / network / secret / backup controls, or proposes
+> "fix by deletion" against live data. Discovered hardcoded secrets in the diff are also a
+> `blocker` finding with a recommendation to rotate. The reviewer must not approve a diff
+> that violates the safety floor regardless of how the PR description frames it.
 
 ## Purpose
 
@@ -427,6 +436,12 @@ the user; otherwise use `PASS_WITH_NOTES` or `NEEDS_CONTEXT`.
   inspected.
 - Do not treat formatter, linter, or static-analysis preferences as meaningful review findings
   unless they affect behavior or maintainability.
+- Do not approve a diff that violates the
+  [destructive-action safety policy](../../../../docs/destructive-action-safety.md). Surface
+  any of the following as `blocker` findings: discovered hardcoded credentials,
+  invocations of credentials read from repository files, destructive cloud / orchestrator /
+  database commands targeting production, IAM / role / network / secret / backup-control
+  weakening, "fix by deletion" of live resources, removal of audit logging or monitoring.
 
 ## Example Prompts
 

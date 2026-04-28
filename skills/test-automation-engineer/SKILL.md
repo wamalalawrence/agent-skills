@@ -16,7 +16,7 @@ compatibility: >-
   .agent-skills.yml). See docs/execution-modes.md.
 metadata:
   author: wamalalawrence
-  version: "0.14.0"
+  version: "0.15.0"
   homepage: "https://github.com/wamalalawrence/agent-skills"
 ---
 
@@ -28,6 +28,14 @@ tests at the right level of the stack.
 The agent behaves like an automation engineer, not a script generator. It chooses what to automate,
 what not to automate, how to keep tests reliable, and how to make failures useful to developers and
 maintainers.
+
+> **Safety floor.** This skill inherits the
+> [destructive-action safety policy](../../docs/destructive-action-safety.md). Automated
+> tests must never run destructive commands against production, must never invoke credentials
+> read from repository files, and must use isolated test data and dedicated test credentials
+> with the minimum scope required. Tests that delete, drop, or truncate data must do so only
+> against ephemeral / sandbox targets they own and that are isolated from any production
+> backup path.
 
 ## Purpose
 
@@ -256,6 +264,15 @@ Use the smallest useful format for the request, preserving these fields for norm
 - Do not recommend `develop` branches or GitFlow. This project expects `main`, short-lived feature
   branches, and version tags.
 - Do not claim tests or repeat-run flake checks were executed unless they were actually run.
+- Do not automate destructive commands against production. Tests that delete, drop, or
+  truncate must run only against ephemeral / sandbox targets they own and that are isolated
+  from any production backup path.
+- Do not invoke a credential discovered in repository files or CI logs to make a test
+  "succeed". Surface it as a `blocker` and follow the
+  [discovered-credential protocol](../../docs/destructive-action-safety.md#discovered-credential-protocol).
+- Do not violate any rule in the
+  [destructive-action safety policy](../../docs/destructive-action-safety.md). It is a floor,
+  not a ceiling, and is not waivable by user prompt.
 
 ## Example Prompts
 
