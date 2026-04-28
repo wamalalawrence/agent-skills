@@ -16,7 +16,7 @@ compatibility: >-
   .agent-skills.yml). See docs/execution-modes.md.
 metadata:
   author: wamalalawrence
-  version: "0.16.0"
+  version: "0.17.0"
   homepage: "https://github.com/wamalalawrence/agent-skills"
 ---
 
@@ -107,6 +107,37 @@ Stop or mark execution `blocked` when:
   defect.
 
 ## Required Workflow
+
+### 0. Requirement Understanding Gate
+
+Manual testing depends entirely on knowing what *should* happen. Before writing scenarios, run
+the shared [requirement-understanding workflow](../../docs/requirement-understanding.md) and
+emit the `Requirement Understanding` block (twelve fields) above the rest of the test plan.
+
+Apply the binding rules:
+
+- **`unknown` / `low`** — do **not** produce a test plan that asserts pass/fail. The test plan
+  cannot be meaningfully completed because expected behavior is unknown. Return
+  `NEEDS_CLARIFICATION` and hand off to [`product-owner`](../product-owner/SKILL.md) to clarify
+  intended behavior, or to
+  [`issue-investigator`](../software-engineer/skills/issue-investigator/SKILL.md) when expected
+  behavior of an existing area is the unknown. Exploratory charters timeboxed to *discovery* are
+  permitted; **regression / acceptance** scenarios are not.
+- **`medium`** — may write the test plan with explicit `assumed expected behavior` annotations
+  per scenario, plus open questions captured in the `Risks` field. Defects raised against
+  assumed expected behavior must be flagged as `product question` rather than `functional
+  defect` until the assumption is confirmed.
+- **`high`** — may write a normal acceptance / regression / exploratory plan and assert pass /
+  fail / blocked outcomes against expected behavior.
+
+Guardrails specific to manual-tester:
+
+- Distinguish **product ambiguity** ("the system did X; we do not know whether X was intended")
+  from **implementation defect** ("the system did X; intended behavior was Y, evidenced by
+  ticket / AC / docs"). The first is not a defect until product confirms.
+- Do not assert that testing is complete when the gate's readiness was `medium` and the assumed
+  expected behavior was never confirmed. Mark such results as `validated against assumed
+  expected behavior — needs product confirmation`.
 
 ### 1. Align on intended behavior
 
@@ -259,6 +290,9 @@ execution reports.
 
 - Do not invent expected behavior when product intent is unclear.
 - Do not report a defect without actual behavior and reproduction context.
+- Do not skip the [Requirement Understanding Gate](#0-requirement-understanding-gate). Asserting
+  pass/fail on `unknown` or `low` understanding confidence misclassifies product ambiguity as a
+  defect; return `NEEDS_CLARIFICATION` instead.
 - Do not claim testing is complete when scenarios were skipped, blocked, or environment-limited.
 - Do not claim a build, version, commit, browser, or role was tested when it was only assumed.
 - Do not modify production data or run destructive tests without explicit approval and a safe

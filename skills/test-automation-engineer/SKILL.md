@@ -16,7 +16,7 @@ compatibility: >-
   .agent-skills.yml). See docs/execution-modes.md.
 metadata:
   author: wamalalawrence
-  version: "0.16.0"
+  version: "0.17.0"
   homepage: "https://github.com/wamalalawrence/agent-skills"
 ---
 
@@ -111,6 +111,42 @@ Stop and recommend clarification or manual coverage instead of automation when:
 - CI integration would be misleading because required services, artifacts, or commands are unknown.
 
 ## Required Workflow
+
+### 0. Requirement Understanding Gate
+
+Automation freezes a behavior assumption into the regression suite. Encoding the wrong assumption
+is worse than no automation — it produces confident green builds for the wrong system. Before
+proposing or writing any automation, run the shared
+[requirement-understanding workflow](../../docs/requirement-understanding.md) and emit the
+`Requirement Understanding` block (twelve fields) above the rest of the automation plan.
+
+Apply the binding rules:
+
+- **`unknown` / `low`** — do **not** automate. Automating ambiguous behavior bakes a wrong
+  assumption into CI. Return `NEEDS_CLARIFICATION` and hand the scenario to
+  [`manual-tester`](../manual-tester/SKILL.md) for exploratory coverage and to
+  [`product-owner`](../product-owner/SKILL.md) to clarify intended behavior. When the input is a
+  defect-derived scenario, require an [`issue-investigator`](../software-engineer/skills/issue-investigator/SKILL.md)
+  reproduction recipe before reconsidering.
+- **`medium`** — may design the automation strategy, identify candidate scenarios, and propose
+  selectors / fixtures / waits, but `Scenarios to automate` must list every load-bearing
+  assumption, and the implementation step is gated on closing those assumptions (manual run,
+  product confirmation, or an investigation result).
+- **`high`** — may proceed to implement the chosen scenarios, run the flake budget, and wire
+  CI integration. The first plausible interpretation is not high confidence; high requires that
+  the manual / product / investigation inputs explicitly confirmed the expected behavior.
+
+Guardrails specific to test-automation-engineer:
+
+- When manual-tester or issue-investigator output is available, prefer it as the source of truth
+  for expected behavior. Reuse the persisted `understanding:` and `repro_recipe.yml` fields
+  rather than re-deriving intent.
+- A regression test for a defect requires a reproduction recipe whose `expected_observation` was
+  produced by an investigation, not by guess. Without it, the test risks asserting the buggy
+  behavior and locking it in.
+- Tests for product-ambiguous behavior are not regression coverage; document them as
+  characterisation tests with a follow-up issue to convert them to regression once product
+  confirms the intent.
 
 ### 1. Decide whether to automate
 
@@ -252,6 +288,10 @@ Use the smallest useful format for the request, preserving these fields for norm
 ## Guardrails
 
 - Do not automate unclear, unstable, or purely subjective behavior.
+- Do not skip the [Requirement Understanding Gate](#0-requirement-understanding-gate).
+  Automating on `unknown` or `low` understanding confidence encodes a wrong assumption as
+  regression coverage; return `NEEDS_CLARIFICATION` and route to manual-tester / product-owner /
+  issue-investigator instead.
 - Do not rely on fixed sleeps, random production-like data, test order, or private customer data.
 - Anti-pattern list (call out as findings): `Thread.sleep`, `cy.wait(N)` with a fixed number,
   `time.sleep`, `setTimeout` waits, hard-coded dates that drift, ordering-dependent fixtures, shared

@@ -17,7 +17,7 @@ compatibility: >-
   docs/execution-modes.md.
 metadata:
   author: wamalalawrence
-  version: "0.16.0"
+  version: "0.17.0"
   homepage: "https://github.com/wamalalawrence/agent-skills"
 argument-hint: >-
   issue URL/key, bug report, incident, support ticket, feature request, or task
@@ -176,6 +176,51 @@ If setup is incomplete, output:
 > without the unavailable issue source.
 
 ## Required Workflow
+
+### 0. Requirement Understanding Gate
+
+This is the strongest place in the repository to apply the
+[requirement-understanding workflow](../../../../docs/requirement-understanding.md). Investigation
+is where most agents quietly assume the requirement and then justify the assumption with
+evidence. Run the twelve-step gate before step 1 and emit the `Requirement Understanding` block
+in the user-facing output above the rest of the investigation result.
+
+The gate output for an investigation must include, in addition to the standard fields:
+
+- The classified issue type from step 2 below, with confidence.
+- Expected vs actual behavior, distinguishing **ticket facts**, **log/code evidence**, and
+  **agent assumptions** — not merged into one paragraph.
+- Both a **root-cause confidence** (how sure the agent is about the cause) and a
+  **requirement-understanding confidence** (how sure the agent is about what the system *should*
+  be doing). These are independent: a high-confidence root cause for the wrong requirement is
+  worse than no investigation at all.
+- A list of missing evidence and the cheapest read-only check that would close each gap.
+
+Binding rules (from the workflow's confidence-to-action section):
+
+- **`unknown`** — the agent cannot describe expected behavior, the issue source is missing
+  inputs, or candidate interpretations cannot be discriminated. Readiness is
+  `NEEDS_CLARIFICATION` or `NEEDS_EVIDENCE`. Do not recommend a fix, rollback, configuration
+  change, or data correction. Permitted recommendations are `monitoring or alerting improvement`,
+  `product clarification`, or `documentation`.
+- **`low`** — expected behavior is partially known but at least one load-bearing assumption is
+  unverified, or there is an unresolved contradiction. Recommendations limited to
+  `clarification`, `monitoring`, `documentation`, or further `investigation`. Do not promote a
+  hypothesis to `confirmed` and do not hand off a `code fix` recommendation.
+- **`medium`** — may run the [three-hypothesis discipline](#three-hypothesis-discipline), the
+  [regression triage](#regression-triage-when-the-issue-worked-before) ladder, and propose
+  bounded read-only checks the user can run. Recommendations may include `rollback` (if a clear
+  introducing commit exists) or `code fix` only when the recommendation matches the evidence
+  gate in step 5. Every load-bearing assumption stays visible.
+- **`high`** — may recommend a confirmed-cause action (`code fix`, `rollback`, `configuration
+  change`, `data correction`) when the evidence gate in step 5 is met. The first plausible
+  explanation is not `high` — it requires disconfirming checks that were run or judged
+  unnecessary because evidence already excluded the alternatives.
+
+A recommendation must never be more confident than the lower of root-cause confidence and
+requirement-understanding confidence. If the agent is sure about the cause but unsure about what
+the system should do, hand off to [`product-owner`](../../../product-owner/SKILL.md) before
+recommending a fix.
 
 ### 1. Gather issue context
 
@@ -543,6 +588,10 @@ missing.
 - Do not invent issue details, logs, screenshots, code behavior, acceptance criteria, or company
   standards.
 - Do not implement a fix before producing an investigation result.
+- Do not promote a root-cause hypothesis to `confirmed` when requirement-understanding
+  confidence is `unknown` or `low`. The recommended next action must respect both confidences
+  and the [Requirement Understanding Gate](#0-requirement-understanding-gate) readiness
+  decision.
 - Do not mutate production data, configuration, or environments without explicit approval and a
   rollback plan.
 - Do not assume every issue is a code bug.

@@ -15,7 +15,7 @@ compatibility: >-
   .agent-skills.yml). See docs/execution-modes.md.
 metadata:
   author: wamalalawrence
-  version: "0.16.0"
+  version: "0.17.0"
   homepage: "https://github.com/wamalalawrence/agent-skills"
 ---
 
@@ -110,6 +110,42 @@ Stop and return refinement questions instead of Jira-ready output when:
 - Scope cannot be split or bounded enough for engineering and testing to act.
 
 ## Required Workflow
+
+### 0. Requirement Understanding Gate
+
+Product ownership is where most requirement-understanding failures originate. Before any
+refinement, run the shared
+[requirement-understanding workflow](../../docs/requirement-understanding.md) and emit the
+`Requirement Understanding` block (twelve fields) above the rest of the product-owner output.
+For product-owner work this gate is the practical operationalisation of the Definition of Ready
+in step 6.
+
+Apply the binding rules:
+
+- **`unknown` / `low`** — do **not** produce Jira-ready output, acceptance criteria, scope
+  statements, or fix-ready stories. Return `NEEDS_CLARIFICATION` (most product cases) or
+  `BLOCKED` (when stakeholder approval, legal, or security sign-off is the missing input).
+  List the candidate interpretations of the request rather than picking one. Hand off to
+  [`issue-investigator`](../software-engineer/skills/issue-investigator/SKILL.md) when the input
+  is bug-flavored and root cause / expected behavior is the unknown.
+- **`medium`** — may draft scope, user value, and exploratory acceptance criteria, but every
+  load-bearing assumption stays visible in `Open questions` and `Assumptions`. The output is
+  marked as a `Spike` or `Discovery` item, not as fix-ready or implementation-ready, until
+  assumptions are resolved.
+- **`high`** — may produce Jira-ready stories or tasks, including acceptance criteria and
+  handoff to engineering / manual testing / automation. The first plausible interpretation is
+  not high confidence; high requires that the candidate-interpretation list in step 1 of the
+  shared workflow has been resolved to one.
+
+Guardrails specific to product-owner:
+
+- Do not invent stakeholder priorities, user research, deadlines, analytics, legal/regulatory
+  rules, or company standards in order to raise confidence.
+- Do not hand off to [`software-engineer`](../software-engineer/SKILL.md),
+  [`manual-tester`](../manual-tester/SKILL.md), or
+  [`test-automation-engineer`](../test-automation-engineer/SKILL.md) until the gate's readiness
+  is `READY_FOR_IMPLEMENTATION` / `READY_FOR_TEST_DESIGN`. Earlier handoffs encourage downstream
+  skills to encode the wrong intent into code, tests, or automation.
 
 ### 1. Clarify the goal
 
@@ -276,6 +312,9 @@ them.
 
 - Do not invent stakeholder priorities, user research, analytics, legal requirements, or deadlines.
 - Do not turn unclear work into implementation-ready stories by hiding assumptions.
+- Do not skip the [Requirement Understanding Gate](#0-requirement-understanding-gate). Producing
+  Jira-ready output on `unknown` or `low` understanding confidence is forbidden by the
+  workflow's confidence-to-action rules; return `NEEDS_CLARIFICATION` or `BLOCKED` instead.
 - Do not prescribe architecture, database design, or test frameworks unless a reliable source
   already establishes them.
 - Do not write acceptance criteria that only say "works as expected" or "user-friendly".

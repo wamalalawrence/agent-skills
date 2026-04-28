@@ -4,12 +4,13 @@ Reusable [Agent Skills](https://agentskills.io/) for software-engineering work �
 role-shaped workflows your AI assistant can load on demand so the same model produces
 senior-engineer, product-owner, tester, or reviewer output instead of generic answers.
 
-> **Status:** `0.16.0` — pre-1.0. Core skill set is shipped and stable enough for public use;
+> **Status:** `0.17.0` — pre-1.0. Core skill set is shipped and stable enough for public use;
 > interfaces may still evolve.
 
 New here? Start with the [quickstart](docs/quickstart.md), then read [starter
-prompts](docs/starter-prompts.md), [examples](docs/examples/README.md),
-[validation](docs/validation.md), [known limitations](docs/known-limitations.md), and the
+prompts](docs/starter-prompts.md), [examples](docs/examples/README.md), the
+[requirement-understanding workflow](docs/requirement-understanding.md) every skill runs before
+acting, [validation](docs/validation.md), [known limitations](docs/known-limitations.md), and the
 [versioning policy](docs/versioning.md).
 
 ## Why Skills
@@ -131,6 +132,9 @@ usage shows they are useful independently.
 - [Examples](docs/examples/README.md)
 - [Validation](docs/validation.md)
 - [Skill quality scorecard](docs/skill-quality-scorecard.md)
+- [Requirement-understanding workflow](docs/requirement-understanding.md) — the gate every
+  relevant skill runs before implementation, review, testing, or automation
+- [Requirement-understanding scorecard](docs/requirement-understanding-scorecard.md)
 - [Skill performance review](docs/skill-performance-review.md)
 - [Eval runs](eval-runs/README.md)
 - [Release checklist](docs/release-checklist.md)

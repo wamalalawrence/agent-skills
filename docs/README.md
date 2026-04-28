@@ -11,6 +11,10 @@ Start here when reading the repository outside GitHub's main README.
 - [Examples](examples/README.md) - realistic input/output examples for each skill.
 - [Validation](validation.md) - repository checks, warning/failure rules, and validation limits.
 - [Skill quality scorecard](skill-quality-scorecard.md) - a simple 0-3 maintainer review aid.
+- [Requirement-understanding workflow](requirement-understanding.md) - the twelve-step gate
+  every relevant skill runs before implementation, review, testing, or automation.
+- [Requirement-understanding scorecard](requirement-understanding-scorecard.md) - a 0-3
+  maintainer aid for judging whether the agent understood the task before acting.
 - [Skill performance review](skill-performance-review.md) - v0.8.0 manual review notes.
 - [Eval runs](../eval-runs/README.md) - release-scoped scored sample runs.
 - [Release checklist](release-checklist.md) - repeatable pre-release checks.
