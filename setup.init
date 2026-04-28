@@ -57,6 +57,7 @@ ENVIRONMENTS_MODE="ask"
 SYMLINK_MODE="ask"
 VERIFY_MODE="false"
 CHECK_CONNECTIVITY="true"
+CHECK_CREDENTIAL_PROBE="true"
 WORKSPACE_ROOT=""
 WORKSPACE_ROOT_EXPLICIT="false"
 
@@ -84,6 +85,10 @@ Options:
   --no-connectivity-check  Skip the optional curl reachability check on the
                            Jira/Confluence/Sonar hosts (useful behind a VPN
                            that blocks the host)
+  --no-credential-probe    Skip the warn-only credential blast-radius probe
+                           that flags destructive-capable cloud / k8s / DB
+                           credentials in the shell or .env (see
+                           docs/destructive-action-safety.md)
   --no-symlink             Do not create the .skills symlink
   --verify                 Check an existing setup and report problems
                            (no writes)
@@ -122,6 +127,7 @@ while [[ $# -gt 0 ]]; do
     --with-environments) ENVIRONMENTS_MODE="yes"; shift ;;
     --no-environments) ENVIRONMENTS_MODE="no"; shift ;;
     --no-connectivity-check) CHECK_CONNECTIVITY="false"; shift ;;
+    --no-credential-probe) CHECK_CREDENTIAL_PROBE="false"; shift ;;
     --no-symlink) SYMLINK_MODE="no"; shift ;;
     --verify) VERIFY_MODE="true"; shift ;;
     --help|-h) usage; exit 0 ;;
@@ -437,6 +443,129 @@ check_url_reachable() {
     return 0
   fi
   echo "  ok    ${label} reachable (HTTP ${code})"
+}
+
+# ------------------------------------------------------------------------------
+# Credential blast-radius probe (warn-only)
+#
+# Inspects the configured .env / .agent-skills.yml plus the current shell
+# environment for credential-shaped values that would let an agent perform
+# destructive cloud / orchestrator / database operations against production
+# (delete buckets, terminate instances, drop databases, delete snapshots,
+# rotate IAM, etc.). Prints WARN lines pointing at the offending name and
+# the recommended scoping; never fails the run.
+#
+# This is heuristic and intentionally generic. It does NOT inspect cloud-
+# provider IAM policies — it cannot. It flags the *presence* of broad
+# credentials so the operator can confirm scoping before letting any agent
+# inherit them. See docs/destructive-action-safety.md.
+#
+# Skip with --no-credential-probe.
+# ------------------------------------------------------------------------------
+check_credential_blast_radius() {
+  [[ "${CHECK_CREDENTIAL_PROBE}" == "true" ]] || return 0
+  echo ""
+  echo "Credential blast-radius probe (warn-only; --no-credential-probe to skip):"
+  echo "  See docs/destructive-action-safety.md for the full safety floor."
+
+  local found=0
+  local sources=()
+  [[ -f "${ENV_FILE}" ]] && sources+=("${ENV_FILE}")
+
+  # Names that, when present at the agent's session, typically grant
+  # destructive privileges unless an explicit least-privilege role is used.
+  local risky_env_names=(
+    AWS_ACCESS_KEY_ID
+    AWS_SECRET_ACCESS_KEY
+    AWS_SESSION_TOKEN
+    GOOGLE_APPLICATION_CREDENTIALS
+    GCP_SERVICE_ACCOUNT_KEY
+    AZURE_CLIENT_SECRET
+    AZURE_SUBSCRIPTION_ID
+    DIGITALOCEAN_TOKEN
+    DO_API_TOKEN
+    LINODE_TOKEN
+    HCLOUD_TOKEN
+    KUBECONFIG
+    DOCKER_HOST
+    TF_VAR_aws_access_key
+    DATABASE_ADMIN_URL
+    POSTGRES_ADMIN_PASSWORD
+    MONGODB_ADMIN_URI
+  )
+
+  local present_in_shell=()
+  local name
+  for name in "${risky_env_names[@]}"; do
+    if [[ -n "${!name:-}" ]]; then
+      present_in_shell+=("${name}")
+    fi
+  done
+
+  if (( ${#present_in_shell[@]} > 0 )); then
+    found=1
+    echo "  WARN: the following destructive-capable credentials are exported in"
+    echo "        this shell and would be inherited by any agent process you"
+    echo "        launch from here:"
+    for name in "${present_in_shell[@]}"; do
+      echo "          - ${name}"
+    done
+    echo "        Recommended: scope these to a least-privilege role with NO"
+    echo "        delete-bucket / terminate-instance / drop-database /"
+    echo "        delete-snapshot / IAM-modify / backup-mutation privileges."
+    echo "        See docs/destructive-action-safety.md#production-boundary."
+  fi
+
+  # Walk the configured .env (if present) for credential-shaped names AND
+  # values inside the setup-managed marker block. We only flag NAMES outside
+  # the marker block so we do not false-positive on the agent-skills setup
+  # keys; tokens inside the marker block are intentional (Jira / Confluence /
+  # Sonar) and have their own least-privilege expectation.
+  local src
+  local in_marker=0
+  local risky_in_env=()
+  if [[ -f "${ENV_FILE}" ]]; then
+    while IFS= read -r line || [[ -n "${line}" ]]; do
+      if [[ "${line}" == "# >>> agent-skills setup.init"* ]]; then
+        in_marker=1
+        continue
+      fi
+      if [[ "${line}" == "# <<< agent-skills setup.init"* ]]; then
+        in_marker=0
+        continue
+      fi
+      [[ "${in_marker}" -eq 1 ]] && continue
+      [[ "${line}" =~ ^[[:space:]]*# ]] && continue
+      [[ -z "${line//[[:space:]]/}" ]] && continue
+      # Match KEY=value where KEY hints at destructive scope.
+      if [[ "${line}" =~ ^[[:space:]]*(export[[:space:]]+)?(AWS_ACCESS_KEY_ID|AWS_SECRET_ACCESS_KEY|AWS_SESSION_TOKEN|GOOGLE_APPLICATION_CREDENTIALS|GCP_SERVICE_ACCOUNT_KEY|AZURE_CLIENT_SECRET|DIGITALOCEAN_TOKEN|DO_API_TOKEN|LINODE_TOKEN|HCLOUD_TOKEN|KUBECONFIG|DATABASE_ADMIN_URL|POSTGRES_ADMIN_PASSWORD|MONGODB_ADMIN_URI)= ]]; then
+        risky_in_env+=("${BASH_REMATCH[2]}")
+      fi
+    done < "${ENV_FILE}"
+  fi
+
+  if (( ${#risky_in_env[@]} > 0 )); then
+    found=1
+    echo "  WARN: the following destructive-capable credentials are defined in"
+    echo "        ${ENV_FILE}"
+    echo "        OUTSIDE the agent-skills marker block — any agent that"
+    echo "        sources this file will inherit them:"
+    for name in "${risky_in_env[@]}"; do
+      echo "          - ${name}"
+    done
+    echo "        Recommended: move them to a host secret manager scoped to"
+    echo "        the operation, or remove them entirely if not needed for"
+    echo "        agent work. Do not commit them. The discovered-credential"
+    echo "        protocol forbids the agent from invoking values it"
+    echo "        encounters; values it inherits silently from the shell"
+    echo "        sidestep that protection."
+  fi
+
+  if (( found == 0 )); then
+    echo "  ok    no destructive-capable credentials detected in shell or"
+    echo "        ${ENV_FILE} (heuristic; cannot inspect cloud-provider IAM"
+    echo "        policies — confirm scoping in your provider console)."
+  fi
 }
 
 # ------------------------------------------------------------------------------
@@ -1093,6 +1222,11 @@ print("\n".join(missing))
     fi
   fi
 
+  # Run the same warn-only blast-radius probe used at first run, so
+  # `--verify` periodically resurfaces the warning if the operator added a
+  # destructive credential to their shell or .env after setup.
+  ENV_FILE="${env_file}" check_credential_blast_radius
+
   if [[ "${errors}" -gt 0 ]]; then
     echo "" >&2
     echo "Verification failed with ${errors} error(s)." >&2
@@ -1519,6 +1653,8 @@ done
 if [[ "${DUP_FOUND}" -eq 1 ]]; then
   echo "Run ./setup.init --verify for details." >&2
 fi
+
+check_credential_blast_radius
 
 cat <<EOF
 

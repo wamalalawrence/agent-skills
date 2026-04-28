@@ -73,6 +73,35 @@ ${AGENT_SKILLS_CACHE_DIR:-${WORKSPACE_ROOT:-$REPO_ROOT}/.cache/agent-skills}/<is
     "shared_library_consumers_listed": [],
   },
 
+  // Safety acknowledgement (REQUIRED whenever the change introduces or
+  // performs ANY mutating action against a deployed environment, or
+  // touches credentials / IAM / secrets / backups / monitoring / network
+  // policy. Omit only when the entire change is local-only with NO
+  // deployed-environment mutation, NO credential/IAM/secret change, NO
+  // backup/monitoring/network change. When omitted, set
+  // `safety_acknowledgement.applies: false` with a one-line reason.)
+  "safety_acknowledgement": {
+    "applies": true,
+    "policy_version": "v1",
+    "policy_path": "docs/destructive-action-safety.md",
+    "environment": "staging", // local | dev | staging | production
+    "environment_confirmed_via": "${ENVIRONMENTS_JSON}.entries[name=stg-eu]",
+    "blast_radius": "single bucket in staging account; no PII; backup retention untouched",
+    "credential_used": "ci-deploy-staging (least-privilege, scoped to staging bucket put/get)",
+    "credential_source": "host-secret-manager", // host-secret-manager | env-var | user-session
+    "no_discovered_credentials_invoked": true, // discovered creds reported, never used
+    "no_in_repo_tokens_invoked": true,
+    "destructive_command_used": false, // true ONLY for authorized destructive maintenance
+    "destructive_command_authorization": null, // {"approver": "...", "ticket": "...", "runbook_path": "..."}
+    "backups_isolated": true, // backup credential != action credential; no cascade-delete
+    "backup_restore_tested": null, // ISO date | "n/a" when no destructive step relies on restore
+    "execution_path": "ci-pipeline", // agent | ci-pipeline | operator-runbook | not-applicable
+    "human_approver": null, // required when execution_path = operator-runbook or destructive_command_used = true
+    "monitoring_unchanged": true,
+    "iam_unchanged": true,
+    "network_policy_unchanged": true,
+  },
+
   // Free-form waivers (each must have a written reason)
   "waivers": [
     // {"item": "tests.coverage_on_changed_lines_pct", "actual": 71, "reason": "generated mapper code; covered by upstream test"}
@@ -91,6 +120,23 @@ ${AGENT_SKILLS_CACHE_DIR:-${WORKSPACE_ROOT:-$REPO_ROOT}/.cache/agent-skills}/<is
   recorded in `waivers[]`.
 - **`scope.shared_library_changed: true`** requires a non-empty
   `scope.shared_library_consumers_listed` (downstream services to flag).
+- **`safety_acknowledgement` is required whenever the change introduces or performs any
+  mutating action against a deployed environment, or touches credentials / IAM / secrets /
+  backups / monitoring / network policy.** When the change is local-only with no such
+  surface, set `safety_acknowledgement.applies: false` with a one-line reason and the
+  remaining fields may be omitted.
+- When `safety_acknowledgement.applies: true`, the reviewer raises a `blocker` if any of:
+  `no_discovered_credentials_invoked: false`, `no_in_repo_tokens_invoked: false`,
+  `destructive_command_used: true` without a populated `destructive_command_authorization`
+  block (approver + ticket + runbook_path), `execution_path: agent` for a
+  destructive/IAM/secret/backup change, `monitoring_unchanged: false` /
+  `iam_unchanged: false` / `network_policy_unchanged: false` without an explicit waiver
+  reason in `waivers[]`. See the
+  [destructive-action safety policy](../../../docs/destructive-action-safety.md).
+- A missing `safety_acknowledgement` block on a change that obviously *should* have one (the
+  diff touches IaC, CI deployment, IAM, secret stores, migrations, or any cloud-provider
+  command) is itself a `blocker` finding. The reviewer must not declare `PASS` until the
+  block is added.
 - The file is regenerated on every Phase 5 run; it is not a long-lived artifact, just the gate
   signal between engineer and reviewer.
 
