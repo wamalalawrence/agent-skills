@@ -3,6 +3,13 @@
 Copy one prompt and replace the bracketed parts. These prompts intentionally ask the skill to stop
 when required evidence is missing.
 
+> **Understanding before action.** Every prompt below assumes the skill will run the shared
+> [requirement-understanding workflow](requirement-understanding.md) and emit a
+> `Requirement Understanding` block at the top of the output. If the gate ends at `unknown` /
+> `low` confidence, the skill must ask for clarification or evidence — even when the prompt
+> asks for an implementation, a story, a test plan, or a verdict. Do not weaken the gate by
+> adding "just do it" framing.
+
 ## Single-Skill Prompts
 
 ### Implement A Feature With `software-engineer`

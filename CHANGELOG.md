@@ -6,6 +6,54 @@ All notable project changes should be recorded here.
 
 - No unreleased changes.
 
+## 0.17.0 - Requirement-Understanding Phase
+
+### Added
+
+- New shared [`docs/requirement-understanding.md`](docs/requirement-understanding.md) workflow
+  defining a twelve-step requirement-understanding gate (interpret task, classify, goal,
+  expected behavior, actual behavior, scope, evidence, facts/assumptions, unknowns,
+  disconfirming checks, confidence, readiness) and the binding confidence-to-action rules every
+  relevant skill must apply (`unknown` / `low` blocks implementation, review verdicts, pass/fail
+  testing, and automation; `medium` allows planning with visible assumptions; `high` allows
+  proceeding within scope).
+- New [`docs/requirement-understanding-scorecard.md`](docs/requirement-understanding-scorecard.md)
+  scorecard (eleven 0-3 criteria including problem framing, expected behavior clarity, evidence
+  discipline, assumption handling, disconfirming checks, readiness decision correctness, and
+  resistance to premature implementation).
+- New [`docs/examples/requirement-understanding.md`](docs/examples/requirement-understanding.md)
+  with six worked examples (clear bug, premature implementation, ambiguous ticket, conflicting
+  AC, bug vs feature, security-sensitive request).
+- Five new evals targeting the gate:
+  [`evals/requirement-understanding-ambiguous-ticket.md`](evals/requirement-understanding-ambiguous-ticket.md),
+  [`evals/requirement-understanding-conflicting-criteria.md`](evals/requirement-understanding-conflicting-criteria.md),
+  [`evals/requirement-understanding-bug-vs-feature.md`](evals/requirement-understanding-bug-vs-feature.md),
+  [`evals/requirement-understanding-wrong-root-cause-trap.md`](evals/requirement-understanding-wrong-root-cause-trap.md),
+  [`evals/requirement-understanding-security-sensitive-request.md`](evals/requirement-understanding-security-sensitive-request.md).
+- New `Requirement Understanding Gate` step in the Required Workflow of every relevant skill:
+  [`software-engineer`](skills/software-engineer/SKILL.md),
+  [`issue-investigator`](skills/software-engineer/skills/issue-investigator/SKILL.md),
+  [`code-reviewer`](skills/software-engineer/skills/code-reviewer/SKILL.md),
+  [`product-owner`](skills/product-owner/SKILL.md),
+  [`manual-tester`](skills/manual-tester/SKILL.md),
+  [`test-automation-engineer`](skills/test-automation-engineer/SKILL.md). Each gate emits a
+  twelve-field `Requirement Understanding` block at the top of skill output, applies the binding
+  confidence-to-action rules tailored to that skill, and adds a guardrail forbidding skipping the
+  gate.
+- `issue-investigator` now tracks **dual confidence** \u2014 root-cause confidence and
+  requirement-understanding confidence \u2014 and may not recommend at higher than the lower of the
+  two.
+- `eval-runs/v0.17.0/` capturing the requirement-understanding multi-skill scenario and release
+  summary.
+
+### Changed
+
+- `README.md`, `docs/README.md`, `docs/quickstart.md`, `docs/starter-prompts.md`,
+  `docs/skill-boundaries.md`, `docs/validation.md`, and `docs/examples/README.md` updated to
+  reference the requirement-understanding gate and scorecard.
+- `scripts/validate-repo.py` `REQUIRED_FILES` extended with the new docs, evals, and eval-runs.
+- `.gitignore` now ignores `.claude/` editor state.
+
 ## 0.16.0 - Safety-Acknowledgement Artifact And Credential Blast-Radius Probe
 
 ### Added

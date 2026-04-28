@@ -57,6 +57,12 @@ must hand off when the task moves outside that surface.
 
 ## Required Handoffs
 
+- All relevant skills must run the
+  [requirement-understanding workflow](requirement-understanding.md) before implementing,
+  reviewing, testing, or automating. When the gate ends at `unknown` / `low` confidence, the
+  correct handoff is to `product-owner` (when product intent is unclear) or to
+  `issue-investigator` (when expected vs actual behavior or root cause is unclear), not to
+  `software-engineer`, `manual-tester`, or `test-automation-engineer`.
 - `software-engineer` must use `issue-investigator` when expected behavior, issue context, or root
   cause is unclear.
 - `software-engineer` must use `code-reviewer` after implementation and again before final PR or

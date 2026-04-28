@@ -70,6 +70,14 @@ contract-complete output without inventing missing facts?
 Use the [skill quality scorecard](skill-quality-scorecard.md) to judge outputs consistently. Treat
 the scorecard as a maintainer aid, not a scientific benchmark.
 
+The five `requirement-understanding-*` evals (ambiguous ticket, conflicting acceptance criteria,
+bug vs feature confusion, wrong-root-cause trap, security-sensitive unclear request) test whether
+the agent runs the [requirement-understanding gate](requirement-understanding.md) before acting.
+Score those outputs with the
+[requirement-understanding scorecard](requirement-understanding-scorecard.md); the
+`Resistance to premature implementation` and `Readiness decision correctness` criteria are
+release-blocking when they score `0` or `1` on the corresponding scenario.
+
 Releases also record **scored sample runs** in [`eval-runs/`](../eval-runs/). Each release-scoped
 subdirectory (for example [`eval-runs/v0.9.0/`](../eval-runs/v0.9.0/)) contains the inputs, outputs,
 per-criterion scores, strengths, gaps, and follow-up actions for each skill. Eval runs make skill

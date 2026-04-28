@@ -108,6 +108,25 @@ the right test level, avoid brittle checks, and describe the validation command.
 - They do not include private company standards; supply those from your repository or prompt.
 - They do not come with an SLA, warranty, or guarantee of correctness.
 
+## Understanding before action
+
+Every relevant skill runs the
+[requirement-understanding workflow](requirement-understanding.md) before implementing, reviewing,
+testing, or automating. The gate writes a short `Requirement Understanding` block (twelve fields)
+at the top of the output and applies three binding rules:
+
+- `unknown` / `low` confidence — the agent must not implement, must not produce Jira-ready
+  output, must not assert pass/fail tests, and must not give a bare `PASS` review. It asks for
+  clarification or evidence instead.
+- `medium` confidence — the agent may plan, draft, or run read-only checks, but every
+  load-bearing assumption stays visible.
+- `high` confidence — the agent may proceed within the understood scope.
+
+If you ask the agent to skip this step ("just write the code", "just ship it"), the gate is
+intentionally not waivable by user prompt. See
+[requirement-understanding examples](examples/requirement-understanding.md) and the
+[requirement-understanding scorecard](requirement-understanding-scorecard.md).
+
 Next, review the [examples](examples/README.md), [skill boundaries](skill-boundaries.md), and
 [severity/confidence definitions](severity-and-confidence.md) to see the expected output contracts
 in practice.

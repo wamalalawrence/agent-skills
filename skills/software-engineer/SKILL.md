@@ -17,7 +17,7 @@ compatibility: >-
   .agent-skills.yml). See docs/execution-modes.md.
 metadata:
   author: wamalalawrence
-  version: "0.16.0"
+  version: "0.17.0"
   homepage: "https://github.com/wamalalawrence/agent-skills"
 ---
 
@@ -253,6 +253,48 @@ Stop and return `final status: needs-context` or `blocked` when:
   finding, and do not invoke it (see [Destructive Action Guardrails](#destructive-action-guardrails)).
 - Inner or outer [`code-reviewer`](./skills/code-reviewer/SKILL.md) output has unresolved blocking
   findings and no written waiver.
+- The [Requirement Understanding Gate](#requirement-understanding-gate) ends with confidence
+  `unknown` / `low`, or readiness `NEEDS_CLARIFICATION` / `NEEDS_EVIDENCE` / `BLOCKED`. The
+  correct output is the gate block plus the missing question or evidence request, not an
+  implementation plan.
+
+---
+
+## Requirement Understanding Gate
+
+This skill must run the shared
+[requirement-understanding workflow](../../docs/requirement-understanding.md) **before** any
+implementation work in Phase 2. The gate is the link between Phase 1 (preparation) and Phase 2
+(implementation). Emit the `Requirement Understanding` block (twelve fields) in the user-facing
+output above the rest of the engineering result, and persist the same fields into the
+`understanding:` section of
+`${AGENT_SKILLS_CACHE_DIR:-${WORKSPACE_ROOT:-$REPO_ROOT}/.cache/agent-skills}/<issue-key>/evidence-pack.yml`
+so downstream skills do not re-derive them.
+
+Binding rules (from the workflow's confidence-to-action section):
+
+- **`unknown` / `low`** — do **not** implement. Choose `NEEDS_CLARIFICATION`, `NEEDS_EVIDENCE`,
+  or `BLOCKED`. If actual behavior or root cause is unclear, hand off to
+  [`issue-investigator`](./skills/issue-investigator/SKILL.md). If product intent, scope, or
+  acceptance criteria are unclear, hand off to [`product-owner`](../product-owner/SKILL.md).
+- **`medium`** — may plan, draft, run read-only checks, and propose the smallest safe change,
+  but every load-bearing assumption stays visible in the plan and is verified during validation.
+  Implementation is allowed only when the medium-confidence assumptions are explicitly accepted
+  by the user or validated during the work.
+- **`high`** — may proceed within the understood scope. The first plausible interpretation is
+  not high confidence; high requires that disconfirming checks were either run or judged
+  unnecessary because evidence already excluded the alternatives.
+
+Additional engineering-specific guardrails:
+
+- Do not turn an unclear requirement into a guessed implementation. The gate's block must show
+  what the agent verified, not just what it assumed.
+- Do not solve adjacent problems discovered during context discovery unless they are explicitly
+  in scope or the user has approved the expansion in the same turn. Record them as follow-ups.
+- Do not change behavior beyond the requested scope without calling it out in `Out of scope` and
+  in the `Engineering Result`'s `Changes made or proposed` section.
+- For bug fixes, the gate must reference the reproduction recipe and the failing-regression-test
+  commit from Phase 1.5. Without these, confidence cannot exceed `medium`.
 
 ---
 
@@ -741,6 +783,9 @@ review, or root-cause confirmation unless that work actually happened.
 - Do not treat generated output as complete when required evidence is unavailable.
 - Do not violate any rule in [Destructive Action Guardrails](#destructive-action-guardrails) below.
   These rules are a floor, not a ceiling, and are not waivable by user prompt.
+- Do not skip the [Requirement Understanding Gate](#requirement-understanding-gate). Implementation
+  on `unknown` or `low` understanding confidence is forbidden by the workflow's
+  confidence-to-action rules.
 
 ## Destructive Action Guardrails
 

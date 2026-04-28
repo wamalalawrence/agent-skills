@@ -42,6 +42,9 @@ REQUIRED_FILES = [
     "docs/skill-quality-scorecard.md",
     "docs/release-checklist.md",
     "docs/destructive-action-safety.md",
+    "docs/requirement-understanding.md",
+    "docs/requirement-understanding-scorecard.md",
+    "docs/examples/requirement-understanding.md",
     "scripts/validate-repo.py",
     "scripts/validate_skills.py",
     "skills/software-engineer/SKILL.md",
@@ -63,6 +66,11 @@ REQUIRED_FILES = [
     "evals/multi-skill-bug-to-regression-flow.md",
     "evals/issue-investigator-read-only-investigation.md",
     "evals/code-reviewer-unavailable-context.md",
+    "evals/requirement-understanding-ambiguous-ticket.md",
+    "evals/requirement-understanding-conflicting-criteria.md",
+    "evals/requirement-understanding-bug-vs-feature.md",
+    "evals/requirement-understanding-wrong-root-cause-trap.md",
+    "evals/requirement-understanding-security-sensitive-request.md",
     "eval-runs/README.md",
     "eval-runs/v0.9.0/summary.md",
     "eval-runs/v0.9.0/issue-investigator-bug-root-cause.md",
@@ -77,6 +85,8 @@ REQUIRED_FILES = [
     "eval-runs/v0.10.0/code-reviewer-unavailable-context.md",
     "eval-runs/v0.11.0/summary.md",
     "eval-runs/v0.11.0/setup-flow-hardening.md",
+    "eval-runs/v0.17.0/summary.md",
+    "eval-runs/v0.17.0/requirement-understanding-multi-skill.md",
 ]
 
 # Setup-managed environment keys. They MUST appear inside the

@@ -16,7 +16,7 @@ compatibility: >-
   .agent-skills.yml). See docs/execution-modes.md.
 metadata:
   author: wamalalawrence
-  version: "0.16.0"
+  version: "0.17.0"
   homepage: "https://github.com/wamalalawrence/agent-skills"
 argument-hint: >-
   optional: mode inner|outer, base branch, issue key/URL, PR URL, or task description
@@ -178,6 +178,45 @@ If required setup is missing, output:
 > explicitly ask for a non-issue-aware manual review.
 
 ## Required Workflow
+
+### 0. Requirement Understanding Gate
+
+Before reviewing the diff, run the shared
+[requirement-understanding workflow](../../../../docs/requirement-understanding.md) against the
+**review target**, not the diff. The reviewer's job is to verify that the change solves the right
+problem; that requires the reviewer to know what the right problem is. Emit the
+`Requirement Understanding` block (twelve fields) above the rest of the review output and use it
+to answer five review-specific questions:
+
+- Does the diff solve the actual requirement, or a different one?
+- Was the requirement clear enough to review against, or did the engineer have to invent intent?
+- Does the diff solve only part of the issue and silently leave the rest open?
+- Does the diff introduce behavior beyond what the requirement asked for, without justification?
+- Are the acceptance criteria observable in the diff (tests, error messages, log lines, API
+  contract) or only asserted in the PR description?
+
+When the engineer's evidence pack already contains the gate output (written by
+[`software-engineer`](../../SKILL.md) or
+[`issue-investigator`](../issue-investigator/SKILL.md)), reuse it and verify it against the diff
+rather than re-deriving from scratch. The reviewer must not weaken a gate decision the engineer
+correctly made; if the engineer left it `low` and shipped anyway, that is itself a `blocker`
+finding.
+
+Binding rules:
+
+- **`unknown` / `low`** understanding of the requirement — do **not** issue a bare `PASS`. Use
+  `NEEDS_CONTEXT` when issue context is missing, or `PASS_WITH_NOTES` /
+  `REQUEST_CHANGES` depending on the diff risk. Hand off to
+  [`issue-investigator`](../issue-investigator/SKILL.md) when expected behavior, root cause, or
+  reproduction status are missing.
+- **`medium`** — may complete the review with the gate's load-bearing assumptions visible in the
+  `Review Limitations / Unavailable Context` section. A bare `PASS` requires every gate item to
+  be `none` or explicitly waived by the user.
+- **`high`** — may produce any verdict, including `PASS`, when the diff matches the understood
+  requirement and no other limitations remain.
+
+This gate is the precondition for the layered review in steps 2-3 below; it is not a substitute
+for them.
 
 ### 1. Resolve review target
 
@@ -458,6 +497,11 @@ the user; otherwise use `PASS_WITH_NOTES` or `NEEDS_CONTEXT`.
   invocations of credentials read from repository files, destructive cloud / orchestrator /
   database commands targeting production, IAM / role / network / secret / backup-control
   weakening, "fix by deletion" of live resources, removal of audit logging or monitoring.
+- Do not produce a bare `PASS` verdict when the
+  [Requirement Understanding Gate](#0-requirement-understanding-gate) ended at `unknown` /
+  `low`, when issue context is missing, or when any item in `Review Limitations / Unavailable
+  Context` is non-`none` and unwaived. The correct verdict is `NEEDS_CONTEXT` or
+  `PASS_WITH_NOTES`.
 
 ## Example Prompts
 
