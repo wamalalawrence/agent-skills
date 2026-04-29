@@ -45,10 +45,13 @@ REQUIRED_FILES = [
     "docs/requirement-understanding.md",
     "docs/requirement-understanding-scorecard.md",
     "docs/auth-discovery.md",
+    "docs/skill-source-resolution.md",
+    "docs/updates.md",
     "docs/examples/requirement-understanding.md",
     "scripts/validate-repo.py",
     "scripts/validate_skills.py",
     "scripts/auth-preflight.py",
+    "scripts/check-updates.py",
     "skills/software-engineer/SKILL.md",
     "skills/software-engineer/README.md",
     "skills/software-engineer/skills/issue-investigator/SKILL.md",
@@ -74,6 +77,7 @@ REQUIRED_FILES = [
     "evals/requirement-understanding-wrong-root-cause-trap.md",
     "evals/requirement-understanding-security-sensitive-request.md",
     "evals/auth-discovery-jira-confluence.md",
+    "evals/skill-source-resolution-ambiguity.md",
     "eval-runs/README.md",
     "eval-runs/v0.9.0/summary.md",
     "eval-runs/v0.9.0/issue-investigator-bug-root-cause.md",
@@ -92,6 +96,8 @@ REQUIRED_FILES = [
     "eval-runs/v0.17.0/requirement-understanding-multi-skill.md",
     "eval-runs/v0.18.0/summary.md",
     "eval-runs/v0.18.0/auth-discovery-jira-confluence.md",
+    "eval-runs/v0.19.0/summary.md",
+    "eval-runs/v0.19.0/skill-source-resolution.md",
 ]
 
 # Setup-managed environment keys. They MUST appear inside the
@@ -826,6 +832,48 @@ def check_jira_placeholder_consistency(result: Result) -> None:
             )
 
 
+REQUIRED_SKILLS_BLOCK_KEYS = (
+    "canonical_dir",
+    "duplicate_policy",
+    "source_repo_dir",
+    "allow_source_repo_fallback",
+    "warn_on_version_drift",
+)
+
+
+def check_agent_skills_yaml_skills_block(result: Result) -> None:
+    """`.agent-skills.example.yml` must keep the documented `skills:` block keys.
+
+    The block is the user-facing knob defined in
+    ``docs/skill-source-resolution.md``. If a key is removed from the example
+    without updating the doc, downstream users lose the documented escape hatch
+    for source-of-truth conflicts.
+    """
+    path = ROOT / ".agent-skills.example.yml"
+    if not path.exists():
+        return
+    text = read_text(path)
+    match = re.search(r"^skills:\s*$", text, re.MULTILINE)
+    if match is None:
+        result.error(
+            ".agent-skills.example.yml: missing top-level 'skills:' block "
+            "(see docs/skill-source-resolution.md)"
+        )
+        return
+    block_start = match.end()
+    block_end = len(text)
+    next_top = re.search(r"^[A-Za-z_][^\s:]*:\s", text[block_start:], re.MULTILINE)
+    if next_top is not None:
+        block_end = block_start + next_top.start()
+    block = text[block_start:block_end]
+    for key in REQUIRED_SKILLS_BLOCK_KEYS:
+        if not re.search(rf"^\s+{re.escape(key)}\s*:", block, re.MULTILINE):
+            result.error(
+                f".agent-skills.example.yml: skills.{key} key missing from the "
+                "skills: block (see docs/skill-source-resolution.md)"
+            )
+
+
 def main() -> int:
     result = Result(errors=[], warnings=[])
     check_required_files(result)
@@ -838,6 +886,7 @@ def main() -> int:
     check_generated_files(result)
     check_env_example_marker_block(result)
     check_jira_placeholder_consistency(result)
+    check_agent_skills_yaml_skills_block(result)
 
     for warning in result.warnings:
         print(f"WARN {warning}")

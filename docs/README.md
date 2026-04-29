@@ -9,6 +9,11 @@ Start here when reading the repository outside GitHub's main README.
 - [Jira / Confluence auth discovery](auth-discovery.md) - the order skills must walk before
   declaring auth unavailable, how `${VAR}` placeholders are resolved, the auth preflight
   script, and the troubleshooting table for common failures.
+- [Skill-source resolution](skill-source-resolution.md) - which directory the agent must
+  treat as the canonical skill source when more than one is present on disk, and how the
+  workspace lock file is consulted.
+- [Updates](updates.md) - how a user notices a new release and applies it without losing
+  local config (`./setup.init --check-updates`, `./setup.init --update`, `git pull`).
 - [Assistant setup](assistants.md) - using the skills with common AI assistants.
 - [Starter prompts](starter-prompts.md) - copy-paste prompts for single-skill and multi-skill work.
 - [Examples](examples/README.md) - realistic input/output examples for each skill.

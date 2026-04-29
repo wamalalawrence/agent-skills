@@ -71,3 +71,43 @@ code_reviewer_model: ""
 # Optional cache override. Defaults to <repo-root>/.cache/agent-skills/.
 # Useful on ephemeral runners that want to redirect the cache to a tmpfs path.
 cache_dir: ""
+
+# -----------------------------------------------------------------------------
+# Skill-source resolution. See docs/skill-source-resolution.md.
+# -----------------------------------------------------------------------------
+# A workspace can have more than one place where SKILL.md files live (the
+# source repo, a workspace symlink, a vendored copy in a downstream repo). This
+# block tells the agent which one is canonical so it never loads two copies of
+# the same skill or merges contradictory instructions.
+#
+# All keys are OPTIONAL. The defaults below match the behavior shipped by
+# `setup.init` and the resolution order in docs/skill-source-resolution.md, so
+# most users do not need to change anything.
+skills:
+  # Directory the agent must treat as the canonical skill source. Resolved
+  # relative to this YAML file. Set this to remove all ambiguity.
+  # COMMON VALUES:
+  #   .skills                   (local-workspace mode, the default symlink)
+  #   .agent-skills/skills      (in-repo mode, vendored copy)
+  #   agent-skills/skills       (when this YAML lives in a parent workspace)
+  canonical_dir: ""
+
+  # What to do when a skill name appears under multiple discovered directories.
+  # ALLOWED: prefer_canonical | prefer_highest_version | ask
+  # DEFAULT: prefer_canonical (use canonical_dir when set, otherwise ask).
+  duplicate_policy: "prefer_canonical"
+
+  # Path to the agent-skills source repo on disk, when present. Used by the
+  # `repo-modification` rule (rule 2 in docs/skill-source-resolution.md) so
+  # edits to skills land in the source repo, not the installed copy.
+  # EXAMPLE: "agent-skills" (relative to this file).
+  source_repo_dir: ""
+
+  # If `true`, the resolver may fall back to `source_repo_dir` when no other
+  # canonical source is configured. Set `false` for cloud agents that should
+  # only ever use the vendored copy.
+  allow_source_repo_fallback: true
+
+  # If `true`, the agent emits a one-line warning when the chosen skill's
+  # `metadata.version` differs from a copy it ignored at another path.
+  warn_on_version_drift: true

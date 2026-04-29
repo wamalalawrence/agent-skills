@@ -71,6 +71,9 @@ The command asks a short set of questions, then creates or updates:
   block are preserved on rerun, edits **inside** are overwritten).
 - `.jira-config.yml` in the workspace root, only if you opt in to Jira setup.
 - `.skills` in the workspace root as a symlink to `agent-skills/skills`.
+- `.agent-skills.lock` in the workspace root — a small JSON file recording the version,
+  source repo path, and canonical skill directory for the agent (advisory; gitignored).
+  See [skill-source-resolution.md](skill-source-resolution.md) and [updates.md](updates.md).
 - `.gitignore` in the workspace root with an idempotent agent-skills block (only when sensible — see
   below).
 
@@ -95,6 +98,9 @@ All flags:
 | `--with-jira` / `--no-jira`                       | Force Jira config on or off.                                     |
 | `--with-confluence` / `--no-confluence`           | Force Confluence config on or off.                               |
 | `--no-symlink`                                    | Skip creating the `.skills` symlink.                             |
+| `--check-updates`                                 | Compare local `VERSION` to the latest release tag on `origin`. Exits `0` up-to-date, `10` update available, `2` setup error. |
+| `--update`                                        | Fetch tags, check out the latest release tag (or `--branch NAME`), refresh `.skills` and `.agent-skills.lock`. Refuses on a dirty working tree. |
+| `--branch NAME`                                   | Used with `--update`; track this branch instead of the latest tag. |
 | `--verify`                                        | Re-check an existing setup; write nothing.                       |
 | `--help`                                          | Show usage.                                                      |
 
@@ -140,9 +146,12 @@ $EDITOR /path/to/work/.jira-config.yml
   `CONFLUENCE_SPACE_KEYS`) when `--with-confluence` is passed or the user opts in interactively.
 - Creates a `.skills` symlink in the workspace root for assistants that can read skills from a
   workspace folder.
+- Writes `.agent-skills.lock` (JSON, gitignored) recording the source repo path and version so
+  the agent can detect drift later. See [skill-source-resolution.md](skill-source-resolution.md).
 - Adds an idempotent agent-skills block to `<workspace-root>/.gitignore` covering `.env`,
-  `.env.local`, `.env.*.local`, `.jira-config.yml`, `.skills`, and `.cache/`. The block is created
-  only when a `.gitignore` already exists or the workspace root is a git repo.
+  `.env.local`, `.env.*.local`, `.jira-config.yml`, `.skills`, `.agent-skills.lock`, and
+  `.cache/`. The block is created only when a `.gitignore` already exists or the workspace root
+  is a git repo.
 - Validates that `.env` parses by trying `python3` first, then `ruby`, and fails the rerun if any
   setup-managed key is duplicated outside the marker block.
 
