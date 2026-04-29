@@ -44,9 +44,11 @@ REQUIRED_FILES = [
     "docs/destructive-action-safety.md",
     "docs/requirement-understanding.md",
     "docs/requirement-understanding-scorecard.md",
+    "docs/auth-discovery.md",
     "docs/examples/requirement-understanding.md",
     "scripts/validate-repo.py",
     "scripts/validate_skills.py",
+    "scripts/auth-preflight.py",
     "skills/software-engineer/SKILL.md",
     "skills/software-engineer/README.md",
     "skills/software-engineer/skills/issue-investigator/SKILL.md",
@@ -71,6 +73,7 @@ REQUIRED_FILES = [
     "evals/requirement-understanding-bug-vs-feature.md",
     "evals/requirement-understanding-wrong-root-cause-trap.md",
     "evals/requirement-understanding-security-sensitive-request.md",
+    "evals/auth-discovery-jira-confluence.md",
     "eval-runs/README.md",
     "eval-runs/v0.9.0/summary.md",
     "eval-runs/v0.9.0/issue-investigator-bug-root-cause.md",
@@ -87,6 +90,8 @@ REQUIRED_FILES = [
     "eval-runs/v0.11.0/setup-flow-hardening.md",
     "eval-runs/v0.17.0/summary.md",
     "eval-runs/v0.17.0/requirement-understanding-multi-skill.md",
+    "eval-runs/v0.18.0/summary.md",
+    "eval-runs/v0.18.0/auth-discovery-jira-confluence.md",
 ]
 
 # Setup-managed environment keys. They MUST appear inside the
@@ -165,6 +170,7 @@ SKIP_DIRS = {
     "build",
     "coverage",
     ".cache",
+    ".claude",
     ".mypy_cache",
     ".pytest_cache",
     ".ruff_cache",
@@ -793,6 +799,33 @@ def check_env_example_marker_block(result: Result) -> None:
             )
 
 
+def check_jira_placeholder_consistency(result: Result) -> None:
+    """`.jira-config.example.yml` placeholders must reference keys in `.env.example`.
+
+    A `${JIRA_HOST}` in the YAML that is not defined in `.env.example` will sit unresolved
+    after `setup.init` runs and cause an avoidable agent-side "no Jira access" failure.
+    """
+    yml_path = ROOT / ".jira-config.example.yml"
+    env_path = ROOT / ".env.example"
+    if not yml_path.exists() or not env_path.exists():
+        return
+
+    yml_text = read_text(yml_path)
+    env_text = read_text(env_path)
+    placeholders = set(re.findall(r"\$\{([A-Z_][A-Z0-9_]*)\}", yml_text))
+    env_keys = {
+        match.group(1) for match in re.finditer(
+            r"^\s*(?:export\s+)?([A-Z_][A-Z0-9_]*)\s*=", env_text, re.MULTILINE
+        )
+    }
+    for name in sorted(placeholders):
+        if name not in env_keys:
+            result.error(
+                f".jira-config.example.yml references ${{{name}}} but {name} is not defined "
+                f"in .env.example; add it or remove the placeholder"
+            )
+
+
 def main() -> int:
     result = Result(errors=[], warnings=[])
     check_required_files(result)
@@ -804,6 +837,7 @@ def main() -> int:
     check_forbidden_content(result)
     check_generated_files(result)
     check_env_example_marker_block(result)
+    check_jira_placeholder_consistency(result)
 
     for warning in result.warnings:
         print(f"WARN {warning}")

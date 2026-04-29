@@ -6,6 +6,9 @@ Start here when reading the repository outside GitHub's main README.
 - [Installation](installation.md) - local-workspace and in-repo setup.
 - [Configuration](configuration.md) - environment and project metadata.
 - [Execution modes](execution-modes.md) - how skills choose local-workspace vs in-repo mode.
+- [Jira / Confluence auth discovery](auth-discovery.md) - the order skills must walk before
+  declaring auth unavailable, how `${VAR}` placeholders are resolved, the auth preflight
+  script, and the troubleshooting table for common failures.
 - [Assistant setup](assistants.md) - using the skills with common AI assistants.
 - [Starter prompts](starter-prompts.md) - copy-paste prompts for single-skill and multi-skill work.
 - [Examples](examples/README.md) - realistic input/output examples for each skill.

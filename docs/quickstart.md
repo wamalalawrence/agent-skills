@@ -100,6 +100,15 @@ Use the test-automation-engineer skill to decide what should be automated for th
 the right test level, avoid brittle checks, and describe the validation command.
 ```
 
+## Jira / Confluence auth at a glance
+
+Skills follow a documented [auth discovery order](auth-discovery.md) before reporting that
+Jira or Confluence is inaccessible: `.agent-skills.yml` → `.jira-config.yml` → `.env` /
+`.env.local` → process environment → `python3 scripts/auth-preflight.py`. Unresolved
+`${JIRA_HOST}` placeholders in `.jira-config.yml` mean **incomplete configuration**, not
+"no auth"; load `.env` first or run the preflight to validate. The preflight never prints
+secret values.
+
 ## What not to expect
 
 - These skills are not deterministic software.

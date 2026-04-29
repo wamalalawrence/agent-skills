@@ -17,7 +17,7 @@ compatibility: >-
   docs/execution-modes.md.
 metadata:
   author: wamalalawrence
-  version: "0.17.0"
+  version: "0.18.0"
   homepage: "https://github.com/wamalalawrence/agent-skills"
 argument-hint: >-
   issue URL/key, bug report, incident, support ticket, feature request, or task
@@ -137,6 +137,34 @@ acceptance criteria, key comments, linked-doc excerpts, and affected environment
 `.jira-config.yml` is optional when the Jira environment variables work. If a Jira key or URL is
 supplied but the ticket cannot be read and no direct ticket details are provided, stop instead of
 producing a low-confidence investigation.
+
+**Mandatory auth discovery before declaring Jira/Confluence inaccessible.** The agent must walk
+the [auth discovery order](../../../../docs/auth-discovery.md#discovery-order) before reporting
+that Jira or Confluence is unavailable:
+
+1. Check `.agent-skills.yml` for `jira:` / `confluence:` host metadata.
+2. Check `.jira-config.yml` for placeholder structure (`${JIRA_HOST}`, etc.).
+3. Check `.env` and `.env.local` for actual values.
+4. Check process environment variables.
+5. Run `python3 scripts/auth-preflight.py` (or pass `--require-jira` when Jira is in scope).
+   The preflight resolves placeholders, validates required fields, and exits 0/1/2 without
+   printing any secret values.
+6. Only after the preflight returns non-usable should the agent ask the user — and the ask must
+   name the specific missing or unresolved fields (never the secret value).
+
+Treat unresolved `${VAR}` placeholders in `.jira-config.yml` as **incomplete configuration**, not
+as missing auth. The fix is to load `.env` (or set the variable in the process environment), not
+to ask the user for credentials. Most Jira CLIs do not expand `${VAR}` placeholders themselves;
+either source `.env` first (`set -a && source .env && set +a`) or rely on the auth preflight.
+
+If config exists but is incomplete, the investigator must report:
+
+- which non-secret fields are unresolved (e.g. `${JIRA_HOST}` not set in `.env`),
+- which secret fields are missing (redacted, never echoed),
+- the smallest fix (typically: rerun `./setup.init` or add the missing key inside the
+  `# >>> agent-skills setup.init` block of `.env`),
+- whether the investigation can continue from supplied issue text alone (it can, with a
+  clearly-marked limitation).
 
 Required setup variables:
 

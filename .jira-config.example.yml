@@ -9,10 +9,19 @@
 # `.jira-config.yml` in your workspace root. You can still copy it manually when
 # you want full control. The real `.jira-config.yml` is gitignored.
 #
+# Placeholder resolution: the `${JIRA_HOST}`, `${JIRA_LOGIN}`, and
+# `${JIRA_AUTH_TYPE}` values below are POSIX-shell placeholders that must be
+# resolved from `.env` (or `.env.local`, or the process environment) before
+# the file is consumed. Most CLIs do NOT expand these themselves — `.env` must
+# be loaded into the environment first (`set -a && source .env && set +a`),
+# OR you can replace the placeholders with literal values here. To check the
+# state of resolution at any time without exposing secrets, run:
+#     python3 scripts/auth-preflight.py
+# It is documented in detail in `docs/auth-discovery.md`.
+#
 # If a Jira ticket is in scope and neither this file nor the Jira environment
 # variables are usable, skills must warn and stop instead of guessing from an
-# unread ticket. If your Jira CLI does not expand ${VAR_NAME} values in YAML,
-# either replace them here or rely on the environment variables from `.env`.
+# unread ticket.
 
 installation: cloud # cloud | local
 server: ${JIRA_HOST}

@@ -6,6 +6,50 @@ All notable project changes should be recorded here.
 
 - No unreleased changes.
 
+## 0.18.0 - Jira / Confluence Auth Discovery
+
+### Added
+
+- New [`docs/auth-discovery.md`](docs/auth-discovery.md) — the canonical agent-facing
+  reference for Jira / Confluence configuration. Defines the explicit discovery order
+  (`.agent-skills.yml` → `.jira-config.yml` → `.env` / `.env.local` → process env →
+  `scripts/auth-preflight.py` → ask the user), the rules for resolving `${VAR}`
+  placeholders, the troubleshooting table for the most common "I can't access Jira"
+  failure modes, and the CLI-independent guidance every skill must follow before
+  declaring auth unavailable.
+- New [`scripts/auth-preflight.py`](scripts/auth-preflight.py) — dependency-free Python
+  script that loads `.env`, `.env.local`, and `.jira-config.yml`, resolves `${VAR}`
+  placeholders, validates required Jira fields and optional Confluence fields, detects
+  API-token-shaped values pasted into `JIRA_PROJECT_KEYS`, and reports the result without
+  ever printing a secret value. Exit codes: `0` usable, `1` incomplete, `2` setup error.
+  Supports `--require-jira`, `--require-confluence`, `--json`, `--show-prefix`.
+- New [`evals/auth-discovery-jira-confluence.md`](evals/auth-discovery-jira-confluence.md)
+  — eval scenario for the exact failure mode this release targets: workspace has both
+  `.env` and `.jira-config.yml` with placeholders, agent must walk the discovery order
+  rather than reporting "no Jira access" and must never echo secret values.
+- `eval-runs/v0.18.0/` capturing the auth-discovery scenario and release summary.
+
+### Changed
+
+- `software-engineer`, `issue-investigator`, and `code-reviewer` SKILL.md files now
+  carry a mandatory auth-discovery step in their Required Environment section. The
+  agent must walk the documented order and run the preflight before reporting Jira /
+  Confluence as inaccessible. Unresolved `${VAR}` placeholders in `.jira-config.yml`
+  are explicitly classified as **incomplete configuration**, not as missing auth.
+- `.env.example` Jira / Confluence sections gained a discovery-contract preamble
+  explaining where real values live, where placeholders live, and how to verify
+  resolution without exposing secrets.
+- `.jira-config.example.yml` placeholder block now states explicitly that `${VAR}`
+  placeholders are not expanded by the Jira CLI and points at the auth preflight.
+- `.agent-skills.example.yml` `jira:` block links the in-repo discovery order
+  (process env → this file → ask the user; no `.env`, no `.jira-config.yml`).
+- `scripts/validate-repo.py` adds `check_jira_placeholder_consistency` — fails when
+  `.jira-config.example.yml` references a `${VAR}` that is not declared in
+  `.env.example`, so the two files cannot drift apart silently.
+- `README.md`, `docs/README.md`, `docs/quickstart.md`, `docs/installation.md`,
+  `docs/configuration.md`, `docs/execution-modes.md`, and `docs/known-limitations.md`
+  link the new auth-discovery doc and (where appropriate) the preflight command.
+
 ## 0.17.0 - Requirement-Understanding Phase
 
 ### Added
