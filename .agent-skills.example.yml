@@ -65,9 +65,6 @@ confluence:
   login: "" # OPTIONAL. Usually same as jira.login on Atlassian Cloud.
   space_keys: "" # OPTIONAL. Comma-separated, e.g. "ENG,ARCH,RUN".
 
-# Optional model-routing hint for the nested code-reviewer skill.
-code_reviewer_model: ""
-
 # Optional cache override. Defaults to <repo-root>/.cache/agent-skills/.
 # Useful on ephemeral runners that want to redirect the cache to a tmpfs path.
 cache_dir: ""

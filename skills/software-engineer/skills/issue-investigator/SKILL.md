@@ -17,7 +17,7 @@ compatibility: >-
   docs/execution-modes.md.
 metadata:
   author: wamalalawrence
-  version: "0.19.0"
+  version: "0.20.0"
   homepage: "https://github.com/wamalalawrence/agent-skills"
 argument-hint: >-
   issue URL/key, bug report, incident, support ticket, feature request, or task
@@ -518,6 +518,13 @@ When recommending a code fix, provide implementation guidance and hand off to
 
 ## Expected Output Contract
 
+Follow [Output Discipline](../../../../docs/output-discipline.md). The contract below is a
+menu of available sections, not a checklist. **Omit empty sections** — drop
+`## Affected Components And Environments` if everything is in one place; drop
+`## Open Questions Or Missing Evidence` when nothing is open. Required-even-if-empty:
+`## Investigation Result` (the verdict block) and `## Root Cause` (so confidence cannot
+be omitted by accident).
+
 ```markdown
 ## Investigation Result
 
@@ -583,9 +590,18 @@ safe check exists with the access the user currently has.)
 - ...
 ```
 
-Normal output must include every section above unless the user asked only for a narrow partial
-analysis. If a section cannot be completed, write `not available` and explain what evidence is
-missing.
+Required-even-if-empty: `Investigation Result` (the verdict + confidence) and `Root Cause`
+(status + evidence). Every other section is **optional and dropped when empty** — do not
+write `not available` under every heading just to fill the template. When a specific section
+is genuinely required by the question but evidence is missing, render only that section with
+a one-line `not available — <what is missing>`.
+
+### Output Style (binding)
+
+- **Omit empty sections.** No `not available` placeholders under every heading.
+- **Hypotheses use the [Output Discipline finding format](../../../../docs/output-discipline.md#findings-format-code-reviewer-manual-tester-defects-investigator-hypotheses)** —
+  one bullet per hypothesis, evidence + supporting/disproving signal + next check inline.
+- No workflow recap, no template echo, no banners around the recommendation.
 
 ## Behavior Checklist
 

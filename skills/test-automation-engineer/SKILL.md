@@ -16,7 +16,7 @@ compatibility: >-
   .agent-skills.yml). See docs/execution-modes.md.
 metadata:
   author: wamalalawrence
-  version: "0.19.0"
+  version: "0.20.0"
   homepage: "https://github.com/wamalalawrence/agent-skills"
 ---
 
@@ -232,7 +232,10 @@ Guardrails specific to test-automation-engineer:
 
 ## Expected Output Contract
 
-Use the smallest useful format for the request, preserving these fields for normal automation plans.
+Follow [Output Discipline](../../docs/output-discipline.md). Use the smallest useful format
+for the request and **omit empty sections** — drop `## Review Notes` if every line would
+be empty, drop `Cleanup:` / `Debug artifacts:` rows if irrelevant. The contract below is a
+menu of available sections, not a checklist.
 
 ```markdown
 ## Automation Strategy
@@ -264,6 +267,14 @@ Use the smallest useful format for the request, preserving these fields for norm
 - Remaining manual coverage:
 - Follow-up work:
 ```
+
+### Output Style (binding)
+
+- **Omit empty sections.** No `none` placeholder bullets.
+- **Findings (flake risks, anti-patterns) use the [Output Discipline finding
+  format](../../docs/output-discipline.md#findings-format-code-reviewer-manual-tester-defects-investigator-hypotheses)** —
+  one bullet per finding, evidence + why + fix inline.
+- No workflow recap, no template echo, no banners.
 
 ## Behavior Checklist
 

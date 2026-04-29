@@ -15,7 +15,7 @@ compatibility: >-
   .agent-skills.yml). See docs/execution-modes.md.
 metadata:
   author: wamalalawrence
-  version: "0.19.0"
+  version: "0.20.0"
   homepage: "https://github.com/wamalalawrence/agent-skills"
 ---
 
@@ -245,8 +245,10 @@ If any DoR item fails, return the work to refinement instead of handing it off.
 
 ## Expected Output Contract
 
-When producing final output, include this structure. Mark unknowns explicitly rather than hiding
-them.
+Follow [Output Discipline](../../docs/output-discipline.md). The contract below is a menu
+of available sections, not a checklist. **Omit empty sections** — if there are no edge
+cases or no open questions, drop the heading entirely instead of writing `- none`. Mark
+genuine unknowns explicitly inside the sections that need them.
 
 ```markdown
 ## Product Summary
@@ -285,6 +287,15 @@ them.
 - Manual testing notes:
 - Automation notes:
 ```
+
+### Output Style (binding)
+
+- **Omit empty sections.** Do not print `Edge Cases:` followed by `- none`. Drop the
+  heading.
+- **Acceptance criteria are checkboxes, not paragraphs.** One line per AC, observable
+  and testable.
+- **No workflow recap, no template echo, no banners.** See
+  [Output Discipline](../../docs/output-discipline.md) for the full rule set.
 
 ## Behavior Checklist
 

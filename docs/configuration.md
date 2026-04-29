@@ -55,7 +55,6 @@ See [`.env.example`](../.env.example) for the full annotated list. The minimum u
 | `GITHUB_ORG`                     | Required only for GitHub repository discovery, clone, push, or PR work |
 | `GITHUB_DEFAULT_BRANCH`          | Default base branch when a project has no override                     |
 | `PROJECTS_JSON`                  | Multi-project map with stack and command metadata                      |
-| `CODE_REVIEWER_MODEL`            | Optional model-routing hint. The literal `default` is a sentinel meaning "let the host pick its model"; replace the value to pin a specific model |
 | `JIRA_HOST` and `JIRA_API_TOKEN` | Required only for Jira-driven or story-aware modes                     |
 | `CONFLUENCE_HOST` and `CONFLUENCE_API_TOKEN` | Required only for Confluence-aware doc lookups             |
 | `SONAR_HOST_URL` and `SONAR_TOKEN` | Optional. Required only when CI/CD publishes a Sonar report the agent should reference |
@@ -138,7 +137,6 @@ Top-level keys:
 | `project`                               | yes                         | Single project block; replaces `PROJECTS_JSON`.                                             |
 | `jira.host`, `jira.default_project_key` | only for Jira work          | Host metadata only; the credential `JIRA_API_TOKEN` is an env var.                          |
 | `confluence.host`                       | only for Confluence work    | Host metadata only; the credential `CONFLUENCE_API_TOKEN` is an env var.                    |
-| `code_reviewer_model`                   | no                          | Optional model-routing hint.                                                                |
 | `cache_dir`                             | no                          | Override; default is `<repo>/.cache/agent-skills/`. Equivalent to `AGENT_SKILLS_CACHE_DIR`. |
 
 `project` keys mirror the per-project schema above (`name`, `stack`, `base_branch`, `build`,

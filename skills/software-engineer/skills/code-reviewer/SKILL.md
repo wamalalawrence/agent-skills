@@ -16,7 +16,7 @@ compatibility: >-
   .agent-skills.yml). See docs/execution-modes.md.
 metadata:
   author: wamalalawrence
-  version: "0.19.0"
+  version: "0.20.0"
   homepage: "https://github.com/wamalalawrence/agent-skills"
 argument-hint: >-
   optional: mode inner|outer, base branch, issue key/URL, PR URL, or task description
@@ -154,8 +154,6 @@ Review setup variables:
   branch, build, and format commands. In `in-repo` mode, the single `project:` block in
   `.agent-skills.yml` replaces this.
 - `GITHUB_DEFAULT_BRANCH`: required. Defaults to `main`; used as the base branch fallback.
-- `CODE_REVIEWER_MODEL`: optional. Defaults to `default`; used when the host supports model
-  routing.
 - `CODE_REVIEWER_BLOCKING`: optional. Defaults to `false`; when `true`, blocker findings stop the
   calling workflow.
 - `CODE_REVIEWER_MAX_FILES`: optional. Defaults to `80`; warns when non-trivial changed files
@@ -404,65 +402,76 @@ contract below.
 
 ## Expected Output Contract
 
-```markdown
-## Code Review - <repo> @ <branch>
+Follow [Output Discipline](../../../../docs/output-discipline.md). The contract below is
+a **menu of available sections, not a checklist**. **Omit empty sections** — render only
+the sections you have content for. The single required-even-if-empty section is the
+one-line `## Final Verdict` at the bottom.
 
-- Review scope:
-- Review mode: inner | outer | pr | manual
-- Issue awareness: issue-aware | partially issue-aware | non-issue-aware
-- Base: <base branch or comparison target>
-- Files reviewed: <kept>/<total> after filtering
+```markdown
+## Code Review — <repo> @ <branch>
+
+<one line each, in this order, dropped if obvious or empty>
+- Mode: inner | outer | pr | manual · Issue awareness: issue-aware | partial | none
+- Base: <base> · Files reviewed: <kept>/<total>
 - Standards used: <repo docs / supplied URLs / none>
 
-## Issue/Ticket Alignment Result
+## Issue/Ticket Alignment
 
-- Issue summary:
-- Expected behavior:
-- Acceptance criteria mapping:
-- Alignment verdict: aligned | partially aligned | not aligned | unclear
+<2–4 lines max: ticket key + summary, expected behavior, alignment verdict
+(aligned | partially aligned | not aligned | unclear). Drop entirely for
+non-issue-aware review.>
 
-## Engineering Quality Result
+## Engineering Quality
 
-- Correctness:
-- Tests:
-- Security:
-- Performance:
-- Observability:
-- Compatibility / regression risk:
+<bullet list, only the dimensions that actually have a finding-worthy observation:
+correctness, tests, security, performance, observability, compatibility/regression
+risk. Drop the section if every dimension is clean — the absence of findings IS
+the signal.>
 
-## Findings Grouped By Severity
+## Findings
 
-### <severity>: <finding title>
+<group by severity in descending order: blocker, major, minor, nit. Each finding is
+ONE bullet using the Output Discipline finding format:>
+- **<severity>: <title>** — <evidence in 1 sentence>. Why it matters: <1 sentence>.
+  Fix: <1 sentence>. (confidence: high|medium|low; blocking|advisory)
 
-- Severity: blocker | major | minor | nit
-- Title:
-- Affected file/area:
-- Evidence:
-- Why it matters:
-- Suggested fix:
-- Confidence: high | medium | low
-- Blocking/advisory decision: blocking | advisory
+## Devil's-Advocate Self-Rebuttal
 
-## Review Limitations / Unavailable Context
+<one short paragraph; required only before a PASS verdict. Drop for any other verdict.>
 
-- Issue context not accessed:
-- Code paths not inspected:
-- Tests / builds / CI not executed or not observed:
-- Standards / guidelines referenced but not supplied:
-- Runtime / deployment / observability evidence not available:
-- Effect on confidence:
+## Review Limitations
+
+<one short paragraph or one line "Review Limitations: none." Do NOT render a
+six-bullet block where every item says "none". List only what actually limited the
+review (issue context not accessed, code paths not inspected, tests/builds not run,
+standards not supplied, runtime evidence not available) and the net effect on
+confidence.>
 
 ## Final Verdict
 
-- Verdict: PASS | PASS_WITH_NOTES | REQUEST_CHANGES | NEEDS_CONTEXT | NOT_REVIEWABLE
-- Reason:
-- Follow-up needed:
+<VERDICT> — <one-sentence reason>.
+Follow-up: <one-sentence list, or omit the line if there is no follow-up>.
 ```
 
-The `Review Limitations / Unavailable Context` section is required even when the review found no
-findings. If everything was available, write `none` under each item rather than removing the
-section. A bare `PASS` verdict requires every limitation item to be `none` or explicitly waived by
-the user; otherwise use `PASS_WITH_NOTES` or `NEEDS_CONTEXT`.
+`<VERDICT>` is one of `PASS`, `PASS_WITH_NOTES`, `REQUEST_CHANGES`, `NEEDS_CONTEXT`,
+`NOT_REVIEWABLE`. A bare `PASS` requires that nothing belonged in the `Review
+Limitations` section, the Requirement Understanding Gate ended at `high`, and the
+Devil's-Advocate paragraph surfaced no credible risk. Otherwise downgrade.
+
+### Output Style (binding)
+
+- **Omit empty sections.** Do not print a heading just to write `none` underneath it.
+- **One bullet per finding.** Do not expand findings into the seven-line
+  `Severity:` / `Title:` / `Affected file:` / `Evidence:` / `Why it matters:` /
+  `Suggested fix:` / `Confidence:` / `Blocking decision:` skeleton. That is the
+  shape of the data, not the shape of the output.
+- **No workflow recap.** Do not narrate which steps the skill ran. The result of
+  each step is the only thing the user wants.
+- **No template echo.** Do not paste the contract block above as your output.
+- **No banners or status decorations** around the verdict line.
+- See [Output Discipline](../../../../docs/output-discipline.md) for the full rule
+  set; the eval [`code-reviewer-concise-output`](../../../../evals/code-reviewer-concise-output.md)
+  pins the expected shape with a worked example.
 
 ## Behavior Checklist
 
@@ -470,10 +479,11 @@ the user; otherwise use `PASS_WITH_NOTES` or `NEEDS_CONTEXT`.
   verdict is `NEEDS_CONTEXT` / `NOT_REVIEWABLE`.
 - [ ] Issue/ticket alignment is checked before generic engineering quality when context exists.
 - [ ] Findings include severity, evidence, impact, suggested fix, confidence, and blocking/advisory
-  decision.
-- [ ] `Review Limitations / Unavailable Context` section is filled in (each item either lists what
-  was missing or says `none`); a bare `PASS` is not used while items are non-`none`.
-- [ ] Missing evidence, skipped files, unverified tests, and review limits are disclosed.
+  decision **as inline content of one bullet, not as a seven-line skeleton**.
+- [ ] Output follows [`docs/output-discipline.md`](../../../../docs/output-discipline.md):
+  empty sections are dropped, the verdict is one line, and the contract template is not echoed.
+- [ ] Missing evidence, skipped files, unverified tests, and review limits are disclosed in
+  `Review Limitations` (one paragraph or one line — never a six-bullet `none` block).
 - [ ] Final verdict uses only `PASS`, `PASS_WITH_NOTES`, `REQUEST_CHANGES`, `NEEDS_CONTEXT`, or
   `NOT_REVIEWABLE`.
 
