@@ -6,6 +6,88 @@ All notable project changes should be recorded here.
 
 - No unreleased changes.
 
+## 0.19.0 - Skill-Source Resolution And Self-Update
+
+### Added
+
+- New [`docs/skill-source-resolution.md`](docs/skill-source-resolution.md) — the canonical
+  agent-facing reference for which skill directory to load when more than one is present on
+  disk. Defines a six-step resolution order (`.agent-skills.yml` `skills.canonical_dir` →
+  repo-modification context → `.agent-skills/skills/` → `.skills/` → `agent-skills/skills/` →
+  ask the user when ambiguous), the duplicate-handling rules (no merging, no "load all", warn
+  on version drift), and the mode-specific defaults that match what `setup.init` ships.
+- New [`docs/updates.md`](docs/updates.md) — how a user who has already cloned the repo
+  notices a new release and applies it. Documents three update channels (`./setup.init
+  --check-updates`, `./setup.init --update`, manual `git pull`), the in-repo / vendored update
+  flow, the rollback path, and how the agent surfaces drift between the loaded skill version
+  and the workspace lock file.
+- New [`scripts/check-updates.py`](scripts/check-updates.py) — dependency-free Python tool
+  that compares the local `VERSION` (or the highest `metadata.version` under a vendored
+  `skills/` directory) against the latest release tag on `origin`. Supports `--vendored`,
+  `--json`, `--use-api`, `--token` (read from `--token` or `GITHUB_TOKEN`, never echoed). Exit
+  codes: `0` up-to-date / ahead, `10` update available, `2` setup error.
+- New `setup.init --check-updates` subcommand — same comparison as the standalone script,
+  but workspace-independent. Same exit codes.
+- New `setup.init --update` subcommand — fetches tags from `origin`, refuses to act on a
+  dirty working tree, checks out the latest release tag (or `--branch NAME`), then re-runs
+  the setup flow non-interactively to refresh `.skills` and the new `.agent-skills.lock`
+  metadata file. Never pushes, never auto-updates without the explicit flag.
+- New advisory `<workspace>/.agent-skills.lock` file written by every `setup.init` run.
+  JSON, gitignored, schema `agent-skills.lock/v1`. Records `version`, `git_sha`,
+  `canonical_dir`, `source_repo_dir`, `installed_at`, `installed_by`. Lets agents pin to a
+  known version and detect drift without inspecting the source repo.
+- New `skills:` block in [`.agent-skills.example.yml`](.agent-skills.example.yml) covering
+  `canonical_dir`, `duplicate_policy`, `source_repo_dir`, `allow_source_repo_fallback`, and
+  `warn_on_version_drift`. All keys are optional; defaults match the resolution order.
+- New [`evals/skill-source-resolution-ambiguity.md`](evals/skill-source-resolution-ambiguity.md)
+  eval scenario covering the exact failure mode this release targets: a workspace with both
+  `.skills/` and a vendored `.agent-skills/skills/` copy at different versions, agent must
+  walk the resolution order rather than merging or arbitrarily picking.
+- `eval-runs/v0.19.0/` capturing the skill-source-resolution scenario and the release summary.
+
+### Changed
+
+- `setup.init` now writes `.agent-skills.lock` at the end of every run, surfaces a warning
+  when more than one **distinct** skill source exists in the workspace without a configured
+  `skills.canonical_dir`, and reports lock-file status (matched / drifted / missing) in
+  `--verify`. The ambiguity check resolves symlinks before comparing, so the expected
+  `.skills -> agent-skills/skills` shape is **not** flagged.
+- `setup.init --help` documents `--check-updates`, `--update`, and `--branch`.
+- The setup-managed `.gitignore` block now ignores `.agent-skills.lock`.
+- `scripts/validate-repo.py` `REQUIRED_FILES` extended with the new docs, eval, eval-runs,
+  and `scripts/check-updates.py`. New `check_agent_skills_yaml_skills_block` validation
+  ensures `.agent-skills.example.yml` keeps the documented `skills:` block keys.
+- `README.md`, `docs/README.md`, `docs/quickstart.md`, `docs/installation.md`,
+  `docs/configuration.md`, `docs/assistants.md`, `docs/execution-modes.md`, and
+  `docs/known-limitations.md` link the two new docs.
+- `VERSION` and every `SKILL.md` `metadata.version` bumped to `0.19.0`.
+
+### Why
+
+A user who clones `agent-skills` next to other repos and runs `./setup.init` ends up with
+at least two paths that contain the same `SKILL.md` files (the source clone plus the
+`.skills` symlink). In-repo / cloud-agent users frequently add a third (a vendored copy at
+`.agent-skills/skills/`) that may drift from the source. Agents discovering more than one
+copy could load duplicate workflows, merge contradictory instructions, or silently pick the
+wrong version. This release fixes that by:
+
+- giving the agent a written, deterministic resolution order it can follow without guessing;
+- giving the operator a single config key (`skills.canonical_dir`) that pins the choice;
+- giving the agent a small lock file (`.agent-skills.lock`) it can read to detect drift;
+- giving the user a first-class update path (`--check-updates` / `--update`) so the
+  installed runtime stays close to the source repo.
+
+### Not Changed (deliberate)
+
+- No new top-level or nested skills.
+- No skill renames; existing collaboration handoffs unchanged.
+- No new required environment variables. The lock file is gitignored and advisory.
+- The `.skills` directory remains a symlink (`--no-symlink` still works). No copy mode
+  was added; the supported way to vendor skills is the existing `.agent-skills/skills/`
+  pattern documented in `docs/installation.md`.
+- `setup.init --update` never pushes, never force-resets, and never auto-runs without the
+  flag.
+
 ## 0.18.0 - Jira / Confluence Auth Discovery
 
 ### Added

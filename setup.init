@@ -56,6 +56,9 @@ SONAR_MODE="ask"
 ENVIRONMENTS_MODE="ask"
 SYMLINK_MODE="ask"
 VERIFY_MODE="false"
+CHECK_UPDATES_MODE="false"
+UPDATE_MODE="false"
+UPDATE_REF=""
 CHECK_CONNECTIVITY="true"
 CHECK_CREDENTIAL_PROBE="true"
 WORKSPACE_ROOT=""
@@ -92,6 +95,15 @@ Options:
   --no-symlink             Do not create the .skills symlink
   --verify                 Check an existing setup and report problems
                            (no writes)
+  --check-updates          Compare local VERSION against the latest release
+                           tag on origin and exit. No writes. Exit codes:
+                             0 up-to-date / ahead, 10 update available,
+                             2 setup error.
+  --update                 Apply the latest release: fetch tags, check out
+                           the latest tag (or --branch), refresh .skills and
+                           .agent-skills.lock. Refuses if working tree dirty.
+  --branch NAME            Used with --update; track this branch instead of
+                           the latest tag (e.g. main).
   --help                   Show this help
 
 Typical use:
@@ -130,6 +142,12 @@ while [[ $# -gt 0 ]]; do
     --no-credential-probe) CHECK_CREDENTIAL_PROBE="false"; shift ;;
     --no-symlink) SYMLINK_MODE="no"; shift ;;
     --verify) VERIFY_MODE="true"; shift ;;
+    --check-updates) CHECK_UPDATES_MODE="true"; shift ;;
+    --update) UPDATE_MODE="true"; shift ;;
+    --branch)
+      UPDATE_REF="${2:-}"; shift 2 ;;
+    --branch=*)
+      UPDATE_REF="${1#*=}"; shift ;;
     --help|-h) usage; exit 0 ;;
     *)
       echo "Unknown option: $1" >&2
@@ -1020,6 +1038,7 @@ update_workspace_gitignore() {
     printf '.env.*.local\n'
     printf '.jira-config.yml\n'
     printf '.skills\n'
+    printf '.agent-skills.lock\n'
     printf '.cache/\n'
     printf '%s\n' "${GITIGNORE_END_MARKER}"
   } > "${block_file}"
@@ -1062,6 +1081,258 @@ update_workspace_gitignore() {
   mv "${temp_file}" "${gitignore_file}"
   rm -f "${block_file}"
   printf 'updated'
+}
+
+# ------------------------------------------------------------------------------
+# Skill-source resolution: lock file, ambiguity check, update handling.
+#
+# See docs/skill-source-resolution.md and docs/updates.md for the full
+# specification. The lock file is written to <workspace>/.agent-skills.lock
+# and is gitignored. It is advisory metadata for agents — `.agent-skills.yml`
+# `skills.canonical_dir` still wins when both are present.
+# ------------------------------------------------------------------------------
+LOCK_FILE_NAME=".agent-skills.lock"
+
+read_repo_version() {
+  local version_file="${SCRIPT_DIR}/VERSION"
+  if [[ -f "${version_file}" ]]; then
+    head -n 1 "${version_file}" | tr -d '[:space:]'
+  fi
+}
+
+read_repo_git_sha() {
+  if command -v git >/dev/null 2>&1 && [[ -d "${SCRIPT_DIR}/.git" ]]; then
+    (cd "${SCRIPT_DIR}" && git rev-parse --short=12 HEAD 2>/dev/null) || true
+  fi
+}
+
+write_skills_lock() {
+  local workspace_root="$1"
+  local canonical_dir="$2"
+  local lock_path="${workspace_root}/${LOCK_FILE_NAME}"
+  local version
+  local git_sha
+  local timestamp
+  version="$(read_repo_version)"
+  git_sha="$(read_repo_git_sha)"
+  timestamp="$(date -u +"%Y-%m-%dT%H:%M:%SZ")"
+  cat > "${lock_path}" <<EOF
+{
+  "schema": "agent-skills.lock/v1",
+  "version": "${version}",
+  "git_sha": "${git_sha}",
+  "canonical_dir": "${canonical_dir}",
+  "source_repo_dir": "${SCRIPT_DIR}",
+  "installed_at": "${timestamp}",
+  "installed_by": "setup.init ${version}"
+}
+EOF
+  chmod 644 "${lock_path}" 2>/dev/null || true
+}
+
+# Detect more than one plausible skill source under the workspace and warn the
+# operator. Called from --verify and at the end of first-run setup.
+#
+# Sources that resolve (after following symlinks) to the same directory are
+# treated as one source — that is the expected `.skills -> agent-skills/skills`
+# shape from `setup.init`, not real ambiguity.
+check_skill_source_ambiguity() {
+  local workspace_root="$1"
+  local symlink="${workspace_root}/.skills"
+  local vendored="${workspace_root}/.agent-skills/skills"
+  local source_clone=""
+  for candidate in "${workspace_root}"/agent-skills "${workspace_root}"/*/agent-skills; do
+    if [[ -d "${candidate}/skills" ]]; then
+      source_clone="${candidate}/skills"
+      break
+    fi
+  done
+
+  local raw_sources=()
+  [[ -e "${symlink}" ]] && raw_sources+=("${symlink}")
+  [[ -d "${vendored}" ]] && raw_sources+=("${vendored}")
+  [[ -n "${source_clone}" ]] && raw_sources+=("${source_clone}")
+
+  # Resolve each source to its real path and dedupe.
+  local seen_resolved=""
+  local distinct_sources=()
+  local entry resolved
+  for entry in "${raw_sources[@]}"; do
+    if command -v python3 >/dev/null 2>&1; then
+      resolved="$(python3 -c 'import os,sys; print(os.path.realpath(sys.argv[1]))' "${entry}")"
+    else
+      resolved="$(cd "${entry}" 2>/dev/null && pwd -P || printf '%s' "${entry}")"
+    fi
+    case "${seen_resolved}" in
+      *"|${resolved}|"*) continue ;;
+    esac
+    seen_resolved="${seen_resolved}|${resolved}|"
+    distinct_sources+=("${entry}")
+  done
+
+  if [[ "${#distinct_sources[@]}" -le 1 ]]; then
+    return 0
+  fi
+
+  local configured_canonical=""
+  if [[ -f "${workspace_root}/.agent-skills.yml" ]]; then
+    configured_canonical="$(awk '
+      /^skills:/ { in_block = 1; next }
+      in_block && /^[^[:space:]]/ { in_block = 0 }
+      in_block && /canonical_dir:/ {
+        sub(/^[[:space:]]*canonical_dir:[[:space:]]*/, "")
+        gsub(/^["'"'"']|["'"'"']$/, "")
+        print
+        exit
+      }
+    ' "${workspace_root}/.agent-skills.yml" 2>/dev/null)"
+  fi
+
+  if [[ -n "${configured_canonical}" ]]; then
+    echo "  ok    skill-source canonical_dir configured: ${configured_canonical}"
+    return 0
+  fi
+
+  echo "  WARN: multiple distinct skill sources discovered under ${workspace_root}:" >&2
+  for entry in "${distinct_sources[@]}"; do
+    echo "         - ${entry}" >&2
+  done
+  echo "         No skills.canonical_dir is configured. Set it in" >&2
+  echo "         .agent-skills.yml to remove ambiguity." >&2
+  echo "         See docs/skill-source-resolution.md." >&2
+}
+
+# Compare two semver strings. Echoes -1, 0, or 1 for a<b, a==b, a>b.
+semver_cmp() {
+  local a="${1#v}"
+  local b="${2#v}"
+  if [[ "${a}" == "${b}" ]]; then
+    echo 0
+    return 0
+  fi
+  local higher
+  higher="$(printf '%s\n%s\n' "${a}" "${b}" | sort -V | tail -n 1)"
+  if [[ "${higher}" == "${a}" ]]; then
+    echo 1
+  else
+    echo -1
+  fi
+}
+
+# Latest semver tag advertised by `origin` (or the configured remote). Empty if
+# git or the network is unavailable.
+latest_remote_release_tag() {
+  local remote="${1:-origin}"
+  command -v git >/dev/null 2>&1 || return 1
+  (cd "${SCRIPT_DIR}" && git ls-remote --tags --refs "${remote}" 2>/dev/null) \
+    | awk '{ print $2 }' \
+    | sed 's#refs/tags/##' \
+    | grep -E '^v?[0-9]+\.[0-9]+\.[0-9]+([-+][0-9A-Za-z.-]+)?$' \
+    | sort -V \
+    | tail -n 1
+}
+
+run_check_updates() {
+  local local_version
+  local remote_tag
+  local remote_version
+  local cmp
+  local_version="$(read_repo_version)"
+  if [[ -z "${local_version}" ]]; then
+    echo "FAIL: cannot read VERSION from ${SCRIPT_DIR}/VERSION" >&2
+    return 2
+  fi
+
+  if ! command -v git >/dev/null 2>&1; then
+    echo "FAIL: git not installed; cannot check for updates" >&2
+    return 2
+  fi
+
+  remote_tag="$(latest_remote_release_tag origin)"
+  if [[ -z "${remote_tag}" ]]; then
+    echo "FAIL: could not resolve latest tag from origin" >&2
+    echo "      check network connectivity or fetch manually with: git fetch --tags" >&2
+    return 2
+  fi
+  remote_version="${remote_tag#v}"
+
+  cmp="$(semver_cmp "${local_version}" "${remote_version}")"
+  echo "agent-skills update check"
+  echo "  local : ${local_version}"
+  echo "  latest: ${remote_version}  (tag: ${remote_tag})"
+  case "${cmp}" in
+    -1)
+      echo "  status: update available"
+      echo "  apply : ./setup.init --update     (or: git fetch --tags && git checkout ${remote_tag})"
+      return 10
+      ;;
+    1)
+      echo "  status: ahead of latest release (likely a contributor branch)"
+      return 0
+      ;;
+    *)
+      echo "  status: up to date"
+      return 0
+      ;;
+  esac
+}
+
+run_self_update() {
+  local workspace_root="$1"
+  local target_ref="${UPDATE_REF}"
+  local cmp_rc=0
+  local local_version
+  local remote_tag
+
+  if ! command -v git >/dev/null 2>&1; then
+    echo "FAIL: git not installed" >&2
+    return 2
+  fi
+  if [[ ! -d "${SCRIPT_DIR}/.git" ]]; then
+    echo "FAIL: ${SCRIPT_DIR} is not a git working tree; cannot self-update" >&2
+    return 2
+  fi
+  if [[ -n "$(cd "${SCRIPT_DIR}" && git status --porcelain 2>/dev/null)" ]]; then
+    echo "FAIL: working tree at ${SCRIPT_DIR} is dirty" >&2
+    echo "      commit or stash local changes before running --update" >&2
+    return 2
+  fi
+
+  echo "Fetching tags from origin..."
+  (cd "${SCRIPT_DIR}" && git fetch --tags --quiet origin) \
+    || { echo "FAIL: git fetch failed" >&2; return 2; }
+
+  if [[ -z "${target_ref}" ]]; then
+    target_ref="$(latest_remote_release_tag origin)"
+    if [[ -z "${target_ref}" ]]; then
+      echo "FAIL: could not resolve a latest release tag" >&2
+      return 2
+    fi
+  fi
+
+  local_version="$(read_repo_version)"
+  remote_tag="${target_ref}"
+  cmp_rc="$(semver_cmp "${local_version}" "${remote_tag#v}")"
+  if [[ "${cmp_rc}" == "0" ]]; then
+    echo "Already at ${target_ref}; refreshing workspace metadata."
+  else
+    echo "Checking out ${target_ref}..."
+    (cd "${SCRIPT_DIR}" && git checkout --quiet "${target_ref}") \
+      || { echo "FAIL: checkout ${target_ref} failed" >&2; return 2; }
+  fi
+
+  echo ""
+  echo "Re-running setup.init non-interactively to refresh workspace metadata..."
+  ASSUME_YES="true"
+  CHECK_CONNECTIVITY="false"
+  CHECK_CREDENTIAL_PROBE="false"
+  JIRA_MODE="no"
+  CONFLUENCE_MODE="no"
+  SONAR_MODE="no"
+  ENVIRONMENTS_MODE="no"
+  UPDATE_MODE="false"
+  CHECK_UPDATES_MODE="false"
+  return 0
 }
 
 # ------------------------------------------------------------------------------
@@ -1173,6 +1444,23 @@ print("\n".join(missing))
     echo "  WARN: ${skills_link} not present (rerun without --no-symlink)" >&2
   fi
 
+  # Lock file (advisory; see docs/skill-source-resolution.md).
+  local lock_path="${workspace_root}/${LOCK_FILE_NAME}"
+  if [[ -f "${lock_path}" ]]; then
+    local lock_version
+    lock_version="$(awk -F'"' '/"version"/ { print $4; exit }' "${lock_path}")"
+    local repo_version
+    repo_version="$(read_repo_version)"
+    if [[ -n "${lock_version}" && "${lock_version}" == "${repo_version}" ]]; then
+      echo "  ok    .agent-skills.lock at v${lock_version}"
+    else
+      echo "  WARN: .agent-skills.lock pinned to v${lock_version:-unknown} but repo is at v${repo_version:-unknown}" >&2
+      echo "         run ./setup.init --update or rerun ./setup.init to refresh" >&2
+    fi
+  else
+    echo "  WARN: ${lock_path} not present (rerun ./setup.init to create it)" >&2
+  fi
+
   # URL / project-key shape checks (do not echo secrets).
   if [[ -n "${JIRA_HOST:-}" ]] && ! validate_url "${JIRA_HOST}" >/dev/null 2>&1; then
     echo "  WARN: JIRA_HOST does not look like a URL" >&2
@@ -1227,6 +1515,9 @@ print("\n".join(missing))
   # destructive credential to their shell or .env after setup.
   ENV_FILE="${env_file}" check_credential_blast_radius
 
+  # Skill-source resolution check (see docs/skill-source-resolution.md).
+  check_skill_source_ambiguity "${workspace_root}"
+
   if [[ "${errors}" -gt 0 ]]; then
     echo "" >&2
     echo "Verification failed with ${errors} error(s)." >&2
@@ -1239,6 +1530,24 @@ print("\n".join(missing))
 # ==============================================================================
 # Main
 # ==============================================================================
+
+# --check-updates is workspace-independent. Handle it before any prompting.
+if [[ "${CHECK_UPDATES_MODE}" == "true" ]]; then
+  run_check_updates
+  exit $?
+fi
+
+# --update first switches the source clone to the latest tag, then falls
+# through into a normal non-interactive setup run that refreshes .skills and
+# the lock file.
+if [[ "${UPDATE_MODE}" == "true" ]]; then
+  if [[ -z "${WORKSPACE_ROOT}" ]]; then
+    WORKSPACE_ROOT="${DEFAULT_WORKSPACE_ROOT}"
+  fi
+  mkdir -p "${WORKSPACE_ROOT}"
+  WORKSPACE_ROOT="$(cd "${WORKSPACE_ROOT}" && pwd)"
+  run_self_update "${WORKSPACE_ROOT}" || exit $?
+fi
 
 if [[ -z "${WORKSPACE_ROOT}" ]]; then
   if [[ "${VERIFY_MODE}" == "true" ]]; then
@@ -1656,6 +1965,20 @@ fi
 
 check_credential_blast_radius
 
+# Write the skill-source lock file. Canonical_dir defaults to the .skills
+# symlink in local-workspace mode; falls back to the source repo when the
+# symlink was skipped. See docs/skill-source-resolution.md.
+LOCK_CANONICAL_DIR="${SKILLS_LINK}"
+if [[ ! -e "${SKILLS_LINK}" ]]; then
+  LOCK_CANONICAL_DIR="${SCRIPT_DIR}/skills"
+fi
+write_skills_lock "${WORKSPACE_ROOT}" "${LOCK_CANONICAL_DIR}"
+echo "Wrote ${WORKSPACE_ROOT}/${LOCK_FILE_NAME}"
+
+# Surface a warning if the operator has more than one plausible skill source
+# without an explicit canonical_dir in `.agent-skills.yml`.
+check_skill_source_ambiguity "${WORKSPACE_ROOT}" || true
+
 cat <<EOF
 
 ----------------------------------------
@@ -1665,6 +1988,7 @@ Workspace root : ${WORKSPACE_ROOT}
 .env           : ${ENV_FILE} ($([[ "${ENV_CREATED}" == "true" ]] && echo "created" || echo "updated"))
 Detected repos : ${DETECTED_COUNT} (under ${WORKSPACE_ROOT})
 .skills        : ${SYMLINK_STATUS}
+.skills-lock   : ${WORKSPACE_ROOT}/${LOCK_FILE_NAME}
 .gitignore     : ${GITIGNORE_STATUS}
 Jira           : $([[ "${USE_JIRA}" == "yes" ]] && echo "configured (${JIRA_FILE})" || echo "skipped")
 Confluence     : $([[ "${USE_CONF}" == "yes" ]] && echo "configured" || echo "skipped")
@@ -1676,4 +2000,5 @@ Next steps:
 2. Tell your AI assistant where the skills live (see README "Using With Your AI Assistant").
 3. Try a starter prompt from ${SCRIPT_DIR}/README.md.
 4. To re-check this setup later, run: ./setup.init --verify
+5. To check for new releases later, run: ./setup.init --check-updates
 EOF

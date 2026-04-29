@@ -9,6 +9,11 @@ must be vendored or referenced from inside the target repo.
 
 ## Local assistants (`local-workspace` mode)
 
+> Skill-source resolution is documented in
+> [skill-source-resolution.md](skill-source-resolution.md). The short version: point your
+> assistant at `<workspace-root>/.skills` and let `setup.init` keep it in sync. To pin the
+> source explicitly (highest precedence), set `skills.canonical_dir` in `.agent-skills.yml`.
+
 ### Anthropic Claude
 
 Point skills-aware clients, such as Claude Code, at `<workspace-root>/.skills` or

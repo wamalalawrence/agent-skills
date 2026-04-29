@@ -21,5 +21,9 @@ runtime enforcement, or guaranteed outcomes.
 - **Evidence-pack and cache flows depend on the execution environment.** Local-workspace mode,
   in-repo/cloud-agent mode, ephemeral runners, and web agents may differ in what files they can read,
   write, or preserve between turns.
+- **Skill-source ambiguity is the operator's call.** When a workspace has more than one
+  on-disk skill source (`.skills`, a vendored `.agent-skills/skills`, or the source clone),
+  the agent walks the resolution order in [skill-source-resolution.md](skill-source-resolution.md)
+  and asks if no winner is determined. It will not silently merge or pick.
 - **No warranty or SLA.** This project offers no guaranteed correctness, availability, response
   time, support commitment, or fitness for a particular purpose.

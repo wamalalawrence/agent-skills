@@ -47,7 +47,9 @@ into another folder after cloning it.
 `setup.init` asks a short set of questions, infers safe defaults from your Jira host / GitHub org /
 sibling repos where possible, and writes everything to a managed marker block in
 `<workspace-root>/.env`. Confluence configuration is optional and offered after Jira. Re-run
-`./setup.init --verify` at any time.
+`./setup.init --verify` at any time. Run `./setup.init --check-updates` to see if a newer
+release is available, and `./setup.init --update` to apply it. See
+[updates.md](updates.md) for details.
 
 ## In-repo / cloud-agent mode
 

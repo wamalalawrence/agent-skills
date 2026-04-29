@@ -42,4 +42,5 @@ Use this before tagging a release.
 - [ ] Verify sponsor and funding links still render, including
       [.github/FUNDING.yml](../.github/FUNDING.yml).
 - [ ] Tag the release with the `v` prefix, for example `v0.8.0`.
+- [ ] Verify `./setup.init --check-updates` reports `up to date` against the new tag.
 - [ ] Verify the release page links to the correct tag, changelog, docs, and skill files.
