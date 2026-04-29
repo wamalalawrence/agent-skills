@@ -6,6 +6,126 @@ All notable project changes should be recorded here.
 
 - No unreleased changes.
 
+## 0.21.0 - Code-Reviewer Verdict Gating, Update Credential Preservation, Updating Discoverability
+
+### Added
+
+- New `## Updating` section in [`README.md`](README.md), placed directly
+  between `## Install` and `## Skills`. Surfaces the two commands users
+  actually need (`./setup.init --check-updates` and `./setup.init --update`)
+  on the top-level README rather than burying them in `docs/updates.md`.
+  Includes a short note on what `--update` preserves and a pointer to the
+  drift-detection behavior.
+- New eval [`evals/code-reviewer-verdict-gating.md`](evals/code-reviewer-verdict-gating.md)
+  pinning four real-world failure modes from a v0.20.0 PR-review transcript:
+  auth-discovery failure buried as a Note, date-gated rollout treated as
+  single-state, fixture replacement uncritically accepted, targeted test
+  failure rationalized away.
+- Four new binding rules in
+  [`code-reviewer/SKILL.md`](skills/software-engineer/skills/code-reviewer/SKILL.md):
+  - **Auth-discovery failure during issue-aware review is not a Note** —
+    the verdict must be `NEEDS_CONTEXT`, not `PASS_WITH_NOTES`, when the
+    Jira/GitHub credential resolves empty, the config has unresolved
+    `${VAR}` placeholders, or the fetch fails. The only exception is when
+    the user supplied the ticket summary, expected behavior, and
+    acceptance criteria verbatim in the prompt.
+  - **Date-gated / phased-rollout check** — when the diff references a
+    future cutover date, flag flip, or upstream rename, the reviewer must
+    verify both pre-cutoff and post-cutoff paths. A diff that supports
+    only the post-cutoff state with no gating mechanism in the change and
+    no evidence the legacy state has been retired must not receive `PASS`
+    or `PASS_WITH_NOTES`.
+  - **Fixture-replacement / label-rename check** — when tests are updated
+    by **replacing** a value rather than **adding** new tests alongside,
+    surface a `major` finding because the legacy regression coverage was
+    deleted. Acceptable resolutions are documented inline.
+  - **Targeted test failures are blocking** — failed tests/builds/CI runs
+    cannot be dismissed with hypotheses (`Spring context startup error,
+    not a tariff assertion`, `flake`, `pre-existing on main`). To dismiss
+    a failure the reviewer must show one of: parent-commit rerun on the
+    same SHA, a linked known-flaky-test ticket, or a clean rerun on a
+    clean checkout.
+- New `scripts/test-setup-update-preserves-credentials.sh` end-to-end
+  regression test for the `--update` credential-preservation fix. Wired
+  into `.github/workflows/ci.yml` as a new CI step.
+- `eval-runs/v0.21.0/` — release summary, the verdict-gating eval run with
+  motivating real-world transcript and good-shape v0.21.0 output, the
+  setup-update-preserves-credentials write-up with reproduction recipe,
+  and the updating-discoverability rationale.
+
+### Fixed
+
+- **`./setup.init --update` no longer wipes Jira / Confluence / Sonar /
+  Environments credentials.** In v0.20.0 and earlier, `run_self_update`
+  hardcoded `JIRA_MODE=no` / `CONFLUENCE_MODE=no` / `SONAR_MODE=no` /
+  `ENVIRONMENTS_MODE=no` before falling through to the rerun, which then
+  wrote empty values into the marker block of `<workspace>/.env`. Every
+  `--update` silently blanked the user's credentials, causing
+  `code-reviewer` to report "no Jira access" against a workspace that had
+  a fully-populated `.env` immediately before the update. The fix sources
+  the existing `.env` first, derives `*_MODE` from whether the
+  corresponding required value is non-empty, and threads the existing
+  values as prompt defaults so non-interactive `prompt` /
+  `prompt_secret` calls fall back to the previous value instead of
+  writing an empty string. The `ENVIRONMENTS_JSON` interactive loop is
+  skipped in non-interactive mode and the existing JSON is preserved
+  verbatim. User-edited lines outside the marker block were already
+  preserved and remain so.
+- The behavior is verified by the new
+  `scripts/test-setup-update-preserves-credentials.sh` regression test
+  running on every CI build.
+
+### Changed
+
+- `code-reviewer` Behavior Checklist gains four checklist items, one per
+  new binding rule, so the gate runs at three points in the spec
+  (Required Workflow → Behavior Checklist → Guardrails).
+- `code-reviewer` Guardrails section gains four explicit "do not …"
+  entries matching the four binding rules.
+- `VERSION` and every `SKILL.md` `metadata.version` bumped to `0.21.0`.
+- `README.md` status pin moved to `0.21.0`.
+
+### Why
+
+The release was triggered by a real PR-review transcript on v0.20.0 that
+showed four concrete failure modes on the same prompt:
+
+1. The reviewer admitted in its own output that it could not read the
+   ticket but emitted `PASS_WITH_NOTES` anyway, with the auth failure
+   listed as a Note alongside engineering observations. The headline
+   conclusion was unsupported because issue alignment was never verified.
+2. The PR explicitly referenced a `01.06.2026` rollout cutover. The new
+   code matched only the post-cutoff label and the diff contained no
+   gating mechanism. The reviewer assumed deployment timing would handle
+   it. Pre-cutoff production traffic still using the legacy label would
+   silently be misclassified.
+3. Tests were updated by swapping the legacy label for the new one. The
+   reviewer treated the green test run as proof of correctness and did
+   not notice that the regression coverage proving the legacy path used
+   to work was deleted.
+4. A targeted test failed during the engineer's own verification
+   (`JourneyKvbIT` Spring context startup, H2 rollback). The reviewer
+   dismissed it with a hypothesis ("not a tariff assertion") and let the
+   verdict stand without producing parent-commit evidence, a flaky-test
+   ticket, or a clean rerun.
+
+The auth-discovery failure was itself caused by the v0.20.0 `setup.init
+--update` bug fixed in this release: a previous `--update` run had
+silently blanked the user's `.env` credentials, so the next agent
+invocation legitimately had no way to read Jira. Each fix here addresses
+one of the four failure modes; together they prevent the same prompt from
+producing an unsupported `PASS_*` verdict on v0.21.0.
+
+### Not changed
+
+- The destructive-action safety floor.
+- The requirement-understanding gate.
+- The other `code-reviewer` knobs (`BLOCKING`, `MAX_FILES`,
+  `MAX_DIFF_CHARS`, `*_SEVERITIES`, `MAX_ROUNDS`, `CACHE_*`).
+- `docs/updates.md` itself — it remains the canonical reference; the
+  README change just makes it discoverable from the front page.
+- The Output Discipline format and validator gates introduced in v0.20.0.
+
 ## 0.20.0 - Output Discipline And Model-Routing Cleanup
 
 ### Added

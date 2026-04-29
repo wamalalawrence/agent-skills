@@ -103,6 +103,12 @@ REQUIRED_FILES = [
     "eval-runs/v0.20.0/summary.md",
     "eval-runs/v0.20.0/code-reviewer-concise-output.md",
     "eval-runs/v0.20.0/model-routing-removal.md",
+    "eval-runs/v0.21.0/summary.md",
+    "eval-runs/v0.21.0/code-reviewer-verdict-gating.md",
+    "eval-runs/v0.21.0/setup-update-preserves-credentials.md",
+    "eval-runs/v0.21.0/updating-discoverability.md",
+    "evals/code-reviewer-verdict-gating.md",
+    "scripts/test-setup-update-preserves-credentials.sh",
 ]
 
 # Setup-managed environment keys. They MUST appear inside the

@@ -16,7 +16,7 @@ compatibility: >-
   .agent-skills.yml). See docs/execution-modes.md.
 metadata:
   author: wamalalawrence
-  version: "0.20.0"
+  version: "0.21.0"
   homepage: "https://github.com/wamalalawrence/agent-skills"
 argument-hint: >-
   optional: mode inner|outer, base branch, issue key/URL, PR URL, or task description
@@ -145,6 +145,16 @@ incomplete — unresolved placeholder X"**, not "no Jira access". The reviewer m
 bare `PASS` when issue alignment could not be checked because of an avoidable auth-discovery
 miss; if the preflight has not been run and Jira is in scope, the correct verdict is
 `NEEDS_CONTEXT`.
+
+**Auth-discovery failure during issue-aware review is not a Note.** If issue-aware review was
+requested and the credential resolves empty, the config has unresolved `${VAR}` placeholders,
+or `jira issue view <KEY>` / the equivalent fetch fails, the verdict **must** be
+`NEEDS_CONTEXT`. The reviewer must not emit `PASS_WITH_NOTES` and bury the auth failure as
+a Note alongside actual findings; the ticket was not read, so issue alignment was not
+verified, so the review's headline conclusion is unsupported. The only exception is when
+the user supplied the ticket summary, expected behavior, and acceptance criteria directly
+in the prompt — the review then proceeds as `partial` issue-awareness with the verbatim
+user-supplied context recorded in `Issue/Ticket Alignment`.
 
 Review setup variables:
 
@@ -327,6 +337,47 @@ Layer 2 review areas:
 Use provided company-specific standards, architecture guidance, or engineering URLs as additional
 context when the user provides them. Do not hard-code private standards into this public skill.
 
+#### Date-gated / phased-rollout check (binding)
+
+If the diff, PR description, ticket, or commit messages reference a future cutover date, a
+feature-flag flip, an environment cutover, an upstream rename rolling out at a specific time,
+or behavior that differs **before vs after** a date / version / flag, the reviewer must
+verify both states explicitly:
+
+- **Pre-cutoff path.** What does the system do today, before the cutover, with the new code
+  deployed? If today's production input still uses the legacy value/format and the new code
+  no longer recognizes it, that is at minimum a `major` finding — a `blocker` when the
+  cutover date is in the future and current production traffic depends on the legacy path.
+- **Post-cutoff path.** What does the system do after the cutover, with the new code
+  deployed? Tests must demonstrate the new behavior.
+- **Either-state strategy.** Acceptable answers are: (a) the code accepts both
+  values/formats during the transition window with a documented sunset; (b) deployment is
+  strictly date-gated / flag-gated and the gating mechanism is in the diff (not "we'll
+  remember to deploy on the right day"); or (c) the upstream change has already happened in
+  production and the legacy value can no longer occur — stated explicitly with evidence,
+  not assumed.
+
+A diff that supports only the post-cutoff state, with no gating mechanism in the change and
+no evidence the legacy state has already been retired, must not receive `PASS` or
+`PASS_WITH_NOTES`.
+
+#### Fixture-replacement / label-rename check (binding)
+
+When tests are updated by **replacing** a value with another (`old-label` → `new-label`,
+`v1` → `v2`, old-enum → new-enum, old-error-code → new-error-code, etc.) rather than by
+**adding** new tests alongside the existing ones, surface a `major` finding. Replacement
+proves only the new happy path; it deletes the regression coverage that proved the legacy
+path used to work. The expected fix is one of:
+
+- Keep both fixtures and assert the code handles each (transition coverage); or
+- Add an explicit test for the cutoff / rename behavior (what happens at the boundary); or
+- A short note in the PR (and ideally the test file) stating the legacy value can no longer
+  occur in any environment the diff is responsible for, with the evidence that justifies
+  deleting the legacy assertions.
+
+This rule applies to test fixtures, snapshot files, recorded HTTP responses, golden files,
+and inline expected-value constants.
+
 ### 4. Filter noise and prioritize evidence
 
 - Ignore formatter-only style preferences, unless they hide a real bug or readability risk.
@@ -351,6 +402,30 @@ Each finding must include:
 
 Use the shared [severity and confidence definitions](../../../../docs/severity-and-confidence.md)
 for severity, confidence, and blocking/advisory decisions.
+
+#### Targeted test failures are blocking (binding)
+
+If the reviewer ran (or the engineer's evidence pack reports) any targeted test, build, or CI
+job for this change and the run **did not pass cleanly**, the failure is at minimum a `major`
+finding and the verdict cannot be `PASS` or `PASS_WITH_NOTES` until either the failure is
+resolved or the reviewer documents — with evidence — that the failure is unrelated to the
+diff and unrelated to the area the diff touches.
+
+The reviewer must not rationalize a failure away with phrases like "not an assertion failure
+in the changed area", "Spring context startup error, not a tariff assertion", "looks like an
+H2 / database / flake / environment issue", or "pre-existing failure on `main`". Each of
+those is a hypothesis, not evidence. To dismiss a failure the reviewer must show at least
+one of:
+
+- The same test fails on the parent commit (run it; record the SHA), **and** the diff does
+  not touch the failing component or its dependencies.
+- A linked open ticket / known-flaky-test entry that pre-dates the diff.
+- A clean rerun on a clean checkout of the diff (recorded with command + result), proving
+  the failure was transient.
+
+If none of those is available, the failure stands as a `major` (or `blocker` when the
+failing component is in the diff's blast radius) and the verdict is `REQUEST_CHANGES` or
+`NEEDS_CONTEXT`.
 
 ### 6. Enforce blocking behavior
 
@@ -478,6 +553,16 @@ Devil's-Advocate paragraph surfaced no credible risk. Otherwise downgrade.
 - [ ] Review target, base, changed files, review mode, and issue-awareness level are resolved or the
   verdict is `NEEDS_CONTEXT` / `NOT_REVIEWABLE`.
 - [ ] Issue/ticket alignment is checked before generic engineering quality when context exists.
+- [ ] Auth-discovery failure during issue-aware review is escalated to `NEEDS_CONTEXT`, not buried
+  as a Note alongside other findings.
+- [ ] Date-gated / phased-rollout check ran when the change references a future date, flag, or
+  cutover; both pre-cutoff and post-cutoff paths are accounted for or surfaced as a finding.
+- [ ] Fixture-replacement / label-rename check ran when tests were updated by replacing values;
+  legacy regression coverage is either preserved, replaced by a cutoff test, or explicitly
+  justified as no-longer-reachable.
+- [ ] Any failed targeted test, build, or CI job is surfaced as `major`/`blocker` and forbids
+  `PASS` / `PASS_WITH_NOTES` unless dismissed with evidence (parent-commit rerun, known-flaky
+  ticket, or clean rerun).
 - [ ] Findings include severity, evidence, impact, suggested fix, confidence, and blocking/advisory
   decision **as inline content of one bullet, not as a seven-line skeleton**.
 - [ ] Output follows [`docs/output-discipline.md`](../../../../docs/output-discipline.md):
@@ -522,6 +607,21 @@ Devil's-Advocate paragraph surfaced no credible risk. Otherwise downgrade.
   `low`, when issue context is missing, or when any item in `Review Limitations / Unavailable
   Context` is non-`none` and unwaived. The correct verdict is `NEEDS_CONTEXT` or
   `PASS_WITH_NOTES`.
+- Do not emit `PASS` or `PASS_WITH_NOTES` when issue-aware review was requested and the
+  Jira/GitHub issue could not actually be read (auth-discovery failure, unresolved `${VAR}`
+  placeholder, empty credential, fetch error). The correct verdict is `NEEDS_CONTEXT`. The
+  only exception is when the user supplied the ticket summary, expected behavior, and
+  acceptance criteria verbatim in the prompt.
+- Do not rationalize away targeted test failures (`Spring context startup`, `H2 rollback`,
+  `flake`, `unrelated component`, `pre-existing on main`) without evidence: parent-commit
+  rerun showing the same failure, a linked known-flaky ticket, or a clean rerun of the diff.
+  Hypotheses about why a test failed do not unblock a `PASS` verdict.
+- Do not approve a date-gated / phased rollout (future cutover date, flag flip, upstream
+  rename) that supports only the post-cutoff state when the gating mechanism is not in the
+  diff and there is no evidence the legacy state has already been retired.
+- Do not approve a fixture-replacement diff (test fixture / snapshot / golden file values
+  swapped from old to new) without either preserved transition coverage, an explicit cutoff
+  test, or a documented justification that the legacy value can no longer occur.
 
 ## Example Prompts
 
