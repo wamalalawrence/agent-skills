@@ -4,7 +4,7 @@ Reusable [Agent Skills](https://agentskills.io/) for software-engineering work �
 role-shaped workflows your AI assistant can load on demand so the same model produces
 senior-engineer, product-owner, tester, or reviewer output instead of generic answers.
 
-> **Status:** `0.17.0` — pre-1.0. Core skill set is shipped and stable enough for public use;
+> **Status:** `0.18.0` — pre-1.0. Core skill set is shipped and stable enough for public use;
 > interfaces may still evolve.
 
 New here? Start with the [quickstart](docs/quickstart.md), then read [starter
@@ -127,6 +127,8 @@ usage shows they are useful independently.
 - [First-time user quickstart](docs/quickstart.md)
 - [Installation & `setup.init`](docs/installation.md)
 - [Configuration & multi-project workspaces](docs/configuration.md)
+- [Jira / Confluence auth discovery](docs/auth-discovery.md) — discovery order, placeholder
+  resolution, and the auth preflight that validates without exposing secrets
 - [Using with your AI assistant](docs/assistants.md)
 - [Starter prompts](docs/starter-prompts.md)
 - [Examples](docs/examples/README.md)

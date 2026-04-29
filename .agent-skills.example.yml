@@ -46,6 +46,9 @@ project:
 
 # Optional issue-system context. Credentials still come from env vars
 # (JIRA_API_TOKEN, GITHUB_TOKEN). Only host/project metadata goes here.
+# Auth discovery in in-repo mode walks: process env (host-injected secrets) →
+# this file → ask the user. There is no `.env` to read, and `.jira-config.yml`
+# is not used. See `docs/auth-discovery.md`.
 jira:
   host: "" # e.g. "https://acme.atlassian.net" — full URL, NO credentials
   default_project_key: "" # e.g. "ABC". Project key prefix from ticket IDs

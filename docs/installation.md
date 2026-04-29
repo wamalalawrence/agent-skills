@@ -149,3 +149,19 @@ $EDITOR /path/to/work/.jira-config.yml
 After setup, review `.env` once before serious code work. The command can detect obvious defaults,
 but it cannot know every repository's exact build, format, runtime, deployment, or Jira conventions.
 Secret prompts (Jira and Confluence tokens) read with hidden input and never echo the value.
+
+## Verify auth without exposing secrets
+
+Once `.env` (and optionally `.jira-config.yml`) is in place, validate that an agent will be able
+to use Jira / Confluence:
+
+```bash
+python3 scripts/auth-preflight.py
+```
+
+The preflight loads `.env`, `.env.local`, and `.jira-config.yml`, resolves `${VAR}` placeholders
+against `.env` and the process environment, validates the required Jira fields, and reports
+Confluence usability separately. It exits `0` for usable, `1` for incomplete (missing field or
+unresolved placeholder), `2` for setup error. Tokens are never echoed — they print as
+`set (hidden)`. See [docs/auth-discovery.md](auth-discovery.md) for the full discovery contract
+and CLI-independent guidance.

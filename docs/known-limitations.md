@@ -10,7 +10,9 @@ runtime enforcement, or guaranteed outcomes.
   cases, attach or reference the nested `SKILL.md` directly.
 - **External access depends on your tools and permissions.** Jira, GitHub, Confluence, CI, logs, and
   cloud environments are only available when your agent session has the right credentials and network
-  access.
+  access. See [auth-discovery.md](auth-discovery.md) for the documented discovery order skills must
+  walk before reporting Jira / Confluence as unavailable; agents that skip the walk will report
+  "no auth" when the real cause is unloaded `.env` or unresolved `${VAR}` placeholders.
 - **Company-specific standards are not bundled.** Repository conventions, coding standards, ticket
   formats, review rules, deployment practices, and architecture constraints must come from the user,
   the target repository, or attached documentation.

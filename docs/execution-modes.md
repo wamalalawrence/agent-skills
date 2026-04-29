@@ -70,6 +70,10 @@ Secrets (Jira tokens, Confluence tokens, GitHub tokens, API keys) **always** com
 variables in both modes. They are never written to `.agent-skills.yml`, which is committed to the
 repository.
 
+For the agent-facing discovery order — including how `${VAR}` placeholders in `.jira-config.yml`
+are resolved and the preflight script that validates auth without printing secrets — see
+[`auth-discovery.md`](auth-discovery.md).
+
 ## Cache path resolution
 
 Skills write their evidence-pack, repro-recipe, and definition-of-done artifacts to:

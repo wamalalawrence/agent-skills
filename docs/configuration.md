@@ -37,6 +37,12 @@ accuracy-sensitive work. Silent fallbacks are treated as a bug because they prod
 directly, but if neither Jira credentials nor a user-supplied ticket summary are available, the
 issue-aware skills stop and ask for context.
 
+When `.jira-config.yml` does exist, its `${JIRA_HOST}` / `${JIRA_LOGIN}` / `${JIRA_AUTH_TYPE}`
+placeholders are resolved from `.env` (or the process environment) at runtime — most CLIs do
+not expand them themselves. The full auth-discovery order, troubleshooting table, and the
+preflight script that validates without exposing secrets are documented in
+[`auth-discovery.md`](auth-discovery.md).
+
 ## Required variables
 
 See [`.env.example`](../.env.example) for the full annotated list. The minimum useful setup is:

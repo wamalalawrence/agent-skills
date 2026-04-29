@@ -16,7 +16,7 @@ compatibility: >-
   .agent-skills.yml). See docs/execution-modes.md.
 metadata:
   author: wamalalawrence
-  version: "0.17.0"
+  version: "0.18.0"
   homepage: "https://github.com/wamalalawrence/agent-skills"
 argument-hint: >-
   optional: mode inner|outer, base branch, issue key/URL, PR URL, or task description
@@ -135,6 +135,16 @@ Jira host metadata can come from `.env` or `.agent-skills.yml`; the credential (
 always comes from environment variables. `.jira-config.yml` is optional. If the issue cannot be read
 and the user did not provide the ticket summary, acceptance criteria, and key comments directly,
 stop or ask for that context before producing a verdict.
+
+**Auth discovery before recording Jira/Confluence as unavailable.** Before listing Jira or
+Confluence under `Review Limitations / Unavailable Context`, walk the documented
+[discovery order](../../../../docs/auth-discovery.md#discovery-order): `.agent-skills.yml` →
+`.jira-config.yml` → `.env` / `.env.local` → process env → `scripts/auth-preflight.py`. If config
+exists but `${VAR}` placeholders are unresolved, record the limitation as **"Jira config
+incomplete — unresolved placeholder X"**, not "no Jira access". The reviewer must not give a
+bare `PASS` when issue alignment could not be checked because of an avoidable auth-discovery
+miss; if the preflight has not been run and Jira is in scope, the correct verdict is
+`NEEDS_CONTEXT`.
 
 Review setup variables:
 

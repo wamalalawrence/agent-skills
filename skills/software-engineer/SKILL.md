@@ -17,7 +17,7 @@ compatibility: >-
   .agent-skills.yml). See docs/execution-modes.md.
 metadata:
   author: wamalalawrence
-  version: "0.17.0"
+  version: "0.18.0"
   homepage: "https://github.com/wamalalawrence/agent-skills"
 ---
 
@@ -174,6 +174,14 @@ For Jira-driven work, `.jira-config.yml` is optional when `JIRA_HOST`, `JIRA_AUT
 scope and neither Jira access nor a user-supplied ticket summary with acceptance criteria/comments
 is available, stop and ask; do not infer ticket intent from the key, branch name, or code diff
 alone.
+
+**Before Phase 1.1 declares Jira inaccessible, run the auth discovery walk** documented in
+[`docs/auth-discovery.md`](../../docs/auth-discovery.md): `.agent-skills.yml` →
+`.jira-config.yml` → `.env` / `.env.local` → process environment → `scripts/auth-preflight.py`.
+Treat unresolved `${VAR}` placeholders in `.jira-config.yml` as **incomplete configuration**, not
+as missing credentials. The Jira CLI does not expand `${VAR}` placeholders; either source `.env`
+first or rely on the preflight for validation. Implementation that skips the discovery walk and
+silently falls back to "no Jira access" is a workflow failure, not a setup failure.
 
 ## Context discovery (read this first, every run)
 
