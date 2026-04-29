@@ -17,7 +17,7 @@ compatibility: >-
   .agent-skills.yml). See docs/execution-modes.md.
 metadata:
   author: wamalalawrence
-  version: "0.19.0"
+  version: "0.20.0"
   homepage: "https://github.com/wamalalawrence/agent-skills"
 ---
 
@@ -738,7 +738,10 @@ the workflow can advance.
 
 ## Expected Output Contract
 
-Normal output should use this shape, trimmed only when a section is genuinely not applicable:
+Follow [Output Discipline](../../docs/output-discipline.md). The shape below is a menu of
+available lines, not a checklist. **Omit empty sections** (here, omit empty lines) — drop
+`Risks and rollback notes:` if there are none, drop `Code-reviewer handoff/result:` when no
+review ran. Required-even-if-empty: the `Final status:` line.
 
 ```markdown
 ## Engineering Result
@@ -758,6 +761,15 @@ Normal output should use this shape, trimmed only when a section is genuinely no
 
 Use `proposed` rather than `made` when no files were changed. Do not claim validation, tests,
 review, or root-cause confirmation unless that work actually happened.
+
+### Output Style (binding)
+
+- **Omit empty lines.** No `- none` placeholder bullets just because the template lists
+  the line.
+- **No workflow recap.** Do not narrate "I detected mode, then I read the ticket, then ...".
+  Surface the **result** of each phase that produced one.
+- **No template echo, no banners.** See [Output Discipline](../../docs/output-discipline.md)
+  for the full rule set.
 
 ## Behavior Checklist
 

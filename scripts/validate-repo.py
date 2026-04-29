@@ -47,6 +47,7 @@ REQUIRED_FILES = [
     "docs/auth-discovery.md",
     "docs/skill-source-resolution.md",
     "docs/updates.md",
+    "docs/output-discipline.md",
     "docs/examples/requirement-understanding.md",
     "scripts/validate-repo.py",
     "scripts/validate_skills.py",
@@ -78,6 +79,7 @@ REQUIRED_FILES = [
     "evals/requirement-understanding-security-sensitive-request.md",
     "evals/auth-discovery-jira-confluence.md",
     "evals/skill-source-resolution-ambiguity.md",
+    "evals/code-reviewer-concise-output.md",
     "eval-runs/README.md",
     "eval-runs/v0.9.0/summary.md",
     "eval-runs/v0.9.0/issue-investigator-bug-root-cause.md",
@@ -98,6 +100,9 @@ REQUIRED_FILES = [
     "eval-runs/v0.18.0/auth-discovery-jira-confluence.md",
     "eval-runs/v0.19.0/summary.md",
     "eval-runs/v0.19.0/skill-source-resolution.md",
+    "eval-runs/v0.20.0/summary.md",
+    "eval-runs/v0.20.0/code-reviewer-concise-output.md",
+    "eval-runs/v0.20.0/model-routing-removal.md",
 ]
 
 # Setup-managed environment keys. They MUST appear inside the
@@ -841,6 +846,113 @@ REQUIRED_SKILLS_BLOCK_KEYS = (
 )
 
 
+OUTPUT_DISCIPLINE_DOC = "docs/output-discipline.md"
+OUTPUT_DISCIPLINE_PHRASE = "Omit empty sections"
+
+
+def _extract_h2_section(body: str, heading: str) -> str | None:
+    """Return the body of the named ``## <heading>`` section.
+
+    Scans line-by-line and tracks fenced-code-block state so that headings
+    written *inside* a fenced contract template (e.g. the literal ``## Manual
+    Test Plan`` inside the contract code-fence) are not mistaken for the next
+    H2 boundary.
+    """
+    lines = body.splitlines()
+    in_section = False
+    in_fence = False
+    collected: list[str] = []
+    for line in lines:
+        stripped = line.lstrip()
+        is_fence = stripped.startswith("```") or stripped.startswith("~~~")
+        if is_fence:
+            in_fence = not in_fence
+            if in_section:
+                collected.append(line)
+            continue
+        if not in_fence and re.match(r"^##\s+\S", line):
+            heading_text = re.sub(r"\s+", " ", line[2:].strip().lower())
+            if heading_text == heading.lower():
+                in_section = True
+                continue
+            if in_section:
+                break
+        if in_section:
+            collected.append(line)
+    return "\n".join(collected) if in_section else None
+
+
+def check_skill_output_discipline(result: Result) -> None:
+    """Every SKILL.md must inline the output-discipline rule inside its
+    Expected Output Contract section.
+
+    Background: in v0.19.0 and earlier the contracts read like menus, and
+    agents responded by echoing every section heading even when empty. The
+    v0.20.0 fix is two-fold: (1) tighten each contract to "menu, not checklist"
+    and (2) gate the rule here so a future SKILL.md cannot silently drop it.
+    """
+    skill_files = sorted(ROOT.glob("skills/**/SKILL.md"))
+    for path in skill_files:
+        text = read_text(path)
+        body = strip_frontmatter(text)
+        section = _extract_h2_section(body, "Expected Output Contract")
+        if section is None:
+            result.error(
+                f"{rel(path)}: missing '## Expected Output Contract' section "
+                f"(required for skill-output-discipline gate)"
+            )
+            continue
+        if "output-discipline.md" not in section:
+            result.error(
+                f"{rel(path)}: Expected Output Contract must link to "
+                f"{OUTPUT_DISCIPLINE_DOC} (output-discipline rule)"
+            )
+        if OUTPUT_DISCIPLINE_PHRASE not in section:
+            result.error(
+                f"{rel(path)}: Expected Output Contract must restate the "
+                f"'{OUTPUT_DISCIPLINE_PHRASE}' rule inline so it cannot drift"
+            )
+
+
+# Files that legitimately reference the removed CODE_REVIEWER_MODEL /
+# code_reviewer_model knobs (history, removal notes, eval transcripts).
+CODE_REVIEWER_MODEL_ALLOWED = {
+    "CHANGELOG.md",
+    "scripts/validate-repo.py",
+    "scripts/validate_skills.py",
+    "docs/output-discipline.md",  # may discuss model routing in passing
+    "skills/software-engineer/skills/code-reviewer/README.md",  # documents the removal
+}
+CODE_REVIEWER_MODEL_ALLOWED_DIRS = (
+    "eval-runs/",
+)
+
+
+def check_no_code_reviewer_model(result: Result) -> None:
+    """The model-routing knob `CODE_REVIEWER_MODEL` / `code_reviewer_model`
+    was removed in v0.20.0 (see the changelog). The host already owns model
+    routing; the skill exposing its own knob caused operator confusion.
+
+    Forbid the strings in tracked files except where they are needed for
+    history (CHANGELOG, validator allow-list, eval transcripts).
+    """
+    pattern = re.compile(r"CODE_REVIEWER_MODEL|code_reviewer_model")
+    for path in text_files():
+        rel_path = rel(path)
+        if rel_path in CODE_REVIEWER_MODEL_ALLOWED:
+            continue
+        if any(rel_path.startswith(prefix) for prefix in CODE_REVIEWER_MODEL_ALLOWED_DIRS):
+            continue
+        text = read_text(path)
+        for line_number, line in enumerate(text.splitlines(), start=1):
+            if pattern.search(line):
+                result.error(
+                    f"{rel_path}:{line_number}: references removed "
+                    f"CODE_REVIEWER_MODEL / code_reviewer_model knob "
+                    f"(removed in v0.20.0; the host owns model routing)"
+                )
+
+
 def check_agent_skills_yaml_skills_block(result: Result) -> None:
     """`.agent-skills.example.yml` must keep the documented `skills:` block keys.
 
@@ -882,6 +994,8 @@ def main() -> int:
     check_source_readability(result)
     check_skill_files(result, repo_version)
     check_skill_link_consistency(result)
+    check_skill_output_discipline(result)
+    check_no_code_reviewer_model(result)
     check_forbidden_content(result)
     check_generated_files(result)
     check_env_example_marker_block(result)

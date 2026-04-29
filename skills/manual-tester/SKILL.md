@@ -16,7 +16,7 @@ compatibility: >-
   .agent-skills.yml). See docs/execution-modes.md.
 metadata:
   author: wamalalawrence
-  version: "0.19.0"
+  version: "0.20.0"
   homepage: "https://github.com/wamalalawrence/agent-skills"
 ---
 
@@ -220,8 +220,11 @@ Time-box exploratory charters (e.g., 30-minute boxes) so investigation does not 
 
 ## Expected Output Contract
 
-Use the smallest useful format for the request, but preserve these fields for normal test plans and
-execution reports.
+Follow [Output Discipline](../../docs/output-discipline.md). Use the smallest useful format
+for the request and **omit empty sections** — if there are no defects, drop the
+`## Defects Found` heading entirely; if no automation candidates surfaced, drop
+`## Automation Candidates`. The contract below is a menu of available sections, not a
+checklist to fill in.
 
 ```markdown
 ## Manual Test Plan
@@ -262,6 +265,14 @@ execution reports.
 - Why it is worth automating:
 - Suggested level: API | integration | UI/e2e | other
 ```
+
+### Output Style (binding)
+
+- **Omit empty sections.** No `none` placeholder bullets.
+- **Defects use the [Output Discipline finding format](../../docs/output-discipline.md#findings-format-code-reviewer-manual-tester-defects-investigator-hypotheses)**
+  — one bullet per defect, evidence + impact + retest inline. Do not expand each defect
+  into a six-line skeleton when one bullet conveys the same information.
+- No workflow recap, no template echo, no banner around the verdict.
 
 ## Behavior Checklist
 

@@ -6,6 +6,112 @@ All notable project changes should be recorded here.
 
 - No unreleased changes.
 
+## 0.20.0 - Output Discipline And Model-Routing Cleanup
+
+### Added
+
+- New [`docs/output-discipline.md`](docs/output-discipline.md) — the canonical,
+  agent-facing rule set for how every skill must shape its output. Defines the
+  hard rules (omit empty sections, no template echo, no workflow recap, no
+  banners), the single-bullet finding format reused by `code-reviewer`,
+  `manual-tester` defects, and `issue-investigator` hypotheses, and the
+  one-line verdict format. Linked from the Expected Output Contract section of
+  every `SKILL.md` so the rule cannot drift out of the spec.
+- New [`evals/code-reviewer-concise-output.md`](evals/code-reviewer-concise-output.md)
+  scenario pinning the failure modes the new spec exists to prevent
+  (template-echo, seven-line per-finding skeleton, workflow recap, banner-wrapped
+  verdict).
+- New `## Output Style (binding)` block under the `## Expected Output Contract`
+  section of every `SKILL.md` (`software-engineer`, `software-engineer/skills/code-reviewer`,
+  `software-engineer/skills/issue-investigator`, `manual-tester`, `product-owner`,
+  `test-automation-engineer`). Each restates the load-bearing rules inline so the
+  agent reads them in the same context as the contract template.
+- New `check_skill_output_discipline` validator in
+  [`scripts/validate-repo.py`](scripts/validate-repo.py) — refuses any future
+  `SKILL.md` whose Expected Output Contract drops the link to
+  `docs/output-discipline.md` or the literal phrase `Omit empty sections`.
+- New `check_no_code_reviewer_model` validator — forbids reintroduction of the
+  removed `CODE_REVIEWER_MODEL` / `code_reviewer_model` knobs in tracked files
+  (allow-list: `CHANGELOG.md`, the validator itself, eval-run history).
+- `eval-runs/v0.20.0/` capturing the concise-output scenario, the
+  model-routing-removal note, and the release summary.
+
+### Changed
+
+- `code-reviewer` Expected Output Contract rewritten from a long YAML-style
+  skeleton into a tight "menu of available sections". The per-finding block
+  collapses from eight bullet fields (`Severity:` / `Title:` / `Affected
+  file/area:` / `Evidence:` / `Why it matters:` / `Suggested fix:` /
+  `Confidence:` / `Blocking/advisory decision:`) to **one bullet** in the
+  Output Discipline format. `Review Limitations / Unavailable Context` is now
+  rendered as a single line or short paragraph instead of a six-bullet `none`
+  block. The `## Final Verdict` is one line: `<VERDICT> — <reason>` with at
+  most one follow-up line.
+- `manual-tester`, `product-owner`, `test-automation-engineer`, `issue-investigator`,
+  and `software-engineer` Expected Output Contracts updated with the same
+  "menu, not checklist" framing and a binding `Output Style` subsection. Defect
+  / hypothesis / finding rendering is unified on the Output Discipline format.
+- The `code-reviewer` Behavior Checklist explicitly requires the Output
+  Discipline format and forbids the seven-line per-finding skeleton.
+- `VERSION` and every `SKILL.md` `metadata.version` bumped to `0.20.0`.
+- `README.md` status pin moved to `0.20.0`.
+
+### Removed
+
+- `CODE_REVIEWER_MODEL` env var and its 25-line model-id comment block deleted
+  from `.env.example`. The skill never invoked the value — model routing is
+  always owned by the host (Copilot Chat, Claude Code, Cursor, Continue,
+  Windsurf, ChatGPT). The previous `default` sentinel was confusing and the
+  list of example model ids drifted out of date as new models shipped.
+- `code_reviewer_model` removed from `.agent-skills.example.yml`.
+- `CODE_REVIEWER_MODEL` row removed from `docs/configuration.md`'s
+  `local-workspace` env table; `code_reviewer_model` row removed from the
+  `in-repo` YAML key table.
+- `CODE_REVIEWER_MODEL` bullet removed from
+  `skills/software-engineer/skills/code-reviewer/SKILL.md` Required Environment
+  list.
+- The "`CODE_REVIEWER_MODEL` is optional" sentence removed from the nested
+  `code-reviewer/README.md`.
+
+Existing `.env` / `.agent-skills.yml` files that still carry the variable
+continue to work because nothing reads the value; the line can be deleted at
+the user's convenience. `setup.init` does not own the line and will not touch
+it. See [`eval-runs/v0.20.0/model-routing-removal.md`](eval-runs/v0.20.0/model-routing-removal.md)
+for the migration note.
+
+### Why
+
+The PR-review evaluation that motivated this release showed two concrete
+problems on the same prompt against the same host:
+
+1. **Template echo.** The v0.19.0 `code-reviewer` Expected Output Contract was
+   a long skeleton listing every section the agent **may** emit. Without a
+   counter-pressure rule, agents treated the skeleton as a checklist and
+   rendered every heading even when empty, expanded each finding into a
+   seven-line sub-list, narrated the workflow they had run, and wrapped the
+   verdict in banners. Real blockers were buried under template noise.
+2. **Phantom model knob.** The `CODE_REVIEWER_MODEL` variable was a
+   pass-through hint to "the host" that no actual host consumed. It made
+   operators think a model had to be picked, polluted `.env.example` with a
+   long model-id catalog that drifted out of date, and crowded the skill's
+   Required Environment list with a fake variable.
+
+v0.20.0 fixes both at the **spec** layer (where the agent reads them) and the
+**validator** layer (so they cannot silently drift back). Actual rendered
+output still depends on the host model — the
+[`code-reviewer-concise-output`](evals/code-reviewer-concise-output.md) eval is
+the place to score real transcripts against the rule.
+
+### Not Changed (deliberate)
+
+- The review **logic** (severity rubric, requirement-understanding gate,
+  devil's-advocate paragraph, evidence-pack handoff, iteration-convergence rule)
+  is unchanged. v0.20.0 is a presentation fix.
+- The destructive-action safety floor is unchanged.
+- The other `CODE_REVIEWER_*` knobs (`BLOCKING`, `MAX_FILES`,
+  `MAX_DIFF_CHARS`, `*_SEVERITIES`, `MAX_ROUNDS`, `CACHE_*`) are real behavior
+  switches and remain.
+
 ## 0.19.0 - Skill-Source Resolution And Self-Update
 
 ### Added

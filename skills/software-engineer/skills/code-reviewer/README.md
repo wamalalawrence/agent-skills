@@ -32,4 +32,6 @@ See [SKILL.md](./SKILL.md) for the full workflow.
 Run [`../../../../setup.init`](../../../../setup.init) from the `agent-skills` folder for the
 simplest setup path. See [SKILL.md](./SKILL.md#required-environment) for details. Minimum for
 repository-aware review: `WORKSPACE_ROOT`, `PROJECTS_JSON`, and `GITHUB_DEFAULT_BRANCH`.
-`CODE_REVIEWER_MODEL` is optional when the host uses its default model routing.
+Model routing is owned by the host (Copilot Chat, Claude Code, Cursor, etc.); the skill
+intentionally does not expose its own model knob — the previous `CODE_REVIEWER_MODEL`
+variable was removed in v0.20.0.

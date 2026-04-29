@@ -14,6 +14,8 @@ Start here when reading the repository outside GitHub's main README.
   workspace lock file is consulted.
 - [Updates](updates.md) - how a user notices a new release and applies it without losing
   local config (`./setup.init --check-updates`, `./setup.init --update`, `git pull`).
+- [Output discipline](output-discipline.md) - the canonical conciseness rules every skill
+  inherits in its Expected Output Contract; what "menu, not checklist" means in practice.
 - [Assistant setup](assistants.md) - using the skills with common AI assistants.
 - [Starter prompts](starter-prompts.md) - copy-paste prompts for single-skill and multi-skill work.
 - [Examples](examples/README.md) - realistic input/output examples for each skill.
