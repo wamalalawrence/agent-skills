@@ -76,6 +76,9 @@ jobs:
             exit 1
           fi
 
+      - name: setup.init --update preserves credentials
+        run: bash scripts/test-setup-update-preserves-credentials.sh
+
       - name: Markdown link check
         uses: gaurav-nelson/github-action-markdown-link-check@v1
         with:

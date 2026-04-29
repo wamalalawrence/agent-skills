@@ -4,7 +4,7 @@ Reusable [Agent Skills](https://agentskills.io/) for software-engineering work �
 role-shaped workflows your AI assistant can load on demand so the same model produces
 senior-engineer, product-owner, tester, or reviewer output instead of generic answers.
 
-> **Status:** `0.20.0` — pre-1.0. Core skill set is shipped and stable enough for public use;
+> **Status:** `0.21.0` — pre-1.0. Core skill set is shipped and stable enough for public use;
 > interfaces may still evolve.
 
 New here? Start with the [quickstart](docs/quickstart.md), then read [starter
@@ -66,6 +66,29 @@ per-platform details.
 ```bash
 npx skills add wamalalawrence/agent-skills
 ```
+
+## Updating
+
+Releases are git tags (`v0.20.0`, `v0.21.0`, …) on this repo. Two commands cover the common
+case; full details, in-repo (cloud-agent) updates, and drift detection are in
+[docs/updates.md](docs/updates.md).
+
+```bash
+cd agent-skills
+./setup.init --check-updates   # read-only; exit 0 up-to-date, 10 update available
+./setup.init --update          # fetch tags, check out latest release, refresh workspace
+```
+
+`--update` preserves your existing `.env` values, rewrites `<workspace>/.agent-skills.lock`,
+and prints the new release's `CHANGELOG.md` excerpt so you can see what changed before your
+next task. It never auto-runs and never pushes anything.
+
+After updating, the next task that loads any `SKILL.md` will surface a one-line **`update
+available`** / **`skill drift`** notice if the loaded skill version, the lock file, and the
+source repo disagree — so a stale vendored copy in another workspace cannot silently keep
+running the old behavior. If you see a stale `Status:` pin in a vendored README, that
+workspace was not refreshed; rerun `./setup.init --update` there or rerun your in-repo
+vendor script (see [docs/updates.md](docs/updates.md#in-repo-cloud--online-agent-updates)).
 
 ## Skills
 

@@ -1326,10 +1326,42 @@ run_self_update() {
   ASSUME_YES="true"
   CHECK_CONNECTIVITY="false"
   CHECK_CREDENTIAL_PROBE="false"
-  JIRA_MODE="no"
-  CONFLUENCE_MODE="no"
-  SONAR_MODE="no"
-  ENVIRONMENTS_MODE="no"
+  # Preserve any Jira / Confluence / Sonar / environments credentials the user
+  # already set. Without this, the rerun below writes empty strings for every
+  # managed key whose `*_MODE` resolves to "no", silently wiping the existing
+  # marker block. We source the existing .env (if present), then default each
+  # mode to "yes" when the corresponding required value is non-empty so the
+  # rerun re-emits the same value instead of clearing it.
+  local existing_env="${workspace_root}/.env"
+  if [[ -f "${existing_env}" ]]; then
+    set -a
+    # shellcheck disable=SC1090
+    source "${existing_env}" 2>/dev/null || true
+    set +a
+    UPDATE_PRESERVE_EXISTING="true"
+  else
+    UPDATE_PRESERVE_EXISTING="false"
+  fi
+  if [[ -n "${JIRA_HOST:-}" || -n "${JIRA_API_TOKEN:-}" || -n "${JIRA_LOGIN:-}" ]]; then
+    JIRA_MODE="yes"
+  else
+    JIRA_MODE="no"
+  fi
+  if [[ -n "${CONFLUENCE_HOST:-}" || -n "${CONFLUENCE_API_TOKEN:-}" ]]; then
+    CONFLUENCE_MODE="yes"
+  else
+    CONFLUENCE_MODE="no"
+  fi
+  if [[ -n "${SONAR_HOST_URL:-}" || -n "${SONAR_TOKEN:-}" ]]; then
+    SONAR_MODE="yes"
+  else
+    SONAR_MODE="no"
+  fi
+  if [[ -n "${ENVIRONMENTS_JSON:-}" && "${ENVIRONMENTS_JSON:-}" != "[]" ]]; then
+    ENVIRONMENTS_MODE="yes"
+  else
+    ENVIRONMENTS_MODE="no"
+  fi
   UPDATE_MODE="false"
   CHECK_UPDATES_MODE="false"
   return 0
@@ -1584,6 +1616,21 @@ elif command -v gh >/dev/null 2>&1; then
 fi
 
 # Decide on Jira/Confluence first so we can chain inferences.
+# In `--update` mode, capture any existing credentials sourced by run_self_update
+# BEFORE the resets below so the rerun preserves them instead of clearing them.
+EXISTING_JIRA_HOST="${JIRA_HOST:-}"
+EXISTING_JIRA_AUTH_TYPE="${JIRA_AUTH_TYPE:-bearer}"
+EXISTING_JIRA_LOGIN="${JIRA_LOGIN:-}"
+EXISTING_JIRA_API_TOKEN="${JIRA_API_TOKEN:-}"
+EXISTING_JIRA_PROJECT_KEYS="${JIRA_PROJECT_KEYS:-}"
+EXISTING_CONFLUENCE_HOST="${CONFLUENCE_HOST:-}"
+EXISTING_CONFLUENCE_LOGIN="${CONFLUENCE_LOGIN:-}"
+EXISTING_CONFLUENCE_API_TOKEN="${CONFLUENCE_API_TOKEN:-}"
+EXISTING_CONFLUENCE_SPACE_KEYS="${CONFLUENCE_SPACE_KEYS:-}"
+EXISTING_SONAR_HOST_URL="${SONAR_HOST_URL:-}"
+EXISTING_SONAR_TOKEN="${SONAR_TOKEN:-}"
+EXISTING_ENVIRONMENTS_JSON="${ENVIRONMENTS_JSON:-}"
+
 if [[ "${JIRA_MODE}" == "yes" ]]; then
   USE_JIRA="yes"
 elif [[ "${JIRA_MODE}" == "no" ]]; then
@@ -1594,36 +1641,36 @@ else
   USE_JIRA="no"
 fi
 
-JIRA_HOST=""
-JIRA_AUTH_TYPE="bearer"
-JIRA_LOGIN=""
-JIRA_API_TOKEN=""
-JIRA_PROJECT_KEYS=""
+JIRA_HOST="${EXISTING_JIRA_HOST}"
+JIRA_AUTH_TYPE="${EXISTING_JIRA_AUTH_TYPE}"
+JIRA_LOGIN="${EXISTING_JIRA_LOGIN}"
+JIRA_API_TOKEN="${EXISTING_JIRA_API_TOKEN}"
+JIRA_PROJECT_KEYS="${EXISTING_JIRA_PROJECT_KEYS}"
 
 if [[ "${USE_JIRA}" == "yes" ]]; then
   echo "" >&2
   echo "Jira setup. Values are written to ${ENV_FILE} which is gitignored." >&2
 
-  JIRA_HOST="$(prompt "Jira host URL" "" \
+  JIRA_HOST="$(prompt "Jira host URL" "${EXISTING_JIRA_HOST}" \
 "REQUIRED for Jira. Full URL with scheme.
 EXAMPLES:
   https://acme.atlassian.net   (Atlassian Cloud)
   https://jira.acme.example.com (self-hosted)" \
     validate_url)"
 
-  JIRA_AUTH_TYPE="$(prompt "Jira auth type (bearer | basic)" "bearer" \
+  JIRA_AUTH_TYPE="$(prompt "Jira auth type (bearer | basic)" "${EXISTING_JIRA_AUTH_TYPE}" \
 "OPTIONAL. 'bearer' for API tokens / PATs, 'basic' for email + token.")"
 
   local_login_help="OPTIONAL for bearer; REQUIRED for basic.
 EXAMPLE: person@acme.example.com"
-  JIRA_LOGIN="$(prompt "Jira login / email" "" "${local_login_help}" validate_email_or_blank)"
+  JIRA_LOGIN="$(prompt "Jira login / email" "${EXISTING_JIRA_LOGIN}" "${local_login_help}" validate_email_or_blank)"
 
   # Suggest a project key derived from a ticket if the user pastes one.
   jira_keys_help="REQUIRED for Jira. Comma-separated project keys (the prefix in ticket IDs).
 EXAMPLE: ABC,PLAT,KVB  -> recognises ABC-123, PLAT-9, KVB-42.
 This is NOT the API token. Tip: paste a ticket key (e.g. ABC-123) or ticket URL
 and setup.init will pick the project key for you."
-  raw_keys="$(prompt "Jira project keys" "" "${jira_keys_help}")"
+  raw_keys="$(prompt "Jira project keys" "${EXISTING_JIRA_PROJECT_KEYS}" "${jira_keys_help}")"
   if inferred_key="$(extract_project_key_from_ticket "${raw_keys}")"; then
     if is_interactive; then
       echo "    Detected project key '${inferred_key}' from ticket input." >&2
@@ -1645,6 +1692,12 @@ and setup.init will pick the project key for you."
   echo "    'Personal Access Tokens' or 'API tokens' page." >&2
   echo "    The token is stored ONLY in ${ENV_FILE} (gitignored)." >&2
   JIRA_API_TOKEN="$(prompt_secret "Jira API token (leave blank to skip)" "")"
+  # In non-interactive mode (e.g. --update), prompt_secret returns empty
+  # because there is no TTY; fall back to the previously stored token so
+  # `--update` does not wipe credentials.
+  if [[ -z "${JIRA_API_TOKEN}" && -n "${EXISTING_JIRA_API_TOKEN}" && "${ASSUME_YES}" == "true" ]]; then
+    JIRA_API_TOKEN="${EXISTING_JIRA_API_TOKEN}"
+  fi
 fi
 
 # Confluence
@@ -1660,17 +1713,17 @@ else
   USE_CONF="no"
 fi
 
-CONF_HOST=""
-CONF_LOGIN=""
-CONF_TOKEN=""
-CONF_SPACES=""
+CONF_HOST="${EXISTING_CONFLUENCE_HOST}"
+CONF_LOGIN="${EXISTING_CONFLUENCE_LOGIN}"
+CONF_TOKEN="${EXISTING_CONFLUENCE_API_TOKEN}"
+CONF_SPACES="${EXISTING_CONFLUENCE_SPACE_KEYS}"
 
 if [[ "${USE_CONF}" == "yes" ]]; then
   echo "" >&2
   echo "Confluence setup. Values are written to ${ENV_FILE} which is gitignored." >&2
 
-  default_conf_host=""
-  if [[ -n "${JIRA_HOST}" ]]; then
+  default_conf_host="${EXISTING_CONFLUENCE_HOST}"
+  if [[ -z "${default_conf_host}" && -n "${JIRA_HOST}" ]]; then
     default_conf_host="$(infer_confluence_from_jira "${JIRA_HOST}" || true)"
     if [[ -n "${default_conf_host}" ]] && is_interactive; then
       echo "    Inferred Confluence host from Jira host." >&2
@@ -1683,14 +1736,17 @@ EXAMPLES:
   https://confluence.acme.example.com (self-hosted)" \
     validate_url)"
 
-  CONF_LOGIN="$(prompt "Confluence login / email" "${JIRA_LOGIN}" \
+  CONF_LOGIN="$(prompt "Confluence login / email" "${EXISTING_CONFLUENCE_LOGIN:-${JIRA_LOGIN}}" \
 "OPTIONAL. Usually the same email as Jira on Atlassian Cloud." validate_email_or_blank)"
 
   echo "" >&2
   echo "    Confluence API token. Stored ONLY in ${ENV_FILE} (gitignored)." >&2
   CONF_TOKEN="$(prompt_secret "Confluence API token (leave blank to skip)" "")"
+  if [[ -z "${CONF_TOKEN}" && -n "${EXISTING_CONFLUENCE_API_TOKEN}" && "${ASSUME_YES}" == "true" ]]; then
+    CONF_TOKEN="${EXISTING_CONFLUENCE_API_TOKEN}"
+  fi
 
-  CONF_SPACES="$(prompt "Confluence space keys (comma-separated, optional)" "" \
+  CONF_SPACES="$(prompt "Confluence space keys (comma-separated, optional)" "${EXISTING_CONFLUENCE_SPACE_KEYS}" \
 "OPTIONAL. Spaces the agent may consult.
 EXAMPLE: ENG,ARCH,RUN")"
 fi
@@ -1706,13 +1762,13 @@ else
   USE_SONAR="no"
 fi
 
-SONAR_HOST_URL_VAL=""
-SONAR_TOKEN_VAL=""
+SONAR_HOST_URL_VAL="${EXISTING_SONAR_HOST_URL}"
+SONAR_TOKEN_VAL="${EXISTING_SONAR_TOKEN}"
 if [[ "${USE_SONAR}" == "yes" ]]; then
   echo "" >&2
   echo "SonarQube setup. Values are written to ${ENV_FILE} which is gitignored." >&2
 
-  SONAR_HOST_URL_VAL="$(prompt "Sonar host URL" "" \
+  SONAR_HOST_URL_VAL="$(prompt "Sonar host URL" "${EXISTING_SONAR_HOST_URL}" \
 "OPTIONAL. Full URL with scheme.
 EXAMPLES:
   https://sonarcloud.io        (SonarCloud)
@@ -1722,6 +1778,9 @@ EXAMPLES:
   echo "" >&2
   echo "    Sonar user token. Stored ONLY in ${ENV_FILE} (gitignored)." >&2
   SONAR_TOKEN_VAL="$(prompt_secret "Sonar user token (leave blank to skip)" "")"
+  if [[ -z "${SONAR_TOKEN_VAL}" && -n "${EXISTING_SONAR_TOKEN}" && "${ASSUME_YES}" == "true" ]]; then
+    SONAR_TOKEN_VAL="${EXISTING_SONAR_TOKEN}"
+  fi
 fi
 
 # Environment access pointers (optional)
@@ -1735,8 +1794,14 @@ else
   USE_ENVS="no"
 fi
 
-ENVIRONMENTS_JSON_VAL='[]'
+ENVIRONMENTS_JSON_VAL="${EXISTING_ENVIRONMENTS_JSON:-[]}"
 if [[ "${USE_ENVS}" == "yes" ]]; then
+  # Non-interactive rerun (e.g. --update): preserve the existing JSON instead
+  # of running the interactive loop, which would terminate immediately on the
+  # first empty env_name and produce a broken/empty array.
+  if ! is_interactive; then
+    : "${ENVIRONMENTS_JSON_VAL:=[]}"
+  else
   echo "" >&2
   echo "Environment-access setup." >&2
   echo "  This stores POINTERS ONLY (env name, host, log paths, kubectl context)." >&2
@@ -1808,6 +1873,7 @@ if [[ "${USE_ENVS}" == "yes" ]]; then
       ENVIRONMENTS_JSON_VAL='[]'
     fi
   fi
+  fi  # close: is_interactive (else branch of preserve-existing path)
 fi
 
 # Optional non-blocking connectivity probe.
