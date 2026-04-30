@@ -4,6 +4,10 @@ All notable project changes should be recorded here.
 
 ## Unreleased
 
+- No unreleased changes.
+
+## 0.23.1 - Iteration Convergence Clarifications
+
 ### Changed
 
 - **`code-reviewer` §7 — Round-1 baseline clarification.** Added an explicit rule that round 1 has
