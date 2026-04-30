@@ -16,7 +16,7 @@ compatibility: >-
   .agent-skills.yml). See docs/execution-modes.md.
 metadata:
   author: wamalalawrence
-  version: "0.23.0"
+  version: "0.23.1"
   homepage: "https://github.com/wamalalawrence/agent-skills"
 argument-hint: >-
   optional: mode inner|outer, base branch, issue key/URL, PR URL, or task description
@@ -438,12 +438,37 @@ failing component is in the diff's blast radius) and the verdict is `REQUEST_CHA
 When this skill is invoked iteratively in the engineer↔reviewer pair-programming loop:
 
 - Track the round number in the evidence pack (`round: 1`, `round: 2`, ...).
-- The number of `blocker` + `major` findings **must strictly decrease** between rounds. If round N
-  has the same or more blocker/major findings than round N-1, stop and surface a "not converging"
-  summary to the user with the recurring findings highlighted.
-- After `${CODE_REVIEWER_MAX_ROUNDS}` (default `3`) rounds, escalate regardless of finding counts:
-  report the unresolved blockers, the engineer's responses, and ask the user how to proceed. Do not
-  loop indefinitely or silently downgrade blockers to advisory.
+- **Round 1 has no prior round.** Strict-decrease is not applicable on round 1 — there is no
+  baseline to compare against. A round-1 result with actionable findings always produces
+  `Loop: continue`. Never emit `Loop: not-converging` on round 1.
+- **From round 2 onward,** the number of `blocker` + `major` findings **must strictly decrease**
+  between consecutive rounds. If round N (N ≥ 2) has the same or more blocker/major findings as
+  round N-1, emit `Loop: not-converging` with the recurring findings highlighted and surface the
+  summary to the user.
+- After `${CODE_REVIEWER_MAX_ROUNDS}` (default `3`) rounds, emit `Loop: max-rounds` regardless of
+  finding counts: report the unresolved blockers, the engineer's responses, and ask the user how to
+  proceed. Do not loop indefinitely or silently downgrade blockers to advisory.
+
+**Signal taxonomy.** Each invocation of this skill in iteration mode ends with exactly one of the
+following signals in the review output:
+
+*Action signals — the loop continues:*
+- `Loop: continue` — findings exist but the round-1 baseline has been set, or round N count
+  decreased; the engineer addresses findings and invokes the reviewer again.
+- `Loop: needs-context` — the review cannot advance without output from a named follow-up skill
+  (e.g. `issue-investigator`, `product-owner`). The engineer invokes that skill; once context is
+  available the reviewer is invoked again. Upgrades to `Loop: needs-user` if the named follow-up
+  skill itself returns `needs-context` or `blocked`.
+
+*Terminal signals — the loop stops:*
+- `Loop: converged` — no `blocker` or `major` findings remain; the engineer may advance to the next
+  phase.
+- `Loop: not-converging` — round N ≥ 2 and the blocker/major count did not decrease; escalate to
+  the user with the recurring findings highlighted.
+- `Loop: max-rounds` — `${CODE_REVIEWER_MAX_ROUNDS}` rounds exhausted; escalate to the user
+  regardless of finding count.
+- `Loop: needs-user` — resolution requires a human decision (scope change, waiver, architectural
+  call, or access grant) that the agent cannot make unilaterally; surface clearly and stop.
 
 ### 8. Devil's-advocate self-rebuttal (before final verdict)
 
@@ -595,6 +620,8 @@ Devil's-Advocate paragraph surfaced no credible risk. Otherwise downgrade.
 
 ## Guardrails
 
+- Do not emit `Loop: not-converging` on round 1; round 1 sets the baseline and must produce
+  `Loop: continue` when actionable findings exist.
 - Do not invent issue details, logs, code behavior, acceptance criteria, or company standards.
 - Do not produce issue-aware verdicts when the issue context could not be read or supplied.
 - Do not recommend broad rewrites unless the evidence shows the current approach is materially
