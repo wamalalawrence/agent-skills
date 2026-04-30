@@ -16,7 +16,7 @@ compatibility: >-
   .agent-skills.yml). See docs/execution-modes.md.
 metadata:
   author: wamalalawrence
-  version: "0.23.1"
+  version: "0.24.0"
   homepage: "https://github.com/wamalalawrence/agent-skills"
 argument-hint: >-
   optional: mode inner|outer, base branch, issue key/URL, PR URL, or task description
@@ -437,6 +437,13 @@ failing component is in the diff's blast radius) and the verdict is `REQUEST_CHA
 
 When this skill is invoked iteratively in the engineer↔reviewer pair-programming loop:
 
+- The reviewer owns `evidence-pack.yml.review`. On each invocation, before emitting the verdict,
+  the reviewer: (a) snapshots the previous round into `review.history` as `{round, blocker_count,
+  major_count, verdict}`, mapping the top-level `open_blocker_count` → `blocker_count` and
+  `open_major_count` → `major_count`; (b) increments `review.round` by 1 (or initialises it to `1`
+  if absent); (c) writes the new top-level `open_blocker_count`, `open_major_count`, and `verdict`
+  for this round. The engineer must not mutate this block — it only re-stages the fix and
+  re-invokes the reviewer. This avoids double-increments and stale counts.
 - Track the round number in the evidence pack (`round: 1`, `round: 2`, ...).
 - **Round 1 has no prior round.** Strict-decrease is not applicable on round 1 — there is no
   baseline to compare against. A round-1 result with actionable findings always produces
@@ -469,6 +476,19 @@ following signals in the review output:
   regardless of finding count.
 - `Loop: needs-user` — resolution requires a human decision (scope change, waiver, architectural
   call, or access grant) that the agent cannot make unilaterally; surface clearly and stop.
+
+#### `Loop:` control signal (binding)
+
+The reviewer is the engineer's loop oracle: the engineer's auto-iteration depends on a single
+unambiguous instruction per round. Every review invoked from `software-engineer` (inner or outer
+loop) must emit a one-line `Loop:` signal as the last line of the output, immediately after
+`## Final Verdict` and any `Follow-up:` line.
+
+For one-shot review modes (`pr`, `manual`, or any user-facing review not invoked from
+`software-engineer`), the `Loop:` line is omitted — those reviews terminate at the verdict.
+
+The reviewer must not bury a stop-the-loop decision inside prose. If the engineer's auto-loop cannot
+find an unambiguous `Loop:` line, it must treat the round as `Loop: needs-user` and escalate.
 
 ### 8. Devil's-advocate self-rebuttal (before final verdict)
 
@@ -560,12 +580,18 @@ confidence.>
 
 <VERDICT> — <one-sentence reason>.
 Follow-up: <one-sentence list, or omit the line if there is no follow-up>.
+Loop: converged | continue | not-converging | max-rounds | needs-user | needs-context
 ```
 
 `<VERDICT>` is one of `PASS`, `PASS_WITH_NOTES`, `REQUEST_CHANGES`, `NEEDS_CONTEXT`,
 `NOT_REVIEWABLE`. A bare `PASS` requires that nothing belonged in the `Review
 Limitations` section, the Requirement Understanding Gate ended at `high`, and the
 Devil's-Advocate paragraph surfaced no credible risk. Otherwise downgrade.
+
+The `Loop:` line is required when the review is invoked from `software-engineer` (inner or outer
+loop) and omitted for one-shot user-facing modes (`pr`, `manual`). It is the deterministic
+instruction the engineer's auto-iteration consumes — see [§ 7 `Loop:` control signal](#loop-control-signal-binding)
+for the per-value semantics.
 
 ### Output Style (binding)
 
@@ -605,6 +631,9 @@ Devil's-Advocate paragraph surfaced no credible risk. Otherwise downgrade.
   `Review Limitations` (one paragraph or one line — never a six-bullet `none` block).
 - [ ] Final verdict uses only `PASS`, `PASS_WITH_NOTES`, `REQUEST_CHANGES`, `NEEDS_CONTEXT`, or
   `NOT_REVIEWABLE`.
+- [ ] When invoked from `software-engineer` (inner or outer loop), the output ends with a `Loop:`
+  line whose value is exactly one of `converged`, `continue`, `not-converging`, `max-rounds`,
+  `needs-user`, or `needs-context`. Omit the line for one-shot `pr` / `manual` reviews.
 
 ## Quality Standards
 

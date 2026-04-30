@@ -7,8 +7,11 @@ description: >-
   Connects implementation, review, and issue resolution in one context-aware loop. Uses
   compact project and issue context first, then expands only when risk or ambiguity
   requires it. Invokes the nested code-reviewer skill at the end of Implementation and
-  again at the end of QA. Reuses issue-investigator when issue context, root cause, or
-  expected behavior needs deeper evidence.
+  again at the end of QA, and auto-iterates the engineer↔reviewer pair-programming
+  loop (address findings, re-invoke reviewer, repeat until convergence or
+  `${CODE_REVIEWER_MAX_ROUNDS}`) instead of bouncing each round back to the user.
+  Reuses issue-investigator when issue context, root cause, or expected behavior needs
+  deeper evidence.
 license: MIT
 compatibility: >-
   Works with any agent that supports the Agent Skills format (Claude Code, Cursor,
@@ -17,7 +20,7 @@ compatibility: >-
   .agent-skills.yml). See docs/execution-modes.md.
 metadata:
   author: wamalalawrence
-  version: "0.23.1"
+  version: "0.24.0"
   homepage: "https://github.com/wamalalawrence/agent-skills"
 ---
 
@@ -519,9 +522,42 @@ before treating the review as issue-aware.
 - For bug fixes, reference the failing-test commit from Phase 1.5 in the evidence pack so the
   reviewer can verify it fails on the parent commit and passes on the fix.
 
-The reviewer's output goes back to the user. Address the findings and iterate until the reviewer
-emits `Loop: converged`. Do not advance to Phase 3 on any other terminal signal
-(`Loop: not-converging`, `Loop: max-rounds`, `Loop: needs-user`) without a written waiver.
+**Auto-iterate, do not hand each round back to the user.** The engineer owns the inner loop;
+the user is the loop's escalation path, not its driver. After each reviewer round, dispatch on
+the `Loop:` signal — `continue` and `needs-context` are action signals (do more work, then
+re-invoke); `converged`, `not-converging`, `max-rounds`, and `needs-user` are terminal:
+
+1. *(terminal, advance)* `Loop: converged` (no `blocker`/`major` findings within
+  `${CODE_REVIEWER_INNER_LOOP_SEVERITIES}`) — proceed to Phase 3.
+2. *(action)* `Loop: continue` — actionable findings remain and either this is round 1 (the
+  baseline) or the round-over-round blocker+major count strictly decreased. Address the
+  findings in code, re-stage (`git add -p` / `git add <files>`), and re-invoke `code-reviewer`
+  in inner-loop mode with `--since-last-review` so the reviewer focuses on the delta. Do this
+  without prompting the user between rounds. The engineer does not mutate
+  `evidence-pack.yml.review` itself — `code-reviewer` owns that block and snapshots the prior
+  round into `review.history` and increments `review.round` when it is re-invoked (see
+  [`references/evidence-pack.md` § Skill responsibilities](./references/evidence-pack.md#3-skill-responsibilities)).
+3. *(terminal, escalate)* `Loop: not-converging` (round N ≥ 2 has the same or more blocker/major
+  findings than round N-1, or the same finding recurs across two rounds), or
+  `Loop: max-rounds` (`${CODE_REVIEWER_MAX_ROUNDS}` reached), or `Loop: needs-user` (a blocker
+  requires a written waiver, scope expansion, or product clarification) — stop the loop and
+  surface to the user: the recurring finding(s), what the engineer tried each round, and the
+  specific decision being asked for (waive / change scope / clarify requirement / stop). Do not
+  advance to Phase 3, do not silently downgrade blockers, do not loop past the cap, and do not
+  invent missing context.
+4. *(action)* `Loop: needs-context` (the reviewer returned `NEEDS_CONTEXT`) — invoke
+  [`issue-investigator`](./skills/issue-investigator/SKILL.md) or
+  [`product-owner`](../product-owner/SKILL.md) — whichever the reviewer's `Follow-up` line
+  points to — and re-invoke `code-reviewer` once the missing context is captured in
+  `evidence-pack.yml`. If the named skill itself returns `status: needs-context` / `blocked`
+  (the missing context cannot be supplied without the user), this becomes terminal: stop and
+  surface the specific question to the user.
+
+The user only sees inner-loop output when the loop terminates: `converged` (advance silently to
+Phase 3) or one of the four escalation cases (`not-converging`, `max-rounds`, `needs-user`, or
+a `needs-context` that downstream skills cannot resolve). Intermediate `continue` and resolvable
+`needs-context` rounds stay in the engineer's working context and in
+`evidence-pack.yml.review.history`.
 
 ---
 
@@ -635,13 +671,19 @@ Before moving to Phase 4, invoke the [`code-reviewer`](./skills/code-reviewer/SK
 Pass the same evidence pack plus QA results, commands run, skipped checks, and any waivers from the
 inner-loop review.
 
-Address remaining findings and iterate until the reviewer emits `Loop: converged`. Only
-`Loop: converged` advances the workflow to Phase 4.
+Auto-iterate the outer loop the same way as the inner loop. Apply the four-case rule from Phase 2.4
+("Auto-iterate, do not hand each round back to the user") with the outer-loop severity filter
+(`${CODE_REVIEWER_SHOW_SEVERITIES}`, default `blocker,major,minor,nit`). Address blocker and major
+findings in code, fix `minor`/`nit` items only when cheap and on-scope, then re-stage, re-run the
+targeted parts of QA that the new edits touch (lint/format/affected tests), and re-invoke the
+reviewer in outer-loop mode. As in the inner loop, the reviewer (not the engineer) owns
+`evidence-pack.yml.review` — it increments `review.round` and snapshots the prior round into
+`review.history` when re-invoked.
 
-- `Loop: continue` or `Loop: needs-context` — iterate: address findings (or invoke the named
-  follow-up skill first), then call the reviewer again. Counts toward `${CODE_REVIEWER_MAX_ROUNDS}`.
-- `Loop: not-converging`, `Loop: max-rounds`, or `Loop: needs-user` — stop the workflow and surface
-  the unresolved findings to the user. Do not advance to Phase 4 without an explicit written waiver.
+Only `Loop: converged` advances to Phase 4. `Loop: continue` keeps iterating the outer loop;
+`Loop: needs-context` invokes the named skill and re-iterates; `Loop: not-converging`,
+`Loop: max-rounds`, and `Loop: needs-user` stop the workflow and surface to the user — Phase 4
+must not run with unresolved reviewer findings.
 
 ---
 
@@ -733,7 +775,8 @@ written waiver.
 ## Code review hooks
 
 This skill explicitly delegates to [`code-reviewer`](./skills/code-reviewer/SKILL.md) at two
-points:
+points and owns the iteration loop at each one — the user is the loop's escalation path, not
+its driver:
 
 - Inner loop: at the end of Phase 2 (Implementation).
   - Diff scope: staged diff (`git diff --staged`).
@@ -747,6 +790,56 @@ points:
 Behaviour is configured by `${CODE_REVIEWER_BLOCKING}` (default `false` = advisory). When blocking
 is enabled, blocker findings must be addressed or explicitly waived (with a written reason) before
 the workflow can advance.
+
+### Engineer-owned iteration algorithm (binding for both loops)
+
+Each loop runs the following dispatch on the reviewer's one-line `Loop:` signal (see
+[`code-reviewer` § Final Verdict](./skills/code-reviewer/SKILL.md#expected-output-contract))
+until a terminal signal fires. The six values split into:
+
+- Action signals — engineer does more work, then invokes the reviewer again. Values: `continue`,
+  `needs-context`.
+- Terminal signals — the loop ends. Values: `converged` (advance to next phase),
+  `not-converging` / `max-rounds` / `needs-user` (stop and surface to the user). A
+  `needs-context` round becomes terminal only if the named follow-up skill itself returns
+  `status: needs-context` / `blocked`.
+
+Dispatch:
+
+1. *(terminal, advance)* `Loop: converged` → no findings remain at the loop's severity filter.
+  Exit the loop and advance to the next phase. Do not re-prompt the user.
+2. *(action)* `Loop: continue` → blocker/major findings remain and either this is round 1 (the
+  baseline — no prior round to compare) or the round-over-round count strictly decreased.
+  Address the findings in code, re-stage, and re-invoke the reviewer with `--since-last-review`.
+  The reviewer (not the engineer) owns `evidence-pack.yml.review`: it snapshots the prior round's
+  counts/verdict into `review.history` and increments `review.round` when re-invoked. Do not
+  surface intermediate rounds to the user.
+3. *(terminal, escalate)* `Loop: not-converging` → round N (N ≥ 2) has the same or more
+  blocker/major findings than round N-1, or the same finding recurs across two rounds. Stop the
+  loop and surface to the user: the recurring finding(s), each round's attempted fix, and the
+  specific decision needed.
+4. *(terminal, escalate)* `Loop: max-rounds` → `${CODE_REVIEWER_MAX_ROUNDS}` (default `3`)
+  rounds completed without convergence. Stop and surface as for `not-converging`, including the
+  current best diff and a recommendation (waive / change scope / split work / abandon).
+5. *(terminal, escalate)* `Loop: needs-user` → a blocker requires a written waiver, scope
+  expansion, or product clarification only the user can give. Stop and surface the specific
+  question.
+6. *(action)* `Loop: needs-context` → reviewer returned `NEEDS_CONTEXT`. Invoke the skill the
+  reviewer's `Follow-up:` line names (typically
+  [`issue-investigator`](./skills/issue-investigator/SKILL.md) for missing root cause,
+  [`product-owner`](../product-owner/SKILL.md) for missing acceptance criteria), persist the
+  captured context to `evidence-pack.yml`, and re-invoke the reviewer. If that named skill itself
+  returns `status: needs-context` / `blocked`, treat the round as terminal-escalate and surface to
+  the user.
+
+Forbidden in either loop:
+
+- Surfacing the reviewer's per-round output to the user when the signal is an action signal.
+- Advancing to the next phase on any signal other than `Loop: converged`.
+- Silently downgrading a `blocker` to advisory to make the loop terminate.
+- Looping past `${CODE_REVIEWER_MAX_ROUNDS}`.
+- Skipping the re-invocation entirely after addressing findings.
+- Treating round 1 as `Loop: not-converging`; there is no prior round to compare against.
 
 ---
 

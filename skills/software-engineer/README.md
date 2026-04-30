@@ -11,9 +11,9 @@ See [SKILL.md](./SKILL.md) for the full workflow. References live under
 - Phase 1 — Preparation (issue context, repo identification, branch setup, compact evidence pack,
   plan)
 - Phase 2 — Implementation (clean code, security, architecture rules) -> calls `code-reviewer`
-  (inner loop)
+  and auto-iterates the inner loop until convergence or bounded escalation
 - Phase 3 — Quality assurance (tests, static analysis, format, build) -> calls `code-reviewer`
-  (outer loop)
+  and auto-iterates the outer loop until convergence or bounded escalation
 - Phase 4 — Self-review
 - Phase 5 — Commit & PR
 

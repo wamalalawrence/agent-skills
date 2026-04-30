@@ -4,7 +4,7 @@ Reusable [Agent Skills](https://agentskills.io/) for software-engineering work �
 role-shaped workflows your AI assistant can load on demand so the same model produces
 senior-engineer, product-owner, tester, or reviewer output instead of generic answers.
 
-> **Status:** `0.23.1` — pre-1.0. Core skill set is shipped and stable enough for public use;
+> **Status:** `0.24.0` — pre-1.0. Core skill set is shipped and stable enough for public use;
 > interfaces may still evolve.
 
 New here? Start with the [quickstart](docs/quickstart.md), then read [starter
@@ -69,7 +69,7 @@ npx skills add wamalalawrence/agent-skills
 
 ## Updating
 
-Releases are git tags (`v0.23.0`, `v0.23.1`, …) on this repo. Two commands cover the common
+Releases are git tags (`v0.23.1`, `v0.24.0`, …) on this repo. Two commands cover the common
 case; full details, in-repo (cloud-agent) updates, and drift detection are in
 [docs/updates.md](docs/updates.md).
 
@@ -186,8 +186,8 @@ usage shows they are useful independently.
   signals before recommending changes.
 - **Token-conscious:** gather the smallest useful evidence pack first, then expand only when
   ambiguous or high risk.
-- **Collaborative:** implementation, review, and issue resolution are one engineering loop, not
-  isolated activities.
+- **Collaborative:** implementation, review, and issue resolution are one engineering loop;
+  `software-engineer` auto-iterates with `code-reviewer` until convergence or bounded escalation.
 - **Maintainer-realistic:** governance, support, and roadmap promises match a solo-maintainer
   open-source project.
 

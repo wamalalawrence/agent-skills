@@ -86,6 +86,7 @@ review:
   round: 0 # increments each invocation
   open_blocker_count: 0
   open_major_count: 0
+  verdict: null # current round's verdict: PASS | PASS_WITH_NOTES | REQUEST_CHANGES | NEEDS_CONTEXT | NOT_REVIEWABLE
   history:
     - round: 1
       blocker_count: 2
@@ -148,10 +149,23 @@ reproduce is forbidden without explicit user approval and a written rollback pla
 | -------------------------- | --------------------------------- | ----------------------------------------------------------------------------------- |
 | `issue-investigator`       | env, prior `evidence-pack.yml`    | `evidence-pack.yml` (investigation, risk, hypotheses), `repro-recipe.yml`           |
 | `software-engineer`        | both files                        | `evidence-pack.yml.plan`, regression test commit referenced from `repro-recipe.yml` |
-| `code-reviewer`            | both files                        | `evidence-pack.yml.review` (round, counts, verdict)                                 |
+| `code-reviewer`            | both files                        | `evidence-pack.yml.review` (sole owner — see ownership rule below)                  |
 | `manual-tester`            | `evidence-pack.yml`               | `repro-recipe.yml` (when manual repro produces one), defect rows                    |
 | `test-automation-engineer` | `repro-recipe.yml`                | regression test files; references the recipe in test docstring                      |
 | `product-owner`            | `evidence-pack.yml.investigation` | `evidence-pack.yml.acceptance_criteria`                                             |
 
 If a consumer skill cannot find the file it needs, it stops with the standard _Missing required
 setup_ message instead of inferring context silently.
+
+**`evidence-pack.yml.review` ownership rule.** `code-reviewer` is the sole writer of the `review`
+block. `software-engineer` does not mutate it — it only re-stages the fix and re-invokes the
+reviewer. On each invocation, before emitting the verdict, the reviewer:
+
+1. Snapshots the previous round into `review.history` as `{round, blocker_count, major_count,
+   verdict}`, mapping the top-level `open_blocker_count` → `blocker_count` and
+   `open_major_count` → `major_count`.
+2. Increments `review.round` by 1 (or initialises it to `1` if absent).
+3. Writes the new `open_blocker_count`, `open_major_count`, and `verdict` for this round.
+
+This single-owner rule prevents double-increments, stale counts, and wrong `max-rounds` / round-1
+decisions.
