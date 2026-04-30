@@ -6,6 +6,27 @@ All notable project changes should be recorded here.
 
 - No unreleased changes.
 
+## 0.24.0 - Engineer-Owned Review Auto-Iteration
+
+### Added
+
+- `software-engineer` now owns the inner and outer engineer↔reviewer loops: it addresses review
+  findings, re-stages changes, re-invokes `code-reviewer` with `--since-last-review`, and repeats
+  until `Loop: converged` or a bounded escalation signal stops the workflow.
+- `code-reviewer` now emits a binding final `Loop:` control signal when invoked from
+  `software-engineer`. One-shot `pr` and `manual` reviews omit the line.
+- `evidence-pack.yml.review` now records the current round `verdict`, and
+  `code-reviewer` is documented as the sole writer of the review block to prevent double-increments
+  and stale convergence counts.
+
+### Changed
+
+- `software-engineer` surfaces intermediate reviewer rounds only to its working context and
+  `review.history`; the user is now the escalation path for `not-converging`, `max-rounds`,
+  `needs-user`, or unresolved `needs-context`, not the driver of every round.
+- README and `software-engineer` docs now describe the review loop as auto-iterating rather than a
+  manual handoff between roles.
+
 ## 0.23.1 - Iteration Convergence Clarifications
 
 ### Changed
