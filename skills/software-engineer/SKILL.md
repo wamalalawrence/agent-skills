@@ -17,7 +17,7 @@ compatibility: >-
   .agent-skills.yml). See docs/execution-modes.md.
 metadata:
   author: wamalalawrence
-  version: "0.21.0"
+  version: "0.22.0"
   homepage: "https://github.com/wamalalawrence/agent-skills"
 ---
 
@@ -558,7 +558,11 @@ Quickly verify by category:
   [`test-automation-engineer`](../test-automation-engineer/SKILL.md) to choose the right automation
   level and avoid brittle tests.
 - [ ] New code: target `${COVERAGE_TARGET_PERCENT:-80}` percent at minimum, 100% for safety-critical
-  code paths. Verify every branch and path you added.
+  code paths. Verify every branch and path you added. (`${COVERAGE_TARGET_PERCENT}` is an
+  *agent-resolved* placeholder; the agent reads the value from the loaded `.env`. When the
+  agent runtime has not loaded `.env`, treat the target as the literal default `80`.
+  Resolution order: per-project `coverage_target` from `PROJECTS_JSON` or
+  `.agent-skills.yml` \u2192 `COVERAGE_TARGET_PERCENT` env var \u2192 literal `80`.)
 - [ ] Tests should be fast; slow or noisy tests are a design smell unless there is a real
   integration reason.
 - [ ] Service / persistence changes require unit tests. API/interface changes require integration

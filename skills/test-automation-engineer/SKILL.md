@@ -16,7 +16,7 @@ compatibility: >-
   .agent-skills.yml). See docs/execution-modes.md.
 metadata:
   author: wamalalawrence
-  version: "0.21.0"
+  version: "0.22.0"
   homepage: "https://github.com/wamalalawrence/agent-skills"
 ---
 
@@ -213,7 +213,10 @@ Guardrails specific to test-automation-engineer:
 - **Invoke [`code-reviewer`](../software-engineer/skills/code-reviewer/SKILL.md) in `manual` mode
   with the `test-quality` profile on the new or modified test files.** Test code is production code;
   selector instability, fixed sleeps, ordering coupling, and weak assertions cause the next three
-  incidents.
+  incidents. This is a **bounded** review loop per
+  [docs/review-loops.md](../../docs/review-loops.md#universal-loop-bounds): one revision round on
+  the test files, no recursion, depth cap of two skills. Surviving findings ship as inline TODOs
+  with linked follow-up issues — do not invoke `code-reviewer` a second time on the same files.
 - For new high-risk e2e or integration tests, define a **flake budget** before merging. The default
   target is at least 20 repeat executions when CI and tooling support it (e.g., `--repeat-each=20`,
   `pytest --count=20`, or a repeat plugin). If repeat execution is not available, state the lower
