@@ -6,6 +6,42 @@ All notable project changes should be recorded here.
 
 - No unreleased changes.
 
+## 0.23.0 - Insightful Simplifications
+
+### Added
+
+- New [`docs/insightful-simplifications.md`](docs/insightful-simplifications.md)
+  defining an **optional**, bounded `## Insightful Simplification` output section
+  any skill MAY add (1–3 bullets, ≤ 35 words each, anchored to a concrete
+  file/layer/state/contract) when one short architectural observation would help
+  the user see the wider shape of the problem. Default behavior is to **omit**
+  the section; it is governed by the existing
+  [output-discipline](docs/output-discipline.md) and
+  [token-efficiency](docs/token-efficiency.md) rules.
+- Optional `## Insightful Simplification` block added to the Expected Output
+  Contract of every top-level and nested skill
+  ([`software-engineer`](skills/software-engineer/SKILL.md),
+  [`product-owner`](skills/product-owner/SKILL.md),
+  [`manual-tester`](skills/manual-tester/SKILL.md),
+  [`test-automation-engineer`](skills/test-automation-engineer/SKILL.md),
+  [`issue-investigator`](skills/software-engineer/skills/issue-investigator/SKILL.md),
+  [`code-reviewer`](skills/software-engineer/skills/code-reviewer/SKILL.md)).
+  Required-even-if-empty sections (`code-reviewer` `## Final Verdict`,
+  `software-engineer` `## Final Status`) keep their position at the end of the
+  output.
+- New eval
+  [`evals/insightful-simplifications-concise.md`](evals/insightful-simplifications-concise.md)
+  pinning the section against generic-coaching, restate-finding,
+  invented-architecture, and template-echo failure modes for both cross-layer
+  and trivial tasks.
+
+### Changed
+
+- `software-engineer` `Expected Output Contract` promotes the trailing
+  `Final status:` bullet into its own `## Final Status` section so the
+  required-even-if-empty status remains the last block when the optional
+  `## Insightful Simplification` is rendered above it.
+
 ## 0.22.0 - Bounded Cross-Skill Review Loops, Token-Efficiency Audit, COVERAGE_TARGET_PERCENT Clarification
 
 ### Added

@@ -17,7 +17,7 @@ compatibility: >-
   .agent-skills.yml). See docs/execution-modes.md.
 metadata:
   author: wamalalawrence
-  version: "0.22.0"
+  version: "0.23.0"
   homepage: "https://github.com/wamalalawrence/agent-skills"
 ---
 
@@ -760,6 +760,18 @@ review ran. Required-even-if-empty: the `Final status:` line.
 - Tests run:
 - Risks and rollback notes:
 - Code-reviewer handoff/result:
+
+## Insightful Simplification
+
+<Optional. 1–3 bullets, ≤ 35 words each, anchored to a concrete
+file/layer/state/contract/boundary. Omit the section entirely when no
+qualifying insight exists. See
+[Insightful Simplifications](../../docs/insightful-simplifications.md).>
+
+- ...
+
+## Final Status
+
 - Final status: complete | blocked | needs-context | needs-review
 ```
 

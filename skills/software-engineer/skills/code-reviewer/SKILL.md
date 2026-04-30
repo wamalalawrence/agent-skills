@@ -16,7 +16,7 @@ compatibility: >-
   .agent-skills.yml). See docs/execution-modes.md.
 metadata:
   author: wamalalawrence
-  version: "0.22.0"
+  version: "0.23.0"
   homepage: "https://github.com/wamalalawrence/agent-skills"
 argument-hint: >-
   optional: mode inner|outer, base branch, issue key/URL, PR URL, or task description
@@ -513,6 +513,15 @@ ONE bullet using the Output Discipline finding format:>
 ## Devil's-Advocate Self-Rebuttal
 
 <one short paragraph; required only before a PASS verdict. Drop for any other verdict.>
+
+## Insightful Simplification
+
+<Optional. 1–3 bullets, ≤ 35 words each, anchored to a concrete
+file/layer/state/contract/boundary observed in the diff. Omit the section
+entirely when no qualifying insight exists. See
+[Insightful Simplifications](../../../../docs/insightful-simplifications.md).>
+
+- ...
 
 ## Review Limitations
 

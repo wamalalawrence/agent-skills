@@ -17,7 +17,7 @@ compatibility: >-
   docs/execution-modes.md.
 metadata:
   author: wamalalawrence
-  version: "0.22.0"
+  version: "0.23.0"
   homepage: "https://github.com/wamalalawrence/agent-skills"
 argument-hint: >-
   issue URL/key, bug report, incident, support ticket, feature request, or task
@@ -598,6 +598,16 @@ be omitted by accident).
 safe check exists with the access the user currently has.)
 
 ## Open Questions Or Missing Evidence
+
+- ...
+
+## Insightful Simplification
+
+<Optional. 1–3 bullets, ≤ 35 words each, anchored to a concrete
+component/layer/state/contract/failure-mode actually observed during
+investigation. Omit the section entirely when no qualifying insight exists.
+See
+[Insightful Simplifications](../../../../docs/insightful-simplifications.md).>
 
 - ...
 ```

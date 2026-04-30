@@ -16,7 +16,7 @@ compatibility: >-
   .agent-skills.yml). See docs/execution-modes.md.
 metadata:
   author: wamalalawrence
-  version: "0.22.0"
+  version: "0.23.0"
   homepage: "https://github.com/wamalalawrence/agent-skills"
 ---
 
@@ -278,6 +278,15 @@ checklist to fill in.
 - Scenario:
 - Why it is worth automating:
 - Suggested level: API | integration | UI/e2e | other
+
+## Insightful Simplification
+
+<Optional. 1–3 bullets, ≤ 35 words each, anchored to a concrete
+workflow/state/role/data-shape/failure-mode. Omit the section entirely when no
+qualifying insight exists. See
+[Insightful Simplifications](../../docs/insightful-simplifications.md).>
+
+- ...
 ```
 
 ### Output Style (binding)

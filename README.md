@@ -4,7 +4,7 @@ Reusable [Agent Skills](https://agentskills.io/) for software-engineering work �
 role-shaped workflows your AI assistant can load on demand so the same model produces
 senior-engineer, product-owner, tester, or reviewer output instead of generic answers.
 
-> **Status:** `0.22.0` — pre-1.0. Core skill set is shipped and stable enough for public use;
+> **Status:** `0.23.0` — pre-1.0. Core skill set is shipped and stable enough for public use;
 > interfaces may still evolve.
 
 New here? Start with the [quickstart](docs/quickstart.md), then read [starter
@@ -69,7 +69,7 @@ npx skills add wamalalawrence/agent-skills
 
 ## Updating
 
-Releases are git tags (`v0.21.0`, `v0.22.0`, …) on this repo. Two commands cover the common
+Releases are git tags (`v0.22.0`, `v0.23.0`, …) on this repo. Two commands cover the common
 case; full details, in-repo (cloud-agent) updates, and drift detection are in
 [docs/updates.md](docs/updates.md).
 
@@ -160,6 +160,9 @@ usage shows they are useful independently.
 - [Examples](docs/examples/README.md)
 - [Validation](docs/validation.md)
 - [Skill quality scorecard](docs/skill-quality-scorecard.md)
+- [Insightful simplifications](docs/insightful-simplifications.md) — optional bounded
+  framing section skills MAY emit when one short architectural observation would help the
+  user see the wider shape of the problem
 - [Requirement-understanding workflow](docs/requirement-understanding.md) — the gate every
   relevant skill runs before implementation, review, testing, or automation
 - [Requirement-understanding scorecard](docs/requirement-understanding-scorecard.md)

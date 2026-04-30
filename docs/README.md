@@ -16,6 +16,9 @@ Start here when reading the repository outside GitHub's main README.
   local config (`./setup.init --check-updates`, `./setup.init --update`, `git pull`).
 - [Output discipline](output-discipline.md) - the canonical conciseness rules every skill
   inherits in its Expected Output Contract; what "menu, not checklist" means in practice.
+- [Insightful simplifications](insightful-simplifications.md) - the optional, bounded
+  framing section any skill MAY add when one short architectural observation would help
+  the user see the wider shape of the problem.
 - [Token efficiency](token-efficiency.md) - principles, audit methodology, and current
   findings for keeping `agent-skills` cheap to load into agent context.
 - [Assistant setup](assistants.md) - using the skills with common AI assistants.

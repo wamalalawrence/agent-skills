@@ -15,7 +15,7 @@ compatibility: >-
   .agent-skills.yml). See docs/execution-modes.md.
 metadata:
   author: wamalalawrence
-  version: "0.22.0"
+  version: "0.23.0"
   homepage: "https://github.com/wamalalawrence/agent-skills"
 ---
 
@@ -301,6 +301,15 @@ genuine unknowns explicitly inside the sections that need them.
 - Engineering notes:
 - Manual testing notes:
 - Automation notes:
+
+## Insightful Simplification
+
+<Optional. 1–3 bullets, ≤ 35 words each, anchored to a concrete
+user/journey/contract/boundary/lifecycle. Omit the section entirely when no
+qualifying insight exists. See
+[Insightful Simplifications](../../docs/insightful-simplifications.md).>
+
+- ...
 ```
 
 ### Output Style (binding)
