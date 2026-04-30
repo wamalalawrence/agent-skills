@@ -16,7 +16,7 @@ compatibility: >-
   .agent-skills.yml). See docs/execution-modes.md.
 metadata:
   author: wamalalawrence
-  version: "0.21.0"
+  version: "0.22.0"
   homepage: "https://github.com/wamalalawrence/agent-skills"
 ---
 
@@ -217,6 +217,20 @@ Time-box exploratory charters (e.g., 30-minute boxes) so investigation does not 
 - Provide retest steps for fixed defects.
 - Hand stable, high-value regression candidates to
   [`test-automation-engineer`](../test-automation-engineer/SKILL.md).
+
+### 7. Self-validation pass (bounded)
+
+Before emitting the plan and any defects, run **one** self-check against the shared
+[test-plan review checklist](../../docs/review-loops.md#test-plan-review-checklist). For
+reproducible defects, confirm the
+[`issue-investigator`](../software-engineer/skills/issue-investigator/SKILL.md) handoff
+fields are populated; defects that fail the handoff become a `product question` instead of
+a `functional defect` until expected behavior is confirmed.
+
+This loop is bounded by
+[docs/review-loops.md](../../docs/review-loops.md#universal-loop-bounds): one revision
+round, no recursion, depth cap of two skills. Surviving items move to `Residual risk` /
+`Open questions`; do not re-run the self-check a second time on the same plan.
 
 ## Expected Output Contract
 

@@ -15,7 +15,7 @@ compatibility: >-
   .agent-skills.yml). See docs/execution-modes.md.
 metadata:
   author: wamalalawrence
-  version: "0.21.0"
+  version: "0.22.0"
   homepage: "https://github.com/wamalalawrence/agent-skills"
 ---
 
@@ -235,6 +235,21 @@ Do not produce the Jira-ready output in step 7 until all of these are true:
   many remain).
 
 If any DoR item fails, return the work to refinement instead of handing it off.
+
+#### Bounded review pass (one round)
+
+After the DoR gate above passes, run **one** bounded review pass before step 7:
+
+- Re-check the draft against the DoR list above as a self-review.
+- When the work is user-facing or behavior-complex, ask
+  [`manual-tester`](../manual-tester/SKILL.md) for a quick **testability check** on the
+  acceptance criteria — observable, unambiguous, at least one negative criterion, no
+  "works as expected" phrasing. Apply the feedback in **one** revision round.
+
+This loop is explicitly bounded by [docs/review-loops.md](../../docs/review-loops.md#universal-loop-bounds):
+one revision round, depth cap of two skills, no recursion. If feedback survives the one
+revision, mark the surviving items in `Open questions` and downgrade the work item to a
+`Spike` / `Discovery`. Do not run the testability check a second time on the same item.
 
 ### 7. Prepare Jira-ready output
 

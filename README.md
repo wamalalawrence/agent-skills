@@ -4,7 +4,7 @@ Reusable [Agent Skills](https://agentskills.io/) for software-engineering work �
 role-shaped workflows your AI assistant can load on demand so the same model produces
 senior-engineer, product-owner, tester, or reviewer output instead of generic answers.
 
-> **Status:** `0.21.0` — pre-1.0. Core skill set is shipped and stable enough for public use;
+> **Status:** `0.22.0` — pre-1.0. Core skill set is shipped and stable enough for public use;
 > interfaces may still evolve.
 
 New here? Start with the [quickstart](docs/quickstart.md), then read [starter
@@ -69,7 +69,7 @@ npx skills add wamalalawrence/agent-skills
 
 ## Updating
 
-Releases are git tags (`v0.20.0`, `v0.21.0`, …) on this repo. Two commands cover the common
+Releases are git tags (`v0.21.0`, `v0.22.0`, …) on this repo. Two commands cover the common
 case; full details, in-repo (cloud-agent) updates, and drift detection are in
 [docs/updates.md](docs/updates.md).
 

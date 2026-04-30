@@ -16,6 +16,8 @@ Start here when reading the repository outside GitHub's main README.
   local config (`./setup.init --check-updates`, `./setup.init --update`, `git pull`).
 - [Output discipline](output-discipline.md) - the canonical conciseness rules every skill
   inherits in its Expected Output Contract; what "menu, not checklist" means in practice.
+- [Token efficiency](token-efficiency.md) - principles, audit methodology, and current
+  findings for keeping `agent-skills` cheap to load into agent context.
 - [Assistant setup](assistants.md) - using the skills with common AI assistants.
 - [Starter prompts](starter-prompts.md) - copy-paste prompts for single-skill and multi-skill work.
 - [Examples](examples/README.md) - realistic input/output examples for each skill.
@@ -29,6 +31,8 @@ Start here when reading the repository outside GitHub's main README.
 - [Eval runs](../eval-runs/README.md) - release-scoped scored sample runs.
 - [Release checklist](release-checklist.md) - repeatable pre-release checks.
 - [Skill boundaries](skill-boundaries.md) - ownership, handoffs, and nested-skill rationale.
+- [Skill review loops](review-loops.md) - how producer skills hand off to reviewer skills
+  with **bounded** revision rounds so the agent never spins forever.
 - [Severity and confidence](severity-and-confidence.md) - shared review, defect, and investigation
   vocabulary.
 - [Known limitations](known-limitations.md) - what the skills cannot guarantee.

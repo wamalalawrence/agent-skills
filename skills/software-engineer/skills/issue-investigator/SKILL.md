@@ -17,7 +17,7 @@ compatibility: >-
   docs/execution-modes.md.
 metadata:
   author: wamalalawrence
-  version: "0.21.0"
+  version: "0.22.0"
   homepage: "https://github.com/wamalalawrence/agent-skills"
 argument-hint: >-
   issue URL/key, bug report, incident, support ticket, feature request, or task
@@ -515,6 +515,18 @@ Choose the most appropriate next action based on evidence:
 When recommending a code fix, provide implementation guidance and hand off to
 [`software-engineer`](../../SKILL.md). After a fix exists, use
 [`code-reviewer`](../code-reviewer/SKILL.md) to review issue alignment and engineering quality.
+
+### 7. Self-validation pass (bounded)
+
+Before emitting the final result, run **one** self-validation pass against the shared
+[investigation-quality checklist](../../../../docs/review-loops.md#investigation-quality-checklist)
+and re-read the evidence pack the investigation just wrote. Items that fail the checklist
+must either be fixed in this pass or moved to `Open Questions Or Missing Evidence` with a
+specific evidence gap stated. **Do not run the checklist a second time.** This loop is
+explicitly bounded by the universal rules in
+[docs/review-loops.md](../../../../docs/review-loops.md#universal-loop-bounds): one
+revision round, no recursion, depth cap of two skills. A second pass on the same
+investigation is forbidden — surface remaining issues to the user instead.
 
 ## Expected Output Contract
 

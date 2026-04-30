@@ -6,6 +6,79 @@ All notable project changes should be recorded here.
 
 - No unreleased changes.
 
+## 0.22.0 - Bounded Cross-Skill Review Loops, Token-Efficiency Audit, COVERAGE_TARGET_PERCENT Clarification
+
+### Added
+
+- New [`docs/review-loops.md`](docs/review-loops.md) defining how producer skills hand
+  off to reviewer skills with **bounded** revision rounds. Six universal bounds (one
+  revision round by default, no recursion, depth cap of two skills, etc.) plus the
+  documented exception for the existing `software-engineer` ↔ `code-reviewer` loop
+  (which keeps `${CODE_REVIEWER_MAX_ROUNDS}`, default `3`, with strictly-decreasing
+  finding counts per round). Includes the new `investigation-quality checklist` and
+  `test-plan review checklist`.
+- New [`docs/token-efficiency.md`](docs/token-efficiency.md) capturing the principles
+  ("menu, not checklist", "persistent artifacts over chat", "reference, do not copy",
+  bounded loops, one-shot examples, no banner headers), the audit methodology, and
+  the v0.22.0 audit findings.
+- New step **7. Self-validation pass (bounded)** in
+  [`issue-investigator/SKILL.md`](skills/software-engineer/skills/issue-investigator/SKILL.md)
+  that runs the new investigation-quality checklist exactly once before emitting the
+  result. Surviving items move to `Open Questions Or Missing Evidence`.
+- New **Bounded review pass (one round)** in
+  [`product-owner/SKILL.md`](skills/product-owner/SKILL.md) between the existing DoR
+  gate and the Jira-ready output. For user-facing or behavior-complex work, asks
+  `manual-tester` for a testability quick-check; surviving items downgrade the work
+  item to `Spike` / `Discovery`.
+- New step **7. Self-validation pass (bounded)** in
+  [`manual-tester/SKILL.md`](skills/manual-tester/SKILL.md) that runs the new test-plan
+  review checklist exactly once. Defects that fail the `issue-investigator` handoff
+  become `product question` instead of `functional defect`.
+- `eval-runs/v0.22.0/` — release summary, the skill-review-loops write-up with the
+  motivating failure modes and the explicit "what this does NOT do" boundary, and the
+  token-efficiency audit with line counts and findings.
+
+### Fixed
+
+- **README "Status" badge.** The user reported v0.21.0 README still showing `0.19.0`
+  status pin on GitHub. The repo HEAD on `main` already had `0.21.0`; the v0.22.0
+  release moves it to `0.22.0` and bumps `VERSION` and every `SKILL.md →
+  metadata.version` accordingly.
+- **`COVERAGE_TARGET_PERCENT` documentation.** Clarified in `.env.example` and the
+  `software-engineer` test-coverage checklist that the placeholder is
+  *agent-resolved*, not script-substituted: the agent runtime must have `.env`
+  loaded into its process environment for an override to take effect; otherwise the
+  literal default `80` applies. Removes the silent assumption that setting a value
+  in `.env` automatically reaches the agent.
+
+### Changed
+
+- `test-automation-engineer/SKILL.md` step 6 — the existing `code-reviewer` (`manual`
+  mode, `test-quality` profile) call is now explicitly tagged as a one-round bounded
+  loop with a pointer to `docs/review-loops.md`. No behavior change; the bound is
+  now written.
+- `docs/README.md` index gains entries for `review-loops.md` and `token-efficiency.md`.
+- `VERSION` and every `SKILL.md` `metadata.version` bumped to `0.22.0`.
+- `README.md` status pin moved to `0.22.0`; the `## Updating` example tag list moved
+  from `v0.20.0, v0.21.0` to `v0.21.0, v0.22.0`.
+
+### Why
+
+The release was triggered by a user audit raising four concerns:
+
+1. README "Status" pin lagged the actual VERSION on the published GitHub view.
+2. Uncertainty whether `COVERAGE_TARGET_PERCENT` is actually consumed anywhere.
+3. Whether `issue-investigator` (and `product-owner`, `manual-tester`,
+   `test-automation-engineer`) outputs are reviewed/validated by a peer skill the
+   way `software-engineer` is reviewed by `code-reviewer`. The repo-level
+   philosophy — *skills work together via review loops to give the best possible
+   output* — was implemented for one skill pair but not for the others.
+4. Whether the repo as a whole is token-efficient for real AI-agent usage.
+
+v0.22.0 wires the bounded review loops with **explicit termination rules** so the
+extension carries no endless-loop risk, documents `COVERAGE_TARGET_PERCENT` as
+agent-resolved, and ships the audit findings under `eval-runs/v0.22.0/`.
+
 ## 0.21.0 - Code-Reviewer Verdict Gating, Update Credential Preservation, Updating Discoverability
 
 ### Added
