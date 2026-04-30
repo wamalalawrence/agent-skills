@@ -511,13 +511,17 @@ before treating the review as issue-aware.
 - Severities surfaced: `${CODE_REVIEWER_INNER_LOOP_SEVERITIES}` (default `blocker,major`).
 - Blocking behaviour: respect `${CODE_REVIEWER_BLOCKING}` — when `true`, do not move to Phase 3
   until blocker findings are addressed or explicitly waived with a written justification.
-- Iteration cap: respect `${CODE_REVIEWER_MAX_ROUNDS}` (default `3`). Each round must produce
-  strictly fewer blocker/major findings than the previous one. If the loop is not converging, stop and
-  surface a "not converging" summary to the user instead of grinding indefinitely.
+- Iteration cap: respect `${CODE_REVIEWER_MAX_ROUNDS}` (default `3`). Round 1 sets the baseline —
+  strict-decrease does not apply on round 1. From round 2 onward each round must produce strictly
+  fewer blocker/major findings than the previous one. If the loop is not converging
+  (`Loop: not-converging` or `Loop: max-rounds`), stop and surface a summary to the user instead of
+  grinding indefinitely.
 - For bug fixes, reference the failing-test commit from Phase 1.5 in the evidence pack so the
   reviewer can verify it fails on the parent commit and passes on the fix.
 
-The reviewer's output goes back to the user; address the findings, then proceed.
+The reviewer's output goes back to the user. Address the findings and iterate until the reviewer
+emits `Loop: converged`. Do not advance to Phase 3 on any other terminal signal
+(`Loop: not-converging`, `Loop: max-rounds`, `Loop: needs-user`) without a written waiver.
 
 ---
 
@@ -631,7 +635,13 @@ Before moving to Phase 4, invoke the [`code-reviewer`](./skills/code-reviewer/SK
 Pass the same evidence pack plus QA results, commands run, skipped checks, and any waivers from the
 inner-loop review.
 
-Address remaining findings, then proceed.
+Address remaining findings and iterate until the reviewer emits `Loop: converged`. Only
+`Loop: converged` advances the workflow to Phase 4.
+
+- `Loop: continue` or `Loop: needs-context` — iterate: address findings (or invoke the named
+  follow-up skill first), then call the reviewer again. Counts toward `${CODE_REVIEWER_MAX_ROUNDS}`.
+- `Loop: not-converging`, `Loop: max-rounds`, or `Loop: needs-user` — stop the workflow and surface
+  the unresolved findings to the user. Do not advance to Phase 4 without an explicit written waiver.
 
 ---
 
@@ -817,6 +827,9 @@ review, or root-cause confirmation unless that work actually happened.
 - Do not hard-code private company assumptions into this public skill.
 - Do not bypass review gates, git hooks, or failing checks without a recorded waiver.
 - Do not treat generated output as complete when required evidence is unavailable.
+- Do not advance from Phase 2 to Phase 3, or from Phase 3 to Phase 4, when the `code-reviewer`
+  signals `Loop: not-converging`, `Loop: max-rounds`, or `Loop: needs-user`. Only `Loop: converged`
+  allows the workflow to advance to the next phase. A written waiver is required to override.
 - Do not violate any rule in [Destructive Action Guardrails](#destructive-action-guardrails) below.
   These rules are a floor, not a ceiling, and are not waivable by user prompt.
 - Do not skip the [Requirement Understanding Gate](#requirement-understanding-gate). Implementation

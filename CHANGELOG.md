@@ -4,7 +4,25 @@ All notable project changes should be recorded here.
 
 ## Unreleased
 
-- No unreleased changes.
+### Changed
+
+- **`code-reviewer` §7 — Round-1 baseline clarification.** Added an explicit rule that round 1 has
+  no prior round and strict-decrease does not apply on round 1. A round-1 result with actionable
+  findings always produces `Loop: continue` — never `Loop: not-converging`. Strict-decrease applies
+  from round 2 onward (N ≥ 2 compares against N-1). Mirrored in the `software-engineer` §2.4
+  inner-loop description.
+- **`code-reviewer` §7 — Iteration signal taxonomy.** Introduced a formal split of the six loop
+  signals into two categories: *action signals* (`Loop: continue`, `Loop: needs-context`) where the
+  loop continues, and *terminal signals* (`Loop: converged`, `Loop: not-converging`,
+  `Loop: max-rounds`, `Loop: needs-user`) where the loop stops. `Loop: needs-context` upgrades to
+  `Loop: needs-user` only when the named follow-up skill itself returns `needs-context` or `blocked`.
+- **`software-engineer` Phase 3.5 — Convergence gate.** Phase 3.5 now explicitly states that only
+  `Loop: converged` advances the workflow to Phase 4. Other terminal signals (`Loop: not-converging`,
+  `Loop: max-rounds`, `Loop: needs-user`) stop the workflow with unresolved findings surfaced to the
+  user; a written waiver is required to override.
+- **Guardrails updated.** `code-reviewer` Guardrails gains a rule forbidding `Loop: not-converging`
+  on round 1. `software-engineer` Guardrails gains a rule forbidding phase advancement past the
+  convergence gate on any terminal signal other than `Loop: converged`.
 
 ## 0.23.0 - Insightful Simplifications
 
