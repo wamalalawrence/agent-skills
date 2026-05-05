@@ -17,7 +17,7 @@ compatibility: >-
   docs/execution-modes.md.
 metadata:
   author: wamalalawrence
-  version: "0.24.0"
+  version: "0.25.0"
   homepage: "https://github.com/wamalalawrence/agent-skills"
 argument-hint: >-
   issue URL/key, bug report, incident, support ticket, feature request, or task
@@ -90,6 +90,12 @@ implementation.
   validation, defect evidence, and retest guidance.
 - [`test-automation-engineer`](../../../test-automation-engineer/SKILL.md): use when the
   investigation identifies stable regression scenarios that should be automated.
+- [`delivery-planner`](../../../delivery-planner/SKILL.md): hand off when the investigation itself
+  is multi-phase (e.g., reproduce → bisect → propose fix path → validate fix in staging) and a
+  single investigator pass cannot hold all of it without losing accuracy. The planner produces a
+  destination brief plus phased plan; this skill then runs one phase per dispatch instead of
+  trying to keep the entire investigation in one growing context. Do **not** invoke the planner
+  during a normal single-pass investigation — it is reserved for genuinely multi-step work.
 
 Issue investigation owns facts, evidence, classification, root cause, and next-step recommendation.
 It does not own broad implementation quality; that belongs to [`software-engineer`](../../SKILL.md)

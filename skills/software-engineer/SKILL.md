@@ -20,7 +20,7 @@ compatibility: >-
   .agent-skills.yml). See docs/execution-modes.md.
 metadata:
   author: wamalalawrence
-  version: "0.24.0"
+  version: "0.25.0"
   homepage: "https://github.com/wamalalawrence/agent-skills"
 ---
 
@@ -68,6 +68,13 @@ quality assurance, and code review into a single repeatable pair-programming loo
 - Use the top-level [`test-automation-engineer`](../test-automation-engineer/SKILL.md) skill when
   changed behavior should become stable regression automation or when test-level choice, fixtures,
   selectors, CI reporting, or flakiness risk need specialist attention.
+- Use the top-level [`delivery-planner`](../delivery-planner/SKILL.md) skill **before** Phase 1
+  whenever the requested change is too large for one focused agent session — multi-PR features,
+  multi-step migrations, multi-week refactors, or work that will be picked up across more than one
+  agent / session. The planner produces a `destination.md` and a `phased-plan/` directory; this
+  skill then executes one phase at a time, reading `destination.md + phase-NN.md` instead of dragging
+  forward the previous phase's working context. This skill never invokes the planner mid-phase — if
+  a phase turns out to be too large, stop and surface to the user so the planner can re-decompose.
 
 ## When To Use
 
@@ -408,6 +415,13 @@ Use the locally installed CLI first, fall back to direct REST only when the CLI 
   `${AGENT_SKILLS_CACHE_DIR:-${WORKSPACE_ROOT:-$REPO_ROOT}/.cache/agent-skills}/<issue-key>/evidence-pack.yml`
   per the [evidence-pack schema](./references/evidence-pack.md). If `issue-investigator` already wrote
   the file, append to it; do not overwrite the investigation block.
+- [ ] **Size check before implementation.** If the 5-line plan does not credibly fit one focused
+  agent session — the smallest change touches more than one major surface (schema + write path + UI),
+  the work spans more than one PR, or the validation route is itself multi-day — **stop and hand off
+  to [`delivery-planner`](../delivery-planner/SKILL.md)**. The planner writes `destination.md` and a
+  phased plan; come back and execute one phase at a time. If a phase the planner gave you turns out
+  to be too large mid-implementation, do not silently keep going — stop and surface to the user so
+  the planner can re-decompose.
 - [ ] For ambiguous, high-risk, or user-facing changes, get confirmation before proceeding. For
   clearly specified low-risk changes, continue after stating the plan.
 

@@ -6,6 +6,61 @@ All notable project changes should be recorded here.
 
 - No unreleased changes.
 
+## 0.25.0 - Delivery Planner
+
+### Added
+
+- New top-level [`delivery-planner`](skills/delivery-planner/SKILL.md) skill that turns a single
+  large or multi-day task (feature, refactor, migration, multi-step investigation, multi-PR bug
+  fix) into two persistent artifacts: a one-page `destination.md` brief and a sequence of small
+  self-contained `phased-plan/phase-NN-<slug>.md` files. Each phase is sized so a fresh agent
+  loaded with `destination.md` plus one `phase-NN.md` has enough — and only enough — context to
+  execute it well. Phases name exactly one recommended owner skill
+  (`software-engineer`, `product-owner`, `issue-investigator`, `manual-tester`,
+  `test-automation-engineer`); the planner does not invoke any of them itself, preserving the
+  depth-cap-of-two universal loop bound from
+  [docs/review-loops.md](docs/review-loops.md#universal-loop-bounds).
+- New references for the planner: a
+  [plan-quality checklist](skills/delivery-planner/references/plan-quality-checklist.md) used in
+  the planner's single bounded self-validation pass, and a
+  [phase template](skills/delivery-planner/references/phase-template.md) defining the binding
+  shape of each per-phase Markdown file.
+- New example
+  [`docs/examples/delivery-planner-feature-decomposition.md`](docs/examples/delivery-planner-feature-decomposition.md)
+  walking through an SSO-parity decomposition, including how the
+  [Requirement Understanding Gate](docs/requirement-understanding.md) gates the dispatch
+  pointer (discovery first when confidence is `medium`).
+- New eval
+  [`evals/delivery-planner-phased-plan.md`](evals/delivery-planner-phased-plan.md) pinning
+  the skill against premature `READY_FOR_DISPATCH`, oversized single-phase plans, missing
+  required destination fields, and silent re-invocation of other skills.
+
+### Changed
+
+- `software-engineer` Phase 1.4 now has a **size check before implementation** that hands off
+  to `delivery-planner` whenever the smallest credible plan does not fit one focused agent
+  session — multi-PR features, multi-step migrations, or multi-day validation routes.
+- `product-owner` step 4 (Refine scope) now has an **oversized epic check** that hands off to
+  `delivery-planner` before writing acceptance criteria when an epic clearly fans out into
+  multiple stories spanning multiple surfaces or releases.
+- `issue-investigator`, `manual-tester`, and `test-automation-engineer` `Related And Reused
+  Skills` sections now describe how phases owned by them are dispatched from a planner-produced
+  `destination.md` + `phase-NN.md`. None of them invoke the planner — the dispatch direction
+  is one-way to keep loops bounded.
+- [`docs/skill-boundaries.md`](docs/skill-boundaries.md) adds the `delivery-planner` role with
+  its ownership boundary (decomposes work; does not execute it) and the binding rule that the
+  planner must hand off each phase to exactly one owner skill rather than invoking any skill
+  itself.
+- [`docs/review-loops.md`](docs/review-loops.md) adds the planner's bounded self-validation
+  loop alongside the existing producer/reviewer pairs.
+- [`README.md`](README.md) now documents **five top-level skills** (was four) and lists
+  `delivery-planner` first because it sits at the start of any multi-session workflow.
+- [`scripts/validate-repo.py`](scripts/validate-repo.py) tracks the new SKILL, README, two
+  references, the eval, and the example as required files, and adds the cross-skill link
+  requirements for `delivery-planner`.
+- `VERSION` bumps from `0.24.0` to `0.25.0`. All `SKILL.md` `metadata.version` fields move
+  with it.
+
 ## 0.24.0 - Engineer-Owned Review Auto-Iteration
 
 ### Added

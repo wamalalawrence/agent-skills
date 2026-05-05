@@ -55,6 +55,13 @@ Each entry: producer → reviewer (mode), trigger, exit rule.
   profile).** Trigger: after step 6 "Review automation value", before merging the new
   tests. Exit: one revision round on the new test files; surviving findings ship as
   inline TODOs with linked follow-up issues.
+- **`delivery-planner` → self-validation against the
+  [plan-quality checklist](../skills/delivery-planner/references/plan-quality-checklist.md).**
+  Trigger: before emitting the final `Plan Summary`. Exit: one revision round on the
+  destination + phase files; surviving items move to `Open Questions Or Missing
+  Evidence` with a one-line gap statement. The planner does **not** invoke any other
+  skill — phase dispatch is the executor's job — so this loop introduces no new
+  cross-skill recursion and respects the depth cap of two skills.
 
 ## Universal loop bounds
 

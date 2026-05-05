@@ -15,7 +15,7 @@ compatibility: >-
   .agent-skills.yml). See docs/execution-modes.md.
 metadata:
   author: wamalalawrence
-  version: "0.24.0"
+  version: "0.25.0"
   homepage: "https://github.com/wamalalawrence/agent-skills"
 ---
 
@@ -76,6 +76,11 @@ invent business priorities or prescribe technical architecture when those belong
 - [`test-automation-engineer`](../test-automation-engineer/SKILL.md): collaborate when acceptance
   criteria should be automation-friendly or when business-critical workflows should become regression
   automation.
+- [`delivery-planner`](../delivery-planner/SKILL.md): hand off **before** writing acceptance
+  criteria when the request is an oversized epic that obviously splits into multiple stories — the
+  planner produces a destination brief and a phased plan, after which this skill refines each phase
+  into a Jira-ready story. Receive a hand-off **from** the planner when one of its phases names
+  this skill in `recommended_owner` (typically a product-refinement phase).
 
 Do not duplicate these skills. Product ownership defines intent and scope; engineering validates
 feasibility; manual testing validates behavior; automation engineering turns high-value checks into
@@ -181,6 +186,12 @@ Guardrails specific to product-owner:
 - Define in scope and out of scope explicitly.
 - Split large work into smaller stories or tasks when a single item mixes unrelated user outcomes,
   systems, or release risks.
+- **Oversized epic check.** If the request is an epic-shaped goal that clearly fans out into more
+  than two or three stories spanning multiple surfaces or releases, do not try to write acceptance
+  criteria for the whole thing in one pass. Hand off to
+  [`delivery-planner`](../delivery-planner/SKILL.md) so it can produce a destination brief and a
+  phased plan, then come back and refine each phase into a Jira-ready story. Writing acceptance
+  criteria for an unphased epic is the most common source of half-correct stories.
 - Identify dependencies, assumptions, open questions, and follow-up work.
 - Mark decisions that require stakeholder confirmation.
 

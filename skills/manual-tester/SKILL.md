@@ -16,7 +16,7 @@ compatibility: >-
   .agent-skills.yml). See docs/execution-modes.md.
 metadata:
   author: wamalalawrence
-  version: "0.24.0"
+  version: "0.25.0"
   homepage: "https://github.com/wamalalawrence/agent-skills"
 ---
 
@@ -74,6 +74,11 @@ on.
   reproducible defects, unclear root cause, regression triage, and recommended next action.
 - [`test-automation-engineer`](../test-automation-engineer/SKILL.md): collaborate to identify manual
   scenarios that are valuable, stable, and worth automating later.
+- [`delivery-planner`](../delivery-planner/SKILL.md): receive validation phases from the planner.
+  When a phase's `recommended_owner` is `manual-tester`, this skill reads `destination.md` plus the
+  phase file and treats the phase's `Inputs` and `Validation` fields as the test scope and exit
+  criterion. This skill does not invoke the planner; if testing surfaces a need for re-decomposition,
+  surface it to the user.
 
 Manual testing validates behavior and discovers risk. It should not duplicate product refinement,
 code implementation, or automation design.

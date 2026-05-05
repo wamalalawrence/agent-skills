@@ -16,7 +16,7 @@ compatibility: >-
   .agent-skills.yml). See docs/execution-modes.md.
 metadata:
   author: wamalalawrence
-  version: "0.24.0"
+  version: "0.25.0"
   homepage: "https://github.com/wamalalawrence/agent-skills"
 ---
 
@@ -77,6 +77,10 @@ maintainers.
   defect-derived automation.
 - [`code-reviewer`](../software-engineer/skills/code-reviewer/SKILL.md): use the `test-quality`
   review profile for new or changed automation code.
+- [`delivery-planner`](../delivery-planner/SKILL.md): receive automation phases from the planner.
+  When a phase's `recommended_owner` is `test-automation-engineer`, this skill reads
+  `destination.md` plus the phase file and treats `Inputs`, `Expected outputs`, and `Validation` as
+  the automation brief, deliverables, and CI exit criterion. This skill does not invoke the planner.
 
 Automation should reinforce the delivery workflow. It should not duplicate product definition,
 manual exploration, or production code engineering standards already owned by other skills.

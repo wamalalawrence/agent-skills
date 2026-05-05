@@ -5,6 +5,17 @@ must hand off when the task moves outside that surface.
 
 ## Role Ownership
 
+### `delivery-planner`
+
+- Owns: phased decomposition of large or multi-session work, the `destination.md` brief, the
+  per-phase `phase-NN-<slug>.md` files, the dependency graph, and the dispatch pointer.
+- Does not own: implementation, refinement, investigation, manual testing, or automation. It
+  produces artifacts those skills consume.
+- Typical handoff: each phase names exactly one of `software-engineer`, `product-owner`,
+  `issue-investigator`, `manual-tester`, or `test-automation-engineer` in `recommended_owner`;
+  the executor invokes that skill itself. The planner does **not** call other skills, preserving
+  the depth-cap-of-two universal loop bound.
+
 ### `software-engineer`
 
 - Owns: repository context, implementation plan, code changes, validation, and PR readiness.
@@ -75,6 +86,11 @@ must hand off when the task moves outside that surface.
   SHA, expected vs actual behavior, steps, and evidence.
 - `test-automation-engineer` must consume stable manual or reproduction scenarios and should not
   automate unclear, subjective, or unstable behavior.
+- `delivery-planner` must hand off each phase to exactly one owner skill and must not invoke any
+  other skill itself. Executors read `destination.md` plus the current `phase-NN-<slug>.md`
+  alongside their normal context. When a phase is too large or its assumptions turn out to be
+  wrong mid-execution, the executor stops and surfaces to the user; the planner re-decomposes on
+  its next run rather than being called recursively.
 
 ## Nested Support Skills
 

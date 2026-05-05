@@ -3,6 +3,7 @@
 Each example shows an input prompt, assumed context, expected behavior, sample output structure, and
 what the skill should avoid.
 
+- [Delivery planner feature decomposition](delivery-planner-feature-decomposition.md)
 - [Software engineer bugfix](software-engineer-bugfix.md)
 - [Issue investigator bug report](issue-investigator-bug-report.md)
 - [Code reviewer PR review](code-reviewer-pr-review.md)

@@ -4,7 +4,7 @@ Reusable [Agent Skills](https://agentskills.io/) for software-engineering work �
 role-shaped workflows your AI assistant can load on demand so the same model produces
 senior-engineer, product-owner, tester, or reviewer output instead of generic answers.
 
-> **Status:** `0.24.0` — pre-1.0. Core skill set is shipped and stable enough for public use;
+> **Status:** `0.25.0` — pre-1.0. Core skill set is shipped and stable enough for public use;
 > interfaces may still evolve.
 
 New here? Start with the [quickstart](docs/quickstart.md), then read [starter
@@ -92,7 +92,7 @@ vendor script (see [docs/updates.md](docs/updates.md#in-repo-cloud--online-agent
 
 ## Skills
 
-This repository currently contains **four top-level skills** and **two nested support skills**. The
+This repository currently contains **five top-level skills** and **two nested support skills**. The
 top-level skills are intended to be invoked directly. The nested support skills are loaded by the
 engineering workflow when investigation or review needs a more specific checklist.
 
@@ -100,9 +100,19 @@ engineering workflow when investigation or review needs a more specific checklis
 support the engineering implementation loop. They may become top-level skills later only if real
 usage shows they are useful independently.
 
+### [`delivery-planner`][delivery-planner] (top-level)
+
+- Key collaborators: `software-engineer`, `product-owner`, `issue-investigator`, `manual-tester`,
+  `test-automation-engineer`.
+- Purpose: turn a single large or multi-day task into a one-page **destination brief** plus a
+  sequence of small, self-contained **execution phases**. Each phase is sized so a fresh agent
+  loaded with `destination.md` + one `phase-NN.md` has enough — and only enough — context to
+  execute it well. Decomposes work; does not execute it.
+
 ### [`software-engineer`][software-engineer] (top-level)
 
-- Key collaborators: `product-owner`, `manual-tester`, `test-automation-engineer`.
+- Key collaborators: `product-owner`, `manual-tester`, `test-automation-engineer`,
+  `delivery-planner`.
 - Purpose: end-to-end engineering — context discovery, implementation, QA, self-review,
   PR preparation.
 
@@ -137,6 +147,7 @@ usage shows they are useful independently.
 - Purpose: reviews diffs against issue context, evidence packs, quality risks, and
   definition of done.
 
+[delivery-planner]: skills/delivery-planner/
 [software-engineer]: skills/software-engineer/
 [product-owner]: skills/product-owner/
 [manual-tester]: skills/manual-tester/
