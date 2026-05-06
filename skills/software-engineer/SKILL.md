@@ -75,6 +75,8 @@ quality assurance, and code review into a single repeatable pair-programming loo
   skill then executes one phase at a time, reading `destination.md + phase-NN.md` instead of dragging
   forward the previous phase's working context. This skill never invokes the planner mid-phase — if
   a phase turns out to be too large, stop and surface to the user so the planner can re-decompose.
+  When invoked from a phase, follow [§ When invoked from a delivery-planner
+  phase](#when-invoked-from-a-delivery-planner-phase) below to keep the dispatch pointer fresh.
 
 ## When To Use
 
@@ -783,6 +785,34 @@ written waiver.
 - [ ] Merge strategy: `${GIT_MERGE_STRATEGY}` (commonly `squash`).
 - [ ] Squash merge commit must start with the ticket key.
 - [ ] If a checklist item was intentionally overridden, leave a PR comment explaining why.
+
+---
+
+## When invoked from a delivery-planner phase
+
+If this run was invoked because a [`delivery-planner`](../delivery-planner/SKILL.md) phase named
+`software-engineer` as its `recommended_owner`:
+
+- [ ] Read `destination.md` and the current `phase-NN-<slug>.md` from
+  `${AGENT_SKILLS_CACHE_DIR:-${WORKSPACE_ROOT:-$REPO_ROOT}/.cache/agent-skills}/<issue-key>/`
+  before context discovery. Treat the phase's `Inputs`, `Scope`, and `Validation` as the
+  authoritative brief; do not re-derive scope from the ticket alone.
+- [ ] Confirm `evidence-pack.yml.delivery_plan.phases[<this phase id>].recommended_owner` equals
+  `software-engineer`. If it does not, **stop** and surface to the user — running the wrong
+  skill on a phase silently corrupts the plan.
+- [ ] If the phase scope clearly exceeds one focused agent session (the size check from
+  Phase 1.4 fires), set `phases[<this phase id>].state: blocked` per the
+  [delivery_plan ownership rule](./references/evidence-pack.md#3-skill-responsibilities), record a
+  one-line reason, and stop so the planner can re-decompose on its next run. Do not silently
+  absorb extra scope.
+- [ ] On normal completion (after Phase 5 finishes), append the phase-state fields per the
+  [delivery_plan ownership rule](./references/evidence-pack.md#3-skill-responsibilities):
+  `phases[<this phase id>].state: done`, `completed_at: <ISO-8601>`,
+  `completed_by: software-engineer`, plus the top-level `last_completed_*` mirrors. The planner
+  reads these on its next run to refresh the dispatch pointer; without them the pointer goes
+  stale and the next phase will not dispatch.
+- [ ] Do not invoke `delivery-planner` from inside this skill. Phase re-decomposition is the
+  planner's job on its next run, triggered by the user.
 
 ---
 

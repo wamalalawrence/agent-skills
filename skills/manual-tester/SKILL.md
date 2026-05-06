@@ -237,6 +237,32 @@ This loop is bounded by
 round, no recursion, depth cap of two skills. Surviving items move to `Residual risk` /
 `Open questions`; do not re-run the self-check a second time on the same plan.
 
+### 8. When invoked from a delivery-planner phase
+
+If this run was invoked because a [`delivery-planner`](../delivery-planner/SKILL.md) phase named
+`manual-tester` as its `recommended_owner`:
+
+- Read `destination.md` and the current `phase-NN-<slug>.md` from
+  `${AGENT_SKILLS_CACHE_DIR:-${WORKSPACE_ROOT:-$REPO_ROOT}/.cache/agent-skills}/<issue-key>/`
+  before step 1. Treat the phase's `Inputs`, `Scope`, and `Validation` as the authoritative
+  test scope and exit criterion; do not expand the test plan beyond the phase's stated scope
+  even when adjacent scenarios feel obvious.
+- Confirm `evidence-pack.yml.delivery_plan.phases[<this phase id>].recommended_owner` equals
+  `manual-tester`. If it does not, **stop** and surface to the user — running the wrong skill
+  on a phase silently corrupts the plan.
+- If the phase's expected behavior is not stable enough to assert pass/fail (the
+  Requirement Understanding Gate ends at `medium` or below for the phase), set
+  `phases[<this phase id>].state: blocked` per the
+  [delivery_plan ownership rule](../software-engineer/references/evidence-pack.md#3-skill-responsibilities),
+  record a one-line reason, and stop so the planner can re-decompose on its next run.
+- On normal completion (after the test plan and any defect rows are emitted), append the
+  phase-state fields per the same ownership rule:
+  `phases[<this phase id>].state: done`, `completed_at: <ISO-8601>`,
+  `completed_by: manual-tester`, plus the top-level `last_completed_*` mirrors. Without these
+  the planner's dispatch pointer goes stale and the next phase will not dispatch.
+- Do not invoke `delivery-planner` from inside this skill. Phase re-decomposition is the
+  planner's job on its next run, triggered by the user.
+
 ## Expected Output Contract
 
 Follow [Output Discipline](../../docs/output-discipline.md). Use the smallest useful format

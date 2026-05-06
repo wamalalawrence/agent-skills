@@ -269,6 +269,32 @@ revision, mark the surviving items in `Open questions` and downgrade the work it
   assumptions, and handoff notes.
 - Include testing notes and automation notes without prescribing test implementation details.
 
+### 8. When invoked from a delivery-planner phase
+
+If this run was invoked because a [`delivery-planner`](../delivery-planner/SKILL.md) phase named
+`product-owner` as its `recommended_owner`:
+
+- Read `destination.md` and the current `phase-NN-<slug>.md` from
+  `${AGENT_SKILLS_CACHE_DIR:-${WORKSPACE_ROOT:-$REPO_ROOT}/.cache/agent-skills}/<issue-key>/`
+  before starting refinement. Treat the phase's `Inputs`, `Scope`, and `Validation` as the
+  authoritative brief; do not refine outside the phase's stated scope even when adjacent stories
+  feel obvious.
+- Confirm `evidence-pack.yml.delivery_plan.phases[<this phase id>].recommended_owner` equals
+  `product-owner`. If it does not, **stop** and surface to the user — running the wrong skill on
+  a phase silently corrupts the plan.
+- If the phase scope clearly exceeds one focused refinement session (the oversized-epic check
+  from step 4 fires inside the phase), set
+  `phases[<this phase id>].state: blocked` per the
+  [delivery_plan ownership rule](../software-engineer/references/evidence-pack.md#3-skill-responsibilities),
+  record a one-line reason, and stop so the planner can re-decompose on its next run.
+- On normal completion (after step 7's Jira-ready output exists), append the phase-state fields
+  per the same ownership rule:
+  `phases[<this phase id>].state: done`, `completed_at: <ISO-8601>`, `completed_by: product-owner`,
+  plus the top-level `last_completed_*` mirrors. Without these the planner's dispatch pointer
+  goes stale and the next phase will not dispatch.
+- Do not invoke `delivery-planner` from inside this skill. Phase re-decomposition is the
+  planner's job on its next run, triggered by the user.
+
 ## Expected Output Contract
 
 Follow [Output Discipline](../../docs/output-discipline.md). The contract below is a menu

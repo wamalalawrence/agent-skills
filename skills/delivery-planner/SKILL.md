@@ -263,9 +263,12 @@ The destination MUST contain:
   ones first.
 
 Persist as
-`${AGENT_SKILLS_CACHE_DIR:-${WORKSPACE_ROOT:-$REPO_ROOT}/.cache/agent-skills}/<issue-key>/destination.md`.
-The file is plain Markdown so a downstream agent or human can paste it
-verbatim into a fresh prompt without re-derivation.
+`${AGENT_SKILLS_CACHE_DIR:-${WORKSPACE_ROOT:-$REPO_ROOT}/.cache/agent-skills}/<issue-key>/destination.md`
+following the binding [destination template](./references/destination-template.md). The file is
+plain Markdown with a small YAML header (`work_key`, `state`, `created_at`, `updated_at`,
+`source_refs`, `understanding_confidence`, `readiness_decision`) so a downstream agent or human
+can paste it verbatim into a fresh prompt without re-derivation, and so the planner can detect
+its own staleness on its next run.
 
 If the destination has changed since the last run (outcome edited, success
 signal removed, constraint added), update the file in place and bump the
@@ -347,13 +350,30 @@ Each `phase-NN-<slug>.md` MUST contain:
   mandatory; for pure-read or pure-add phases it is `no rollback needed —
   no state mutation`.
 
-The index `phased-plan/README.md` MUST contain:
+The index `phased-plan/README.md` follows the binding
+[plan-index template](./references/plan-index-template.md) and MUST contain:
 
+- A YAML header with `work_key`, `destination_path`, `state`, `created_at`,
+  `updated_at`, `current_dispatch_pointer`, `readiness_decision`, the
+  `last_completed_*` mirrors of `evidence-pack.yml.delivery_plan`, and
+  `totals`.
 - The list of phases in order with title, owner skill, size, state
-  (`provisional` / `ready` / `in-progress` / `done` / `skipped` / `blocked`).
+  (`provisional` / `ready` / `in-progress` / `done` / `skipped` / `blocked`),
+  and prerequisites — rendered as a Markdown table.
 - The dependency graph in plain prose ("Phase 4 needs Phases 1 and 3; Phases
   2 and 3 are parallel-safe").
-- The current dispatch pointer — which phase is next.
+- The current dispatch pointer — which phase is next. Subject to the binding
+  rules in the [plan-index template's "Dispatch pointer rules"
+  section](./references/plan-index-template.md#body-sections):
+  `READY_FOR_DISPATCH` and `READY_FOR_DISCOVERY` MUST name a phase id;
+  `null` is reserved for `NEEDS_CLARIFICATION` / `NEEDS_EVIDENCE` / `BLOCKED`.
+
+The index is **derived** from the per-phase files plus
+`evidence-pack.yml.delivery_plan`: the planner regenerates it on every run
+by re-reading the per-phase files and recomputing `totals`, the
+`last_completed_*` mirrors, and `current_dispatch_pointer`. Where the index
+and a per-phase file disagree, the per-phase file wins and the index is
+regenerated.
 
 ### 4. Right-size and re-decompose
 
@@ -372,14 +392,27 @@ absorb extra work into a neighbour phase.
 
 ### 5. Sequence and dispatch
 
-The planner picks the **first phase** ready to run and writes its phase ID
-into the index's *current dispatch pointer*. From there, dispatch is the
-user's or executor's job — the planner does not call other skills. The
-recommended skill on each phase tells the executor which `SKILL.md` to load.
+The planner picks the next phase to run and writes its phase ID into the
+index's `current_dispatch_pointer`. From there, dispatch is the user's or
+executor's job — the planner does not call other skills. The recommended
+skill on each phase tells the executor which `SKILL.md` to load.
 
-If the first ready phase is a `Discovery` spike (because the gate's
-confidence was `medium`), dispatch that one and mark all later phases as
-`provisional` until discovery confirms or revises the destination.
+The dispatch-pointer rules are **binding** and mirrored in the
+[plan-index template](./references/plan-index-template.md#body-sections):
+
+- `READY_FOR_DISPATCH` → `current_dispatch_pointer` MUST be the phase id of
+  the first phase whose state is `ready` and whose prerequisites are all
+  `done`. Never `null`.
+- `READY_FOR_DISCOVERY` → `current_dispatch_pointer` MUST be the phase id
+  of the discovery / spike phase that closes the load-bearing assumptions
+  surfaced by the medium-confidence gate. **Never `null`.** All later
+  phases stay `provisional` until the discovery phase raises
+  understanding-confidence to `high`. The output contract MUST NOT use
+  the placeholder "none — discovery first"; it MUST name the discovery
+  phase id.
+- `NEEDS_CLARIFICATION` / `NEEDS_EVIDENCE` / `BLOCKED` →
+  `current_dispatch_pointer` MUST be `null`. The planner has nothing to
+  dispatch; the next action is on the user, not on an executor.
 
 ### 6. Self-validation pass (bounded)
 
@@ -427,10 +460,18 @@ ${AGENT_SKILLS_CACHE_DIR:-${WORKSPACE_ROOT:-$REPO_ROOT}/.cache/agent-skills}/<is
 ```
 
 The plan files live next to the existing evidence pack so any downstream
-skill can read both with one directory walk. Skills that already write the
-evidence pack append the phase ID they executed under into
-`evidence-pack.yml.delivery_plan.last_phase_id` so the planner can keep the
-index honest on the next run.
+skill can read both with one directory walk. The cross-skill schema for the
+phase-state writes — what each executing skill appends, and what the
+planner alone owns — is defined in the
+[evidence-pack `delivery_plan` ownership rule](../software-engineer/references/evidence-pack.md#3-skill-responsibilities).
+The short version: the planner is the sole writer of the structural fields
+(`destination_path`, `index_path`, `current_dispatch_pointer`, the
+`phases[]` list); the skill named in a phase's `recommended_owner` is the
+sole writer of that phase's completion state (`state`, `completed_at`,
+`completed_by`) and updates the top-level `last_completed_*` mirrors. The
+planner reads those completion writes on its next run to refresh the index
+and the dispatch pointer; without them the pointer goes stale and the next
+phase will not dispatch.
 
 ## Phase template
 
@@ -454,7 +495,9 @@ omitted by accident).
 - Destination file: <relative path written or updated this run>
 - Phased-plan index: <relative path written or updated this run>
 - Phases total / ready / done / blocked:
-- Current dispatch pointer: <phase id or "none — discovery first">
+- Current dispatch pointer: <phase id, REQUIRED for READY_FOR_DISPATCH and
+  READY_FOR_DISCOVERY (point at the discovery phase id); "none" only when
+  readiness is NEEDS_CLARIFICATION / NEEDS_EVIDENCE / BLOCKED>
 - Understanding confidence: unknown | low | medium | high
 - Readiness decision: READY_FOR_DISPATCH | READY_FOR_DISCOVERY |
   NEEDS_CLARIFICATION | NEEDS_EVIDENCE | BLOCKED
@@ -581,9 +624,11 @@ entirely when no qualifying insight exists. See
   Postgres. Each phase should be small enough that I can hand it to a
   fresh agent the next morning."
 - "This investigation has run long enough; turn the open hypotheses into a
-  phased plan and dispatch the first one to issue-investigator."
+  phased plan and set the first dispatch pointer to a phase whose
+  recommended_owner is issue-investigator."
 - "Use the delivery-planner skill to split this oversized story into smaller
-  ones, then hand each one to product-owner for acceptance criteria."
+  phases, each with recommended_owner: product-owner so I can dispatch them
+  to product-owner one at a time for acceptance criteria."
 
 See [the delivery-planner phased-plan example](../../docs/examples/delivery-planner-feature-decomposition.md)
 and [starter prompts](../../docs/starter-prompts.md).
@@ -592,7 +637,15 @@ and [starter prompts](../../docs/starter-prompts.md).
 
 ## Reference files
 
-- [Plan-quality checklist](./references/plan-quality-checklist.md) — the
-  single self-validation pass step 6 runs.
+- [Destination template](./references/destination-template.md) — the
+  binding shape of `destination.md` (header fields plus body sections).
+- [Plan-index template](./references/plan-index-template.md) — the binding
+  shape of `phased-plan/README.md`, including the binding dispatch-pointer
+  rules.
 - [Phase template](./references/phase-template.md) — the binding shape of
   each `phase-NN-<slug>.md` file.
+- [Plan-quality checklist](./references/plan-quality-checklist.md) — the
+  single self-validation pass step 6 runs.
+- [Evidence-pack `delivery_plan` ownership rule](../software-engineer/references/evidence-pack.md#3-skill-responsibilities)
+  — the cross-skill schema for phase-state writes; the contract that keeps
+  the dispatch pointer fresh after real phase execution.

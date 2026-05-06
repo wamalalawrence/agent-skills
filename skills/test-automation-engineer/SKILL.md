@@ -237,6 +237,32 @@ Guardrails specific to test-automation-engineer:
   `local-workspace` mode and to the repository root in `in-repo` mode — see
   [docs/execution-modes.md](../../docs/execution-modes.md).
 
+### When invoked from a delivery-planner phase
+
+If this run was invoked because a [`delivery-planner`](../delivery-planner/SKILL.md) phase named
+`test-automation-engineer` as its `recommended_owner`:
+
+- Read `destination.md` and the current `phase-NN-<slug>.md` from
+  `${AGENT_SKILLS_CACHE_DIR:-${WORKSPACE_ROOT:-$REPO_ROOT}/.cache/agent-skills}/<issue-key>/`
+  before starting. Treat the phase's `Inputs`, `Expected outputs`, and `Validation` as the
+  automation brief, the deliverables list, and the CI exit criterion respectively.
+- Confirm `evidence-pack.yml.delivery_plan.phases[<this phase id>].recommended_owner` equals
+  `test-automation-engineer`. If it does not, **stop** and surface to the user — running the
+  wrong skill on a phase silently corrupts the plan.
+- If the phase asks the skill to automate behavior that is not yet stable (Requirement
+  Understanding Gate ends below `high`, or the manual scenario it should formalise has not
+  been executed), set
+  `phases[<this phase id>].state: blocked` per the
+  [delivery_plan ownership rule](../software-engineer/references/evidence-pack.md#3-skill-responsibilities),
+  record a one-line reason, and stop so the planner can re-decompose on its next run.
+- On normal completion (after the new tests are committed and CI is green for the affected
+  workflow), append the phase-state fields per the same ownership rule:
+  `phases[<this phase id>].state: done`, `completed_at: <ISO-8601>`,
+  `completed_by: test-automation-engineer`, plus the top-level `last_completed_*` mirrors.
+  Without these the planner's dispatch pointer goes stale and the next phase will not dispatch.
+- Do not invoke `delivery-planner` from inside this skill. Phase re-decomposition is the
+  planner's job on its next run, triggered by the user.
+
 ## Expected Output Contract
 
 Follow [Output Discipline](../../docs/output-discipline.md). Use the smallest useful format

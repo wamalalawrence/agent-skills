@@ -63,6 +63,12 @@ user; do not grind.
 - [ ] Provisional phases (downstream of a discovery spike with `medium`
       understanding-confidence) are clearly marked `provisional` and never
       flagged as the dispatch pointer.
+- [ ] `current_dispatch_pointer` matches the readiness decision per the
+      [plan-index template's dispatch-pointer rules](../references/plan-index-template.md#body-sections):
+      `READY_FOR_DISPATCH` and `READY_FOR_DISCOVERY` MUST name a phase id
+      (the discovery phase, when readiness is `READY_FOR_DISCOVERY`);
+      `null` is reserved for `NEEDS_CLARIFICATION` / `NEEDS_EVIDENCE` /
+      `BLOCKED`.
 
 ## Cross-skill compatibility
 

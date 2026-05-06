@@ -68,6 +68,8 @@ REQUIRED_FILES = [
     "skills/delivery-planner/README.md",
     "skills/delivery-planner/references/plan-quality-checklist.md",
     "skills/delivery-planner/references/phase-template.md",
+    "skills/delivery-planner/references/destination-template.md",
+    "skills/delivery-planner/references/plan-index-template.md",
     "evals/delivery-planner-phased-plan.md",
     "docs/examples/delivery-planner-feature-decomposition.md",
     "evals/issue-investigator-bug-root-cause.md",

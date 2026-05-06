@@ -22,9 +22,26 @@ All notable project changes should be recorded here.
   [docs/review-loops.md](docs/review-loops.md#universal-loop-bounds).
 - New references for the planner: a
   [plan-quality checklist](skills/delivery-planner/references/plan-quality-checklist.md) used in
-  the planner's single bounded self-validation pass, and a
+  the planner's single bounded self-validation pass, a
   [phase template](skills/delivery-planner/references/phase-template.md) defining the binding
-  shape of each per-phase Markdown file.
+  shape of each per-phase Markdown file, a
+  [destination template](skills/delivery-planner/references/destination-template.md) defining
+  the binding header + body shape of `destination.md` (with `work_key`, `state`, `created_at`,
+  `updated_at`, `source_refs`, `understanding_confidence`, `readiness_decision`), and a
+  [plan-index template](skills/delivery-planner/references/plan-index-template.md) defining
+  the binding shape of `phased-plan/README.md` (header mirrors of
+  `evidence-pack.yml.delivery_plan`, totals, the phase table, and the binding dispatch-pointer
+  rules).
+- New `delivery_plan` block in
+  [`evidence-pack.yml`](skills/software-engineer/references/evidence-pack.md), with a strict
+  two-writer ownership rule: `delivery-planner` writes the structural fields
+  (`destination_path`, `index_path`, `current_dispatch_pointer`, the `phases[]` list); the
+  skill named in a phase's `recommended_owner` is the sole writer of that phase's completion
+  state (`state`, `completed_at`, `completed_by`) plus the top-level `last_completed_*`
+  mirrors. Every receiving skill (`software-engineer`, `product-owner`, `issue-investigator`,
+  `manual-tester`, `test-automation-engineer`) now has a binding `When invoked from a
+  delivery-planner phase` step that performs those writes before returning, so the dispatch
+  pointer stays fresh after real phase execution.
 - New example
   [`docs/examples/delivery-planner-feature-decomposition.md`](docs/examples/delivery-planner-feature-decomposition.md)
   walking through an SSO-parity decomposition, including how the
@@ -37,6 +54,12 @@ All notable project changes should be recorded here.
 
 ### Changed
 
+- `delivery-planner` step 5 (Sequence and dispatch) now states the dispatch-pointer rules as
+  binding: `READY_FOR_DISPATCH` and `READY_FOR_DISCOVERY` MUST name a phase id (the discovery
+  phase id, when readiness is `READY_FOR_DISCOVERY`); `null` is reserved for
+  `NEEDS_CLARIFICATION` / `NEEDS_EVIDENCE` / `BLOCKED`. The Expected Output Contract and the
+  plan-quality checklist now mirror the same rule, and the prior contradicting "none —
+  discovery first" placeholder has been removed.
 - `software-engineer` Phase 1.4 now has a **size check before implementation** that hands off
   to `delivery-planner` whenever the smallest credible plan does not fit one focused agent
   session — multi-PR features, multi-step migrations, or multi-day validation routes.

@@ -92,6 +92,34 @@ review:
       blocker_count: 2
       major_count: 4
       verdict: REQUEST_CHANGES
+
+# Phased delivery tracking (structure written by delivery-planner; phase-state
+# fields appended by the executing skill named in recommended_owner). See the
+# delivery_plan ownership rule below.
+delivery_plan:
+  destination_path: ".cache/agent-skills/PROJ-1234/destination.md"
+  index_path: ".cache/agent-skills/PROJ-1234/phased-plan/README.md"
+  current_dispatch_pointer: phase-03 # phase id, or null when no plan exists / readiness is NEEDS_*/BLOCKED
+  last_completed_phase_id: phase-02
+  last_completed_at: 2026-05-06T14:00:00Z
+  last_completed_by: software-engineer # which skill marked the most recent phase done/blocked
+  phases:
+    - id: phase-01
+      slug: confirm-jwt-issuer
+      recommended_owner: issue-investigator
+      state: done # provisional | ready | in-progress | done | skipped | blocked
+      completed_at: 2026-05-06T10:00:00Z
+      completed_by: issue-investigator
+    - id: phase-02
+      slug: feature-flag-scaffolding
+      recommended_owner: software-engineer
+      state: done
+      completed_at: 2026-05-06T14:00:00Z
+      completed_by: software-engineer
+    - id: phase-03
+      slug: dual-write-path
+      recommended_owner: software-engineer
+      state: ready
 ```
 
 **Loading rule**: every skill `set -a && source ${WORKSPACE_ROOT}/.env && set +a`, then reads/writes
@@ -145,14 +173,24 @@ reproduce is forbidden without explicit user approval and a written rollback pla
 
 ## 3. Skill responsibilities
 
-| Skill                      | Reads                             | Writes                                                                              |
-| -------------------------- | --------------------------------- | ----------------------------------------------------------------------------------- |
-| `issue-investigator`       | env, prior `evidence-pack.yml`    | `evidence-pack.yml` (investigation, risk, hypotheses), `repro-recipe.yml`           |
-| `software-engineer`        | both files                        | `evidence-pack.yml.plan`, regression test commit referenced from `repro-recipe.yml` |
-| `code-reviewer`            | both files                        | `evidence-pack.yml.review` (sole owner — see ownership rule below)                  |
-| `manual-tester`            | `evidence-pack.yml`               | `repro-recipe.yml` (when manual repro produces one), defect rows                    |
-| `test-automation-engineer` | `repro-recipe.yml`                | regression test files; references the recipe in test docstring                      |
-| `product-owner`            | `evidence-pack.yml.investigation` | `evidence-pack.yml.acceptance_criteria`                                             |
+| Skill                      | Reads                              | Writes                                                                       |
+| -------------------------- | ---------------------------------- | ---------------------------------------------------------------------------- |
+| `issue-investigator` †     | env, prior `evidence-pack.yml`     | `evidence-pack.yml` (investigation, risk, hypotheses); `repro-recipe.yml`    |
+| `software-engineer` †      | both files                         | `evidence-pack.yml.plan`; regression test commit referenced from recipe      |
+| `code-reviewer`            | both files                         | `evidence-pack.yml.review` (sole owner — see ownership rule below)           |
+| `manual-tester` †          | `evidence-pack.yml`                | `repro-recipe.yml` (when manual repro produces one); defect rows             |
+| `test-automation-engineer` † | `repro-recipe.yml`              | regression test files; references the recipe in test docstring               |
+| `product-owner` †          | `evidence-pack.yml.investigation`  | `evidence-pack.yml.acceptance_criteria`                                      |
+| `delivery-planner`         | env, prior `delivery_plan` block   | `evidence-pack.yml.delivery_plan` structure (sole owner); plan files on disk |
+
+† **also writes phase-state fields** (`phases[<id>].state`,
+`completed_at`, `completed_by`, plus the top-level `last_completed_*`
+mirrors) into `evidence-pack.yml.delivery_plan` when invoked from a
+`delivery-planner` phase, per the
+[`delivery_plan` ownership rule](#evidence-packymldelivery_plan-ownership-rule)
+below. `code-reviewer` does not own a phase (it is invoked by
+`software-engineer` from inside a phase) and `delivery-planner` writes
+the structural fields, not phase-state.
 
 If a consumer skill cannot find the file it needs, it stops with the standard _Missing required
 setup_ message instead of inferring context silently.
@@ -169,3 +207,30 @@ reviewer. On each invocation, before emitting the verdict, the reviewer:
 
 This single-owner rule prevents double-increments, stale counts, and wrong `max-rounds` / round-1
 decisions.
+
+**`evidence-pack.yml.delivery_plan` ownership rule.** Two writers, with a strict split:
+
+- `delivery-planner` is the sole writer of the **structural** fields:
+  `destination_path`, `index_path`, `current_dispatch_pointer`, the entire `phases[]` list
+  (each entry's `id`, `slug`, `recommended_owner`, and the initial `state` of `provisional` /
+  `ready`). It MUST NOT touch `last_completed_*` fields directly — those are derived from
+  per-phase completion writes — but it MAY recompute `current_dispatch_pointer` on each run
+  by reading `phases[*].state`.
+- The skill named in a phase's `recommended_owner` is the **only** writer of that phase's
+  completion state. When invoked from a phase, before returning its final result, that skill
+  appends to `evidence-pack.yml.delivery_plan`:
+  1. `phases[<this phase id>].state` ← `done` (work complete) or `blocked` (cannot finish
+     within scope; surfaces to user via the planner on its next run).
+  2. `phases[<this phase id>].completed_at` ← current ISO-8601 timestamp.
+  3. `phases[<this phase id>].completed_by` ← this skill's own `name` (must equal the phase's
+     `recommended_owner`; mismatch is a workflow bug and the skill MUST stop and surface to
+     the user instead of writing).
+  4. Top-level `last_completed_phase_id`, `last_completed_at`, `last_completed_by` ← copies
+     of the same values. These exist so other skills (and the planner on its next run) can
+     answer "what just finished?" without scanning the whole `phases[]` list.
+
+This split keeps the dispatch pointer fresh after real phase execution: the planner owns
+the plan shape, the executors own their own outcomes, and no skill writes another's fields.
+A skill invoked outside any phase (i.e. the user invoked it directly without a planner
+artifact) MUST NOT touch `delivery_plan` at all — the absence of the block is meaningful
+context for the planner on its next run.
