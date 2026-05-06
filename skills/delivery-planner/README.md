@@ -22,9 +22,10 @@ See [SKILL.md](./SKILL.md) for the full workflow. References live under
   dispatches itself instead of routing through this skill on every hop. A
   missing owner skill is a blocked phase, not an optional warning.
 - Persists plan files into the shared
-  `${AGENT_SKILLS_CACHE_DIR}/<issue-key>/` cache next to the existing
-  `evidence-pack.yml`, so any downstream skill or fresh agent finds them in
-  the same place.
+  `${AGENT_SKILLS_CACHE_DIR}/<issue-key>/` cache next to `evidence-pack.yml`,
+  so any downstream skill or fresh agent finds them in the same place.
+- Creates or updates `evidence-pack.yml` for every plan, including greenfield
+  plans, so phase executors have a durable continuity checkpoint to update.
 - For code-delivery work, requires the final executable path to reach PR-ready
   completion: outer-loop review, Definition-of-Done, branch push, and PR URL,
   or an explicit blocker.

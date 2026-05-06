@@ -35,6 +35,10 @@ owns the production database. Several of these are load-bearing.
 - When (b) is chosen, persists `destination.md` and at least one
   `phase-NN-<slug>.md` file under
   `${AGENT_SKILLS_CACHE_DIR}/<issue-key>/`.
+- Creates `${AGENT_SKILLS_CACHE_DIR}/<issue-key>/evidence-pack.yml` in the
+  same run, even though no prior evidence pack existed. The file contains
+  `delivery_plan.destination_path`, `index_path`, `current_dispatch_pointer`,
+  and one `phases[]` entry per phase.
 - Each phase names exactly one `recommended_owner` skill from
   `software-engineer`, `product-owner`, `issue-investigator`,
   `manual-tester`, or `test-automation-engineer`.
@@ -54,9 +58,9 @@ owns the production database. Several of these are load-bearing.
 
 ## Required Output Fields
 
-- `## Plan Summary` (with destination file path, index path, total /
-  ready / done / blocked counts, current dispatch pointer, understanding
-  confidence, and readiness decision).
+- `## Plan Summary` (with destination file path, index path, evidence-pack
+  path, total / ready / done / blocked counts, current dispatch pointer,
+  understanding confidence, and readiness decision).
 - `## Destination Brief` (outcome, success signals, scope, non-goals,
   constraints, load-bearing assumptions, stakeholders, risks).
 - `## Phases` (one bullet per phase with id, title, owner skill, size,
@@ -77,6 +81,9 @@ owns the production database. Several of these are load-bearing.
   the user's or executor's job.
 - Must not silently drop `Non-goals` or any other required destination
   field. Empty fields hide assumptions; named-and-empty fields do not.
+- Must not produce Markdown-only plan artifacts. Without `evidence-pack.yml`,
+  the plan is not dispatchable because executors have no durable continuity
+  checkpoint to update.
 - Must not write a phase that requires the executor to drop or truncate
   production data, force-push to a shared branch, or invoke a discovered
   credential. Such steps are operator runbooks, not agent phases. See the
@@ -105,3 +112,5 @@ owns the production database. Several of these are load-bearing.
 - [ ] Plan files are persisted under
   `${AGENT_SKILLS_CACHE_DIR}/<issue-key>/` next to the existing
   evidence-pack layout.
+- [ ] `evidence-pack.yml` exists after planning and contains the delivery
+  plan state needed by a fresh executor.

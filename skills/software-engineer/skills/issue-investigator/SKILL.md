@@ -17,7 +17,7 @@ compatibility: >-
   docs/execution-modes.md.
 metadata:
   author: wamalalawrence
-  version: "0.26.0"
+  version: "0.27.0"
   homepage: "https://github.com/wamalalawrence/agent-skills"
 argument-hint: >-
   issue URL/key, bug report, incident, support ticket, feature request, or task
@@ -555,20 +555,27 @@ named `issue-investigator` as its `recommended_owner`:
   before step 1. Treat the phase's `Inputs`, `Scope`, and `Validation` as the authoritative
   brief; do not expand the investigation beyond the phase's stated scope even when adjacent
   hypotheses look tempting.
+- Open `evidence-pack.yml` from the same directory before investigating. If it is missing,
+  reconstruct the minimal `delivery_plan` block from `phased-plan/README.md` and the phase files,
+  then re-read it. If that cannot be done, stop with
+  `BLOCKED: phase continuity evidence-pack missing`; do not investigate from Markdown files alone.
 - Confirm `evidence-pack.yml.delivery_plan.phases[<this phase id>].recommended_owner` equals
   `issue-investigator`. If it does not, **stop** and surface to the user — running the wrong
   skill on a phase silently corrupts the plan.
+- Before material work starts, write `phases[<this phase id>].state: in-progress` plus
+  `last_continuity_checkpoint_at`, then re-read `evidence-pack.yml` to confirm the checkpoint.
 - If the investigation's own three-hypothesis discipline reveals that the phase scope is too
   broad (e.g. the phase says "find the cause" but discriminating between hypotheses needs
-  multiple environments), set
-  `phases[<this phase id>].state: blocked` per the
-  [delivery_plan ownership rule](../../references/evidence-pack.md#3-skill-responsibilities),
-  record a one-line reason, and stop so the planner can re-decompose on its next run.
-- On normal completion (after step 7's self-validation pass), append the phase-state fields
-  per the same ownership rule:
-  `phases[<this phase id>].state: done`, `completed_at: <ISO-8601>`,
-  `completed_by: issue-investigator`, plus the top-level `last_completed_*` mirrors. Without
-  these the planner's dispatch pointer goes stale and the next phase will not dispatch.
+  multiple environments), write a blocked
+  [phase-continuity checkpoint](../../references/evidence-pack.md#phase-continuity-checkpoint),
+  record `blocked_reason`, recompute `current_dispatch_pointer`, and stop so the planner can
+  re-decompose on its next run.
+- On normal completion (after step 7's self-validation pass), write the full
+  [phase-continuity checkpoint](../../references/evidence-pack.md#phase-continuity-checkpoint):
+  `state: done`, `completed_at`, `completed_by: issue-investigator`, `completion_summary`,
+  `artifacts`, `validation`, `follow_up_context`, top-level `last_completed_*`,
+  `last_continuity_checkpoint_at`, and the recomputed `current_dispatch_pointer`. Re-read
+  `evidence-pack.yml` after the write. Without this checkpoint the phase is not complete.
 - Do not invoke `delivery-planner` from inside this skill. Phase re-decomposition is the
   planner's job on its next run, triggered by the user.
 

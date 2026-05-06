@@ -16,7 +16,7 @@ compatibility: >-
   .agent-skills.yml). See docs/execution-modes.md.
 metadata:
   author: wamalalawrence
-  version: "0.26.0"
+  version: "0.27.0"
   homepage: "https://github.com/wamalalawrence/agent-skills"
 ---
 
@@ -247,19 +247,26 @@ If this run was invoked because a [`delivery-planner`](../delivery-planner/SKILL
   before step 1. Treat the phase's `Inputs`, `Scope`, and `Validation` as the authoritative
   test scope and exit criterion; do not expand the test plan beyond the phase's stated scope
   even when adjacent scenarios feel obvious.
+- Open `evidence-pack.yml` from the same directory before testing. If it is missing, reconstruct
+  the minimal `delivery_plan` block from `phased-plan/README.md` and the phase files, then re-read
+  it. If that cannot be done, stop with `BLOCKED: phase continuity evidence-pack missing`; do not
+  test from Markdown files alone.
 - Confirm `evidence-pack.yml.delivery_plan.phases[<this phase id>].recommended_owner` equals
   `manual-tester`. If it does not, **stop** and surface to the user — running the wrong skill
   on a phase silently corrupts the plan.
+- Before material work starts, write `phases[<this phase id>].state: in-progress` plus
+  `last_continuity_checkpoint_at`, then re-read `evidence-pack.yml` to confirm the checkpoint.
 - If the phase's expected behavior is not stable enough to assert pass/fail (the
-  Requirement Understanding Gate ends at `medium` or below for the phase), set
-  `phases[<this phase id>].state: blocked` per the
-  [delivery_plan ownership rule](../software-engineer/references/evidence-pack.md#3-skill-responsibilities),
-  record a one-line reason, and stop so the planner can re-decompose on its next run.
-- On normal completion (after the test plan and any defect rows are emitted), append the
-  phase-state fields per the same ownership rule:
-  `phases[<this phase id>].state: done`, `completed_at: <ISO-8601>`,
-  `completed_by: manual-tester`, plus the top-level `last_completed_*` mirrors. Without these
-  the planner's dispatch pointer goes stale and the next phase will not dispatch.
+  Requirement Understanding Gate ends at `medium` or below for the phase), write a blocked
+  [phase-continuity checkpoint](../software-engineer/references/evidence-pack.md#phase-continuity-checkpoint),
+  record `blocked_reason`, recompute `current_dispatch_pointer`, and stop so the planner can
+  re-decompose on its next run.
+- On normal completion (after the test plan and any defect rows are emitted), write the full
+  [phase-continuity checkpoint](../software-engineer/references/evidence-pack.md#phase-continuity-checkpoint):
+  `state: done`, `completed_at`, `completed_by: manual-tester`, `completion_summary`,
+  `artifacts`, `validation`, `follow_up_context`, top-level `last_completed_*`,
+  `last_continuity_checkpoint_at`, and the recomputed `current_dispatch_pointer`. Re-read
+  `evidence-pack.yml` after the write. Without this checkpoint the phase is not complete.
 - Do not invoke `delivery-planner` from inside this skill. Phase re-decomposition is the
   planner's job on its next run, triggered by the user.
 
