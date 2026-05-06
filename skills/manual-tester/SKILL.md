@@ -16,7 +16,7 @@ compatibility: >-
   .agent-skills.yml). See docs/execution-modes.md.
 metadata:
   author: wamalalawrence
-  version: "0.28.0"
+  version: "0.29.0"
   homepage: "https://github.com/wamalalawrence/agent-skills"
 ---
 
@@ -112,6 +112,19 @@ Stop or mark execution `blocked` when:
   defect.
 
 ## Required Workflow
+
+### Pre-flight: locate config and read project memory
+
+Before the gate, do two cheap reads so the test plan has real context:
+
+- Run `python3 scripts/locate-config.py` to confirm `.env` / `.jira-config.yml` paths. They
+  live in the **parent workspace folder**, not the repo cwd. See
+  [`docs/auth-discovery.md` § Where the files live](../../docs/auth-discovery.md#where-the-files-live).
+- Run `python3 scripts/project-memory.py read <project>`. Recorded `Common gotchas` (Docker
+  Compose dependencies, seed-data steps, profile flags, environment-only behaviour) often
+  belong in the test plan as preconditions or as exclusions — do not re-derive them. After
+  the test pass, append a `Recent tasks` bullet noting the scenarios run and any new
+  reproduction steps worth keeping. See [`docs/project-memory.md`](../../docs/project-memory.md).
 
 ### 0. Requirement Understanding Gate
 

@@ -6,6 +6,60 @@ All notable project changes should be recorded here.
 
 - No unreleased changes.
 
+## 0.29.0 - Config Discovery, GitHub Access Ladder, Project Memory
+
+### Added
+
+- New [`docs/project-memory.md`](docs/project-memory.md) and
+  [`scripts/project-memory.py`](scripts/project-memory.py) — durable per-project knowledge
+  store at
+  `${AGENT_SKILLS_CACHE_DIR:-${WORKSPACE_ROOT:-$REPO_ROOT}/.cache/agent-skills}/_projects/<project-slug>/memory.md`.
+  Skills read it before context discovery and append a bullet to it after every successful
+  task. The `_projects/` prefix is reserved; the `cleanup-task` subcommand refuses any path
+  starting with `_` so per-task cleanup never deletes accumulated project knowledge.
+  Subcommands: `path`, `init`, `read`, `note`, `cleanup-task`.
+- New [`docs/github-access.md`](docs/github-access.md) and
+  [`scripts/github-access.sh`](scripts/github-access.sh) — the canonical ladder an agent must
+  walk before declaring "no GitHub access". Steps: `gh auth status` → enumerate logged-in
+  accounts on `github.com` → `gh repo view <owner>/<repo>` → `git ls-remote` over HTTPS →
+  `git ls-remote` over SSH. When the active `gh` account is wrong for the target org (the
+  most common false dead-end on developer laptops), the script prints a `suggest: gh auth
+  switch -h github.com -u <other-login>` line for the agent to follow before giving up.
+- New [`scripts/locate-config.py`](scripts/locate-config.py) — deterministic finder for
+  `.env`, `.env.local`, `.jira-config.yml`, and `.agent-skills.yml`. Walks the cwd, every
+  parent directory, the `WORKSPACE_ROOT` env var, and the directory holding the `.skills`
+  symlink (where `setup.init` writes them). Prints the searched-directory list so an agent
+  cannot honestly report "`.env` not found" without naming the directories it actually
+  checked. Reads no file contents; never prints secrets.
+- New [`docs/auth-discovery.md` § Where the files
+  live](docs/auth-discovery.md#where-the-files-live) section pinning the location order and
+  the `setup.init` contract that `.env` lives in the **parent workspace folder**, not the
+  repo cwd. The TL;DR now starts with "Locate the files first" so the discovery walk cannot
+  be skipped by a too-narrow cwd check.
+
+### Changed
+
+- **`software-engineer` Phase 1.3** — the bare `gh auth status` step now binds the agent to
+  walk the [GitHub access ladder](docs/github-access.md) when the active account fails to
+  reach the target repo. Surfacing "no GitHub access" without trying the ladder (and every
+  printed `suggest:` line) is now an explicit workflow failure.
+- **`software-engineer` Required Environment** — adds two new mandatory pre-flight reads:
+  `python3 scripts/locate-config.py` (locate config files before claiming any are missing)
+  and `python3 scripts/project-memory.py read <project>` (load durable project knowledge
+  before context discovery). The same two reads are now required at the top of
+  `delivery-planner`, `product-owner`, `manual-tester`, `test-automation-engineer`,
+  `issue-investigator`, and `code-reviewer` workflows.
+- **`software-engineer` new section 5.5 — Project memory and per-task cleanup.** After the PR
+  is open (or the run reaches a terminal `blocked` / `abandoned` state), the agent must
+  (1) append durable facts to project memory, then (2) run
+  `python3 scripts/project-memory.py cleanup-task <issue-key>` to delete only
+  `${cache_root}/<issue-key>/`, then (3) `git branch -d <branch>` for branches that have
+  been merged and pushed. The script refuses any path starting with `_`; remote branches
+  are never deleted; `blocked` runs skip cleanup so the next agent can resume.
+- README documentation index now lists the new GitHub-access-ladder and project-memory
+  pages alongside auth-discovery.
+- `VERSION`, README status pin, and all skill metadata versions moved from `0.28.0` to `0.29.0`.
+
 ## 0.28.0 - Phase Execution Hygiene
 
 ### Added

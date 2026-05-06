@@ -15,7 +15,7 @@ compatibility: >-
   .agent-skills.yml). See docs/execution-modes.md.
 metadata:
   author: wamalalawrence
-  version: "0.28.0"
+  version: "0.29.0"
   homepage: "https://github.com/wamalalawrence/agent-skills"
 ---
 
@@ -115,6 +115,20 @@ Stop and return refinement questions instead of Jira-ready output when:
 - Scope cannot be split or bounded enough for engineering and testing to act.
 
 ## Required Workflow
+
+### Pre-flight: locate config and read project memory
+
+Before the gate, do two cheap reads so the rest of the workflow has real context:
+
+- Run `python3 scripts/locate-config.py` to confirm `.env` / `.jira-config.yml` / `.agent-skills.yml`
+  paths. They live in the **parent workspace folder**, not the repo cwd. Do not declare a config
+  file missing without naming the directories the locator searched. See
+  [`docs/auth-discovery.md` § Where the files live](../../docs/auth-discovery.md#where-the-files-live).
+- Run `python3 scripts/project-memory.py read <project>` to load durable knowledge about the
+  product (recent stories, recurring acceptance-criteria patterns, stakeholders' phrasing
+  preferences). After the refinement is complete, append a one-line bullet under
+  `Recent tasks` summarising the refined story and the resulting Definition of Ready outcome.
+  See [`docs/project-memory.md`](../../docs/project-memory.md).
 
 ### 0. Requirement Understanding Gate
 

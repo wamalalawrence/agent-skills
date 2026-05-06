@@ -17,7 +17,7 @@ compatibility: >-
   docs/execution-modes.md.
 metadata:
   author: wamalalawrence
-  version: "0.28.0"
+  version: "0.29.0"
   homepage: "https://github.com/wamalalawrence/agent-skills"
 argument-hint: >-
   issue URL/key, bug report, incident, support ticket, feature request, or task
@@ -157,6 +157,18 @@ that Jira or Confluence is unavailable:
    printing any secret values.
 6. Only after the preflight returns non-usable should the agent ask the user — and the ask must
    name the specific missing or unresolved fields (never the secret value).
+
+**Locate config files before claiming any are missing.** Run
+`python3 scripts/locate-config.py` — `.env` / `.jira-config.yml` are written by `setup.init`
+to the **parent workspace folder**, not the repo cwd. "Not in cwd" is not "not in the
+workspace". Reporting the former as the latter is a workflow failure.
+
+**Project memory.** Before context discovery, run
+`python3 scripts/project-memory.py read <project>`. If a recorded `Common gotchas` entry
+matches the symptom under investigation, cite it in the investigation report and verify it
+before proceeding. After investigation, append any newly-discovered durable fact (the
+actual reproduction trigger, a hidden config flag, a service dependency) under
+`Common gotchas`. See [`docs/project-memory.md`](../../../../docs/project-memory.md).
 
 Treat unresolved `${VAR}` placeholders in `.jira-config.yml` as **incomplete configuration**, not
 as missing auth. The fix is to load `.env` (or set the variable in the process environment), not

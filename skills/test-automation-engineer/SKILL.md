@@ -16,7 +16,7 @@ compatibility: >-
   .agent-skills.yml). See docs/execution-modes.md.
 metadata:
   author: wamalalawrence
-  version: "0.28.0"
+  version: "0.29.0"
   homepage: "https://github.com/wamalalawrence/agent-skills"
 ---
 
@@ -115,6 +115,20 @@ Stop and recommend clarification or manual coverage instead of automation when:
 - CI integration would be misleading because required services, artifacts, or commands are unknown.
 
 ## Required Workflow
+
+### Pre-flight: locate config and read project memory
+
+Before the gate, do two cheap reads so the automation plan has real context:
+
+- Run `python3 scripts/locate-config.py` to confirm `.env` / `.jira-config.yml` paths. They
+  live in the **parent workspace folder**, not the repo cwd. See
+  [`docs/auth-discovery.md` § Where the files live](../../docs/auth-discovery.md#where-the-files-live).
+- Run `python3 scripts/project-memory.py read <project>`. Recorded `Build & runtime` and
+  `Common gotchas` (test profiles, Testcontainers requirements, generators that must run
+  before tests, flaky-test mitigations already proven) are exactly the inputs an automation
+  plan needs and should not re-discover. After landing the automation, append a
+  `Recent tasks` bullet describing the new selectors, fixtures, or CI step. See
+  [`docs/project-memory.md`](../../docs/project-memory.md).
 
 ### 0. Requirement Understanding Gate
 

@@ -16,7 +16,7 @@ compatibility: >-
   .agent-skills.yml). See docs/execution-modes.md.
 metadata:
   author: wamalalawrence
-  version: "0.28.0"
+  version: "0.29.0"
   homepage: "https://github.com/wamalalawrence/agent-skills"
 argument-hint: >-
   optional: mode inner|outer, base branch, issue key/URL, PR URL, or task description
@@ -145,6 +145,22 @@ incomplete — unresolved placeholder X"**, not "no Jira access". The reviewer m
 bare `PASS` when issue alignment could not be checked because of an avoidable auth-discovery
 miss; if the preflight has not been run and Jira is in scope, the correct verdict is
 `NEEDS_CONTEXT`.
+
+**Locate config files before declaring any missing.** Run
+`python3 scripts/locate-config.py` — `.env` / `.jira-config.yml` live in the parent workspace
+folder, not the repo cwd. A `Review Limitations` line that reads "`.env` not present in the
+repo" without naming every directory the locator searched is itself a finding the reviewer
+must correct, not surface.
+
+**GitHub access.** If the review needs to fetch the PR, related PRs, or issue history and
+`gh` reports a 404, walk the [GitHub access ladder](../../../../docs/github-access.md)
+(`scripts/github-access.sh <owner>/<repo>`) before listing GitHub as unavailable. Switching
+the active account is often the fix on multi-account laptops.
+
+**Project memory.** Before computing the verdict, run `python3 scripts/project-memory.py
+read <project>` for the project under review. Recorded gotchas (Testcontainers profile flag,
+required generators, runtime version) often explain why a CI step that looks broken is
+actually correct — and avoid `NEEDS_CONTEXT` verdicts that the recorded fact resolves.
 
 **Auth-discovery failure during issue-aware review is not a Note.** If issue-aware review was
 requested and the credential resolves empty, the config has unresolved `${VAR}` placeholders,

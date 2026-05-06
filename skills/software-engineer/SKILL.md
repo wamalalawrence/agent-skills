@@ -20,7 +20,7 @@ compatibility: >-
   .agent-skills.yml). See docs/execution-modes.md.
 metadata:
   author: wamalalawrence
-  version: "0.28.0"
+  version: "0.29.0"
   homepage: "https://github.com/wamalalawrence/agent-skills"
 ---
 
@@ -195,6 +195,24 @@ as missing credentials. The Jira CLI does not expand `${VAR}` placeholders; eith
 first or rely on the preflight for validation. Implementation that skips the discovery walk and
 silently falls back to "no Jira access" is a workflow failure, not a setup failure.
 
+**Locate config files before claiming any are missing.** `.env` and `.jira-config.yml` are
+written by `setup.init` to the **parent workspace folder**, not the repo cwd. Run
+`python3 scripts/locate-config.py` (see [`docs/auth-discovery.md` § Where the files
+live](../../docs/auth-discovery.md#where-the-files-live)). The script walks the cwd, every
+parent directory, the `WORKSPACE_ROOT` env var, and the directory holding the `.skills`
+symlink. "Not in cwd" is **not** the same as "not in the workspace"; reporting the former as
+the latter is a workflow failure.
+
+**Project memory: read on start, write on finish.** Before context discovery, run
+`python3 scripts/project-memory.py read <project>`. If no memory exists yet, run
+`python3 scripts/project-memory.py init <project> --repo <owner/repo>` to create the skeleton.
+Treat the contents as starting context (build commands, runtime version, common gotchas, recent
+tasks) — not as gospel; correct it when this run disproves a fact. Append durable facts as
+they are verified with `python3 scripts/project-memory.py note <project> --section <S> --text
+<T>`. See [`docs/project-memory.md`](../../docs/project-memory.md) for what belongs there and
+the post-completion cleanup contract that preserves project memory while removing per-task
+scratch.
+
 ## Context discovery (read this first, every run)
 
 This skill must work with **real** context. Walk this ladder until you have enough to act safely; if
@@ -332,6 +350,13 @@ Use the locally installed CLI first, fall back to direct REST only when the CLI 
   `${CONFLUENCE_API_TOKEN}`.
 - `gh` CLI for GitHub when authenticated; otherwise SSH or HTTPS, whichever is already authenticated
   for the target repo.
+- **Walk the [GitHub access ladder](../../docs/github-access.md) before declaring "no GitHub
+  access".** Run `scripts/github-access.sh <owner>/<repo>` — it walks `gh auth status` →
+  account enumeration → `gh repo view` → HTTPS `git ls-remote` → SSH `git ls-remote` and
+  prints a `suggest:` line when the most likely fix is `gh auth switch -h github.com -u
+  <other-login>`. On laptops with multiple logged-in GitHub accounts the suggested switch is
+  almost always the actual fix; firing off "no GitHub access" without trying it is a
+  workflow failure, not a setup failure.
 - Run `gh auth status` before any clone/push/PR work and confirm the active GitHub account is the
   right one for `${GITHUB_ORG}`.
 - Verify git commit identity with `git config user.name` and `git config user.email`. If your global
@@ -432,7 +457,14 @@ Use the locally installed CLI first, fall back to direct REST only when the CLI 
 
 - [ ] Determine the base branch by looking up the project in `${PROJECTS_JSON}` and reading its
   `base_branch`; fall back to `${GITHUB_DEFAULT_BRANCH}` if the project has no override.
-- [ ] `gh auth status` to confirm GitHub authentication.
+- [ ] `gh auth status` to confirm GitHub authentication. If the active account cannot see the
+  target repo (`gh repo view <owner>/<repo>` fails with 404), do not stop — walk the
+  [GitHub access ladder](../../docs/github-access.md) by running
+  `scripts/github-access.sh ${GITHUB_ORG}/<repo-name>` and follow its `suggest:` line
+  (commonly `gh auth switch -h github.com -u <other-login>`). Only after the ladder is
+  exhausted and every printed `suggest:` line has been tried may the agent surface "no
+  GitHub access" — and the surface message must include the configured accounts and the
+  target repo, never the active token.
 - [ ] Verify repo git identity: `git config user.name`, `git config user.email`.
 - [ ] Update the base branch: `git fetch origin && git checkout <base> && git pull origin <base>`.
 - [ ] Create a branch from the updated base. Format hint: `${GIT_BRANCH_NAME_FORMAT}`.
@@ -838,6 +870,40 @@ written waiver.
 - [ ] Merge strategy: `${GIT_MERGE_STRATEGY}` (commonly `squash`).
 - [ ] Squash merge commit must start with the ticket key.
 - [ ] If a checklist item was intentionally overridden, leave a PR comment explaining why.
+
+### 5.5 Project memory and per-task cleanup
+
+Run this section only after the PR is open (status `pr-opened`) **or** the run is reaching a
+terminal `blocked` / `abandoned` state. Skipping it leaves the workspace cluttered and loses
+durable knowledge.
+
+- [ ] **Update project memory first.** For each project touched in this run, append a one-line
+  bullet under `Recent tasks` (`<issue-key>: <one-sentence outcome>` plus the PR URL when one
+  exists). Append any newly-verified durable fact under `Build & runtime` or `Common gotchas`
+  (a non-default Make target, a Testcontainers requirement, a runtime version that surprised
+  the agent, a per-project GitHub account preference confirmed via the
+  [GitHub access ladder](../../docs/github-access.md)). Use:
+  `python3 scripts/project-memory.py note <project> --section <S> --text <T>`.
+  Project memory belongs at
+  `${AGENT_SKILLS_CACHE_DIR:-${WORKSPACE_ROOT:-$REPO_ROOT}/.cache/agent-skills}/_projects/<project-slug>/memory.md`.
+  See [`docs/project-memory.md`](../../docs/project-memory.md) for what does and does not
+  belong there. Never write secrets, tokens, customer data, or environment-specific URLs into
+  project memory.
+- [ ] **Then clean up per-task scratch.** Run
+  `python3 scripts/project-memory.py cleanup-task <issue-key>` to delete only
+  `${cache_root}/<issue-key>/` and everything under it. The script refuses any path starting
+  with `_` so `_projects/` is never collateral damage.
+- [ ] **Then clean up local branches**, but only ones that are safe to drop. A local branch is
+  safe to delete when it has been merged and pushed (PR closed/merged) or when the run is
+  `abandoned`. Run `git branch -d <branch>` (never `-D`); if git refuses because the branch is
+  not merged, leave it. **Never** delete remote branches, never delete branches for `blocked`
+  work, never run `git push --force` to "tidy up".
+- [ ] If the run ends `blocked` or `needs-context`, **skip cleanup entirely** — the next agent
+  will need both the per-task scratch and the working branch to resume. Project memory may
+  still be appended (one bullet under `Recent tasks` describing the blocker).
+
+The order — memory first, scratch next, branches last, only when safe — is what guarantees the
+durable knowledge survives every cleanup pass.
 
 ---
 

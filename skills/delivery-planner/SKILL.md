@@ -20,7 +20,7 @@ compatibility: >-
   .agent-skills.yml). See docs/execution-modes.md.
 metadata:
   author: wamalalawrence
-  version: "0.28.0"
+  version: "0.29.0"
   homepage: "https://github.com/wamalalawrence/agent-skills"
 ---
 
@@ -197,6 +197,18 @@ If a Jira ticket key is supplied but Jira access is unavailable, follow the
 [auth discovery walk](../../docs/auth-discovery.md) before declaring it
 inaccessible. Treat unresolved `${VAR}` placeholders in `.jira-config.yml` as
 incomplete configuration, not missing credentials.
+
+**Locate config files before declaring any are missing.** Run
+`python3 scripts/locate-config.py` — `.env` / `.jira-config.yml` are written by
+`setup.init` to the **parent workspace folder**, not the repo cwd. "Not in cwd" is
+**not** "not in the workspace".
+
+**Project memory.** Before producing the destination brief, run
+`python3 scripts/project-memory.py read <project>` for each affected project. Treat the
+contents as starting context (module layout, runtime, common gotchas, recent tasks) — not
+as gospel. After the plan is written, append a `Recent tasks` bullet to project memory
+noting the new `destination.md` path and the planning outcome. See
+[`docs/project-memory.md`](../../docs/project-memory.md).
 
 ## Required Workflow
 

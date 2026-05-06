@@ -4,7 +4,7 @@ Reusable [Agent Skills](https://agentskills.io/) for software-engineering work �
 role-shaped workflows your AI assistant can load on demand so the same model produces
 senior-engineer, product-owner, tester, or reviewer output instead of generic answers.
 
-> **Status:** `0.28.0` — pre-1.0. Core skill set is shipped and stable enough for public use;
+> **Status:** `0.29.0` — pre-1.0. Core skill set is shipped and stable enough for public use;
 > interfaces may still evolve.
 
 New here? Start with the [quickstart](docs/quickstart.md), then read [starter
@@ -163,6 +163,10 @@ usage shows they are useful independently.
 - [Configuration & multi-project workspaces](docs/configuration.md)
 - [Jira / Confluence auth discovery](docs/auth-discovery.md) — discovery order, placeholder
   resolution, and the auth preflight that validates without exposing secrets
+- [GitHub access ladder](docs/github-access.md) — `gh auth status` → account switching →
+  HTTPS → SSH; the ladder an agent must walk before declaring "no GitHub access"
+- [Project memory](docs/project-memory.md) — the per-project knowledge file every skill
+  reads on start and updates after every successful task; preserved through per-task cleanup
 - [Skill-source resolution](docs/skill-source-resolution.md) — which skill directory the
   agent must use when more than one is present on disk
 - [Updates](docs/updates.md) — how to notice and apply new agent-skills releases

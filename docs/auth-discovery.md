@@ -11,14 +11,51 @@ It pairs with the broader [configuration reference](configuration.md) and the
 
 ## TL;DR for agents
 
-1. Walk the discovery order below in order. Do not skip steps.
-2. Treat unresolved `${VAR}` placeholders in `.jira-config.yml` as **incomplete configuration**,
+1. **Locate the files first.** Run `python3 scripts/locate-config.py` (or read the [Where the
+  files live](#where-the-files-live) section). Do not say "`.env` not found" until the locator
+  has reported every directory it searched. The most common false dead-end is a `.env` that
+  lives one directory **above** the cwd because `setup.init` writes it to the parent workspace
+  folder, not to the repo root.
+2. Walk the discovery order below in order. Do not skip steps.
+3. Treat unresolved `${VAR}` placeholders in `.jira-config.yml` as **incomplete configuration**,
   not as missing auth. Resolve them from `.env` or process environment first.
-3. Run `python3 scripts/auth-preflight.py` (or the documented equivalent) before declaring auth
+4. Run `python3 scripts/auth-preflight.py` (or the documented equivalent) before declaring auth
   unusable. The preflight reports which fields are missing, which placeholders are unresolved,
   and whether the configuration is usable — without printing secrets.
-4. Only after the preflight returns a non-usable result should the agent ask the user, and the
-  ask must name the specific missing fields.
+5. Only after the preflight returns a non-usable result should the agent ask the user, and the
+  ask must name the specific missing fields **and** every directory the locator searched.
+
+## Where the files live
+
+`setup.init` does **not** put `.env` and `.jira-config.yml` inside any specific repository. It
+puts them in the **parent workspace folder** that holds the sibling repos and the `.skills`
+symlink. An agent whose cwd is `<workspace>/<repo>` and which only checks the cwd will
+incorrectly report the files as missing.
+
+Authoritative locations, in resolution order:
+
+1. The directory passed via `--workspace-root` to any agent-skills script, or the
+  `WORKSPACE_ROOT` environment variable.
+2. The cwd, then every parent directory up to the filesystem root. Do **not** stop at the first
+  `.git` boundary — the workspace folder usually sits *outside* every repo's `.git`.
+3. The directory containing the `.skills` symlink. Whichever directory holds `.skills` is, by
+  setup.init's contract, the workspace root and therefore the home of `.env` /
+  `.jira-config.yml` / `.env.local`.
+4. In `in-repo` mode, the repository root itself, where `.agent-skills.yml` replaces `.env` /
+  `.jira-config.yml`. Secrets in this mode come from the host platform's environment-variable
+  injection, not from a file.
+
+The locator script implements exactly this order:
+
+```bash
+python3 scripts/locate-config.py                   # everything it can find
+python3 scripts/locate-config.py --require .env    # exit 1 if .env still missing
+python3 scripts/locate-config.py --json            # for tools / agents
+```
+
+The script never reads file contents — it only reports paths, the searched-directory list, and
+whether each requested file exists. That is enough for an agent to decide whether to source
+`.env`, switch to in-repo mode, or surface a precise "missing in these N places" message.
 
 ## Discovery order
 
