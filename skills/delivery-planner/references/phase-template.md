@@ -71,6 +71,8 @@ What must exist when the phase is done. Examples:
 - `evidence-pack.yml.plan.smallest_change` populated.
 - `evidence-pack.yml.review.round` advanced.
 - Failing-regression-test commit referenced from `repro-recipe.yml`.
+- For implementation phases: Definition-of-Done artifact written, branch
+  pushed, PR URL recorded, and `code-reviewer` outer-loop convergence reached.
 - A passing CI run for `<workflow-name>`.
 
 ## Validation / exit criteria
@@ -82,6 +84,8 @@ The observable check that says the phase is finished. Examples:
 - "`mvn -pl auth test` passes locally and in CI."
 - "The third acceptance criterion is checked off in the Jira-ready story."
 - "`code-reviewer` returns `Loop: converged` for the inner-loop review."
+- "For a code-delivery phase, the remote branch is pushed and the PR URL is
+  present in `definition-of-done.json` after outer-loop review convergence."
 
 No "done when it feels done".
 

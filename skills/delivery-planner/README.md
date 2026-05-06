@@ -19,11 +19,15 @@ See [SKILL.md](./SKILL.md) for the full workflow. References live under
   [`issue-investigator`](../software-engineer/skills/issue-investigator/),
   [`manual-tester`](../manual-tester/),
   [`test-automation-engineer`](../test-automation-engineer/)) so the plan
-  dispatches itself instead of routing through this skill on every hop.
+  dispatches itself instead of routing through this skill on every hop. A
+  missing owner skill is a blocked phase, not an optional warning.
 - Persists plan files into the shared
   `${AGENT_SKILLS_CACHE_DIR}/<issue-key>/` cache next to the existing
   `evidence-pack.yml`, so any downstream skill or fresh agent finds them in
   the same place.
+- For code-delivery work, requires the final executable path to reach PR-ready
+  completion: outer-loop review, Definition-of-Done, branch push, and PR URL,
+  or an explicit blocker.
 
 ## What it does not do
 

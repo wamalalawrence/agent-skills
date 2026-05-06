@@ -6,6 +6,37 @@ All notable project changes should be recorded here.
 
 - No unreleased changes.
 
+## 0.26.0 - Dispatch And Jira Scope Hardening
+
+### Added
+
+- Added a prompt-supplied skill-source rule to
+  [`docs/skill-source-resolution.md`](docs/skill-source-resolution.md): when a user gives an exact
+  skill folder or `SKILL.md` path, agents must verify that path before falling back to host defaults
+  such as `.skills`.
+- Added `evidence-pack.yml.related_work` for open PRs, matching remote branches, and already
+  addressed issue status so Jira-driven work can detect likely existing fixes before starting a
+  competing branch.
+- Added [`evals/jira-issue-scope-and-existing-pr.md`](evals/jira-issue-scope-and-existing-pr.md) to
+  pin one-Jira-task-per-branch/PR behavior and existing PR detection.
+
+### Changed
+
+- `evidence-pack.yml.delivery_plan` now treats a missed `recommended_owner` skill as a workflow
+  blocker. Executors must load the recommended owner from the resolved canonical skill source and
+  stop if the skill is unavailable or mismatched.
+- `software-engineer` now starts with dispatch and ticket-isolation gates: one Jira task maps to one
+  branch and one PR, existing open PRs/branches are checked before branch creation, and ticket-driven
+  completion requires a pushed branch plus PR URL.
+- `issue-investigator` now checks for open PRs or remote branches that may already address a Jira or
+  GitHub issue and records the result in `evidence-pack.yml.related_work`.
+- `code-reviewer` now treats bundling independent Jira tasks into one PR as a blocker for
+  issue-aware review.
+- `delivery-planner` now requires code-delivery plans to reach a conclusive reviewable artifact:
+  outer-loop review, Definition-of-Done, pushed branch, and PR URL, or an explicit blocker. A final
+  validation-only phase is no longer sufficient for bug-fix or implementation delivery.
+- `VERSION`, README status, and all skill metadata versions moved from `0.25.0` to `0.26.0`.
+
 ## 0.25.0 - Delivery Planner
 
 ### Added

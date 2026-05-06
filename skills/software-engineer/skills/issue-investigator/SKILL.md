@@ -17,7 +17,7 @@ compatibility: >-
   docs/execution-modes.md.
 metadata:
   author: wamalalawrence
-  version: "0.25.0"
+  version: "0.26.0"
   homepage: "https://github.com/wamalalawrence/agent-skills"
 argument-hint: >-
   issue URL/key, bug report, incident, support ticket, feature request, or task
@@ -265,6 +265,16 @@ recommending a fix.
 - Identify affected users, roles, environments, versions, data sets, integrations, and workflows.
 - Capture timestamps, deployment windows, feature flags, configuration changes, and CI/deployment
   history when relevant.
+- For Jira or GitHub issues, check whether the issue is already addressed by open work before
+  recommending a new code fix. Look for open PRs whose title/body/comments mention the key, remote
+  branches containing the key, ticket development-panel links when available, and recent commits or
+  PRs touching the suspected files. With GitHub access, prefer
+  `gh pr list --state open --search "<ISSUE-KEY> in:title,body,comments"` and
+  `git ls-remote --heads origin "*<ISSUE-KEY>*"`.
+- If an open PR or branch likely covers the same root cause or acceptance criteria, classify the
+  next action as `review existing PR` / `continue existing branch` / `ask user`, not `start new
+  fix`. Persist the evidence under `evidence-pack.yml.related_work` so `software-engineer` does not
+  create a competing branch.
 - Separate confirmed facts from assumptions and unknowns.
 
 ### 2. Classify the issue
@@ -394,8 +404,9 @@ Persist the full investigation result to
 `${AGENT_SKILLS_CACHE_DIR:-${WORKSPACE_ROOT:-$REPO_ROOT}/.cache/agent-skills}/<issue-key>/evidence-pack.yml`
 per the [evidence-pack schema](../../references/evidence-pack.md). At minimum populate `issue_*`,
 `project`, `expected_behavior`, `actual_behavior`, `investigation` (root-cause status, evidence,
-hypotheses considered, confidence, what-would-change-my-mind), and `risk_areas`. Subsequent skills
-append to this file rather than re-deriving the context.
+hypotheses considered, confidence, what-would-change-my-mind), `risk_areas`, and `related_work`
+when an issue key was present. Subsequent skills append to this file rather than re-deriving the
+context.
 
 #### Three-hypothesis discipline
 
@@ -617,6 +628,7 @@ be omitted by accident).
 - Why:
 - Fix/clarification/test recommendations:
 - Monitoring / documentation / support follow-up:
+- Existing PR/branch overlap:
 
 ## Safe Checks The User Can Run
 
@@ -665,6 +677,8 @@ a one-line `not available — <what is missing>`.
 - [ ] Issue type classification is supported by evidence and confidence.
 - [ ] Reproduction status records environment, steps attempted, observed result, and missing data.
 - [ ] Root-cause status is `unknown`, `suspected`, `confirmed`, or `disproved` and never overstated.
+- [ ] For Jira/GitHub issues, existing open PRs and remote branches for the same issue key are
+  checked or explicitly unavailable; likely overlap is called out before recommending a new fix.
 - [ ] When direct environment access is unavailable, `Safe Checks The User Can Run` lists at least
   one bounded read-only check tied to a hypothesis, or explicitly says no safe check is possible
   with the current access.

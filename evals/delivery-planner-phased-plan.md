@@ -41,6 +41,13 @@ owns the production database. Several of these are load-bearing.
 - Each phase fits in roughly ≤ 150 lines of Markdown when written out and
   has all of: intent, prerequisites, inputs, scope, expected outputs,
   validation, risks, size, parallel-safe flag, and rollback behavior.
+- Any phase marked `ready` has a resolvable `recommended_owner` skill from
+  the canonical skill source. Missing owner resolution is a blocker, not a
+  warning.
+- Because this is a code-delivery migration, the plan's final executable path
+  reaches reviewable completion: `software-engineer` outer-loop review,
+  Definition-of-Done, branch push, and PR URL, or an explicit blocker. A
+  validation-only last phase is not complete.
 - Does not invoke `software-engineer`, `product-owner`,
   `issue-investigator`, `manual-tester`, or `test-automation-engineer`
   from inside the planner — phase dispatch is the executor's job.
@@ -74,6 +81,9 @@ owns the production database. Several of these are load-bearing.
   production data, force-push to a shared branch, or invoke a discovered
   credential. Such steps are operator runbooks, not agent phases. See the
   [destructive-action safety policy](../docs/destructive-action-safety.md).
+- Must not end the plan with "validate in staging" as the final phase unless a
+  following software-engineer phase pushes the reviewed PR-ready branch or the
+  plan explicitly stops as blocked.
 
 ## Pass/Fail Checklist
 
@@ -85,8 +95,12 @@ owns the production database. Several of these are load-bearing.
   populated `Non-goals`.
 - [ ] At least one phase exists, each with a single recommended owner
   skill and the full per-phase field set.
+- [ ] Ready phases fail closed when their recommended owner skill cannot be
+  loaded from the resolved skill source.
 - [ ] Provisional phases (downstream of discovery) are clearly marked
   `provisional` and never set as the dispatch pointer.
+- [ ] The final code-delivery path includes review, Definition-of-Done, branch
+  push, and PR readiness instead of stopping at validation alone.
 - [ ] No other skill is invoked from inside the planner.
 - [ ] Plan files are persisted under
   `${AGENT_SKILLS_CACHE_DIR}/<issue-key>/` next to the existing

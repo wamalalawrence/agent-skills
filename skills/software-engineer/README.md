@@ -8,14 +8,14 @@ See [SKILL.md](./SKILL.md) for the full workflow. References live under
 
 ## What it does
 
-- Phase 1 — Preparation (issue context, repo identification, branch setup, compact evidence pack,
-  plan)
+- Phase 1 — Preparation (dispatch owner check, one-Jira-task scope, existing PR/branch scan, repo
+  identification, compact evidence pack, plan)
 - Phase 2 — Implementation (clean code, security, architecture rules) -> calls `code-reviewer`
   and auto-iterates the inner loop until convergence or bounded escalation
 - Phase 3 — Quality assurance (tests, static analysis, format, build) -> calls `code-reviewer`
   and auto-iterates the outer loop until convergence or bounded escalation
 - Phase 4 — Self-review
-- Phase 5 — Commit & PR
+- Phase 5 — Commit, push, Definition-of-Done, and PR
 
 The nested `code-reviewer` and `issue-investigator` skills intentionally stay inside this role for
 now. They represent closely related parts of one collaborative engineering workflow rather than

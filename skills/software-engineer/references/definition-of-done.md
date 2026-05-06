@@ -15,11 +15,14 @@ ${AGENT_SKILLS_CACHE_DIR:-${WORKSPACE_ROOT:-$REPO_ROOT}/.cache/agent-skills}/<is
 ```jsonc
 {
   "issue_key": "PROJ-1234",
+  "primary_jira_key": "PROJ-1234",
+  "related_jira_keys": [],
   "produced_by": "software-engineer",
   "produced_at": "2026-04-26T15:30:00Z",
   "branch": "bugfix/PROJ-1234-saml-expiry-redirect",
   "head_sha": "deadbee1234",
   "base_branch": "main",
+  "pr_url": "https://github.com/example-org/example-api/pull/987",
 
   // Build & test
   "build": {
@@ -65,6 +68,12 @@ ${AGENT_SKILLS_CACHE_DIR:-${WORKSPACE_ROOT:-$REPO_ROOT}/.cache/agent-skills}/<is
     "no_no_verify": true, // --no-verify was NOT used to bypass hooks
     "branch_starts_with_ticket_key": true,
     "commit_message_starts_with_ticket_key": true,
+    "single_jira_issue_scope": true,
+    "primary_jira_key": "PROJ-1234",
+    "related_jira_keys": [],
+    "open_pr_checked_for_existing_work": true,
+    "pushed_to_remote": true,
+    "pr_url": "https://github.com/example-org/example-api/pull/987",
   },
   "scope": {
     "no_unrelated_files": true,
@@ -118,6 +127,15 @@ ${AGENT_SKILLS_CACHE_DIR:-${WORKSPACE_ROOT:-$REPO_ROOT}/.cache/agent-skills}/<is
   of `regression_test_commit`, runs the test, expects failure; runs it on HEAD, expects success).
 - **`git.no_no_verify: false`** is itself a `blocker` unless waived with explicit user approval
   recorded in `waivers[]`.
+- **`git.single_jira_issue_scope: false`** is a `blocker` for ticket-driven work. One Jira task
+  maps to one branch and one PR. Related keys may be listed as context, but independent tasks must
+  be split before PR.
+- **`git.open_pr_checked_for_existing_work: false`** is a `major` finding when Jira is in scope.
+  A likely existing PR or remote branch for the same key must be surfaced before creating a
+  competing branch.
+- **`git.pushed_to_remote: false`** or a missing `git.pr_url` means the change is not PR-ready. The
+  reviewer must not report final shipping readiness until the branch has been pushed and the PR URL
+  is recorded, unless the workflow is explicitly blocked by unavailable GitHub access.
 - **`scope.shared_library_changed: true`** requires a non-empty
   `scope.shared_library_consumers_listed` (downstream services to flag).
 - **`safety_acknowledgement` is required whenever the change introduces or performs any
