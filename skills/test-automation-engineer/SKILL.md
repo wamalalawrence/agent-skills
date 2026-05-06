@@ -16,7 +16,7 @@ compatibility: >-
   .agent-skills.yml). See docs/execution-modes.md.
 metadata:
   author: wamalalawrence
-  version: "0.26.0"
+  version: "0.27.0"
   homepage: "https://github.com/wamalalawrence/agent-skills"
 ---
 
@@ -246,20 +246,29 @@ If this run was invoked because a [`delivery-planner`](../delivery-planner/SKILL
   `${AGENT_SKILLS_CACHE_DIR:-${WORKSPACE_ROOT:-$REPO_ROOT}/.cache/agent-skills}/<issue-key>/`
   before starting. Treat the phase's `Inputs`, `Expected outputs`, and `Validation` as the
   automation brief, the deliverables list, and the CI exit criterion respectively.
+- Open `evidence-pack.yml` from the same directory before automating. If it is missing,
+  reconstruct the minimal `delivery_plan` block from `phased-plan/README.md` and the phase files,
+  then re-read it. If that cannot be done, stop with
+  `BLOCKED: phase continuity evidence-pack missing`; do not automate from Markdown files alone.
 - Confirm `evidence-pack.yml.delivery_plan.phases[<this phase id>].recommended_owner` equals
   `test-automation-engineer`. If it does not, **stop** and surface to the user — running the
   wrong skill on a phase silently corrupts the plan.
+- Before material work starts, write `phases[<this phase id>].state: in-progress` plus
+  `last_continuity_checkpoint_at`, then re-read `evidence-pack.yml` to confirm the checkpoint.
 - If the phase asks the skill to automate behavior that is not yet stable (Requirement
   Understanding Gate ends below `high`, or the manual scenario it should formalise has not
-  been executed), set
-  `phases[<this phase id>].state: blocked` per the
-  [delivery_plan ownership rule](../software-engineer/references/evidence-pack.md#3-skill-responsibilities),
-  record a one-line reason, and stop so the planner can re-decompose on its next run.
+  been executed), write a blocked
+  [phase-continuity checkpoint](../software-engineer/references/evidence-pack.md#phase-continuity-checkpoint),
+  record `blocked_reason`, recompute `current_dispatch_pointer`, and stop so the planner can
+  re-decompose on its next run.
 - On normal completion (after the new tests are committed and CI is green for the affected
-  workflow), append the phase-state fields per the same ownership rule:
-  `phases[<this phase id>].state: done`, `completed_at: <ISO-8601>`,
-  `completed_by: test-automation-engineer`, plus the top-level `last_completed_*` mirrors.
-  Without these the planner's dispatch pointer goes stale and the next phase will not dispatch.
+  workflow), write the full
+  [phase-continuity checkpoint](../software-engineer/references/evidence-pack.md#phase-continuity-checkpoint):
+  `state: done`, `completed_at`, `completed_by: test-automation-engineer`,
+  `completion_summary`, `artifacts`, `validation`, `follow_up_context`, top-level
+  `last_completed_*`, `last_continuity_checkpoint_at`, and the recomputed
+  `current_dispatch_pointer`. Re-read `evidence-pack.yml` after the write. Without this checkpoint
+  the phase is not complete.
 - Do not invoke `delivery-planner` from inside this skill. Phase re-decomposition is the
   planner's job on its next run, triggered by the user.
 

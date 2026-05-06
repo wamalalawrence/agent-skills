@@ -49,8 +49,10 @@ size phases so a fresh agent can finish each one in a single session.
 - Mark the discovery phase that confirms the JWT issuer's metadata as the
   dispatch pointer. Mark all later phases `provisional` until that
   discovery raises understanding-confidence to `high`.
-- Persist `destination.md` and `phased-plan/phase-NN-<slug>.md` files into
-  `${AGENT_SKILLS_CACHE_DIR}/<issue-key>/`.
+- Persist `destination.md`, `phased-plan/phase-NN-<slug>.md`, and
+  `evidence-pack.yml` into `${AGENT_SKILLS_CACHE_DIR}/<issue-key>/`.
+  The evidence pack contains the `delivery_plan` block that phase executors
+  update when they finish.
 
 ## Sample Output Structure
 
@@ -60,6 +62,7 @@ size phases so a fresh agent can finish each one in a single session.
 - Issue / work key: AUTH-SSO-PARITY
 - Destination file: .cache/agent-skills/AUTH-SSO-PARITY/destination.md
 - Phased-plan index: .cache/agent-skills/AUTH-SSO-PARITY/phased-plan/README.md
+- Evidence pack: .cache/agent-skills/AUTH-SSO-PARITY/evidence-pack.yml
 - Phases total / ready / done / blocked: 5 / 1 / 0 / 0
 - Current dispatch pointer: phase-01-confirm-jwt-issuer
 - Understanding confidence: medium

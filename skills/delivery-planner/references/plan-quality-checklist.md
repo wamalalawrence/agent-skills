@@ -70,6 +70,10 @@ user; do not grind.
 - [ ] Provisional phases (downstream of a discovery spike with `medium`
       understanding-confidence) are clearly marked `provisional` and never
       flagged as the dispatch pointer.
+- [ ] High-confidence phases that are only waiting on earlier phase completion
+      are marked `ready` with prerequisites, not `provisional`, so an executor
+      checkpoint can advance the dispatch pointer without needing a planner
+      rerun.
 - [ ] `current_dispatch_pointer` matches the readiness decision per the
       [plan-index template's dispatch-pointer rules](../references/plan-index-template.md#body-sections):
       `READY_FOR_DISPATCH` and `READY_FOR_DISCOVERY` MUST name a phase id
@@ -82,6 +86,11 @@ user; do not grind.
 - [ ] The phase artifacts live under
       `${AGENT_SKILLS_CACHE_DIR:-${WORKSPACE_ROOT:-$REPO_ROOT}/.cache/agent-skills}/<issue-key>/`
       next to `evidence-pack.yml`, not in a parallel directory tree.
+- [ ] `evidence-pack.yml` is created or updated in the same run as
+      `destination.md` and `phased-plan/`. It contains
+      `delivery_plan.destination_path`, `index_path`, `current_dispatch_pointer`,
+      and one `phases[]` entry for every phase file. A greenfield plan with no
+      evidence pack fails this checklist.
 - [ ] Phases that depend on the existing
       [evidence pack](../../software-engineer/references/evidence-pack.md)
       reference its fields by path (`investigation.root_cause_status`,

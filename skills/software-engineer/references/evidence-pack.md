@@ -106,16 +106,17 @@ review:
       major_count: 4
       verdict: REQUEST_CHANGES
 
-# Phased delivery tracking (structure written by delivery-planner; phase-state
-# fields appended by the executing skill named in recommended_owner). See the
-# delivery_plan ownership rule below.
+# Phased delivery tracking. The planner writes the plan shape. The executing
+# skill writes phase-state and continuity checkpoints. See the delivery_plan
+# ownership rule and phase-continuity checkpoint below.
 delivery_plan:
   destination_path: ".cache/agent-skills/PROJ-1234/destination.md"
   index_path: ".cache/agent-skills/PROJ-1234/phased-plan/README.md"
-  current_dispatch_pointer: phase-03 # phase id, or null when no plan exists / readiness is NEEDS_*/BLOCKED
+  current_dispatch_pointer: phase-03 # next phase id, or null when no phase is dispatchable
   last_completed_phase_id: phase-02
   last_completed_at: 2026-05-06T14:00:00Z
   last_completed_by: software-engineer # which skill marked the most recent phase done/blocked
+  last_continuity_checkpoint_at: 2026-05-06T14:02:00Z
   phases:
     - id: phase-01
       slug: confirm-jwt-issuer
@@ -123,12 +124,27 @@ delivery_plan:
       state: done # provisional | ready | in-progress | done | skipped | blocked
       completed_at: 2026-05-06T10:00:00Z
       completed_by: issue-investigator
+      completion_summary: "Confirmed issuer metadata source and eliminated stale config hypothesis."
+      artifacts:
+        - ".cache/agent-skills/PROJ-1234/repro/issuer-check.log"
+      validation:
+        - "Read-only issuer query matched production metadata."
+      follow_up_context:
+        - "Phase 02 can use issuer `https://idp.example.com/oauth2/default`."
     - id: phase-02
       slug: feature-flag-scaffolding
       recommended_owner: software-engineer
       state: done
       completed_at: 2026-05-06T14:00:00Z
       completed_by: software-engineer
+      completion_summary: "Added disabled-by-default SSO dual-write flag and config tests."
+      artifacts:
+        - "src/auth/SsoFlags.java"
+        - "src/auth/SsoFlagsTest.java"
+      validation:
+        - "mvn -pl auth test -Dtest=SsoFlagsTest passed."
+      follow_up_context:
+        - "Next phase may assume `sso.dualWrite.enabled=false` is present in all profiles."
     - id: phase-03
       slug: dual-write-path
       recommended_owner: software-engineer
@@ -138,6 +154,13 @@ delivery_plan:
 **Loading rule**: every skill `set -a && source ${WORKSPACE_ROOT}/.env && set +a`, then reads/writes
 `${AGENT_SKILLS_CACHE_DIR:-${WORKSPACE_ROOT:-$REPO_ROOT}/.cache/agent-skills}/${issue_key}/evidence-pack.yml`.
 Skills append to lists; they do not delete prior entries.
+
+**Planner creation rule**: `delivery-planner` MUST create `evidence-pack.yml` when it writes
+`destination.md` and `phased-plan/`, even when no prior evidence pack exists. A greenfield plan
+without an evidence pack is invalid because a fresh executor has no durable state to update. The
+minimal file contains `issue_key`, `issue_url` or source brief, `issue_type`, `title`, `summary`,
+`project` when known, and `delivery_plan` with every phase id, slug, owner, initial state,
+prerequisites, `destination_path`, `index_path`, and `current_dispatch_pointer`.
 
 **Skill-dispatch blocker rule**: when `delivery_plan.current_dispatch_pointer` is set, the
 executor must read that phase and load the `SKILL.md` for
@@ -151,6 +174,13 @@ generic agent workflow, do not keep using the wrong skill, and do not mark the p
 An agent output such as "I did not find `.skills/software-engineer`" is insufficient when the user
 or config supplied a different skill source. Missing the recommended owner is a blocker, not a
 warning.
+
+**Missing evidence-pack recovery rule**: if an executor is invoked with `destination.md` and a
+`phase-NN.md` but `evidence-pack.yml` is missing, it MUST NOT silently continue. It may reconstruct
+the minimal `delivery_plan` block from `phased-plan/README.md` and the per-phase files, then continue
+only after re-reading the file it wrote. If reconstruction is not possible, stop with
+`BLOCKED: phase continuity evidence-pack missing` and list the expected path. Do not mark the phase
+done in chat only.
 
 ---
 
@@ -201,25 +231,29 @@ reproduce is forbidden without explicit user approval and a written rollback pla
 
 | Skill                      | Reads                              | Writes                                                                       |
 | -------------------------- | ---------------------------------- | ---------------------------------------------------------------------------- |
-| `issue-investigator` †     | env, prior `evidence-pack.yml`     | `evidence-pack.yml` (investigation, risk, hypotheses, related_work); `repro-recipe.yml` |
-| `software-engineer` †      | both files                         | `evidence-pack.yml.plan`, `related_work`; regression test commit referenced from recipe |
+| `issue-investigator` †     | env, prior `evidence-pack.yml`     | `evidence-pack.yml` (investigation, risk, hypotheses, related_work, phase checkpoint); `repro-recipe.yml` |
+| `software-engineer` †      | both files                         | `evidence-pack.yml.plan`, `related_work`, phase checkpoint; regression test commit referenced from recipe |
 | `code-reviewer`            | both files                         | `evidence-pack.yml.review` (sole owner — see ownership rule below)           |
-| `manual-tester` †          | `evidence-pack.yml`                | `repro-recipe.yml` (when manual repro produces one); defect rows             |
-| `test-automation-engineer` † | `repro-recipe.yml`              | regression test files; references the recipe in test docstring               |
-| `product-owner` †          | `evidence-pack.yml.investigation`  | `evidence-pack.yml.acceptance_criteria`                                      |
-| `delivery-planner`         | env, prior `delivery_plan` block   | `evidence-pack.yml.delivery_plan` structure (sole owner); plan files on disk |
+| `manual-tester` †          | `evidence-pack.yml`                | `repro-recipe.yml` (when manual repro produces one); defect rows; phase checkpoint |
+| `test-automation-engineer` † | `repro-recipe.yml`              | regression test files; references the recipe in test docstring; phase checkpoint |
+| `product-owner` †          | `evidence-pack.yml.investigation`  | `evidence-pack.yml.acceptance_criteria`; phase checkpoint                    |
+| `delivery-planner`         | env, prior `delivery_plan` block   | `evidence-pack.yml` creation, `delivery_plan` structure; plan files on disk  |
 
-† **also writes phase-state fields** (`phases[<id>].state`,
-`completed_at`, `completed_by`, plus the top-level `last_completed_*`
-mirrors) into `evidence-pack.yml.delivery_plan` when invoked from a
-`delivery-planner` phase, per the
+† **also writes the phase-continuity checkpoint** (`phases[<id>].state`,
+completion or blocked timestamp, owner, summary/reason, artifacts,
+validation, follow-up context, the top-level `last_completed_*` /
+`last_blocked_*` mirrors, `last_continuity_checkpoint_at`, and the derived
+`current_dispatch_pointer`) into `evidence-pack.yml.delivery_plan` when
+invoked from a `delivery-planner` phase, per the
 [`delivery_plan` ownership rule](#evidence-packymldelivery_plan-ownership-rule)
 below. `code-reviewer` does not own a phase (it is invoked by
 `software-engineer` from inside a phase) and `delivery-planner` writes
 the structural fields, not phase-state.
 
 If a consumer skill cannot find the file it needs, it stops with the standard _Missing required
-setup_ message instead of inferring context silently.
+setup_ message instead of inferring context silently, except for the explicit missing
+evidence-pack recovery rule above when planner phase files are present and can reconstruct the
+minimal `delivery_plan`.
 
 **`evidence-pack.yml.review` ownership rule.** `code-reviewer` is the sole writer of the `review`
 block. `software-engineer` does not mutate it — it only re-stages the fix and re-invokes the
@@ -234,29 +268,51 @@ reviewer. On each invocation, before emitting the verdict, the reviewer:
 This single-owner rule prevents double-increments, stale counts, and wrong `max-rounds` / round-1
 decisions.
 
+### Phase-continuity checkpoint
+
+Any skill invoked from a `delivery-planner` phase must write a checkpoint before returning, then
+re-read `evidence-pack.yml` and confirm the write is present. This is mandatory even when the user
+only asked for "phase 1" and even when the implementation itself finished successfully. If the write
+fails, the phase result is `blocked` because the next agent cannot continue safely.
+
+The checkpoint write contains:
+
+1. `phases[<this phase id>].state` ← `in-progress` before material work starts, then `done` or
+   `blocked` before the final response.
+2. `phases[<this phase id>].completed_at` or `blocked_at` ← current ISO-8601 timestamp.
+3. `phases[<this phase id>].completed_by` or `blocked_by` ← this skill's own `name`.
+4. `phases[<this phase id>].completion_summary` or `blocked_reason` ← one to three sentences
+   written for the next fresh agent, not for chat transcript readers.
+5. `phases[<this phase id>].artifacts` ← files, PRs, commits, cache files, test reports, or
+   investigation outputs produced by the phase.
+6. `phases[<this phase id>].validation` ← commands/checks run and their result, or explicit
+   skipped/blocked reasons.
+7. `phases[<this phase id>].follow_up_context` ← assumptions resolved, decisions made, and details
+   the next phase may rely on.
+8. Top-level `last_completed_*` or `last_blocked_*` mirrors and
+   `last_continuity_checkpoint_at`.
+9. `current_dispatch_pointer` recomputed to the first `ready` phase whose prerequisites are now
+   `done`; `null` only when no phase is dispatchable or the plan is blocked.
+
+The final user-facing response for a phase must name the evidence-pack path, the phase id updated,
+the resulting phase state, and the new `current_dispatch_pointer`. A transcript-only summary is not
+a checkpoint.
+
 **`evidence-pack.yml.delivery_plan` ownership rule.** Two writers, with a strict split:
 
-- `delivery-planner` is the sole writer of the **structural** fields:
-  `destination_path`, `index_path`, `current_dispatch_pointer`, the entire `phases[]` list
-  (each entry's `id`, `slug`, `recommended_owner`, and the initial `state` of `provisional` /
-  `ready`). It MUST NOT touch `last_completed_*` fields directly — those are derived from
-  per-phase completion writes — but it MAY recompute `current_dispatch_pointer` on each run
-  by reading `phases[*].state`.
+- `delivery-planner` is the sole writer of the **plan-shape** fields: `destination_path`,
+  `index_path`, the entire `phases[]` list (each entry's `id`, `slug`, `recommended_owner`,
+  prerequisites, and initial `state` of `provisional` / `ready`). It creates
+  `current_dispatch_pointer` and MAY recompute it on each planner run by reading
+  `phases[*].state`.
 - The skill named in a phase's `recommended_owner` is the **only** writer of that phase's
   completion state. When invoked from a phase, before returning its final result, that skill
-  appends to `evidence-pack.yml.delivery_plan`:
-  1. `phases[<this phase id>].state` ← `done` (work complete) or `blocked` (cannot finish
-     within scope; surfaces to user via the planner on its next run).
-  2. `phases[<this phase id>].completed_at` ← current ISO-8601 timestamp.
-  3. `phases[<this phase id>].completed_by` ← this skill's own `name` (must equal the phase's
-     `recommended_owner`; mismatch is a workflow bug and the skill MUST stop and surface to
-     the user instead of writing).
-  4. Top-level `last_completed_phase_id`, `last_completed_at`, `last_completed_by` ← copies
-     of the same values. These exist so other skills (and the planner on its next run) can
-     answer "what just finished?" without scanning the whole `phases[]` list.
+  performs the [phase-continuity checkpoint](#phase-continuity-checkpoint). It MAY update
+  `current_dispatch_pointer` only by the deterministic rule above; it MUST NOT add, delete,
+  reorder, rename, or resize phases.
 
-This split keeps the dispatch pointer fresh after real phase execution: the planner owns
-the plan shape, the executors own their own outcomes, and no skill writes another's fields.
+This split keeps continuity fresh after real phase execution: the planner owns the plan shape, the
+executors own their own outcomes and the derived next pointer, and no skill writes another's fields.
 A skill invoked outside any phase (i.e. the user invoked it directly without a planner
 artifact) MUST NOT touch `delivery_plan` at all — the absence of the block is meaningful
 context for the planner on its next run.

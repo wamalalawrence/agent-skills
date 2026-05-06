@@ -70,6 +70,10 @@ What must exist when the phase is done. Examples:
 - Files committed under `<paths>` on a feature branch.
 - `evidence-pack.yml.plan.smallest_change` populated.
 - `evidence-pack.yml.review.round` advanced.
+- `evidence-pack.yml.delivery_plan.phases[<this phase id>]` updated with
+  state, completion summary, artifacts, validation, and follow-up context.
+- `evidence-pack.yml.delivery_plan.current_dispatch_pointer` advanced to the
+  next ready phase, or `null` with a blocker reason.
 - Failing-regression-test commit referenced from `repro-recipe.yml`.
 - For implementation phases: Definition-of-Done artifact written, branch
   pushed, PR URL recorded, and `code-reviewer` outer-loop convergence reached.
@@ -84,6 +88,8 @@ The observable check that says the phase is finished. Examples:
 - "`mvn -pl auth test` passes locally and in CI."
 - "The third acceptance criterion is checked off in the Jira-ready story."
 - "`code-reviewer` returns `Loop: converged` for the inner-loop review."
+- "`evidence-pack.yml` was re-read after the phase checkpoint write and now
+  names the completed phase plus the next dispatch pointer."
 - "For a code-delivery phase, the remote branch is pushed and the PR URL is
   present in `definition-of-done.json` after outer-loop review convergence."
 

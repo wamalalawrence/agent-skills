@@ -20,7 +20,7 @@ compatibility: >-
   .agent-skills.yml). See docs/execution-modes.md.
 metadata:
   author: wamalalawrence
-  version: "0.26.0"
+  version: "0.27.0"
   homepage: "https://github.com/wamalalawrence/agent-skills"
 ---
 
@@ -389,6 +389,15 @@ by re-reading the per-phase files and recomputing `totals`, the
 and a per-phase file disagree, the per-phase file wins and the index is
 regenerated.
 
+The planner MUST also create or update
+`${AGENT_SKILLS_CACHE_DIR:-${WORKSPACE_ROOT:-$REPO_ROOT}/.cache/agent-skills}/<issue-key>/evidence-pack.yml`
+in the same run. This applies even when the user starts from a greenfield brief
+and no prior evidence pack exists. The evidence pack is the durable continuity
+contract for phase execution: it records the `delivery_plan` structure, the
+current dispatch pointer, and the fields each executor must update when a
+phase completes. A plan that writes `destination.md` and phase files without
+`evidence-pack.yml` is not dispatchable.
+
 ### 4. Right-size and re-decompose
 
 Phases that are too large hide their assumptions. Re-decompose any phase that:
@@ -424,6 +433,11 @@ The dispatch-pointer rules are **binding** and mirrored in the
 - `READY_FOR_DISPATCH` → `current_dispatch_pointer` MUST be the phase id of
   the first phase whose state is `ready` and whose prerequisites are all
   `done`. Never `null`.
+- For high-confidence plans, mark phases `ready` when they are fully specified
+  and only blocked by listed prerequisites; prerequisites, not `provisional`,
+  gate dispatch order. Reserve `provisional` for phases that cannot be safely
+  executed from the written plan because discovery or user evidence is still
+  needed.
 - `READY_FOR_DISCOVERY` → `current_dispatch_pointer` MUST be the phase id
   of the discovery / spike phase that closes the load-bearing assumptions
   surfaced by the medium-confidence gate. **Never `null`.** All later
@@ -475,24 +489,24 @@ ${AGENT_SKILLS_CACHE_DIR:-${WORKSPACE_ROOT:-$REPO_ROOT}/.cache/agent-skills}/<is
 │   ├── phase-01-<slug>.md               <- one file per phase
 │   ├── phase-02-<slug>.md
 │   └── ...
-├── evidence-pack.yml                    <- shared with other skills (existing)
+├── evidence-pack.yml                    <- this skill creates/updates; shared with other skills
 ├── repro-recipe.yml                     <- shared (existing, when applicable)
 └── definition-of-done.json              <- shared (existing, written by software-engineer)
 ```
 
-The plan files live next to the existing evidence pack so any downstream
-skill can read both with one directory walk. The cross-skill schema for the
+The plan files live next to the evidence pack so any downstream skill can
+read both with one directory walk. The cross-skill schema for the
 phase-state writes — what each executing skill appends, and what the
 planner alone owns — is defined in the
 [evidence-pack `delivery_plan` ownership rule](../software-engineer/references/evidence-pack.md#3-skill-responsibilities).
 The short version: the planner is the sole writer of the structural fields
-(`destination_path`, `index_path`, `current_dispatch_pointer`, the
-`phases[]` list); the skill named in a phase's `recommended_owner` is the
-sole writer of that phase's completion state (`state`, `completed_at`,
-`completed_by`) and updates the top-level `last_completed_*` mirrors. The
-planner reads those completion writes on its next run to refresh the index
-and the dispatch pointer; without them the pointer goes stale and the next
-phase will not dispatch.
+(`destination_path`, `index_path`, the `phases[]` list); the skill named in
+a phase's `recommended_owner` is the sole writer of that phase's completion
+checkpoint (`state`, `completed_at`, `completed_by`, `completion_summary`,
+`artifacts`, `validation`, `follow_up_context`) and the top-level
+`last_completed_*` / `last_continuity_checkpoint_at` mirrors. The executor
+also recomputes `current_dispatch_pointer` to the next ready phase after its
+own checkpoint. Without that checkpoint, the phase is not complete.
 
 ## Phase template
 
@@ -515,6 +529,7 @@ omitted by accident).
 - Issue / work key:
 - Destination file: <relative path written or updated this run>
 - Phased-plan index: <relative path written or updated this run>
+- Evidence pack: <relative path written or updated this run; REQUIRED for every dispatchable plan>
 - Phases total / ready / done / blocked:
 - Current dispatch pointer: <phase id, REQUIRED for READY_FOR_DISPATCH and
   READY_FOR_DISCOVERY (point at the discovery phase id); "none" only when
@@ -582,6 +597,9 @@ entirely when no qualifying insight exists. See
   recommended owner skill.
 - [ ] Each `ready` phase's recommended owner skill resolves from the canonical
   skill source. Missing owner skill resolution is `blocked`, not a warning.
+- [ ] `evidence-pack.yml` exists beside `destination.md` and contains the
+  `delivery_plan` block for every phase. A plan with only Markdown phase files
+  is not dispatchable.
 - [ ] Each phase has prerequisites, inputs, scope, expected outputs,
   validation, risks, size, parallel-safety, and rollback behavior.
 - [ ] Code-delivery plans end at a reviewable delivery artifact: branch pushed,
@@ -605,6 +623,9 @@ entirely when no qualifying insight exists. See
   explicit accept-the-risk note.
 - Plan artifacts live in the shared cache layout; the planner does not
   invent a new directory structure per task.
+- The evidence pack is the continuity source of truth. A fresh agent must be
+  able to read it and know which phase was last completed and which phase is
+  next.
 - Implementation plans do not hide the final engineering closure. Review,
   Definition-of-Done, push, and PR readiness are part of delivery, not optional
   afterthoughts.
@@ -638,6 +659,9 @@ entirely when no qualifying insight exists. See
 - Do not mark a phase `ready` when its `recommended_owner` skill cannot be
   resolved from the canonical skill source. Surface the missing skill as a
   blocker with the checked paths.
+- Do not produce a dispatchable plan without `evidence-pack.yml`. If the cache
+  write fails, readiness is `BLOCKED` even if the Markdown plan files were
+  written.
 - Do not end a code-changing delivery plan with validation only. The final
   executable path must either produce a pushed PR-ready branch or explicitly
   stop as blocked before claiming completion.

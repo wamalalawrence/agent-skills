@@ -16,6 +16,10 @@ skill source before doing work. If the owner skill cannot be loaded, the phase
 is blocked; the executor must not substitute a generic workflow or another
 skill.
 
+The index is not enough on its own. A sibling `../evidence-pack.yml` must
+exist and contain the same phase ids under `delivery_plan.phases[]`. Executors
+write their continuity checkpoint there before claiming a phase is complete.
+
 Do not invent extra fields. If something is genuinely not applicable, write
 `not applicable — <one-line reason>` instead of removing the field.
 
@@ -80,6 +84,10 @@ Plain-prose two-to-four-sentence summary of the dependency graph. Example:
 - `READY_FOR_DISPATCH` → `current_dispatch_pointer` MUST be the phase id
   of the first phase whose state is `ready` and whose prerequisites are
   all `done`. Never `null`.
+- In high-confidence plans, phases that are fully specified but wait on prior
+  phase completion should still be `ready`; their `prerequisites` gate dispatch.
+  Use `provisional` only when the phase needs more discovery or evidence before
+  a fresh executor can run it safely.
 - `READY_FOR_DISCOVERY` → `current_dispatch_pointer` MUST be the phase id
   of the discovery / spike phase that closes the load-bearing assumptions.
   Never `null`. All later phases stay `provisional` until the discovery

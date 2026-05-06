@@ -6,6 +6,35 @@ All notable project changes should be recorded here.
 
 - No unreleased changes.
 
+## 0.27.0 - Phase Continuity Checkpoints
+
+### Added
+
+- Added a binding
+  [phase-continuity checkpoint](skills/software-engineer/references/evidence-pack.md#phase-continuity-checkpoint)
+  contract to `evidence-pack.yml`. Any skill executing a `delivery-planner` phase now must record
+  `in-progress`, `done`, or `blocked` state plus completion summary, artifacts, validation,
+  follow-up context, `last_completed_*` / `last_blocked_*` mirrors, and the recomputed
+  `current_dispatch_pointer` before claiming the phase is complete.
+- Added a missing-evidence-pack recovery rule: when an executor is given `destination.md` and
+  `phase-NN.md` but no `evidence-pack.yml`, it must reconstruct the minimal `delivery_plan` from
+  the phase files or stop with `BLOCKED: phase continuity evidence-pack missing`.
+- Added [`evals/delivery-planner-phase-continuity.md`](evals/delivery-planner-phase-continuity.md)
+  to pin the greenfield planning and phase-1 execution handoff that exposed the continuity break.
+
+### Changed
+
+- `delivery-planner` now must create or update `evidence-pack.yml` in the same run as
+  `destination.md` and `phased-plan/`, even for greenfield plans with no prior evidence pack.
+  Markdown-only phase plans are no longer dispatchable.
+- `software-engineer`, `issue-investigator`, `product-owner`, `manual-tester`, and
+  `test-automation-engineer` phase handoff sections now require opening `evidence-pack.yml` before
+  work, marking the current phase `in-progress`, writing a completion or blocked checkpoint, and
+  re-reading the evidence pack after the write.
+- `delivery-planner` output now includes the evidence-pack path in `Plan Summary`, and the planner
+  checklist verifies that `delivery_plan` contains one phase entry per phase file.
+- `VERSION`, README status, and all skill metadata versions moved from `0.26.0` to `0.27.0`.
+
 ## 0.26.0 - Dispatch And Jira Scope Hardening
 
 ### Added
