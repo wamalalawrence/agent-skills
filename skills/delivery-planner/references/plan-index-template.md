@@ -61,6 +61,32 @@ totals:
 ```markdown
 # Phased plan — SSO parity for the example-api login flow
 
+## Inputs for the next agent
+
+A fresh agent given **this README plus the dispatched phase file** must have
+enough context to start. Always include this block, regenerate it on every
+checkpoint, and use repo-relative paths from this README's location:
+
+- **Destination brief**: `../destination.md` — outcome, success signals,
+  scope, non-goals, constraints. Read first.
+- **Evidence pack**: `../evidence-pack.yml` — durable continuity record
+  including `delivery_plan.phases[]` state, `current_dispatch_pointer`, and
+  prior `last_completed_*` mirrors. The dispatch contract.
+- **Current phase file**: `phase-<NN>-<slug>.md` (the file matching
+  `current_dispatch_pointer`). Each phase file is self-contained so no other
+  phase file needs to be read.
+- **Recommended owner skill**: load `<skill_source>/<recommended_owner>/SKILL.md`
+  from the resolved canonical skill source — see
+  [skill-source-resolution.md](../../../docs/skill-source-resolution.md).
+  The current owner is named in the phase row below.
+- **Optional**: `../repro-recipe.yml` (when bug-flavored) and
+  `../definition-of-done.json` (written by `software-engineer` once a Phase 5
+  closure runs). Read only if referenced by the dispatched phase.
+
+If any of the above is missing, follow the
+[missing evidence-pack recovery rule](../../software-engineer/references/evidence-pack.md)
+or stop with `BLOCKED: required input missing` — do not invent context.
+
 ## Phases
 
 | ID         | Title                                | Owner skill              | Size | State        | Prereqs |
@@ -102,6 +128,15 @@ Plain-prose two-to-four-sentence summary of the dependency graph. Example:
 - Bump `updated_at:` on every regeneration. The planner regenerates the
   index whenever it runs (re-reads the per-phase files and recomputes
   `totals`, `last_completed_*` mirrors, and `current_dispatch_pointer`).
+- **Executors regenerate the index too.** Any skill that completes its
+  phase-continuity checkpoint to `evidence-pack.yml` MUST also regenerate
+  this README from the updated evidence pack — re-derive the phase table's
+  `State` column, refresh the `totals` and `last_completed_*` mirrors,
+  recompute `current_dispatch_pointer`, refresh the `Inputs for the next
+  agent` section, and bump `updated_at`. Executors MUST NOT add, delete,
+  reorder, rename, or resize phases — those are planner-only operations.
+  See the
+  [phase-continuity checkpoint](../../software-engineer/references/evidence-pack.md#phase-continuity-checkpoint).
 - The index is **derived**: never edit it by hand. If the index and a
   per-phase file disagree, the per-phase file wins and the planner
   regenerates the index on its next run.

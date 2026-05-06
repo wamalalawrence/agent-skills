@@ -86,6 +86,56 @@ If none of the above match, the agent has no skills to load — report
 `Missing required setup: no skill source found` and point the user at
 [installation.md](installation.md).
 
+## Owner-skill verification recipe
+
+When a `delivery-planner` phase names a `recommended_owner` (e.g.
+`test-automation-engineer`, `manual-tester`), the executing agent MUST verify
+the owner skill is loadable **by reading the canonical path**, not by
+consulting the host IDE's curated skill listing. Some IDEs surface only a
+subset of installed skills (Claude Code shows the workspace registry; Cursor,
+Continue, and similar surfaces may show a curated default), so an absence
+from the IDE's "available skills" panel is **not** evidence the skill is
+missing on disk.
+
+The verification recipe (binding):
+
+1. Resolve the canonical skill source per the order above. Common results
+   are `<workspace>/.skills/`, `<repo>/.agent-skills/skills/`, or
+   `<workspace>/agent-skills/skills/`.
+2. Construct the candidate path:
+   `<canonical>/<recommended_owner>/SKILL.md`.
+3. Confirm the file exists and is readable (in shell:
+   `test -r <path>`; in agents without shell, use the `Read` tool and
+   verify the YAML header parses).
+4. Confirm the loaded SKILL.md's `name` field equals `recommended_owner`.
+   A path mismatch (e.g. directory renamed, vendored copy out of sync) is
+   a blocker, not a substitution opportunity.
+
+If steps 1–4 succeed, **load that file directly** with the agent's file-read
+tool and follow its workflow for the phase. Do NOT downgrade to "execute the
+phase directly" because the host's skill registry didn't surface the name.
+Do NOT substitute a related skill (`software-engineer` is not an acceptable
+substitute for `test-automation-engineer`).
+
+If any step fails, stop with:
+
+```text
+BLOCKED: recommended owner skill unavailable
+  recommended_owner: <name>
+  canonical source: <path>
+  paths checked: <list>
+  reason: <one-line cause>
+```
+
+Record the same paths and reason on `phases[<id>].blocked_reason` in
+`evidence-pack.yml`. The operator's next action is to fix the skill source
+(rerun `./setup.init`, sync the vendored copy, or pass an explicit
+`<path>` in the prompt), not to ask the agent to proceed without the skill.
+
+This rule applies equally when the user invokes a skill outside a
+`delivery-planner` phase: a prompt that names `recommended_owner: foo`
+demands `foo`, regardless of host UI.
+
 ## Duplicate-handling rules
 
 When a skill name appears in more than one of the directories listed above, the agent must

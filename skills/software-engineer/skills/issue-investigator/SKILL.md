@@ -17,7 +17,7 @@ compatibility: >-
   docs/execution-modes.md.
 metadata:
   author: wamalalawrence
-  version: "0.27.0"
+  version: "0.28.0"
   homepage: "https://github.com/wamalalawrence/agent-skills"
 argument-hint: >-
   issue URL/key, bug report, incident, support ticket, feature request, or task
@@ -562,7 +562,15 @@ named `issue-investigator` as its `recommended_owner`:
 - Confirm `evidence-pack.yml.delivery_plan.phases[<this phase id>].recommended_owner` equals
   `issue-investigator`. If it does not, **stop** and surface to the user — running the wrong
   skill on a phase silently corrupts the plan.
-- Before material work starts, write `phases[<this phase id>].state: in-progress` plus
+- Run the
+  [owner-skill verification recipe](../../../../docs/skill-source-resolution.md#owner-skill-verification-recipe)
+  for `issue-investigator` itself: read
+  `<canonical>/software-engineer/skills/issue-investigator/SKILL.md` directly with the
+  file-read tool and confirm its `name:` field. The host IDE's skill listing is not
+  authoritative — the canonical file on disk is. Record the verified path on
+  `phases[<this phase id>].owner_skill_source`.
+- Before material work starts, write `phases[<this phase id>].state: in-progress`,
+  `working_branch: not-applicable — read-only`, `base_branch`, `owner_skill_source`, plus
   `last_continuity_checkpoint_at`, then re-read `evidence-pack.yml` to confirm the checkpoint.
 - If the investigation's own three-hypothesis discipline reveals that the phase scope is too
   broad (e.g. the phase says "find the cause" but discriminating between hypotheses needs
@@ -573,9 +581,15 @@ named `issue-investigator` as its `recommended_owner`:
 - On normal completion (after step 7's self-validation pass), write the full
   [phase-continuity checkpoint](../../references/evidence-pack.md#phase-continuity-checkpoint):
   `state: done`, `completed_at`, `completed_by: issue-investigator`, `completion_summary`,
-  `artifacts`, `validation`, `follow_up_context`, top-level `last_completed_*`,
-  `last_continuity_checkpoint_at`, and the recomputed `current_dispatch_pointer`. Re-read
-  `evidence-pack.yml` after the write. Without this checkpoint the phase is not complete.
+  `artifacts`, `validation`, `follow_up_context`, `working_branch`, `base_branch`,
+  `owner_skill_source`, top-level `last_completed_*`, `last_continuity_checkpoint_at`, and the
+  recomputed `current_dispatch_pointer`. Re-read `evidence-pack.yml` after the write. Without
+  this checkpoint the phase is not complete.
+- Regenerate `phased-plan/README.md` from the updated evidence pack as part of the same
+  checkpoint write — refresh the phase table's `State` column, the `totals`, the
+  `last_completed_*` mirrors, the `current_dispatch_pointer`, and the `Inputs for the next
+  agent` section, and bump `updated_at`. Do not add, delete, reorder, rename, or resize
+  phases.
 - Do not invoke `delivery-planner` from inside this skill. Phase re-decomposition is the
   planner's job on its next run, triggered by the user.
 

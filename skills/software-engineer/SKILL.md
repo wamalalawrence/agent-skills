@@ -20,7 +20,7 @@ compatibility: >-
   .agent-skills.yml). See docs/execution-modes.md.
 metadata:
   author: wamalalawrence
-  version: "0.27.0"
+  version: "0.28.0"
   homepage: "https://github.com/wamalalawrence/agent-skills"
 ---
 
@@ -354,12 +354,19 @@ Use the locally installed CLI first, fall back to direct REST only when the CLI 
   branch, or code work.
 - [ ] Resolve the phase's `recommended_owner` using the
   [skill-source resolution contract](../../docs/skill-source-resolution.md), including any explicit
-  skill directory or `SKILL.md` path the user supplied. If the owner skill cannot be loaded, stop
-  with `BLOCKED: recommended owner skill unavailable`; list the paths checked. Do not fall back to a
-  host-specific `.skills` guess when the user or config supplied a different path.
+  skill directory or `SKILL.md` path the user supplied. Run the
+  [owner-skill verification recipe](../../docs/skill-source-resolution.md#owner-skill-verification-recipe):
+  read `<canonical>/<recommended_owner>/SKILL.md` directly with the file-read tool and confirm
+  its `name:` field equals `recommended_owner`. The host IDE's skill-registry listing is not
+  authoritative — an entry missing from the IDE panel does not mean the file is missing on disk.
+  Record the verified path in `phases[<id>].owner_skill_source` in `evidence-pack.yml`. If
+  verification fails, stop with `BLOCKED: recommended owner skill unavailable`, list the paths
+  checked, and write `phases[<id>].state: blocked`.
 - [ ] If the current phase's `recommended_owner` is not `software-engineer`, do not execute this
-  workflow. Load the named owner skill from the resolved skill source, or stop with the blocker
-  above. Running the wrong skill on a phase is a workflow bug.
+  workflow. Load the named owner skill from the resolved skill source via the verification
+  recipe above, or stop with the blocker. Running the wrong skill on a phase is a workflow bug;
+  "the IDE didn't list it so I executed directly" is the failure mode this rule exists to
+  prevent.
 - [ ] Extract the primary Jira key when Jira is involved. A software implementation run has exactly
   one primary Jira task. If the prompt contains two or more independent Jira keys, stop before
   branch creation and split the work: one Jira task = one branch = one PR = one focused reviewable
@@ -850,8 +857,21 @@ If this run was invoked because a [`delivery-planner`](../delivery-planner/SKILL
 - [ ] Confirm `evidence-pack.yml.delivery_plan.phases[<this phase id>].recommended_owner` equals
   `software-engineer`. If it does not, **stop** and surface to the user — running the wrong
   skill on a phase silently corrupts the plan.
-- [ ] Before material work starts, write `phases[<this phase id>].state: in-progress` plus
-  `last_continuity_checkpoint_at`, then re-read `evidence-pack.yml` to confirm the checkpoint.
+- [ ] Run the
+  [owner-skill verification recipe](../../docs/skill-source-resolution.md#owner-skill-verification-recipe)
+  for `software-engineer` itself: read `<canonical>/software-engineer/SKILL.md` directly and
+  confirm its `name:` field. The host IDE's skill-listing absence is **not** evidence the file
+  is missing on disk. Record the verified path on `phases[<this phase id>].owner_skill_source`.
+- [ ] Run the **branch-isolation pre-check** from the
+  [phase-continuity checkpoint](./references/evidence-pack.md#phase-continuity-checkpoint).
+  Capture `working_branch` from `git rev-parse --abbrev-ref HEAD` after section 1.3 created
+  the feature branch, and `base_branch` from the matched `${PROJECTS_JSON}` entry. If
+  `working_branch == base_branch`, stop with
+  `BLOCKED: phase would commit to base branch <name>`; do NOT silently `git checkout -b` and
+  proceed.
+- [ ] Before material work starts, write `phases[<this phase id>].state: in-progress`,
+  `working_branch`, `base_branch`, `owner_skill_source`, and `last_continuity_checkpoint_at`,
+  then re-read `evidence-pack.yml` to confirm the checkpoint.
 - [ ] If the phase scope clearly exceeds one focused agent session (the size check from
   Phase 1.4 fires), write a blocked
   [phase-continuity checkpoint](./references/evidence-pack.md#phase-continuity-checkpoint), record
@@ -860,10 +880,16 @@ If this run was invoked because a [`delivery-planner`](../delivery-planner/SKILL
 - [ ] On normal completion (after Phase 5 finishes), write the full
   [phase-continuity checkpoint](./references/evidence-pack.md#phase-continuity-checkpoint):
   `state: done`, `completed_at`, `completed_by: software-engineer`, `completion_summary`,
-  `artifacts`, `validation`, `follow_up_context`, top-level `last_completed_*`,
-  `last_continuity_checkpoint_at`, and the recomputed `current_dispatch_pointer`. Re-read
-  `evidence-pack.yml` after the write. Without this checkpoint the phase is not complete, even if
-  the code was changed and tests passed.
+  `artifacts`, `validation`, `follow_up_context`, `working_branch`, `base_branch`,
+  `owner_skill_source`, top-level `last_completed_*`, `last_continuity_checkpoint_at`, and
+  the recomputed `current_dispatch_pointer`. Re-read `evidence-pack.yml` after the write.
+  Without this checkpoint the phase is not complete, even if the code was changed and tests
+  passed.
+- [ ] Regenerate `phased-plan/README.md` from the updated evidence pack as part of the same
+  checkpoint write — refresh the phase table's `State` column, the `totals`, the
+  `last_completed_*` mirrors, the `current_dispatch_pointer`, and the `Inputs for the next
+  agent` section, and bump `updated_at`. Do not add, delete, reorder, rename, or resize
+  phases.
 - [ ] Do not invoke `delivery-planner` from inside this skill. Phase re-decomposition is the
   planner's job on its next run, triggered by the user.
 

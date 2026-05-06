@@ -20,7 +20,7 @@ compatibility: >-
   .agent-skills.yml). See docs/execution-modes.md.
 metadata:
   author: wamalalawrence
-  version: "0.27.0"
+  version: "0.28.0"
   homepage: "https://github.com/wamalalawrence/agent-skills"
 ---
 
@@ -371,6 +371,11 @@ The index `phased-plan/README.md` follows the binding
   `updated_at`, `current_dispatch_pointer`, `readiness_decision`, the
   `last_completed_*` mirrors of `evidence-pack.yml.delivery_plan`, and
   `totals`.
+- An **`## Inputs for the next agent`** section that lists, with repo-relative
+  paths, the destination brief, the evidence pack, the current phase file,
+  and the canonical skill source path for the dispatched phase's
+  `recommended_owner`. A user pasting only this README into a fresh prompt
+  must be able to walk those pointers without prior conversation context.
 - The list of phases in order with title, owner skill, size, state
   (`provisional` / `ready` / `in-progress` / `done` / `skipped` / `blocked`),
   and prerequisites — rendered as a Markdown table.
@@ -671,8 +676,13 @@ entirely when no qualifying insight exists. See
 - Do not turn this skill into a project-management replacement. It does not
   track effort, calendar dates, headcount allocation, or vendor procurement.
   Those belong outside the agent loop.
-- Do not recommend `develop` branches or GitFlow. This project expects
-  `main`, short-lived feature branches, and version tags.
+- Do not invent the project's branching policy. Read each affected repo's
+  `base_branch` from `${PROJECTS_JSON}` (with `${GITHUB_DEFAULT_BRANCH}` as
+  a fallback when an entry is missing). Some teams target `develop`, some
+  `main`, some a release train; the planner mirrors what the project
+  declared, never overrides it. The only exception is when the user
+  explicitly states a different base branch in the prompt — record the
+  exception verbatim in the destination's `Constraints` section.
 
 ## Example Prompts
 

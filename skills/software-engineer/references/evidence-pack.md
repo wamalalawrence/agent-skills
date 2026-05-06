@@ -137,6 +137,9 @@ delivery_plan:
       state: done
       completed_at: 2026-05-06T14:00:00Z
       completed_by: software-engineer
+      working_branch: feature/PROJ-1234-sso-feature-flag
+      base_branch: develop
+      owner_skill_source: ".skills/software-engineer/SKILL.md"
       completion_summary: "Added disabled-by-default SSO dual-write flag and config tests."
       artifacts:
         - "src/auth/SsoFlags.java"
@@ -275,6 +278,38 @@ re-read `evidence-pack.yml` and confirm the write is present. This is mandatory 
 only asked for "phase 1" and even when the implementation itself finished successfully. If the write
 fails, the phase result is `blocked` because the next agent cannot continue safely.
 
+#### Pre-work isolation gate (binding)
+
+Before writing `phases[<id>].state: in-progress` and before any code edit, branch creation, commit,
+push, or PR-affecting action, the executor MUST record and self-check the following on
+`phases[<this phase id>]`:
+
+1. `working_branch` ← the actual git branch the executor will commit on. Capture with
+   `git -C <repo-root> rev-parse --abbrev-ref HEAD` after `1.3 Git branching` (for
+   `software-engineer`) or the equivalent step in other executors.
+2. `base_branch` ← the project's `base_branch` from `${PROJECTS_JSON}` (or
+   `${GITHUB_DEFAULT_BRANCH}` fallback) for the repo this phase touches.
+3. **Branch-isolation assertion.** For any phase that mutates the repo (commits, pushes, or opens
+   a PR — i.e. `software-engineer` and any other repo-mutating owner), `working_branch` MUST NOT
+   equal `base_branch`. If they are equal, the executor stops with
+   `BLOCKED: phase would commit to base branch <name>` and writes `phases[<id>].state: blocked`
+   with `blocked_reason: "Working branch matched base branch; refused to commit on base."` Do
+   not edit files, do not stash, do not silently `git checkout -b` and proceed; ask the user to
+   confirm the intended branch first. Read-only owners (`issue-investigator`,
+   `manual-tester` against deployed environments, `product-owner` discovery) skip this assertion
+   and instead record `working_branch: not-applicable — read-only`.
+4. **Owner-skill verification.** The executor MUST verify that the resolved canonical skill
+   source contains a `SKILL.md` for `phases[<id>].recommended_owner`. The verification is a file
+   read, not a host listing — see
+   [skill-source-resolution.md](../../../docs/skill-source-resolution.md#owner-skill-verification-recipe).
+   Record the verified path on `phases[<id>].owner_skill_source`. A host listing that omits the
+   skill (some IDEs only expose a curated subset) is **not** evidence the skill is missing.
+
+These three writes happen in the same evidence-pack update that flips the phase to `in-progress`.
+Without them the executor has not entered the phase.
+
+#### Checkpoint write
+
 The checkpoint write contains:
 
 1. `phases[<this phase id>].state` ← `in-progress` before material work starts, then `done` or
@@ -289,14 +324,33 @@ The checkpoint write contains:
    skipped/blocked reasons.
 7. `phases[<this phase id>].follow_up_context` ← assumptions resolved, decisions made, and details
    the next phase may rely on.
-8. Top-level `last_completed_*` or `last_blocked_*` mirrors and
+8. `phases[<this phase id>].working_branch`, `base_branch`, and `owner_skill_source` ← carried
+   forward from the pre-work isolation gate above. These fields are required on every checkpoint
+   so the next agent can audit branch hygiene and skill resolution without rerunning git.
+9. Top-level `last_completed_*` or `last_blocked_*` mirrors and
    `last_continuity_checkpoint_at`.
-9. `current_dispatch_pointer` recomputed to the first `ready` phase whose prerequisites are now
-   `done`; `null` only when no phase is dispatchable or the plan is blocked.
+10. `current_dispatch_pointer` recomputed to the first `ready` phase whose prerequisites are now
+    `done`; `null` only when no phase is dispatchable or the plan is blocked.
 
-The final user-facing response for a phase must name the evidence-pack path, the phase id updated,
-the resulting phase state, and the new `current_dispatch_pointer`. A transcript-only summary is not
-a checkpoint.
+#### Index regeneration (binding)
+
+After the checkpoint write to `evidence-pack.yml`, the executor MUST also regenerate
+`phased-plan/README.md` from the updated evidence pack. This is mechanical, not planning: read
+`delivery_plan.phases[]`, recompute `totals`, refresh the phase table's `State` column, refresh
+the YAML header's `last_completed_*` mirrors and `current_dispatch_pointer`, bump the header's
+`updated_at:`. Follow the binding shape in
+[plan-index template](../../delivery-planner/references/plan-index-template.md). If the index
+write fails, the phase result is `blocked` for the same reason as a failed evidence-pack write —
+the next agent reading only the README would otherwise see a stale dispatch pointer.
+
+The executor MUST NOT add, delete, reorder, rename, or resize phases while regenerating the
+index. Those are planner-owned operations. If the index already contains a phase the evidence
+pack does not, or vice versa, stop with `BLOCKED: phase index out of sync with evidence pack`
+and surface the diff — do not silently reconcile.
+
+The final user-facing response for a phase must name the evidence-pack path, the regenerated
+phased-plan/README path, the phase id updated, the resulting phase state, and the new
+`current_dispatch_pointer`. A transcript-only summary is not a checkpoint.
 
 **`evidence-pack.yml.delivery_plan` ownership rule.** Two writers, with a strict split:
 
@@ -307,9 +361,12 @@ a checkpoint.
   `phases[*].state`.
 - The skill named in a phase's `recommended_owner` is the **only** writer of that phase's
   completion state. When invoked from a phase, before returning its final result, that skill
-  performs the [phase-continuity checkpoint](#phase-continuity-checkpoint). It MAY update
+  performs the [phase-continuity checkpoint](#phase-continuity-checkpoint), which includes
+  regenerating `phased-plan/README.md` from the updated evidence pack. It MAY update
   `current_dispatch_pointer` only by the deterministic rule above; it MUST NOT add, delete,
-  reorder, rename, or resize phases.
+  reorder, rename, or resize phases. Index regeneration is mechanical (re-derive the table,
+  totals, header mirrors, and pointer from `delivery_plan`); inserting or removing rows is a
+  planner-only operation.
 
 This split keeps continuity fresh after real phase execution: the planner owns the plan shape, the
 executors own their own outcomes and the derived next pointer, and no skill writes another's fields.

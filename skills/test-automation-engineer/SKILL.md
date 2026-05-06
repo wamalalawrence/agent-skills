@@ -16,7 +16,7 @@ compatibility: >-
   .agent-skills.yml). See docs/execution-modes.md.
 metadata:
   author: wamalalawrence
-  version: "0.27.0"
+  version: "0.28.0"
   homepage: "https://github.com/wamalalawrence/agent-skills"
 ---
 
@@ -253,8 +253,19 @@ If this run was invoked because a [`delivery-planner`](../delivery-planner/SKILL
 - Confirm `evidence-pack.yml.delivery_plan.phases[<this phase id>].recommended_owner` equals
   `test-automation-engineer`. If it does not, **stop** and surface to the user — running the
   wrong skill on a phase silently corrupts the plan.
-- Before material work starts, write `phases[<this phase id>].state: in-progress` plus
-  `last_continuity_checkpoint_at`, then re-read `evidence-pack.yml` to confirm the checkpoint.
+- Run the
+  [owner-skill verification recipe](../../docs/skill-source-resolution.md#owner-skill-verification-recipe)
+  for `test-automation-engineer` itself: read `<canonical>/test-automation-engineer/SKILL.md`
+  directly with the file-read tool and confirm its `name:` field. If the host IDE's skill
+  panel did not surface the skill but the file exists on disk, treat the file as authoritative
+  and proceed. Record the verified path on `phases[<this phase id>].owner_skill_source`. Do
+  NOT downgrade to `software-engineer`; do NOT execute the phase directly without the skill.
+- Before material work starts, capture `working_branch` (the branch tests will be committed
+  on) and `base_branch` from `${PROJECTS_JSON}` for the affected repo. If `working_branch ==
+  base_branch`, stop with `BLOCKED: phase would commit to base branch <name>`. Then write
+  `phases[<this phase id>].state: in-progress` plus `working_branch`, `base_branch`,
+  `owner_skill_source`, and `last_continuity_checkpoint_at`, and re-read `evidence-pack.yml`
+  to confirm the checkpoint.
 - If the phase asks the skill to automate behavior that is not yet stable (Requirement
   Understanding Gate ends below `high`, or the manual scenario it should formalise has not
   been executed), write a blocked
@@ -265,10 +276,15 @@ If this run was invoked because a [`delivery-planner`](../delivery-planner/SKILL
   workflow), write the full
   [phase-continuity checkpoint](../software-engineer/references/evidence-pack.md#phase-continuity-checkpoint):
   `state: done`, `completed_at`, `completed_by: test-automation-engineer`,
-  `completion_summary`, `artifacts`, `validation`, `follow_up_context`, top-level
-  `last_completed_*`, `last_continuity_checkpoint_at`, and the recomputed
-  `current_dispatch_pointer`. Re-read `evidence-pack.yml` after the write. Without this checkpoint
-  the phase is not complete.
+  `completion_summary`, `artifacts`, `validation`, `follow_up_context`, `working_branch`,
+  `base_branch`, `owner_skill_source`, top-level `last_completed_*`,
+  `last_continuity_checkpoint_at`, and the recomputed `current_dispatch_pointer`. Re-read
+  `evidence-pack.yml` after the write. Without this checkpoint the phase is not complete.
+- Regenerate `phased-plan/README.md` from the updated evidence pack as part of the same
+  checkpoint write — refresh the phase table's `State` column, the `totals`, the
+  `last_completed_*` mirrors, the `current_dispatch_pointer`, and the `Inputs for the next
+  agent` section, and bump `updated_at`. Do not add, delete, reorder, rename, or resize
+  phases.
 - Do not invoke `delivery-planner` from inside this skill. Phase re-decomposition is the
   planner's job on its next run, triggered by the user.
 

@@ -817,6 +817,78 @@ detect_projects_json() {
   printf '\n]'
 }
 
+merge_projects_json() {
+  # Merge a freshly-detected PROJECTS_JSON ($1) with an existing one ($2),
+  # preserving user edits in the existing JSON for any repo whose `name`
+  # appears in both. New repos found on disk are appended; existing repos
+  # missing from the detected JSON are dropped.
+  #
+  # Specifically: when a repo `name` appears in both, every key set in the
+  # existing entry wins (`base_branch`, `runtime_version`, `notes`, etc.) —
+  # the user-edited `base_branch: develop` survives `--update`. Detected
+  # fields only fill blanks the existing entry left empty.
+  local detected="$1"
+  local existing="$2"
+  if [[ -z "${existing}" || "${existing}" == "[]" ]]; then
+    printf '%s' "${detected}"
+    return 0
+  fi
+  if ! command -v python3 >/dev/null 2>&1; then
+    # No python3 available; fall back to detected JSON. Surface a warning so
+    # the user knows their per-repo overrides may have been reset.
+    echo "  WARN: python3 not found; cannot merge per-repo PROJECTS_JSON overrides." >&2
+    echo "        The detected base_branch will be applied to every repo." >&2
+    printf '%s' "${detected}"
+    return 0
+  fi
+  AGENT_SKILLS_DETECTED="${detected}" \
+  AGENT_SKILLS_EXISTING="${existing}" \
+  python3 -c '
+import json
+import os
+import sys
+
+try:
+    detected = json.loads(os.environ["AGENT_SKILLS_DETECTED"])
+    existing = json.loads(os.environ["AGENT_SKILLS_EXISTING"])
+except Exception as exc:
+    sys.stderr.write("  WARN: PROJECTS_JSON merge failed (%s); using detected JSON.\n" % exc)
+    sys.stdout.write(os.environ["AGENT_SKILLS_DETECTED"])
+    sys.exit(0)
+
+if not isinstance(detected, list) or not isinstance(existing, list):
+    sys.stdout.write(os.environ["AGENT_SKILLS_DETECTED"])
+    sys.exit(0)
+
+existing_by_name = {entry.get("name"): entry for entry in existing if isinstance(entry, dict)}
+merged = []
+preserved = []
+appended = []
+for entry in detected:
+    if not isinstance(entry, dict):
+        merged.append(entry)
+        continue
+    name = entry.get("name")
+    prior = existing_by_name.get(name)
+    if prior is None:
+        merged.append(entry)
+        appended.append(name)
+        continue
+    combined = dict(entry)
+    for key, value in prior.items():
+        if value not in (None, "", []):
+            combined[key] = value
+    merged.append(combined)
+    preserved.append(name)
+
+if preserved:
+    sys.stderr.write("  Preserved per-repo overrides for: %s\n" % ", ".join(sorted(n for n in preserved if n)))
+if appended:
+    sys.stderr.write("  Detected new repo entries: %s\n" % ", ".join(sorted(n for n in appended if n)))
+sys.stdout.write(json.dumps(merged))
+'
+}
+
 count_detected_projects() {
   local workspace_root="$1"
   local count=0 repo_path=""
@@ -1607,6 +1679,20 @@ ENV_FILE="${WORKSPACE_ROOT}/.env"
 JIRA_FILE="${WORKSPACE_ROOT}/.jira-config.yml"
 SKILLS_LINK="${WORKSPACE_ROOT}/.skills"
 
+# In any non-interactive rerun (including --yes and --update), source the
+# existing .env so EXISTING_* captures the prior PROJECTS_JSON before the
+# managed-key block is regenerated. Without this, per-repo overrides like
+# `base_branch: develop` are silently reset on every rerun. --update already
+# handles this inside run_self_update; this block extends the same behavior
+# to plain --yes reruns. Skip in interactive mode so prompts still defer to
+# user input over stale env values.
+if [[ "${ASSUME_YES}" == "true" && -f "${ENV_FILE}" && -z "${UPDATE_PRESERVE_EXISTING:-}" ]]; then
+  set -a
+  # shellcheck disable=SC1090
+  source "${ENV_FILE}" 2>/dev/null || true
+  set +a
+fi
+
 # Pre-detect GitHub org so we can offer a richer ORG_NAME default.
 DEFAULT_GITHUB_ORG=""
 if DEFAULT_GITHUB_ORG="$(detect_github_org_from_siblings "${WORKSPACE_ROOT}" 2>/dev/null)"; then
@@ -1630,6 +1716,7 @@ EXISTING_CONFLUENCE_SPACE_KEYS="${CONFLUENCE_SPACE_KEYS:-}"
 EXISTING_SONAR_HOST_URL="${SONAR_HOST_URL:-}"
 EXISTING_SONAR_TOKEN="${SONAR_TOKEN:-}"
 EXISTING_ENVIRONMENTS_JSON="${ENVIRONMENTS_JSON:-}"
+EXISTING_PROJECTS_JSON="${PROJECTS_JSON:-}"
 
 if [[ "${JIRA_MODE}" == "yes" ]]; then
   USE_JIRA="yes"
@@ -1916,7 +2003,12 @@ GITHUB_DEFAULT_BRANCH="$(prompt "Default base branch" "main" \
 "REQUIRED. Default base branch for new feature work.
 COMMON VALUES: main, master, develop, trunk." validate_branch_name)"
 
-PROJECTS_JSON="$(detect_projects_json "${WORKSPACE_ROOT}" "${GITHUB_DEFAULT_BRANCH}")"
+DETECTED_PROJECTS_JSON="$(detect_projects_json "${WORKSPACE_ROOT}" "${GITHUB_DEFAULT_BRANCH}")"
+if [[ -n "${EXISTING_PROJECTS_JSON:-}" && "${EXISTING_PROJECTS_JSON}" != "[]" ]]; then
+  PROJECTS_JSON="$(merge_projects_json "${DETECTED_PROJECTS_JSON}" "${EXISTING_PROJECTS_JSON}")"
+else
+  PROJECTS_JSON="${DETECTED_PROJECTS_JSON}"
+fi
 DETECTED_COUNT="$(count_detected_projects "${WORKSPACE_ROOT}")"
 
 if ! validate_json_string "${PROJECTS_JSON}"; then

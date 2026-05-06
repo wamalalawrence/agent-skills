@@ -6,6 +6,63 @@ All notable project changes should be recorded here.
 
 - No unreleased changes.
 
+## 0.28.0 - Phase Execution Hygiene
+
+### Added
+
+- Added a binding **branch-isolation pre-check** to the
+  [phase-continuity checkpoint](skills/software-engineer/references/evidence-pack.md#phase-continuity-checkpoint).
+  Before flipping `phases[<id>].state` to `in-progress`, every executor that mutates a repo
+  must capture `working_branch` (from `git rev-parse --abbrev-ref HEAD`) and the project's
+  `base_branch` (from `${PROJECTS_JSON}` with `${GITHUB_DEFAULT_BRANCH}` fallback) and assert
+  they are not equal. A match stops the phase with `BLOCKED: phase would commit to base
+  branch <name>` and `state: blocked`. Read-only owners record `working_branch:
+  not-applicable — read-only`.
+- Added an **owner-skill verification recipe** to
+  [`docs/skill-source-resolution.md`](docs/skill-source-resolution.md#owner-skill-verification-recipe).
+  Executors must verify a phase's `recommended_owner` by reading
+  `<canonical>/<recommended_owner>/SKILL.md` directly with the file-read tool — the host IDE's
+  curated skill panel (Cursor, Continue, Copilot Chat) is not authoritative. An IDE listing
+  that omits the skill is **not** evidence the file is missing. Verified path is recorded on
+  `phases[<id>].owner_skill_source`.
+- Added an **`## Inputs for the next agent`** section to the
+  [plan-index template](skills/delivery-planner/references/plan-index-template.md). The
+  generated `phased-plan/README.md` now lists the destination brief, evidence pack, current
+  phase file, and canonical skill source path so a user pasting only the README into a fresh
+  prompt has every pointer the executor needs.
+- Added [`evals/phase-execution-branch-isolation.md`](evals/phase-execution-branch-isolation.md),
+  [`evals/owner-skill-verification-vs-ide-listing.md`](evals/owner-skill-verification-vs-ide-listing.md),
+  and [`evals/plan-index-regenerated-after-each-phase.md`](evals/plan-index-regenerated-after-each-phase.md)
+  pinning the three new contracts.
+
+### Changed
+
+- **Executors regenerate `phased-plan/README.md`.** The phase-continuity checkpoint now
+  requires the executing skill (`software-engineer`, `issue-investigator`, `product-owner`,
+  `manual-tester`, `test-automation-engineer`) to regenerate the phased-plan index from the
+  updated evidence pack as part of the same checkpoint write — refresh the phase table's
+  `State` column, the `totals`, the `last_completed_*` mirrors, the
+  `current_dispatch_pointer`, and the `Inputs for the next agent` section, and bump
+  `updated_at`. Adding, deleting, reordering, renaming, or resizing phases remains
+  planner-only. Without this regeneration, downstream agents reading only the README see
+  stale dispatch state.
+- **`setup.init --update` preserves per-repo `base_branch` overrides.** A new
+  `merge_projects_json` step merges the freshly-detected `PROJECTS_JSON` with the existing
+  one by `name`: every key set in the existing entry wins (`base_branch`,
+  `runtime_version`, `notes`, `build`, etc.). Newly-detected repos are appended; repos
+  removed from disk are dropped. Teams that target `develop` or any non-default base branch
+  no longer have their overrides reset on every update. A warning surfaces when `python3` is
+  unavailable for the merge.
+- The `delivery-planner` guardrail "Do not recommend `develop` branches or GitFlow" was
+  replaced with "Do not invent the project's branching policy. Read each affected repo's
+  `base_branch` from `${PROJECTS_JSON}`." The planner now mirrors what the project declared
+  rather than imposing the agent-skills repo's own preference on user repos.
+- Every executor's "When invoked from a delivery-planner phase" section now points at the
+  owner-skill verification recipe, the branch-isolation pre-check, and the README
+  regeneration discipline. The phase-continuity checkpoint additionally requires
+  `working_branch`, `base_branch`, and `owner_skill_source` on the completion write.
+- `VERSION`, README status, and all skill metadata versions moved from `0.27.0` to `0.28.0`.
+
 ## 0.27.0 - Phase Continuity Checkpoints
 
 ### Added
