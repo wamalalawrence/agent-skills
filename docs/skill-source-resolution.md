@@ -9,9 +9,10 @@ This page is the **single source of truth** for how an agent (and the human oper
 **one** canonical skill directory. It applies to every skill in this repository and to every host
 that loads them.
 
-> **TL;DR:** if there is a `.agent-skills.yml` with `skills.canonical_dir`, that wins. Otherwise
-> walk the resolution order below, pick the first match, and **stop**. Never load skills from two
-> directories in the same task.
+> **TL;DR:** if the current prompt gives an explicit skill directory or `SKILL.md` path, verify and
+> use that path for this task. Otherwise, if there is a `.agent-skills.yml` with
+> `skills.canonical_dir`, that wins. Then walk the resolution order below, pick the first match,
+> and **stop**. Never load skills from two directories in the same task.
 
 ## Why this matters
 
@@ -36,6 +37,27 @@ If the agent loads from both locations it can:
 The resolution order below removes that ambiguity.
 
 ## Resolution order
+
+### Prompt-supplied source path
+
+Before walking the generic resolution order, honor an explicit path supplied in the current user
+prompt or task brief. The path may be absolute, relative to the current working directory, relative
+to the repository root, or relative to `${WORKSPACE_ROOT}`. It may point at either the canonical
+skills directory (`skills/`, `.skills/`, `.agent-skills/skills/`) or at a specific `SKILL.md`.
+
+The agent must normalize the path, verify that it exists, and verify that the requested skill file
+is present under it. If the user said "use `<path>/skills/software-engineer`", do not first search
+only `<workspace>/.skills/software-engineer` and report failure. A host-specific default path is a
+fallback, not evidence that the user-supplied path is missing.
+
+If the explicit path cannot be read, stop with:
+
+```text
+Missing required setup: skill source not readable at <path>. I checked <resolved checks>.
+```
+
+Do not continue with a different copy unless the user explicitly authorizes the fallback. A wrong
+skill source is a workflow blocker because it changes the instructions being executed.
 
 The agent must walk this order **once per task**, top to bottom, and use the **first** directory
 that satisfies the rule. Subsequent entries are ignored for the rest of the task.
@@ -126,6 +148,8 @@ These defaults match the resolution order above. A user who wants to override an
 
 ## Operator quick reference
 
+- "Use this exact skill folder" — provide the path in the prompt. The agent must verify that path
+  first and must not fall back to `.skills` until you authorize it.
 - "I want one explicit answer" — set `skills.canonical_dir` in `.agent-skills.yml` to the
   directory you want.
 - "I just cloned and ran `setup.init`" — `.skills` is your canonical source.

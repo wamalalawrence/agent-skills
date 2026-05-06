@@ -20,7 +20,7 @@ compatibility: >-
   .agent-skills.yml). See docs/execution-modes.md.
 metadata:
   author: wamalalawrence
-  version: "0.25.0"
+  version: "0.26.0"
   homepage: "https://github.com/wamalalawrence/agent-skills"
 ---
 
@@ -346,6 +346,29 @@ Use the locally installed CLI first, fall back to direct REST only when the CLI 
 
 ## Phase 1: Preparation (NEVER skip)
 
+### 1.0 Dispatch and ticket-isolation gates
+
+- [ ] If
+  `${AGENT_SKILLS_CACHE_DIR:-${WORKSPACE_ROOT:-$REPO_ROOT}/.cache/agent-skills}/<issue-key>/evidence-pack.yml`
+  contains `delivery_plan.current_dispatch_pointer`, read the pointed phase before any Jira,
+  branch, or code work.
+- [ ] Resolve the phase's `recommended_owner` using the
+  [skill-source resolution contract](../../docs/skill-source-resolution.md), including any explicit
+  skill directory or `SKILL.md` path the user supplied. If the owner skill cannot be loaded, stop
+  with `BLOCKED: recommended owner skill unavailable`; list the paths checked. Do not fall back to a
+  host-specific `.skills` guess when the user or config supplied a different path.
+- [ ] If the current phase's `recommended_owner` is not `software-engineer`, do not execute this
+  workflow. Load the named owner skill from the resolved skill source, or stop with the blocker
+  above. Running the wrong skill on a phase is a workflow bug.
+- [ ] Extract the primary Jira key when Jira is involved. A software implementation run has exactly
+  one primary Jira task. If the prompt contains two or more independent Jira keys, stop before
+  branch creation and split the work: one Jira task = one branch = one PR = one focused reviewable
+  change. Linked parent, duplicate, or follow-up issues may be referenced as context, but they are
+  not implementation scope for this branch.
+- [ ] If the current branch name already contains a different Jira key than the primary issue, stop
+  before editing. Either switch/create the correct branch or ask the user which issue owns this
+  branch.
+
 ### 1.1 Ticket / context
 
 - [ ] Source credentials so they're available to subprocesses:
@@ -357,6 +380,15 @@ Use the locally installed CLI first, fall back to direct REST only when the CLI 
 - [ ] Read ticket details: `jira issue view <TICKET>` and `jira issue view <TICKET> --comments 100`.
 - [ ] Follow linked issues, parent/child relationships, subtasks, and epic context.
 - [ ] Open and read any linked Confluence pages.
+- [ ] Before creating a new branch for a Jira ticket, search for already-open work that may have
+  addressed it: open PRs whose title/body/comments mention the key, remote branches containing the
+  key, linked PRs in the ticket's development panel when available, and recent commits touching the
+  suspected files. With GitHub, prefer
+  `gh pr list --state open --search "<TICKET> in:title,body,comments"` plus
+  `git ls-remote --heads origin "*<TICKET>*"` when remote access exists.
+- [ ] Persist findings to `evidence-pack.yml.related_work`. If an open PR or branch likely covers
+  the same issue/root cause, stop and call it out instead of creating a competing branch. Continue
+  only when the user explicitly asks to supersede that work or the overlap is disproved.
 - [ ] If ticket context is insufficient → **stop and ask** (see Required Inputs).
 
 ### 1.2 Identify the project
@@ -400,6 +432,8 @@ Use the locally installed CLI first, fall back to direct REST only when the CLI 
 - [ ] Use prefixes intentionally: `feature/` by default, `bugfix/` for defects, `hotfix/` only for
   actual hotfix flow, `wip/` or `private/` only for non-public work.
 - [ ] Branch name **must** contain the ticket key for ticket-driven public work.
+- [ ] Branch name must contain only the single primary Jira key for this implementation run. Do not
+  combine two Jira keys in one branch name to justify a bundled PR.
 
 ### 1.4 Research & plan
 
@@ -742,6 +776,9 @@ must not run with unresolved reviewer findings.
 - [ ] Stage only relevant files — no IDE configs, no unrelated changes.
 - [ ] Never bypass git hooks (`--no-verify`) without an explicit user-approved waiver recorded in
   the Definition-of-Done artifact.
+- [ ] For ticket-driven work, the commit set must belong to the single primary Jira key from
+  Phase 1.0. If another independent Jira task was fixed incidentally, split it onto its own branch
+  before continuing.
 
 ### 5.2 Conflict resolution
 
@@ -763,6 +800,10 @@ written waiver.
   `fails_on_parent: true`, `passes_on_head: true`, `repro_recipe_path` populated,
   `observability_added` set honestly.
 - [ ] `git.no_no_verify: true` and `git.branch_starts_with_ticket_key: true` for ticket-driven work.
+- [ ] `git.single_jira_issue_scope: true`, `git.primary_jira_key` set, and
+  `git.related_jira_keys` containing context-only linked issues, not independent bundled work.
+- [ ] `git.open_pr_checked_for_existing_work: true` when Jira is in scope.
+- [ ] `git.pushed_to_remote: true` and `git.pr_url` populated before reporting the work as PR-ready.
 - [ ] `scope.shared_library_changed` truthful; if `true`, list affected downstream consumers.
 - [ ] **`safety_acknowledgement` block written truthfully.** Required whenever the change
   introduces or performs any mutating action against a deployed environment, or touches
@@ -779,9 +820,14 @@ written waiver.
 
 ### 5.4 Pull request
 
+- [ ] Push the branch to the remote (`git push -u origin <branch>`) before opening or updating the
+  PR. If push is unavailable, final status is `needs-context` or `blocked`; do not describe the work
+  as ready for review.
 - [ ] PR title follows the same format as the commit.
 - [ ] PR description explains: **what** changed, **why**, and **how it was tested**.
 - [ ] Link the Jira ticket, GitHub issue, or supplied issue source in the PR when one exists.
+- [ ] The PR description must name one primary Jira key. Related keys may appear only in a clearly
+  labelled "Related context" line; they do not expand PR scope.
 - [ ] Merge strategy: `${GIT_MERGE_STRATEGY}` (commonly `squash`).
 - [ ] Squash merge commit must start with the ticket key.
 - [ ] If a checklist item was intentionally overridden, leave a PR comment explaining why.
@@ -972,6 +1018,14 @@ review, or root-cause confirmation unless that work actually happened.
 - Do not skip the [Requirement Understanding Gate](#requirement-understanding-gate). Implementation
   on `unknown` or `low` understanding confidence is forbidden by the workflow's
   confidence-to-action rules.
+- Do not combine independent Jira tasks in one implementation branch or PR. One primary Jira task
+  maps to one branch, one PR, and one focused reviewable change.
+- Do not create a new Jira-fix branch before checking for open PRs or remote branches that already
+  reference the same issue key. Possible existing work must be surfaced, not overwritten or
+  duplicated.
+- Do not report ticket-driven implementation as complete until the branch is pushed and a PR URL is
+  recorded, or until you clearly return `needs-context` / `blocked` because push or PR creation is
+  unavailable.
 
 ## Destructive Action Guardrails
 

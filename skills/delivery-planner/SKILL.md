@@ -20,7 +20,7 @@ compatibility: >-
   .agent-skills.yml). See docs/execution-modes.md.
 metadata:
   author: wamalalawrence
-  version: "0.25.0"
+  version: "0.26.0"
   homepage: "https://github.com/wamalalawrence/agent-skills"
 ---
 
@@ -332,7 +332,12 @@ Each `phase-NN-<slug>.md` MUST contain:
 - **Recommended owner skill.** One of `software-engineer`, `product-owner`,
   `issue-investigator`, `manual-tester`, `test-automation-engineer`. The
   executor is expected to load that skill's `SKILL.md` and follow its
-  workflow for this phase. The planner does not invoke skills itself.
+  workflow for this phase. The planner does not invoke skills itself. Before
+  marking a phase `ready`, verify the owner skill can be resolved from the
+  canonical skill source defined by
+  [skill-source resolution](../../docs/skill-source-resolution.md), including
+  any explicit skill path the user supplied. If it cannot be resolved, the
+  phase state is `blocked`, not `ready`.
 - **Expected outputs / artifacts.** What must exist when the phase is done:
   files committed, evidence-pack fields populated, tests added, a Jira-ready
   story produced, an investigation result, a passing CI run.
@@ -349,6 +354,15 @@ Each `phase-NN-<slug>.md` MUST contain:
   half-done and abandoned. For destructive or schema-changing phases this is
   mandatory; for pure-read or pure-add phases it is `no rollback needed —
   no state mutation`.
+
+For code-delivery plans (bug fix, feature, refactor, migration), the plan is
+not complete until it reaches a reviewable delivery artifact. Each
+`software-engineer` implementation phase must either finish its own
+`software-engineer` Phase 5 path (committed branch, outer-loop `code-reviewer`
+convergence, Definition-of-Done artifact, pushed remote branch, PR URL), or the
+plan must include a later `software-engineer` closure phase that performs those
+steps. A final phase that only validates behavior is not conclusive for a code
+delivery; validation must feed into review and PR readiness.
 
 The index `phased-plan/README.md` follows the binding
 [plan-index template](./references/plan-index-template.md) and MUST contain:
@@ -396,6 +410,13 @@ The planner picks the next phase to run and writes its phase ID into the
 index's `current_dispatch_pointer`. From there, dispatch is the user's or
 executor's job — the planner does not call other skills. The recommended
 skill on each phase tells the executor which `SKILL.md` to load.
+
+The dispatch pointer is a contract, not a suggestion. The executing agent must
+load the `recommended_owner` skill from the resolved canonical skill source
+before acting. If the skill cannot be found, if a host only checked a default
+`.skills` path while the user supplied a different folder, or if the loaded
+skill's `name` does not match `recommended_owner`, the phase is blocked and no
+work should be performed under a substitute workflow.
 
 The dispatch-pointer rules are **binding** and mirrored in the
 [plan-index template](./references/plan-index-template.md#body-sections):
@@ -559,8 +580,13 @@ entirely when no qualifying insight exists. See
   assumptions with falsifiers.
 - [ ] Each phase fits a fresh agent's context budget and names exactly one
   recommended owner skill.
+- [ ] Each `ready` phase's recommended owner skill resolves from the canonical
+  skill source. Missing owner skill resolution is `blocked`, not a warning.
 - [ ] Each phase has prerequisites, inputs, scope, expected outputs,
   validation, risks, size, parallel-safety, and rollback behavior.
+- [ ] Code-delivery plans end at a reviewable delivery artifact: branch pushed,
+  PR URL recorded, Definition-of-Done written, and `code-reviewer` outer-loop
+  convergence or explicit blocker. A validation-only final phase is incomplete.
 - [ ] Dependency graph in the index matches the prerequisites listed on
   individual phase files (not silently contradicted).
 - [ ] No phase requires the executor to perform a forbidden destructive
@@ -579,6 +605,9 @@ entirely when no qualifying insight exists. See
   explicit accept-the-risk note.
 - Plan artifacts live in the shared cache layout; the planner does not
   invent a new directory structure per task.
+- Implementation plans do not hide the final engineering closure. Review,
+  Definition-of-Done, push, and PR readiness are part of delivery, not optional
+  afterthoughts.
 
 ## Guardrails
 
@@ -606,6 +635,12 @@ entirely when no qualifying insight exists. See
 - Do not produce a plan that contradicts itself between the index and the
   per-phase files. The index is generated from the per-phase files; if they
   disagree, the per-phase files win and the index is regenerated.
+- Do not mark a phase `ready` when its `recommended_owner` skill cannot be
+  resolved from the canonical skill source. Surface the missing skill as a
+  blocker with the checked paths.
+- Do not end a code-changing delivery plan with validation only. The final
+  executable path must either produce a pushed PR-ready branch or explicitly
+  stop as blocked before claiming completion.
 - Do not run the self-validation checklist more than once on the same plan.
   Surviving items move to `Open Questions Or Missing Evidence` and the
   user decides.

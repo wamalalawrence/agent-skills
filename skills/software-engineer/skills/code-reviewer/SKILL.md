@@ -16,7 +16,7 @@ compatibility: >-
   .agent-skills.yml). See docs/execution-modes.md.
 metadata:
   author: wamalalawrence
-  version: "0.25.0"
+  version: "0.26.0"
   homepage: "https://github.com/wamalalawrence/agent-skills"
 argument-hint: >-
   optional: mode inner|outer, base branch, issue key/URL, PR URL, or task description
@@ -242,6 +242,11 @@ for them.
   project identity, or issue context.
 - Confirm the current directory is inside a git working tree when reviewing local changes.
 - Identify repo, branch, base branch, changed files, and review mode.
+- For issue-aware Jira review, extract issue keys from branch name, PR title/body, commits, and diff
+  text. Exactly one primary Jira key may own the PR. Multiple independent Jira keys in one branch or
+  PR are a `blocker` unless the PR is explicitly a mechanical dependency update with no ticket
+  scope expansion and the user supplied a written waiver. Linked parent/duplicate keys may be
+  listed as context but must not expand the review scope.
 - Supported modes:
   - `inner`: staged diff, intended for implementation checkpoint review.
   - `outer`: branch diff against base, intended for pre-PR or final review.
@@ -316,6 +321,8 @@ Layer 1 review questions:
   issue?
 - Does the implementation address the confirmed root cause, or only a symptom?
 - Does it introduce scope creep beyond the ticket?
+- Does the branch/PR bundle another independent Jira task that should have been a separate branch
+  and PR?
 
 ### 3. Review general engineering quality
 
@@ -613,6 +620,8 @@ for the per-value semantics.
 - [ ] Review target, base, changed files, review mode, and issue-awareness level are resolved or the
   verdict is `NEEDS_CONTEXT` / `NOT_REVIEWABLE`.
 - [ ] Issue/ticket alignment is checked before generic engineering quality when context exists.
+- [ ] Jira-aware reviews verify that the PR has one primary Jira key and does not bundle independent
+  tasks that should be separate branches/PRs.
 - [ ] Auth-discovery failure during issue-aware review is escalated to `NEEDS_CONTEXT`, not buried
   as a Note alongside other findings.
 - [ ] Date-gated / phased-rollout check ran when the change references a future date, flag, or
@@ -653,6 +662,8 @@ for the per-value semantics.
   `Loop: continue` when actionable findings exist.
 - Do not invent issue details, logs, code behavior, acceptance criteria, or company standards.
 - Do not produce issue-aware verdicts when the issue context could not be read or supplied.
+- Do not approve a PR that bundles independent Jira tasks into one branch/PR. Surface it as a
+  `blocker` because it prevents focused review and clean rollback.
 - Do not recommend broad rewrites unless the evidence shows the current approach is materially
   unsafe or unmaintainable.
 - Do not rewrite the diff during review unless the user explicitly asks for implementation help.

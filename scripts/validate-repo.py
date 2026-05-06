@@ -88,6 +88,7 @@ REQUIRED_FILES = [
     "evals/requirement-understanding-security-sensitive-request.md",
     "evals/auth-discovery-jira-confluence.md",
     "evals/skill-source-resolution-ambiguity.md",
+    "evals/jira-issue-scope-and-existing-pr.md",
     "evals/code-reviewer-concise-output.md",
     "evals/insightful-simplifications-concise.md",
     "eval-runs/README.md",

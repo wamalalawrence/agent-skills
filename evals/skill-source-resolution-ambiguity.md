@@ -52,6 +52,12 @@ distinct stale copy.
 
 ## Negative variants the agent must also handle
 
+0. **Explicit path supplied in the prompt.** Operator says:
+   *"Use the skills at `<workspace>/agent-skills/skills`; run the software-engineer skill."*
+   Agent verifies that exact path first and loads
+   `<workspace>/agent-skills/skills/software-engineer/SKILL.md`. It must not report that
+   `.skills/software-engineer` was not found unless it also checked the supplied path and that path
+   was unreadable.
 1. **No lock file present.** Agent walks the resolution order using on-disk evidence only.
    Picks `.skills` (rule 4 in the doc) and warns the operator to run `./setup.init` to
    create the lock file.
@@ -75,6 +81,7 @@ distinct stale copy.
 ## Pass / fail criteria
 
 - [ ] Exactly one `SKILL.md` is loaded per skill name per task.
+- [ ] A user-supplied skill path is verified before host defaults such as `.skills`.
 - [ ] When duplicates exist, the chosen path is justified by a numbered rule from the
   resolution doc.
 - [ ] Drift warnings name both versions and the path that was rejected.

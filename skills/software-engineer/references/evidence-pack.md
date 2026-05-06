@@ -73,6 +73,19 @@ risk_areas:
   - "AuthenticationFilter ordering"
   - "Existing /login redirect tests"
 
+# Existing related work discovered before creating a competing branch/PR
+related_work:
+  already_addressed_status: none # none | possible | likely | confirmed
+  open_prs:
+    - url: "https://github.com/example-org/example-api/pull/987"
+      title: "PROJ-1234 redirect expired SAML sessions"
+      status: open
+      overlap: "touches AuthFilter and references the same Jira key"
+      decision: review_existing_pr # review_existing_pr | continue_existing_branch | create_new_branch | ask_user
+  matching_branches:
+    - "origin/bugfix/PROJ-1234-saml-expiry-redirect"
+  checked_at: 2026-05-06T13:00:00Z
+
 # Engineer's 5-line plan (filled in by software-engineer in Phase 1.4)
 plan:
   problem: "Expired SAML cookie causes 500 instead of redirect."
@@ -126,6 +139,19 @@ delivery_plan:
 `${AGENT_SKILLS_CACHE_DIR:-${WORKSPACE_ROOT:-$REPO_ROOT}/.cache/agent-skills}/${issue_key}/evidence-pack.yml`.
 Skills append to lists; they do not delete prior entries.
 
+**Skill-dispatch blocker rule**: when `delivery_plan.current_dispatch_pointer` is set, the
+executor must read that phase and load the `SKILL.md` for
+`delivery_plan.phases[<phase id>].recommended_owner` from the canonical skill source before doing
+work. Resolve the source with [`docs/skill-source-resolution.md`](../../../docs/skill-source-resolution.md),
+including any explicit skill path the user supplied in the current prompt. If the owner skill cannot
+be loaded, or the loaded skill's `name` does not equal `recommended_owner`, stop with
+`BLOCKED: recommended owner skill unavailable` and list the paths checked. Do not substitute a
+generic agent workflow, do not keep using the wrong skill, and do not mark the phase complete.
+
+An agent output such as "I did not find `.skills/software-engineer`" is insufficient when the user
+or config supplied a different skill source. Missing the recommended owner is a blocker, not a
+warning.
+
 ---
 
 ## 2. `repro-recipe.yml`
@@ -175,8 +201,8 @@ reproduce is forbidden without explicit user approval and a written rollback pla
 
 | Skill                      | Reads                              | Writes                                                                       |
 | -------------------------- | ---------------------------------- | ---------------------------------------------------------------------------- |
-| `issue-investigator` †     | env, prior `evidence-pack.yml`     | `evidence-pack.yml` (investigation, risk, hypotheses); `repro-recipe.yml`    |
-| `software-engineer` †      | both files                         | `evidence-pack.yml.plan`; regression test commit referenced from recipe      |
+| `issue-investigator` †     | env, prior `evidence-pack.yml`     | `evidence-pack.yml` (investigation, risk, hypotheses, related_work); `repro-recipe.yml` |
+| `software-engineer` †      | both files                         | `evidence-pack.yml.plan`, `related_work`; regression test commit referenced from recipe |
 | `code-reviewer`            | both files                         | `evidence-pack.yml.review` (sole owner — see ownership rule below)           |
 | `manual-tester` †          | `evidence-pack.yml`                | `repro-recipe.yml` (when manual repro produces one); defect rows             |
 | `test-automation-engineer` † | `repro-recipe.yml`              | regression test files; references the recipe in test docstring               |

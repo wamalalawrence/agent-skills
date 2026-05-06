@@ -10,6 +10,12 @@ runs next. The per-phase files are still authoritative for the contents of
 each phase; the index is the lightweight roll-up the planner regenerates
 from them.
 
+The `current_dispatch_pointer` is binding on the executor. The executor must
+load the pointed phase's `recommended_owner` skill from the resolved canonical
+skill source before doing work. If the owner skill cannot be loaded, the phase
+is blocked; the executor must not substitute a generic workflow or another
+skill.
+
 Do not invent extra fields. If something is genuinely not applicable, write
 `not applicable — <one-line reason>` instead of removing the field.
 

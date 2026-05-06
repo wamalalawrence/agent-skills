@@ -35,6 +35,9 @@ user; do not grind.
       larger is re-decomposed in step 4 of the workflow.
 - [ ] Each phase names exactly one `recommended_owner` skill. A phase with
       two joint owners is two phases.
+- [ ] Each phase marked `ready` has a `recommended_owner` whose `SKILL.md`
+      resolves from the canonical skill source. If the skill cannot be
+      loaded, the phase is `blocked` and the missing source is surfaced.
 - [ ] Each phase has all of: intent (one sentence), prerequisites, inputs,
       scope (in / out), expected outputs, validation, risks, size,
       parallel-safe flag, rollback / abort behavior.
@@ -49,6 +52,10 @@ user; do not grind.
       action under the
       [destructive-action safety policy](../../../docs/destructive-action-safety.md).
       Such steps are operator runbooks for a human, not agent phases.
+- [ ] For code-delivery plans, the last executable path reaches reviewable
+      completion: `code-reviewer` outer-loop convergence, Definition-of-Done,
+      pushed remote branch, and PR URL, or an explicit blocker. A final phase
+      that only validates behavior is incomplete.
 
 ## Sequencing
 
