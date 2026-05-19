@@ -30,7 +30,7 @@ the code-reviewer handoff/result in the final output contract.
 ```text
 Use the issue-investigator skill.
 
-Issue source: [Jira/GitHub issue URL, support report, incident note, or bug report]
+Issue source: [tracker ticket URL (Jira/GitHub/GitLab/etc.), support report, incident note, or bug report]
 Affected area: [repo/service/component/environment/version if known]
 Evidence available: [logs, screenshots, traces, request/response examples, reproduction notes]
 
@@ -60,7 +60,7 @@ Request: [rough product idea, stakeholder request, or draft ticket]
 Users/stakeholders: [who benefits or is affected]
 Known context: [current behavior, desired behavior, constraints, links]
 
-Produce a Jira-ready story or task with product goal, user value, scope, out of scope, assumptions,
+Produce a tracker-ready story or task with product goal, user value, scope, out of scope, assumptions,
 acceptance criteria, edge cases, dependencies, UX notes, non-functional requirements, open
 questions, and handoff notes for engineering and testing.
 ```

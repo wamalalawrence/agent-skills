@@ -8,7 +8,7 @@ See [SKILL.md](./SKILL.md) for the full workflow. References live under
 
 ## What it does
 
-- Phase 1 — Preparation (dispatch owner check, one-Jira-task scope, existing PR/branch scan, repo
+- Phase 1 — Preparation (dispatch owner check, one-tracker-task scope, existing PR/branch scan, repo
   identification, compact evidence pack, plan)
 - Phase 2 — Implementation (clean code, security, architecture rules) -> calls `code-reviewer`
   and auto-iterates the inner loop until convergence or bounded escalation

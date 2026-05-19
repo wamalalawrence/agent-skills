@@ -43,7 +43,7 @@ must hand off when the task moves outside that surface.
 
 ### `product-owner`
 
-- Owns: product goal, user value, scope, acceptance criteria, UX notes, and Jira-ready handoff.
+- Owns: product goal, user value, scope, acceptance criteria, UX notes, and tracker-ready handoff.
 - Does not own: technical architecture, code review, test implementation, or deciding bug root
   cause.
 - Typical handoff: to `issue-investigator` for bug-flavored input, to `software-engineer` for
@@ -65,6 +65,17 @@ must hand off when the task moves outside that surface.
   investigation.
 - Typical handoff: to `manual-tester` for unstable/manual scenarios, to `issue-investigator` for
   repro evidence, and to `code-reviewer` for test-quality review.
+
+### `domain-modeler`
+
+- Owns: canonical domain glossary (`CONTEXT.md`), Architecture Decision Records (`docs/adr/`),
+  terminology disambiguation, and cross-referencing stated behaviour against code.
+- Does not own: product scope or user-facing language (that's `product-owner`), implementation
+  or architectural authority (that's `software-engineer`), or phase-level work decomposition
+  (that's `delivery-planner`).
+- Typical handoff: to `product-owner` when user-facing terminology needs refinement, to
+  `software-engineer` when an ADR needs feasibility validation, and to `delivery-planner` when
+  a glossary change or ADR affects the phasing of a multi-phase delivery.
 
 ## Required Handoffs
 

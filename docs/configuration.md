@@ -30,11 +30,12 @@ set +a
 ```
 
 If `.env` is missing, a required value is blank, a copied bootstrap value would make the project
-identity ambiguous, or a Jira ticket cannot be read, the skill warns and stops before doing
+identity ambiguous, or a tracker ticket cannot be read, the skill warns and stops before doing
 accuracy-sensitive work. Silent fallbacks are treated as a bug because they produce wrong work.
 
-`.jira-config.yml` is optional. Jira-driven work can use the environment variables in `.env`
-directly, but if neither Jira credentials nor a user-supplied ticket summary are available, the
+`.jira-config.yml` (or equivalent tracker config) is optional. Tracker-driven work can use the
+environment variables in `.env`
+directly, but if neither tracker credentials nor a user-supplied ticket summary are available, the
 issue-aware skills stop and ask for context.
 
 When `.jira-config.yml` does exist, its `${JIRA_HOST}` / `${JIRA_LOGIN}` / `${JIRA_AUTH_TYPE}`
@@ -55,18 +56,18 @@ See [`.env.example`](../.env.example) for the full annotated list. The minimum u
 | `GITHUB_ORG`                     | Required only for GitHub repository discovery, clone, push, or PR work |
 | `GITHUB_DEFAULT_BRANCH`          | Default base branch when a project has no override                     |
 | `PROJECTS_JSON`                  | Multi-project map with stack and command metadata                      |
-| `JIRA_HOST` and `JIRA_API_TOKEN` | Required only for Jira-driven or story-aware modes                     |
-| `CONFLUENCE_HOST` and `CONFLUENCE_API_TOKEN` | Required only for Confluence-aware doc lookups             |
+| `JIRA_HOST` and `JIRA_API_TOKEN` | Required only for Jira-driven or story-aware modes. For non-Jira trackers (GitLab, Azure DevOps, etc.), equivalent tracker-specific variables apply. |
+| `CONFLUENCE_HOST` and `CONFLUENCE_API_TOKEN` | Required only for Confluence-aware doc lookups. For non-Confluence document stores, equivalent variables apply. |
 | `SONAR_HOST_URL` and `SONAR_TOKEN` | Optional. Required only when CI/CD publishes a Sonar report the agent should reference |
 | `ENVIRONMENTS_JSON`              | Optional. Read-only pointers (host, log paths, kubectl context) to deployed environments used by `issue-investigator` for live evidence collection |
 
 `setup.init` auto-populates several of these where it safely can:
 
-- `ORG_NAME` is inferred from the Jira host (e.g. `acme.atlassian.net` -> `Acme`), then from the
+- `ORG_NAME` is inferred from the tracker host (e.g. `acme.atlassian.net` -> `Acme`), then from the
   GitHub org, then from the workspace root directory name.
-- `ORG_DOMAIN` is inferred from the Jira login email, the Jira host, or the GitHub org.
+- `ORG_DOMAIN` is inferred from the tracker login email, the tracker host, or the GitHub org.
 - `GITHUB_ORG` is inferred from sibling repo `remote.origin.url` first, then from `gh api user`.
-- `JIRA_PROJECT_KEYS` accepts a pasted ticket key (`ABC-123`) or ticket URL and extracts the
+- `JIRA_PROJECT_KEYS` (or equivalent for other trackers) accepts a pasted ticket key (`ABC-123`) or ticket URL and extracts the
   project key prefix.
 - `CONFLUENCE_HOST` is inferred from the Jira host (Atlassian Cloud uses `<host>/wiki`; self-hosted
   `jira.<domain>` becomes `confluence.<domain>`).

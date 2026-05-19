@@ -10,7 +10,7 @@ the project should grow through proven usefulness rather than a large up-front f
   [`test-automation-engineer`](./skills/test-automation-engineer/).
 - Keep [`software-engineer`](./skills/software-engineer/) strong as the flagship engineering skill.
 - Improve portability across different stacks and workspace layouts.
-- Tighten token-efficient context gathering for Jira, user descriptions, repository discovery,
+- Tighten token-efficient context gathering for tracker tickets, user descriptions, repository discovery,
   product refinement, testing, and review loops.
 - Collect real-world feedback on where nested skills should remain nested or become standalone
   roles.

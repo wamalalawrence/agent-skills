@@ -1,10 +1,11 @@
 ---
 name: product-owner
 description: >-
-  Product ownership workflow for turning product goals, stakeholder needs, Jira tickets,
-  and rough ideas into clear, testable, implementation-ready work. Use when: clarifying
-  goals, refining requirements, defining scope, writing acceptance criteria, preparing
-  Jira-ready stories or tasks, or handing work to engineering and testing. Collaborates
+  Product ownership workflow for turning product goals, stakeholder needs, tracker tickets
+  (Jira, GitHub Issues, GitLab Issues, Azure DevOps, and others), and rough ideas into
+  clear, testable, implementation-ready work. Use when: clarifying goals, refining
+  requirements, defining scope, writing acceptance criteria, preparing tracker-ready
+  stories or tasks, or handing work to engineering and testing. Collaborates
   with software-engineer for feasibility and tradeoffs, manual-tester for scenario
   coverage, and test-automation-engineer for automation-friendly acceptance criteria.
 license: MIT
@@ -15,7 +16,7 @@ compatibility: >-
   .agent-skills.yml). See docs/execution-modes.md.
 metadata:
   author: wamalalawrence
-  version: "0.29.0"
+  version: "0.30.0"
   homepage: "https://github.com/wamalalawrence/agent-skills"
 ---
 
@@ -38,7 +39,7 @@ invent business priorities or prescribe technical architecture when those belong
 ## Purpose
 
 - Clarify what should be built, why it matters, who benefits, and how success will be recognized.
-- Convert broad requests into Jira-ready stories, tasks, defects, or discovery items.
+- Convert broad requests into tracker-ready stories, tasks, defects, or discovery items.
 - Make scope, out-of-scope items, assumptions, dependencies, edge cases, UX concerns, and
   non-functional requirements visible.
 - Produce requirements that are testable by humans and, where appropriate, friendly to later
@@ -47,7 +48,7 @@ invent business priorities or prescribe technical architecture when those belong
 ## When To Use
 
 - A stakeholder request is too vague for implementation.
-- A Jira story or task needs refinement before engineering starts.
+- A tracker story or task needs refinement before engineering starts.
 - Acceptance criteria are missing, broad, conflicting, or hard to test.
 - Scope needs to be split across stories, tasks, bugs, or follow-up work.
 - Engineering or testing needs a clear statement of intended behavior.
@@ -60,7 +61,7 @@ invent business priorities or prescribe technical architecture when those belong
 - Do not use to implement, review, or test code; hand those outputs to the relevant delivery skill.
 - Do not use to invent business priorities, legal/compliance rules, analytics, deadlines, or private
   company standards that were not supplied.
-- Do not produce Jira-ready work when the goal, user value, scope, or expected behavior is still
+- Do not produce tracker-ready work when the goal, user value, scope, or expected behavior is still
   unresolved.
 
 ## Related And Reused Skills
@@ -79,8 +80,12 @@ invent business priorities or prescribe technical architecture when those belong
 - [`delivery-planner`](../delivery-planner/SKILL.md): hand off **before** writing acceptance
   criteria when the request is an oversized epic that obviously splits into multiple stories — the
   planner produces a destination brief and a phased plan, after which this skill refines each phase
-  into a Jira-ready story. Receive a hand-off **from** the planner when one of its phases names
+  into a tracker-ready story. Receive a hand-off **from** the planner when one of its phases names
   this skill in `recommended_owner` (typically a product-refinement phase).
+- [`domain-modeler`](../domain-modeler/SKILL.md): collaborate when product terminology is
+  ambiguous, when stakeholders use conflicting terms for the same concept, or when a new domain
+  term needs a canonical definition in `CONTEXT.md`. Domain-modeler owns the internal glossary;
+  product-owner owns the user-facing language.
 
 Do not duplicate these skills. Product ownership defines intent and scope; engineering validates
 feasibility; manual testing validates behavior; automation engineering turns high-value checks into
@@ -91,7 +96,7 @@ stable automated tests.
 Ask for missing information before producing final requirements. A rough draft is allowed only if
 assumptions are clearly marked.
 
-- Product goal, problem statement, stakeholder request, Jira ticket, or support issue.
+- Product goal, problem statement, stakeholder request, tracker ticket, or support issue.
 - Target users, affected roles, or stakeholder groups.
 - Business value or reason the work matters.
 - Current behavior and desired behavior, when applicable.
@@ -105,7 +110,7 @@ list of high-impact questions over a long interview.
 
 ## Stopping Conditions
 
-Stop and return refinement questions instead of Jira-ready output when:
+Stop and return refinement questions instead of tracker-ready output when:
 
 - Product goal, user/stakeholder value, or problem statement is unknown.
 - Expected behavior is unclear and the request is bug-flavored.
@@ -120,10 +125,10 @@ Stop and return refinement questions instead of Jira-ready output when:
 
 Before the gate, do two cheap reads so the rest of the workflow has real context:
 
-- Run `python3 scripts/locate-config.py` to confirm `.env` / `.jira-config.yml` / `.agent-skills.yml`
-  paths. They live in the **parent workspace folder**, not the repo cwd. Do not declare a config
-  file missing without naming the directories the locator searched. See
-  [`docs/auth-discovery.md` § Where the files live](../../docs/auth-discovery.md#where-the-files-live).
+- Run `python3 scripts/locate-config.py` to confirm `.env` / `.jira-config.yml` (or equivalent
+  tracker config) / `.agent-skills.yml` paths. They live in the **parent workspace folder**, not
+  the repo cwd. Do not declare a config file missing without naming the directories the locator
+  searched. See [`docs/auth-discovery.md` § Where the files live](../../docs/auth-discovery.md#where-the-files-live).
 - Run `python3 scripts/project-memory.py read <project>` to load durable knowledge about the
   product (recent stories, recurring acceptance-criteria patterns, stakeholders' phrasing
   preferences). After the refinement is complete, append a one-line bullet under
@@ -141,7 +146,7 @@ in step 6.
 
 Apply the binding rules:
 
-- **`unknown` / `low`** — do **not** produce Jira-ready output, acceptance criteria, scope
+- **`unknown` / `low`** — do **not** produce tracker-ready output, acceptance criteria, scope
   statements, or fix-ready stories. Return `NEEDS_CLARIFICATION` (most product cases) or
   `BLOCKED` (when stakeholder approval, legal, or security sign-off is the missing input).
   List the candidate interpretations of the request rather than picking one. Hand off to
@@ -151,7 +156,7 @@ Apply the binding rules:
   load-bearing assumption stays visible in `Open questions` and `Assumptions`. The output is
   marked as a `Spike` or `Discovery` item, not as fix-ready or implementation-ready, until
   assumptions are resolved.
-- **`high`** — may produce Jira-ready stories or tasks, including acceptance criteria and
+- **`high`** — may produce tracker-ready stories or tasks, including acceptance criteria and
   handoff to engineering / manual testing / automation. The first plausible interpretation is
   not high confidence; high requires that the candidate-interpretation list in step 1 of the
   shared workflow has been resolved to one.
@@ -204,7 +209,7 @@ Guardrails specific to product-owner:
   than two or three stories spanning multiple surfaces or releases, do not try to write acceptance
   criteria for the whole thing in one pass. Hand off to
   [`delivery-planner`](../delivery-planner/SKILL.md) so it can produce a destination brief and a
-  phased plan, then come back and refine each phase into a Jira-ready story. Writing acceptance
+  phased plan, then come back and refine each phase into a tracker-ready story. Writing acceptance
   criteria for an unphased epic is the most common source of half-correct stories.
 - Identify dependencies, assumptions, open questions, and follow-up work.
 - Mark decisions that require stakeholder confirmation.
@@ -238,7 +243,7 @@ Guardrails specific to product-owner:
 
 #### Definition of Ready (gate before handoff)
 
-Do not produce the Jira-ready output in step 7 until all of these are true:
+Do not produce the tracker-ready output in step 7 until all of these are true:
 
 - Goal, target users, and business value are stated.
 - For bug-flavored input that is being refined into fix-ready work: the
@@ -276,7 +281,7 @@ one revision round, depth cap of two skills, no recursion. If feedback survives 
 revision, mark the surviving items in `Open questions` and downgrade the work item to a
 `Spike` / `Discovery`. Do not run the testability check a second time on the same item.
 
-### 7. Prepare Jira-ready output
+### 7. Prepare tracker-ready output
 
 - Choose the right work item type: story, task, bug, spike, or follow-up.
 - Produce a concise title, context, user value, scope, acceptance criteria, dependencies,
@@ -315,7 +320,7 @@ If this run was invoked because a [`delivery-planner`](../delivery-planner/SKILL
   [phase-continuity checkpoint](../software-engineer/references/evidence-pack.md#phase-continuity-checkpoint),
   record `blocked_reason`, recompute `current_dispatch_pointer`, and stop so the planner can
   re-decompose on its next run.
-- On normal completion (after step 7's Jira-ready output exists), write the full
+- On normal completion (after step 7's tracker-ready output exists), write the full
   [phase-continuity checkpoint](../software-engineer/references/evidence-pack.md#phase-continuity-checkpoint):
   `state: done`, `completed_at`, `completed_by: product-owner`, `completion_summary`,
   `artifacts`, `validation`, `follow_up_context`, `working_branch`, `base_branch`,
@@ -354,7 +359,7 @@ genuine unknowns explicitly inside the sections that need them.
 - Non-functional requirements:
 - Open questions:
 
-## Jira-Ready Story/Task Format
+## Tracker-Ready Story/Task Format
 
 - Title:
 - Type: Story | Task | Bug | Spike
@@ -420,7 +425,7 @@ qualifying insight exists. See
 - Do not invent stakeholder priorities, user research, analytics, legal requirements, or deadlines.
 - Do not turn unclear work into implementation-ready stories by hiding assumptions.
 - Do not skip the [Requirement Understanding Gate](#0-requirement-understanding-gate). Producing
-  Jira-ready output on `unknown` or `low` understanding confidence is forbidden by the
+  tracker-ready output on `unknown` or `low` understanding confidence is forbidden by the
   workflow's confidence-to-action rules; return `NEEDS_CLARIFICATION` or `BLOCKED` instead.
 - Do not prescribe architecture, database design, or test frameworks unless a reliable source
   already establishes them.
@@ -438,7 +443,7 @@ qualifying insight exists. See
 
 ## Example Prompts
 
-- "Refine this rough feature idea into a Jira-ready story with acceptance criteria."
+- "Refine this rough feature idea into a tracker-ready story with acceptance criteria."
 - "Route this support complaint through investigation, then refine the expected behavior."
 - "Review these acceptance criteria for gaps before engineering starts."
 - "Split this large request into smaller stories and call out dependencies."

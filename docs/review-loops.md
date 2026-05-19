@@ -44,7 +44,7 @@ Each entry: producer → reviewer (mode), trigger, exit rule.
   by revision must appear in `Open Questions Or Missing Evidence`.
 - **`product-owner` → `manual-tester` (testability quick-check) + self-check against
   the [Definition of Ready](../skills/product-owner/SKILL.md#definition-of-ready-gate-before-handoff).**
-  Trigger: before emitting the Jira-ready output. Exit: one revision round; unresolved
+  Trigger: before emitting the tracker-ready output. Exit: one revision round; unresolved
   items make the work item a `Spike` / `Discovery`, not fix-ready.
 - **`manual-tester` → self-check against the
   [test-plan review checklist](#test-plan-review-checklist); `issue-investigator` for
@@ -130,7 +130,7 @@ Used by `manual-tester` as its single self-validation pass before emitting the p
 
 ## When to skip a loop
 
-- **Trivial output.** A one-line answer (`"yes that's a bug"`, `"the Jira config is missing
+- **Trivial output.** A one-line answer (`"yes that's a bug"`, `"the tracker config is missing
   JIRA_HOST"`) does not need a review loop. Reserve loops for artifacts that downstream
   skills or humans will act on.
 - **Read-only or advisory output.** A `safe checks the user can run` block, a `feasibility

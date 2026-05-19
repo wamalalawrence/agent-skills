@@ -18,7 +18,7 @@ This workflow is consumed by:
   start of every investigation.
 - [`code-reviewer`](../skills/software-engineer/skills/code-reviewer/SKILL.md) before issue-aware
   review.
-- [`product-owner`](../skills/product-owner/SKILL.md) before producing Jira-ready output.
+- [`product-owner`](../skills/product-owner/SKILL.md) before producing tracker-ready output.
 - [`manual-tester`](../skills/manual-tester/SKILL.md) before writing test scenarios.
 - [`test-automation-engineer`](../skills/test-automation-engineer/SKILL.md) before automating any
   behavior.
@@ -30,7 +30,7 @@ specific stopping conditions and output contract.
 
 - The skill has just been invoked and the user task is in hand.
 - The skill is about to leave its preparation phase and start a phase that changes files, produces
-  Jira-ready output, writes a test, or hands off to another skill.
+  tracker-ready output, writes a test, or hands off to another skill.
 - Any time the requirement materially changes mid-task (stakeholder added a constraint, evidence
   contradicts the original brief, scope expands).
 
@@ -182,7 +182,7 @@ forward, and what kind of next action is appropriate.
 These three rules are binding. Skill `Guardrails` sections cite them directly.
 
 - If understanding confidence is **`unknown` or `low`**, the agent **must not implement** the
-  requirement, must not produce Jira-ready output as if intent were settled, must not write
+  requirement, must not produce tracker-ready output as if intent were settled, must not write
   automated regression coverage, and must not give a bare `PASS` review verdict. The correct
   decision is `NEEDS_CLARIFICATION`, `NEEDS_EVIDENCE`, or `BLOCKED`.
 - If understanding confidence is **`medium`**, the agent may investigate, plan, draft, or run

@@ -2,8 +2,8 @@
 name: code-reviewer
 description: >-
   Issue-aware code review workflow for working diffs, commits, branches, and pull
-  requests. Use when: reviewing implementation against a Jira ticket, GitHub issue, bug
-  report, feature request, task description, acceptance criteria, or general engineering
+  requests. Use when: reviewing implementation against a tracker ticket (Jira, GitHub
+  issue, GitLab issue, etc.), bug report, feature request, task description, acceptance criteria, or general engineering
   quality bar. Applies two layers: issue/ticket alignment first, then general engineering
   quality. Reuses issue-investigator when expected behavior, root cause, or issue context
   is unclear, and reuses software-engineer for architecture, implementation quality,
@@ -16,7 +16,7 @@ compatibility: >-
   .agent-skills.yml). See docs/execution-modes.md.
 metadata:
   author: wamalalawrence
-  version: "0.29.0"
+  version: "0.30.0"
   homepage: "https://github.com/wamalalawrence/agent-skills"
 argument-hint: >-
   optional: mode inner|outer, base branch, issue key/URL, PR URL, or task description
@@ -57,7 +57,8 @@ implementation.
 - During the [`software-engineer`](../../SKILL.md) inner-loop review after implementation is staged.
 - During the [`software-engineer`](../../SKILL.md) outer-loop review after QA has run.
 - When reviewing a PR, branch, commit range, staged diff, or uncommitted working diff.
-- When a change needs issue-aware review against Jira, GitHub Issues, a support ticket, incident,
+- When a change needs issue-aware review against a tracker ticket (Jira, GitHub Issues, GitLab
+  Issues, etc.), a support ticket, incident,
   feature request, task description, acceptance criteria, or linked documents.
 
 ## When Not To Use
@@ -94,7 +95,7 @@ Accept any of these review targets:
 - Staged diff, working diff, branch diff, commit range, or pull request URL.
 - Base branch or comparison target. If absent, derive it from `${PROJECTS_JSON}` or
   `${GITHUB_DEFAULT_BRANCH}`.
-- Issue context: Jira ticket, GitHub issue, bug report, feature request, task description,
+- Issue context: tracker ticket (Jira key, GitHub issue URL, GitLab issue URL, etc.), bug report,
   acceptance criteria, or linked documents.
 - Repository path or enough context to identify the project in `${PROJECTS_JSON}`.
 - Optional standards: engineering handbook, architecture notes, coding standards, API guidelines,
@@ -131,23 +132,26 @@ may continue only when the output clearly states that repository setup, build co
 issue-system access were not verified.
 
 If issue-aware review is requested or an issue key/URL is present, usable issue context is required.
-Jira host metadata can come from `.env` or `.agent-skills.yml`; the credential (`JIRA_API_TOKEN`)
-always comes from environment variables. `.jira-config.yml` is optional. If the issue cannot be read
+Tracker host metadata (Jira, GitLab, etc.) can come from `.env` or `.agent-skills.yml`; the
+credential (`JIRA_API_TOKEN` or equivalent) always comes from environment variables.
+`.jira-config.yml` (or equivalent tracker config) is optional. If the issue cannot be read
 and the user did not provide the ticket summary, acceptance criteria, and key comments directly,
 stop or ask for that context before producing a verdict.
 
-**Auth discovery before recording Jira/Confluence as unavailable.** Before listing Jira or
-Confluence under `Review Limitations / Unavailable Context`, walk the documented
-[discovery order](../../../../docs/auth-discovery.md#discovery-order): `.agent-skills.yml` →
-`.jira-config.yml` → `.env` / `.env.local` → process env → `scripts/auth-preflight.py`. If config
-exists but `${VAR}` placeholders are unresolved, record the limitation as **"Jira config
-incomplete — unresolved placeholder X"**, not "no Jira access". The reviewer must not give a
+**Auth discovery before recording the tracker/document-store as unavailable.** Before listing
+the issue tracker or linked document store under `Review Limitations / Unavailable Context`,
+walk the documented [discovery order](../../../../docs/auth-discovery.md#discovery-order):
+`.agent-skills.yml` → `.jira-config.yml` (or equivalent tracker config) → `.env` /
+`.env.local` → process env → `scripts/auth-preflight.py`. If config
+exists but `${VAR}` placeholders are unresolved, record the limitation as **"tracker config
+incomplete — unresolved placeholder X"**, not "no tracker access". The reviewer must not give a
 bare `PASS` when issue alignment could not be checked because of an avoidable auth-discovery
-miss; if the preflight has not been run and Jira is in scope, the correct verdict is
+miss; if the preflight has not been run and the tracker is in scope, the correct verdict is
 `NEEDS_CONTEXT`.
 
 **Locate config files before declaring any missing.** Run
-`python3 scripts/locate-config.py` — `.env` / `.jira-config.yml` live in the parent workspace
+`python3 scripts/locate-config.py` — `.env` / `.jira-config.yml` (or equivalent tracker
+config) live in the parent workspace
 folder, not the repo cwd. A `Review Limitations` line that reads "`.env` not present in the
 repo" without naming every directory the locator searched is itself a finding the reviewer
 must correct, not surface.
@@ -197,6 +201,7 @@ Review setup variables:
   issue-context summaries.
 - `CODE_REVIEWER_CACHE_TTL_HOURS`: optional. Defaults to `24`; cache TTL.
 - `JIRA_HOST`, `JIRA_API_TOKEN`, `JIRA_AUTH_TYPE`: required only for Jira issue-aware review.
+  For other trackers (GitLab, Azure DevOps, etc.), the equivalent tracker-specific variables apply.
 - `CONFLUENCE_HOST`, `CONFLUENCE_API_TOKEN`: required only when linked docs require them.
 - `SHARED_LIBRARY_NAMES`: optional. Used for cross-project impact detection.
 - `API_MODULE_PATTERNS`: optional. Used for API and contract risk detection.
@@ -319,7 +324,7 @@ loop continues.
 
 - Look for issue keys or URLs from user input, branch name, PR title/body, commit messages, and diff
   text.
-- Fetch or summarize Jira tickets, GitHub issues, task descriptions, support tickets, incidents,
+- Fetch or summarize tracker tickets (Jira, GitHub Issues, etc.), task descriptions, support tickets, incidents,
   feature requests, comments, acceptance criteria, linked docs, screenshots, logs, and related tickets
   where available.
 - If expected behavior, root cause, issue type, or acceptance criteria remain unclear, invoke
@@ -337,7 +342,7 @@ Layer 1 review questions:
   issue?
 - Does the implementation address the confirmed root cause, or only a symptom?
 - Does it introduce scope creep beyond the ticket?
-- Does the branch/PR bundle another independent Jira task that should have been a separate branch
+- Does the branch/PR bundle another independent tracker task that should have been a separate branch
   and PR?
 
 ### 3. Review general engineering quality
@@ -678,7 +683,7 @@ for the per-value semantics.
   `Loop: continue` when actionable findings exist.
 - Do not invent issue details, logs, code behavior, acceptance criteria, or company standards.
 - Do not produce issue-aware verdicts when the issue context could not be read or supplied.
-- Do not approve a PR that bundles independent Jira tasks into one branch/PR. Surface it as a
+- Do not approve a PR that bundles independent tracker tasks into one branch/PR. Surface it as a
   `blocker` because it prevents focused review and clean rollback.
 - Do not recommend broad rewrites unless the evidence shows the current approach is materially
   unsafe or unmaintainable.
@@ -717,7 +722,7 @@ for the per-value semantics.
 
 ## Example Prompts
 
-- "Review my staged diff against this Jira ticket."
+- "Review my staged diff against this tracker ticket."
 - "Review this PR for issue alignment and engineering risk."
 - "Run an outer-loop review before I open a PR."
 - "Review this bug fix and tell me if it actually addresses the root cause."

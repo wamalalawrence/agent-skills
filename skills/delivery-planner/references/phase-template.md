@@ -86,7 +86,7 @@ The observable check that says the phase is finished. Examples:
 - "The new test fails on the parent commit and passes on the fix commit"
   (verified by `git checkout <parent>` then re-running the test).
 - "`mvn -pl auth test` passes locally and in CI."
-- "The third acceptance criterion is checked off in the Jira-ready story."
+- "The third acceptance criterion is checked off in the tracker-ready story."
 - "`code-reviewer` returns `Loop: converged` for the inner-loop review."
 - "`evidence-pack.yml` was re-read after the phase checkpoint write and now
   names the completed phase plus the next dispatch pointer."
@@ -131,7 +131,7 @@ repo). Otherwise omit the section.
 The same fields apply. Translate the implementation-flavoured wording to the
 owner skill's vocabulary:
 
-- `product-owner` phase: `Expected outputs` is the Jira-ready story or
+- `product-owner` phase: `Expected outputs` is the tracker-ready story or
   acceptance-criteria block; `Validation` is the
   [Definition of Ready](../../product-owner/SKILL.md#definition-of-ready-gate-before-handoff)
   pass.

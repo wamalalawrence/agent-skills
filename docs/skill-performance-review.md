@@ -86,7 +86,7 @@ found and the fixes made were:
 - Too vague: no major gap after review.
 - Over-prescriptive: negative acceptance criteria requirement is strict but valuable for quality.
 - Stopping behavior: clear; unresolved goal, value, expected behavior, or feasibility risk blocks
-  Jira-ready output.
+  tracker-ready output.
 - Hallucination prevention: strong; stakeholder priorities, analytics, legal rules, and approvals
   cannot be invented.
 - Related skills: correctly routes bugs to `issue-investigator`, feasibility to `software-engineer`,

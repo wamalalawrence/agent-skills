@@ -1,7 +1,8 @@
 ---
 name: issue-investigator
 description: >-
-  Issue investigation workflow for Jira tickets, GitHub issues, support tickets,
+  Issue investigation workflow for tracker tickets (Jira, GitHub Issues, GitLab Issues,
+  Azure DevOps, and others), support tickets,
   incidents, regressions, feature requests, and technical tasks. Use when: understanding
   expected vs actual behavior, classifying issue type, gathering evidence, reproducing
   problems, analyzing root cause, refining tickets before implementation, or recommending
@@ -13,11 +14,12 @@ compatibility: >-
   Works with any agent that supports the Agent Skills format (Claude Code, Cursor,
   Windsurf, Continue, GitHub Copilot Chat, ChatGPT, etc.). Two execution modes —
   `local-workspace` (multi-repo, setup.init + .env) and `in-repo` (single-repo,
-  .agent-skills.yml). Optional Jira CLI integration via `.jira-config.yml`. See
+  .agent-skills.yml). Optional tracker CLI integration via `.jira-config.yml` (or equivalent
+  tracker config for other platforms). See
   docs/execution-modes.md.
 metadata:
   author: wamalalawrence
-  version: "0.29.0"
+  version: "0.30.0"
   homepage: "https://github.com/wamalalawrence/agent-skills"
 argument-hint: >-
   issue URL/key, bug report, incident, support ticket, feature request, or task
@@ -31,7 +33,8 @@ disable-model-invocation: false
 Use this skill to understand an issue before deciding what to build, fix, configure, roll back,
 test, monitor, or clarify.
 
-This is intentionally not only a Jira bug-fix skill. It investigates many issue types and produces
+This is intentionally not only a single-tracker bug-fix skill. It investigates many issue types
+across many tracker platforms and produces
 an evidence-based result before recommending the next action. It must not jump directly to
 implementation.
 
@@ -64,7 +67,7 @@ implementation.
 - Support ticket investigation.
 - New feature clarification.
 - Technical task analysis.
-- Jira ticket or GitHub issue refinement before implementation.
+- Tracker ticket (Jira key, GitHub issue URL, GitLab issue URL, etc.) refinement before implementation.
 - Root-cause analysis before fixing.
 - Review preparation when expected behavior or issue context is unclear.
 
@@ -105,7 +108,7 @@ and [`code-reviewer`](../code-reviewer/SKILL.md).
 
 Accept any of these as the starting issue source:
 
-- Jira ticket key or URL.
+- Jira ticket key or URL (or equivalent tracker key from GitLab, Azure DevOps, etc.).
 - GitHub issue URL or number.
 - Support ticket, production incident, regression report, bug report, feature request, task
   description, or user-provided issue brief.
@@ -138,17 +141,17 @@ repo root → `in-repo`; else continue only when the user supplied the issue det
 repository/Jira lookup is needed. Otherwise warn and stop because the investigation would be based
 on incomplete context.
 
-For Jira tickets, usable Jira access is required unless the user provides the ticket summary,
+For tracker tickets, usable tracker access is required unless the user provides the ticket summary,
 acceptance criteria, key comments, linked-doc excerpts, and affected environment details directly.
 `.jira-config.yml` is optional when the Jira environment variables work. If a Jira key or URL is
 supplied but the ticket cannot be read and no direct ticket details are provided, stop instead of
 producing a low-confidence investigation.
 
-**Mandatory auth discovery before declaring Jira/Confluence inaccessible.** The agent must walk
-the [auth discovery order](../../../../docs/auth-discovery.md#discovery-order) before reporting
-that Jira or Confluence is unavailable:
+**Mandatory auth discovery before declaring the tracker/document-store inaccessible.** The agent
+must walk the [auth discovery order](../../../../docs/auth-discovery.md#discovery-order) before
+reporting that the issue tracker or linked document store is unavailable:
 
-1. Check `.agent-skills.yml` for `jira:` / `confluence:` host metadata.
+1. Check `.agent-skills.yml` for `jira:` / `confluence:` (or equivalent tracker) host metadata.
 2. Check `.jira-config.yml` for placeholder structure (`${JIRA_HOST}`, etc.).
 3. Check `.env` and `.env.local` for actual values.
 4. Check process environment variables.
@@ -159,7 +162,8 @@ that Jira or Confluence is unavailable:
    name the specific missing or unresolved fields (never the secret value).
 
 **Locate config files before claiming any are missing.** Run
-`python3 scripts/locate-config.py` — `.env` / `.jira-config.yml` are written by `setup.init`
+`python3 scripts/locate-config.py` — `.env` / `.jira-config.yml` (or equivalent tracker
+config) are written by `setup.init`
 to the **parent workspace folder**, not the repo cwd. "Not in cwd" is not "not in the
 workspace". Reporting the former as the latter is a workflow failure.
 
@@ -769,7 +773,7 @@ a one-line `not available — <what is missing>`.
 
 ## Example Prompts
 
-- "Investigate this Jira ticket and tell me whether it is a bug, config issue, or unclear
+- "Investigate this tracker ticket and tell me whether it is a bug, config issue, or unclear
   requirement."
 - "Analyze this production incident and recommend the next action before we fix anything."
 - "Read this support ticket and identify expected vs actual behavior."

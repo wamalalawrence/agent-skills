@@ -39,7 +39,7 @@ cd agent-skills
 ./setup.init
 ```
 
-`setup.init` writes `.env`, optional `.jira-config.yml`, a `.skills` symlink, and a `.gitignore`
+`setup.init` writes `.env`, optional `.jira-config.yml` (or equivalent tracker config), a `.skills` symlink, and a `.gitignore`
 block into the parent workspace folder. See [docs/installation.md](docs/installation.md) for the
 workspace layout, all flags, and manual setup.
 
@@ -161,7 +161,7 @@ usage shows they are useful independently.
 - [First-time user quickstart](docs/quickstart.md)
 - [Installation & `setup.init`](docs/installation.md)
 - [Configuration & multi-project workspaces](docs/configuration.md)
-- [Jira / Confluence auth discovery](docs/auth-discovery.md) — discovery order, placeholder
+- [Issue tracker / Document store auth discovery](docs/auth-discovery.md) — discovery order, placeholder
   resolution, and the auth preflight that validates without exposing secrets
 - [GitHub access ladder](docs/github-access.md) — `gh auth status` → account switching →
   HTTPS → SSH; the ladder an agent must walk before declaring "no GitHub access"

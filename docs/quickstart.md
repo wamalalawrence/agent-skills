@@ -44,9 +44,10 @@ Here, the workspace root is the parent folder that contains the `agent-skills` c
 sibling repos you want the assistant to work across. You are not expected to copy `agent-skills`
 into another folder after cloning it.
 
-`setup.init` asks a short set of questions, infers safe defaults from your Jira host / GitHub org /
+`setup.init` asks a short set of questions, infers safe defaults from your tracker host / GitHub org /
 sibling repos where possible, and writes everything to a managed marker block in
-`<workspace-root>/.env`. Confluence configuration is optional and offered after Jira. Re-run
+`<workspace-root>/.env`. Linked document-store configuration is optional and offered after the
+tracker. Re-run
 `./setup.init --verify` at any time. Run `./setup.init --check-updates` to see if a newer
 release is available, and `./setup.init --update` to apply it. See
 [updates.md](updates.md) for details.
@@ -59,10 +60,11 @@ attached.
 
 1. Copy [`.agent-skills.example.yml`](../.agent-skills.example.yml) to `.agent-skills.yml` in the
   target repository.
-2. Fill in the `project:` block. Optionally fill in `jira:` and `confluence:` host metadata.
+2. Fill in the `project:` block. Optionally fill in `jira:` and `confluence:` (or equivalent
+   tracker / document-store) host metadata.
 3. Vendor the skills you need into the repository, or reference the relevant `SKILL.md` files from
   the agent's instruction surface.
-4. Put secrets (`JIRA_API_TOKEN`, `CONFLUENCE_API_TOKEN`, `GITHUB_TOKEN`) in the host platform's
+4. Put secrets (`JIRA_API_TOKEN`, `GITHUB_TOKEN`, etc.) in the host platform's
   secret mechanism, not in `.agent-skills.yml`.
 5. Add `.cache/` to the target repository's `.gitignore`.
 
@@ -102,10 +104,11 @@ Use the test-automation-engineer skill to decide what should be automated for th
 the right test level, avoid brittle checks, and describe the validation command.
 ```
 
-## Jira / Confluence auth at a glance
+## Issue tracker / Document store auth at a glance
 
 Skills follow a documented [auth discovery order](auth-discovery.md) before reporting that
-Jira or Confluence is inaccessible: `.agent-skills.yml` → `.jira-config.yml` → `.env` /
+The issue tracker or linked document store is inaccessible: `.agent-skills.yml` →
+`.jira-config.yml` (or equivalent tracker config) → `.env` /
 `.env.local` → process environment → `python3 scripts/auth-preflight.py`. Unresolved
 `${JIRA_HOST}` placeholders in `.jira-config.yml` mean **incomplete configuration**, not
 "no auth"; load `.env` first or run the preflight to validate. The preflight never prints
@@ -115,7 +118,7 @@ secret values.
 
 - These skills are not deterministic software.
 - They do not replace human review.
-- They do not provide Jira, GitHub, Confluence, CI, or production access by themselves.
+- They do not provide tracker, GitHub, linked document store, CI, or production access by themselves.
 - They do not include private company standards; supply those from your repository or prompt.
 - They do not come with an SLA, warranty, or guarantee of correctness.
 
@@ -126,7 +129,7 @@ Every relevant skill runs the
 testing, or automating. The gate writes a short `Requirement Understanding` block (twelve fields)
 at the top of the output and applies three binding rules:
 
-- `unknown` / `low` confidence — the agent must not implement, must not produce Jira-ready
+- `unknown` / `low` confidence — the agent must not implement, must not produce tracker-ready
   output, must not assert pass/fail tests, and must not give a bare `PASS` review. It asks for
   clarification or evidence instead.
 - `medium` confidence — the agent may plan, draft, or run read-only checks, but every

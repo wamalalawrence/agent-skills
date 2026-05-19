@@ -22,7 +22,7 @@ Known context: current filters must be rebuilt manually each visit; no design is
 - Clarify the product goal, user value, and problem statement.
 - Define in scope, out of scope, assumptions, dependencies, UX notes, and non-functional needs.
 - Ask or record open questions instead of inventing missing product decisions.
-- Produce Jira-ready story/task structure with testable acceptance criteria.
+- Produce tracker-ready story/task structure with testable acceptance criteria.
 - Hand off feasibility, manual testing, and automation notes without prescribing implementation.
 
 ## Sample Output Structure
@@ -44,7 +44,7 @@ Known context: current filters must be rebuilt manually each visit; no design is
 - Non-functional requirements: saved filters must not expose another user's private report context.
 - Open questions: ...
 
-## Jira-Ready Story/Task Format
+## Tracker-Ready Story/Task Format
 
 - Title: Save and reuse report filters
 - Type: Story

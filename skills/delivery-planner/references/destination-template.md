@@ -15,7 +15,7 @@ fields hide assumptions; named-and-empty fields do not.
 
 ```yaml
 ---
-work_key: AUTH-SSO-PARITY     # Jira key, GitHub issue number, or local slug
+work_key: AUTH-SSO-PARITY     # Tracker key, GitHub issue number, or local slug
                               # (lowercase-hyphen-separated when no ticket exists,
                               # e.g. local-2026-05-auth-sso-parity)
 title: SSO parity for the example-api login flow

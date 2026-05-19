@@ -20,7 +20,7 @@ compatibility: >-
   .agent-skills.yml). See docs/execution-modes.md.
 metadata:
   author: wamalalawrence
-  version: "0.29.0"
+  version: "0.30.0"
   homepage: "https://github.com/wamalalawrence/agent-skills"
 ---
 
@@ -86,7 +86,7 @@ same) fresh agent without dragging the previous session's context along.
   run will reach a verdict — investigate first, plan only if the result calls
   for multi-phase remediation.
 - A standalone product-refinement task that fits one
-  [`product-owner`](../product-owner/SKILL.md) Jira-ready story — refine first,
+  [`product-owner`](../product-owner/SKILL.md) tracker-ready story — refine first,
   plan only when the resulting work item is itself multi-phase.
 - Any time the user has not actually agreed on the destination. This skill
   makes plans, not decisions; do not invent the goal.
@@ -116,6 +116,9 @@ same) fresh agent without dragging the previous session's context along.
 - [`code-reviewer`](../software-engineer/skills/code-reviewer/SKILL.md): does
   not own delivery phases; it reviews the diffs each phase produces under
   `software-engineer`'s normal inner/outer review loop.
+- [`domain-modeler`](../domain-modeler/SKILL.md): use when the destination or a
+  phase implies an architectural decision that meets the ADR criteria, or when
+  domain terminology must be canonicalised before downstream phases refine scope.
 
 This skill **decomposes** work; it does not execute it. It does not call any
 of the skills above to do their job. It produces artifacts those skills (or a
@@ -189,17 +192,18 @@ Useful but not required:
   shared `.cache/agent-skills/<issue-key>/` directory next to the existing
   evidence-pack and definition-of-done artifacts.
 - `AGENT_SKILLS_CACHE_DIR` — overrides the cache root.
-- Jira / Confluence / GitHub access — only when the input is a ticket and the
+- Issue tracker / linked document store / GitHub access — only when the input is a ticket and the
   planner needs to fetch the brief itself. If the user pastes the brief,
   these are not required.
 
-If a Jira ticket key is supplied but Jira access is unavailable, follow the
+If a tracker ticket key is supplied but tracker access is unavailable, follow the
 [auth discovery walk](../../docs/auth-discovery.md) before declaring it
-inaccessible. Treat unresolved `${VAR}` placeholders in `.jira-config.yml` as
-incomplete configuration, not missing credentials.
+inaccessible. Treat unresolved `${VAR}` placeholders in `.jira-config.yml` (or equivalent
+ tracker config) as incomplete configuration, not missing credentials.
 
 **Locate config files before declaring any are missing.** Run
-`python3 scripts/locate-config.py` — `.env` / `.jira-config.yml` are written by
+`python3 scripts/locate-config.py` — `.env` / `.jira-config.yml` (or equivalent tracker
+config) are written by
 `setup.init` to the **parent workspace folder**, not the repo cwd. "Not in cwd" is
 **not** "not in the workspace".
 
@@ -351,7 +355,7 @@ Each `phase-NN-<slug>.md` MUST contain:
   any explicit skill path the user supplied. If it cannot be resolved, the
   phase state is `blocked`, not `ready`.
 - **Expected outputs / artifacts.** What must exist when the phase is done:
-  files committed, evidence-pack fields populated, tests added, a Jira-ready
+  files committed, evidence-pack fields populated, tests added, a tracker-ready
   story produced, an investigation result, a passing CI run.
 - **Validation / exit criteria.** The observable check that says the phase is
   finished. A test passes, a query returns the expected shape, a peer review

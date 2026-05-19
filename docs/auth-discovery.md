@@ -1,7 +1,8 @@
-# Jira / Confluence Auth Discovery
+# Issue Tracker / Document Store Auth Discovery
 
-This page is the canonical reference an agent should follow when it needs Jira or Confluence
-access. The goal is simple: an agent should not say "I can't access Jira/Confluence" until it has
+This page is the canonical reference an agent should follow when it needs Jira, Confluence,
+GitLab, Azure DevOps, or equivalent tracker / document-store access. The goal is simple: an
+agent should not say "I can't access the issue tracker / doc store" until it has
 walked the documented discovery order, attempted placeholder resolution, and run the auth
 preflight. Failing earlier produces avoidable dead ends; the same workspace usually has the
 information available, just not in the place the agent looked first.
@@ -173,7 +174,7 @@ correct request; it does not prove the credentials still work on the Jira side. 
 preflight followed by an HTTP 401 from Jira means the token was rotated, not that discovery
 failed.
 
-## Jira / Confluence access troubleshooting
+## Tracker / Document Store access troubleshooting
 
 The most common failures, with the diagnosis the agent should reach. Each entry is **symptom →
 real cause → fix**.

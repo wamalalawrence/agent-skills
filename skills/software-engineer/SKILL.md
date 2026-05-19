@@ -20,7 +20,7 @@ compatibility: >-
   .agent-skills.yml). See docs/execution-modes.md.
 metadata:
   author: wamalalawrence
-  version: "0.29.0"
+  version: "0.30.0"
   homepage: "https://github.com/wamalalawrence/agent-skills"
 ---
 
@@ -77,12 +77,16 @@ quality assurance, and code review into a single repeatable pair-programming loo
   a phase turns out to be too large, stop and surface to the user so the planner can re-decompose.
   When invoked from a phase, follow [§ When invoked from a delivery-planner
   phase](#when-invoked-from-a-delivery-planner-phase) below to keep the dispatch pointer fresh.
+- Use the top-level [`domain-modeler`](../domain-modeler/SKILL.md) skill when an architectural
+  decision meets the ADR criteria (hard to reverse, surprising without context, result of a real
+  trade-off) and its rationale should be recorded, or when domain terminology needs a canonical
+  definition in `CONTEXT.md` before implementation proceeds.
 
 ## When To Use
 
 - Any code change, bug fix, feature, or refactor in a repository the agent can inspect
 - Code review or self-review before opening a PR
-- Working with a Jira ticket, GitHub issue, support report, or supplied task brief
+- Working with a tracker ticket (Jira, GitHub issue, GitLab issue, etc.), support report, or supplied task brief
 - Database migration script changes
 - API endpoint additions or modifications
 - Security-sensitive changes
@@ -166,7 +170,8 @@ Required setup variables:
 - `GIT_BRANCH_NAME_FORMAT`: optional. Hint string for branch name format.
 - `GIT_MERGE_STRATEGY`: optional. One of `squash`, `merge`, or `rebase`.
 - `JIRA_HOST`, `JIRA_API_TOKEN`, `JIRA_AUTH_TYPE`: required only when a Jira ticket is in scope.
-  Used for Jira CLI or REST access.
+  Used for Jira CLI or REST access. For non-Jira trackers (GitLab, Azure DevOps, etc.),
+  the equivalent tracker-specific variables apply.
 - `CONFLUENCE_HOST`, `CONFLUENCE_API_TOKEN`: required only if the ticket links Confluence pages.
 - `JDK_MANAGER`, `NODE_MANAGER`, `PYTHON_MANAGER`: optional hints for switching language runtime.
 - `DOCKER_REQUIRED`: optional. Indicates whether Docker must be running before the build.
@@ -181,21 +186,22 @@ If a variable is missing, output:
 > [`agent-skills/.agent-skills.example.yml`](../../.agent-skills.example.yml)) and re-run. I will
 > not continue because the result would be based on incomplete context.
 
-For Jira-driven work, `.jira-config.yml` is optional when `JIRA_HOST`, `JIRA_AUTH_TYPE`,
+For tracker-driven work, `.jira-config.yml` (or equivalent tracker config) is optional when `JIRA_HOST`, `JIRA_AUTH_TYPE`,
 `JIRA_API_TOKEN`, and any required `JIRA_LOGIN` value are present and usable. If a Jira ticket is in
 scope and neither Jira access nor a user-supplied ticket summary with acceptance criteria/comments
 is available, stop and ask; do not infer ticket intent from the key, branch name, or code diff
 alone.
 
-**Before Phase 1.1 declares Jira inaccessible, run the auth discovery walk** documented in
+**Before Phase 1.1 declares the issue tracker inaccessible, run the auth discovery walk** documented in
 [`docs/auth-discovery.md`](../../docs/auth-discovery.md): `.agent-skills.yml` →
 `.jira-config.yml` → `.env` / `.env.local` → process environment → `scripts/auth-preflight.py`.
 Treat unresolved `${VAR}` placeholders in `.jira-config.yml` as **incomplete configuration**, not
 as missing credentials. The Jira CLI does not expand `${VAR}` placeholders; either source `.env`
 first or rely on the preflight for validation. Implementation that skips the discovery walk and
-silently falls back to "no Jira access" is a workflow failure, not a setup failure.
+silently falls back to "no tracker access" is a workflow failure, not a setup failure.
 
-**Locate config files before claiming any are missing.** `.env` and `.jira-config.yml` are
+**Locate config files before claiming any are missing.** `.env` and `.jira-config.yml` (or
+equivalent tracker config) are
 written by `setup.init` to the **parent workspace folder**, not the repo cwd. Run
 `python3 scripts/locate-config.py` (see [`docs/auth-discovery.md` § Where the files
 live](../../docs/auth-discovery.md#where-the-files-live)). The script walks the cwd, every
@@ -224,7 +230,7 @@ step 4 is reached, stop and ask the user.
   the single `project:` block in `.agent-skills.yml` is the project; if its required fields (`stack`,
   `base_branch`, `build`) are blank, infer from repo files (`pom.xml` / `package.json` /
   `pyproject.toml` / `go.mod`) and ask the user to confirm before any code-changing step.
-2. **Issue source** — Use a Jira ticket when one is supplied or derivable from the branch name.
+2. **Issue source** — Use a tracker ticket when one is supplied or derivable from the branch name.
   Otherwise use the user's description as the issue brief. For Jira, fetch `jira issue view <KEY>
   --comments 100` and follow parent / child / linked issues and any linked Confluence pages.
 3. **Codebase** — Read the project's `README.md` and `CONTRIBUTING.md` (if present) **before**
@@ -245,7 +251,7 @@ step 4 is reached, stop and ask the user.
 Start with a compact evidence pack before loading long files or remote histories:
 
 - Project entry from `${PROJECTS_JSON}` plus detected repo root, branch, and base branch.
-- Issue brief: Jira summary/acceptance criteria/key comments, or the user's non-ticket description.
+- Issue brief: Tracker ticket summary/acceptance criteria/key comments, or the user's non-ticket description.
 - Relevant code map: filenames, nearby tests, build manifest, CI workflow names, and recent commits
   touching the likely area.
 - Only the smallest necessary snippets from source files, tests, logs, and linked docs.
@@ -263,7 +269,7 @@ Required inputs:
 
 - The repository being changed, or a clear hint that lets the agent identify it within
   `${WORKSPACE_ROOT}`
-- For ticket-driven work: the Jira ticket key, GitHub issue URL/number, or supplied issue source
+- For ticket-driven work: the tracker ticket key, GitHub issue URL/number, or supplied issue source
 - For non-ticket work: a one-paragraph issue brief covering the desired change, business reason,
   expected behavior, and any known constraints
 
@@ -375,7 +381,7 @@ Use the locally installed CLI first, fall back to direct REST only when the CLI 
 
 - [ ] If
   `${AGENT_SKILLS_CACHE_DIR:-${WORKSPACE_ROOT:-$REPO_ROOT}/.cache/agent-skills}/<issue-key>/evidence-pack.yml`
-  contains `delivery_plan.current_dispatch_pointer`, read the pointed phase before any Jira,
+  contains `delivery_plan.current_dispatch_pointer`, read the pointed phase before any tracker,
   branch, or code work.
 - [ ] Resolve the phase's `recommended_owner` using the
   [skill-source resolution contract](../../docs/skill-source-resolution.md), including any explicit
@@ -392,12 +398,12 @@ Use the locally installed CLI first, fall back to direct REST only when the CLI 
   recipe above, or stop with the blocker. Running the wrong skill on a phase is a workflow bug;
   "the IDE didn't list it so I executed directly" is the failure mode this rule exists to
   prevent.
-- [ ] Extract the primary Jira key when Jira is involved. A software implementation run has exactly
-  one primary Jira task. If the prompt contains two or more independent Jira keys, stop before
-  branch creation and split the work: one Jira task = one branch = one PR = one focused reviewable
-  change. Linked parent, duplicate, or follow-up issues may be referenced as context, but they are
-  not implementation scope for this branch.
-- [ ] If the current branch name already contains a different Jira key than the primary issue, stop
+- [ ] Extract the primary tracker key when a ticket tracker is involved. A software implementation
+  run has exactly one primary tracker task. If the prompt contains two or more independent tracker
+  keys, stop before branch creation and split the work: one tracker task = one branch = one PR =
+  one focused reviewable change. Linked parent, duplicate, or follow-up issues may be referenced
+  as context, but they are not implementation scope for this branch.
+- [ ] If the current branch name already contains a different tracker key than the primary issue, stop
   before editing. Either switch/create the correct branch or ask the user which issue owns this
   branch.
 
@@ -408,11 +414,11 @@ Use the locally installed CLI first, fall back to direct REST only when the CLI 
   credentials come from the host platform's environment-variable injection — nothing to source.
 - [ ] If `.env` is missing, unreadable, or still only contains bootstrap values that cannot identify
   the real project for this task, stop with the missing-setup message from Required Environment.
-- [ ] If working from a Jira ticket: sanity-check access with `jira me` and `jira serverinfo`.
+- [ ] If working from a tracker ticket: sanity-check access (for Jira: `jira me` and `jira serverinfo`;
 - [ ] Read ticket details: `jira issue view <TICKET>` and `jira issue view <TICKET> --comments 100`.
 - [ ] Follow linked issues, parent/child relationships, subtasks, and epic context.
 - [ ] Open and read any linked Confluence pages.
-- [ ] Before creating a new branch for a Jira ticket, search for already-open work that may have
+- [ ] Before creating a new branch for a tracker ticket, search for already-open work that may have
   addressed it: open PRs whose title/body/comments mention the key, remote branches containing the
   key, linked PRs in the ticket's development panel when available, and recent commits touching the
   suspected files. With GitHub, prefer
@@ -816,7 +822,7 @@ must not run with unresolved reviewer findings.
 - [ ] Never bypass git hooks (`--no-verify`) without an explicit user-approved waiver recorded in
   the Definition-of-Done artifact.
 - [ ] For ticket-driven work, the commit set must belong to the single primary Jira key from
-  Phase 1.0. If another independent Jira task was fixed incidentally, split it onto its own branch
+  Phase 1.0. If another independent tracker task was fixed incidentally, split it onto its own branch
   before continuing.
 
 ### 5.2 Conflict resolution
@@ -864,7 +870,7 @@ written waiver.
   as ready for review.
 - [ ] PR title follows the same format as the commit.
 - [ ] PR description explains: **what** changed, **why**, and **how it was tested**.
-- [ ] Link the Jira ticket, GitHub issue, or supplied issue source in the PR when one exists.
+- [ ] Link the tracker ticket, GitHub issue, or supplied issue source in the PR when one exists.
 - [ ] The PR description must name one primary Jira key. Related keys may appear only in a clearly
   labelled "Related context" line; they do not expand PR scope.
 - [ ] Merge strategy: `${GIT_MERGE_STRATEGY}` (commonly `squash`).
@@ -1117,7 +1123,7 @@ review, or root-cause confirmation unless that work actually happened.
 - Do not skip the [Requirement Understanding Gate](#requirement-understanding-gate). Implementation
   on `unknown` or `low` understanding confidence is forbidden by the workflow's
   confidence-to-action rules.
-- Do not combine independent Jira tasks in one implementation branch or PR. One primary Jira task
+- Do not combine independent tracker tasks in one implementation branch or PR. One primary tracker task
   maps to one branch, one PR, and one focused reviewable change.
 - Do not create a new Jira-fix branch before checking for open PRs or remote branches that already
   reference the same issue key. Possible existing work must be surfaced, not overwritten or

@@ -27,7 +27,7 @@ scorecard](skill-quality-scorecard.md):
 | Disconfirming checks | At least one falsifiable check exists for every load-bearing assumption and candidate interpretation. Cheap and read-only when possible. |
 | Scope / out-of-scope clarity | "What this changes" and "what this does not change" are both written, including handoff items vs absorbed items. |
 | Readiness decision correctness | The chosen `READY_FOR_…` / `NEEDS_…` / `BLOCKED` value matches the evidence and confidence shown in the block. |
-| Resistance to premature implementation | On `unknown` / `low` confidence, the agent stops, asks, or investigates; it does not implement, automate, produce Jira-ready output, or give bare `PASS`. |
+| Resistance to premature implementation | On `unknown` / `low` confidence, the agent stops, asks, or investigates; it does not implement, automate, produce tracker-ready output, or give bare `PASS`. |
 
 ## Suggested Review Method
 

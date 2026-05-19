@@ -1,6 +1,6 @@
 # issue-investigator
 
-Issue investigation workflow for Jira tickets, GitHub issues, support tickets, incidents,
+Issue investigation workflow for tracker tickets (Jira, GitHub Issues, GitLab Issues, etc.), support tickets, incidents,
 regressions, feature requests, and technical tasks.
 
 See [SKILL.md](./SKILL.md) for the full workflow.
@@ -26,5 +26,5 @@ See [SKILL.md](./SKILL.md) for the full workflow.
 ## Required environment
 
 Run [`../../../../setup.init`](../../../../setup.init) from the `agent-skills` folder for the
-simplest setup path. See [SKILL.md](./SKILL.md#required-environment) for details. Jira and
-Confluence variables are required only when those systems are the source of issue context.
+simplest setup path. See [SKILL.md](./SKILL.md#required-environment) for details. Tracker and
+document-store variables are required only when those systems are the source of issue context.

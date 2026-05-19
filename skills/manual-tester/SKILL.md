@@ -16,7 +16,7 @@ compatibility: >-
   .agent-skills.yml). See docs/execution-modes.md.
 metadata:
   author: wamalalawrence
-  version: "0.29.0"
+  version: "0.30.0"
   homepage: "https://github.com/wamalalawrence/agent-skills"
 ---
 
@@ -117,7 +117,8 @@ Stop or mark execution `blocked` when:
 
 Before the gate, do two cheap reads so the test plan has real context:
 
-- Run `python3 scripts/locate-config.py` to confirm `.env` / `.jira-config.yml` paths. They
+- Run `python3 scripts/locate-config.py` to confirm `.env` / `.jira-config.yml` (or equivalent
+  tracker config) paths. They
   live in the **parent workspace folder**, not the repo cwd. See
   [`docs/auth-discovery.md` § Where the files live](../../docs/auth-discovery.md#where-the-files-live).
 - Run `python3 scripts/project-memory.py read <project>`. Recorded `Common gotchas` (Docker
