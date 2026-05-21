@@ -1,0 +1,146 @@
+# The Company Brain
+
+`agent-skills` is built so the same set of specialist skills compounds value across
+projects, sessions, and time — not just one task. This document is the map of that
+loop: which artifacts persist, where they live, who writes them, and how a single
+PR's outcome eventually tightens future runs of every relevant skill.
+
+> *"AI is not something you bolt onto the side of a company. The company itself has
+> to be built with self-improving AI loops from the ground up."*
+
+This is the policy that turns that quote into a concrete contract every skill in
+this repo can be held to.
+
+## The loop
+
+```mermaid
+flowchart LR
+  Task[Task / issue] --> Blackboard[(Per-task blackboard)]
+  Blackboard --> Skills[Skills: SE, PO, MT, TAE, II, CR, DP, DM]
+  Skills --> Artifacts[PR + evidence pack]
+  Artifacts --> Outcome[merged / reverted / hotfixed / blocked]
+  Outcome --> ProjectMem[(Project memory)]
+  Outcome --> Telemetry[(Telemetry NDJSON)]
+  ProjectMem --> Promote[Rule-promotion review]
+  Promote --> OrgMem[(Org memory + index)]
+  OrgMem --> Skills
+  ProjectMem --> Skills
+  Blackboard --> Skills
+  Telemetry --> SkillReview[Skill performance review]
+  SkillReview --> SkillUpdates[Skill PRs]
+  SkillUpdates --> Skills
+  Evals[Eval harness] --> SkillReview
+```
+
+## The three memory tiers
+
+| Tier | Path under `${AGENT_SKILLS_CACHE_DIR}` | Lifetime | Written by | Read by |
+| --- | --- | --- | --- | --- |
+| Task scratch + blackboard | `<issue-key>/` | Deleted by `cleanup-task` | Every skill in the task | Every skill in the task |
+| Project memory | `_projects/<slug>/memory.md` | Forever (survives task cleanup) | Every skill at end of task | Every skill at start of task |
+| Org memory + index | `_org/memory.md`, `_org/index.json` | Forever | Promotion review only | Every skill at start of task |
+
+The `_*` prefix is reserved. The cleanup contract in
+[`scripts/project-memory.py`](../scripts/project-memory.py) refuses to delete any
+path starting with `_`, so org and project memory cannot be destroyed by
+per-task cleanup.
+
+### Read order at the start of every task
+
+Every top-level skill MUST, before any context discovery:
+
+1. `python3 scripts/locate-config.py` — find `.env` / `.agent-skills.yml`.
+2. `python3 scripts/org-memory.py read` (non-zero exit means no org memory yet — proceed).
+3. `python3 scripts/project-memory.py read <project>` (non-zero exit means no
+   project memory yet — initialise the skeleton with `init`).
+4. `python3 scripts/blackboard.py init <issue-key> --project <project>
+   --skill <name>=<version>` to create the per-task working memory. Subsequent
+   skills append; they do not re-derive.
+
+### Write order at the end of every task
+
+1. Append durable facts to project memory (`scripts/project-memory.py note ...`).
+2. Record the outcome (`scripts/outcome-recorder.py record ...`). Outcomes
+   `reverted` and `hotfixed` automatically write a `Lesson` bullet to project
+   memory's `Common gotchas` so the next task on the same project sees it on
+   read.
+3. (Optional, automatic for the engineer skill) emit a telemetry event for
+   `completed`.
+4. Run `scripts/project-memory.py cleanup-task <issue-key>` — the blackboard
+   and task scratch are removed; org and project memory are preserved.
+
+## Task blackboard
+
+The blackboard is the **single canonical** working memory for one task. Once
+the engineer initialises it, every skill that participates in the task reads
+from it (instead of re-discovering context) and appends new findings to it
+(instead of writing them only into its own output). Schema and CLI are in
+[`scripts/blackboard.py`](../scripts/blackboard.py) and the layout in
+[task-blackboard.md](task-blackboard.md).
+
+Sections: `facts`, `assumptions`, `unknowns`, `decisions`, `artifacts`,
+`handoffs`, plus `skill_versions` for honest attribution after the fact.
+
+## Outcome feedback
+
+Outcomes close the loop. After a PR's fate is known (merge with no revert in N
+days, revert, hotfix, blocked, abandoned),
+[`scripts/outcome-recorder.py`](../scripts/outcome-recorder.py) writes:
+
+- a bullet to project memory under `Outcomes`,
+- a telemetry `outcome` event,
+- (for `reverted` / `hotfixed`) a `Lesson` line under project memory's
+  `Common gotchas`,
+- (with `--promote-to-org --confirmed-in N>=2`) a copy in org memory under
+  `Outcomes` with provenance.
+
+Without this step, the loop is decorative.
+
+## Rule promotion
+
+`scripts/promote-rules.py` scans every project's memory for bullets that recur
+across `≥ --min-projects` projects in a given section (default `Common gotchas`)
+and prints candidates. A human reviews; an explicit
+`scripts/org-memory.py promote` call moves the bullet into org memory; an even
+more deliberate human PR is required to lift it into a SKILL.md checklist.
+
+The brain proposes — humans approve.
+
+## Telemetry
+
+[`scripts/telemetry.py`](../scripts/telemetry.py) writes one NDJSON event per
+line under `_projects/<slug>/telemetry.ndjson`. Recognised events: `invoked`,
+`loop_round`, `handoff`, `finding`, `stopped`, `completed`, `artifact`,
+`outcome`. `report` aggregates per-skill counts and, with `--all`, across the
+whole workspace. Without these counters, "self-improvement" is unfalsifiable.
+
+## Cross-project index
+
+[`scripts/org-memory.py index-update <project> --shared-lib ...`](../scripts/org-memory.py)
+writes `_org/index.json`, mapping each project to its declared shared libraries
+and the reverse. This turns the `software-engineer` "cross-project impact"
+checklist item from a wishful note into a real lookup the agent must consult
+before touching anything in `${SHARED_LIBRARY_NAMES}`.
+
+## Skill-version attribution
+
+Every blackboard records `skill_versions` for the skills that ran on this task.
+Every outcome record carries the same map. Combined with the telemetry log,
+this makes per-skill-version success/failure analysis possible across the eval
+harness and per-release `eval-runs/` summaries.
+
+## Eval harness
+
+[`scripts/run-evals.py`](../scripts/run-evals.py) is the structural regression
+check for the `evals/` corpus. It does not invoke a model; it enforces that
+every eval file keeps the contract every release depends on (required
+sections, valid skill references, summary present per release run). A future
+iteration can plug a real agent runner behind `--invoke`.
+
+## Related docs
+
+- [Project memory](project-memory.md) — the existing per-project contract.
+- [Skill boundaries](skill-boundaries.md) — role ownership and handoffs.
+- [Review loops](review-loops.md) — bounded producer/reviewer rounds.
+- [Skill performance review](skill-performance-review.md) — release-cadenced
+  human review that consumes telemetry, outcomes, and eval results.

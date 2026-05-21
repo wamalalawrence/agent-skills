@@ -9,6 +9,10 @@ the project should grow through proven usefulness rather than a large up-front f
   [`software-engineer`](./skills/software-engineer/), [`manual-tester`](./skills/manual-tester/), and
   [`test-automation-engineer`](./skills/test-automation-engineer/).
 - Keep [`software-engineer`](./skills/software-engineer/) strong as the flagship engineering skill.
+- Harden the [Company Brain](./docs/company-brain.md) loop introduced in
+  `v0.31.0` — three memory tiers, per-task blackboard, outcome feedback,
+  telemetry, rule promotion, eval harness — so it is the default operating
+  mode for every skill, not an opt-in.
 - Improve portability across different stacks and workspace layouts.
 - Tighten token-efficient context gathering for tracker tickets, user descriptions, repository discovery,
   product refinement, testing, and review loops.
@@ -24,6 +28,12 @@ the project should grow through proven usefulness rather than a large up-front f
   organization-specific strings.
 - Improve contribution examples for new reference checklists and nested skills.
 - Keep known limitations and compatibility notes current as users report them.
+- Wire [`scripts/promote-rules.py`](./scripts/promote-rules.py) candidates
+  into an auto-PR helper so org-tier promotion has a one-command path from
+  candidate JSON to a reviewable change.
+- Plug a real agent runner behind [`scripts/run-evals.py`](./scripts/run-evals.py)
+  `--invoke` so the eval harness produces a measured pass/fail per skill per
+  release, not just a structural check.
 
 ## Later
 

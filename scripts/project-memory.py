@@ -185,6 +185,142 @@ def cmd_cleanup(args: argparse.Namespace) -> int:
     return 0
 
 
+_BULLET_RE = re.compile(r"^- (?:\([^)]+\)\s+)?(.*?)\s*$")
+
+
+def _bullet_payload(line: str) -> str:
+    m = _BULLET_RE.match(line)
+    return (m.group(1) if m else line).strip().lower()
+
+
+def dedup_memory(pdir: Path) -> int:
+    md = pdir / "memory.md"
+    if not md.exists():
+        return 0
+    lines = md.read_text(encoding="utf-8").splitlines()
+    out: list[str] = []
+    seen: set[tuple[str, str]] = set()
+    current_section = ""
+    removed = 0
+    for line in lines:
+        if line.startswith("## "):
+            current_section = line[3:].strip()
+            out.append(line)
+            continue
+        if line.startswith("- ") and not line.startswith("- _empty"):
+            key = (current_section, _bullet_payload(line))
+            if key in seen:
+                removed += 1
+                continue
+            seen.add(key)
+        out.append(line)
+    md.write_text("\n".join(out).rstrip() + "\n", encoding="utf-8")
+    return removed
+
+
+def compact_recent_tasks(pdir: Path, keep: int) -> int:
+    """Collapse `Recent tasks` bullets beyond `keep` into a Trends summary."""
+    md = pdir / "memory.md"
+    if not md.exists():
+        return 0
+    text = md.read_text(encoding="utf-8")
+    match = re.search(
+        r"(^## Recent tasks\s*\n)((?:- .*\n)*)", text, re.MULTILINE
+    )
+    if not match:
+        return 0
+    bullets = [line for line in match.group(2).splitlines() if line.startswith("- ")]
+    if len(bullets) <= keep:
+        return 0
+    kept = bullets[:keep]
+    rolled = bullets[keep:]
+    trend = (
+        f"- ({now_iso()}) compacted {len(rolled)} older Recent tasks bullets "
+        f"into Trends; see git history for original entries."
+    )
+    new_block = match.group(1) + "\n".join(kept) + "\n"
+    text = text[: match.start()] + new_block + text[match.end() :]
+    trends_re = re.compile(r"(^## Trends\s*\n)", re.MULTILINE)
+    if trends_re.search(text):
+        text = trends_re.sub(rf"\1{trend}\n", text, count=1)
+    else:
+        text = text.rstrip() + f"\n\n## Trends\n\n{trend}\n"
+    md.write_text(text, encoding="utf-8")
+    return len(rolled)
+
+
+def find_repeated_bullets(pdir: Path, section: str, min_count: int) -> list[dict]:
+    """Find bullets in `section` whose payload appears `min_count` or more times.
+
+    Used to surface promotion candidates for org memory.
+    """
+    md = pdir / "memory.md"
+    if not md.exists():
+        return []
+    lines = md.read_text(encoding="utf-8").splitlines()
+    in_section = False
+    counts: dict[str, int] = {}
+    samples: dict[str, str] = {}
+    for line in lines:
+        if line.startswith("## "):
+            in_section = line[3:].strip() == section
+            continue
+        if not in_section or not line.startswith("- ") or line.startswith("- _empty"):
+            continue
+        payload = _bullet_payload(line)
+        counts[payload] = counts.get(payload, 0) + 1
+        samples.setdefault(payload, line)
+    return [
+        {"payload": p, "count": counts[p], "sample": samples[p]}
+        for p in counts
+        if counts[p] >= min_count
+    ]
+
+
+def search_memory(pdir: Path, query: str) -> list[tuple[int, str]]:
+    md = pdir / "memory.md"
+    if not md.exists():
+        return []
+    pat = re.compile(re.escape(query), re.IGNORECASE)
+    hits = []
+    for i, line in enumerate(md.read_text(encoding="utf-8").splitlines(), start=1):
+        if pat.search(line):
+            hits.append((i, line.rstrip()))
+    return hits
+
+
+def cmd_dedup(args: argparse.Namespace) -> int:
+    pdir = project_dir(resolve_cache_root(args.cache_root), args.project)
+    removed = dedup_memory(pdir)
+    print(f"removed {removed} duplicate bullets")
+    return 0
+
+
+def cmd_compact(args: argparse.Namespace) -> int:
+    pdir = project_dir(resolve_cache_root(args.cache_root), args.project)
+    rolled = compact_recent_tasks(pdir, args.keep)
+    print(f"compacted {rolled} bullets into Trends")
+    return 0
+
+
+def cmd_promote_candidates(args: argparse.Namespace) -> int:
+    pdir = project_dir(resolve_cache_root(args.cache_root), args.project)
+    found = find_repeated_bullets(pdir, args.section, args.min_count)
+    print(json.dumps(found, indent=2))
+    return 0
+
+
+def cmd_search(args: argparse.Namespace) -> int:
+    pdir = project_dir(resolve_cache_root(args.cache_root), args.project)
+    hits = search_memory(pdir, args.query)
+    if not hits:
+        print("-- no matches", file=sys.stderr)
+        return 1
+    for line_no, line in hits:
+        print(f"{line_no}: {line}")
+    return 0
+
+
 def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument(
@@ -217,6 +353,26 @@ def main(argv: list[str] | None = None) -> int:
     sp = sub.add_parser("cleanup-task")
     sp.add_argument("issue_key")
     sp.set_defaults(func=cmd_cleanup)
+
+    sp = sub.add_parser("dedup")
+    sp.add_argument("project")
+    sp.set_defaults(func=cmd_dedup)
+
+    sp = sub.add_parser("compact")
+    sp.add_argument("project")
+    sp.add_argument("--keep", type=int, default=20)
+    sp.set_defaults(func=cmd_compact)
+
+    sp = sub.add_parser("promote-candidates")
+    sp.add_argument("project")
+    sp.add_argument("--section", default="Common gotchas")
+    sp.add_argument("--min-count", type=int, default=3)
+    sp.set_defaults(func=cmd_promote_candidates)
+
+    sp = sub.add_parser("search")
+    sp.add_argument("project")
+    sp.add_argument("query")
+    sp.set_defaults(func=cmd_search)
 
     args = parser.parse_args(argv)
     return args.func(args)

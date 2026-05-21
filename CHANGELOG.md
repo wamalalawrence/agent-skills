@@ -6,6 +6,60 @@ All notable project changes should be recorded here.
 
 - No unreleased changes.
 
+## 0.31.0 - Company Brain Foundations
+
+This release turns the eight specialist skills into a self-improving loop:
+every task writes to a per-task blackboard, every PR's fate is recorded as an
+outcome, every recurring lesson can be promoted into org-tier memory, and a
+telemetry layer makes "the skills are improving" a number instead of a feeling.
+The loop is documented in [`docs/company-brain.md`](docs/company-brain.md).
+
+### Added
+
+- New [`docs/company-brain.md`](docs/company-brain.md) — the canonical map of
+  the self-improving loop (three memory tiers, blackboard, outcome feedback,
+  telemetry, rule promotion, cross-project index, eval harness).
+- New [`docs/org-memory.md`](docs/org-memory.md) and
+  [`scripts/org-memory.py`](scripts/org-memory.py) — third memory tier above
+  per-project memory. Stored at
+  `${AGENT_SKILLS_CACHE_DIR:-${WORKSPACE_ROOT:-$REPO_ROOT}/.cache/agent-skills}/_org/`.
+  Subcommands: `path`, `init`, `read`, `note`, `search`, `promote`,
+  `index-update`, `index-show`. `_org/` is reserved by the existing cleanup
+  contract so org memory survives every per-task cleanup pass on every project.
+- New [`docs/task-blackboard.md`](docs/task-blackboard.md) and
+  [`scripts/blackboard.py`](scripts/blackboard.py) — the canonical per-task
+  working memory shared across every skill in a task. Schema includes
+  `facts`, `assumptions`, `unknowns`, `decisions`, `artifacts`, `handoffs`,
+  and `skill_versions` for honest attribution after the fact.
+- New [`docs/telemetry.md`](docs/telemetry.md) and
+  [`scripts/telemetry.py`](scripts/telemetry.py) — append-only NDJSON event
+  log per project. Subcommands: `emit`, `report`. Recognised events:
+  `invoked`, `loop_round`, `handoff`, `finding`, `stopped`, `completed`,
+  `artifact`, `outcome`.
+- New [`scripts/outcome-recorder.py`](scripts/outcome-recorder.py) — closes
+  the loop: PR fate → project memory `Outcomes`, telemetry event, automatic
+  `Lesson` line in `Common gotchas` for `reverted`/`hotfixed`, and explicit
+  promotion to org memory with `--promote-to-org --confirmed-in N>=2`.
+- New [`scripts/promote-rules.py`](scripts/promote-rules.py) — scans every
+  project's memory under a configurable section (default `Common gotchas`)
+  and emits a JSON list of candidates that recur across `≥ --min-projects`
+  projects. The brain proposes; humans approve.
+- New [`scripts/run-evals.py`](scripts/run-evals.py) — structural eval
+  harness. Checks every `evals/*.md` for a top-level heading, a context
+  section, a success-criteria section, valid `Expected Skills:` references,
+  and that every `eval-runs/<version>/` ships a `summary.md`. Designed so a
+  future iteration can plug a real agent runner behind `--invoke`.
+
+### Changed
+
+- [`scripts/project-memory.py`](scripts/project-memory.py) gains `dedup`,
+  `compact --keep N`, `search <query>`, and `promote-candidates --section
+  --min-count` subcommands so per-project memory does not bloat unbounded
+  and recurring bullets can be surfaced for org-tier promotion.
+- All eight top-level SKILL.md files bumped to `metadata.version: "0.31.0"`
+  and now point at the Company Brain hooks documented in
+  [`docs/company-brain.md`](docs/company-brain.md).
+
 ## 0.29.0 - Config Discovery, GitHub Access Ladder, Project Memory
 
 ### Added

@@ -4,7 +4,7 @@ Reusable [Agent Skills](https://agentskills.io/) for software-engineering work �
 role-shaped workflows your AI assistant can load on demand so the same model produces
 senior-engineer, product-owner, tester, or reviewer output instead of generic answers.
 
-> **Status:** `0.29.0` — pre-1.0. Core skill set is shipped and stable enough for public use;
+> **Status:** `0.31.0` — pre-1.0. Core skill set is shipped and stable enough for public use;
 > interfaces may still evolve.
 
 New here? Start with the [quickstart](docs/quickstart.md), then read [starter
@@ -155,6 +155,37 @@ usage shows they are useful independently.
 [issue-investigator]: skills/software-engineer/skills/issue-investigator/
 [code-reviewer]: skills/software-engineer/skills/code-reviewer/
 
+## The Company Brain
+
+`agent-skills` is built so the eight specialist skills compound value across
+projects, sessions, and time — not just one task. Every task writes to a
+shared blackboard, every PR's outcome is recorded, every recurring lesson can
+be promoted into org-tier memory, and a telemetry layer makes "the skills are
+improving" a number instead of a feeling. The loop:
+
+```mermaid
+flowchart LR
+  Task[Task / issue] --> Blackboard[(Per-task blackboard)]
+  Blackboard --> Skills[Skills: SE, PO, MT, TAE, II, CR, DP, DM]
+  Skills --> Artifacts[PR + evidence pack]
+  Artifacts --> Outcome[merged / reverted / hotfixed / blocked]
+  Outcome --> ProjectMem[(Project memory)]
+  Outcome --> Telemetry[(Telemetry NDJSON)]
+  ProjectMem --> Promote[Rule-promotion review]
+  Promote --> OrgMem[(Org memory + index)]
+  OrgMem --> Skills
+  ProjectMem --> Skills
+  Blackboard --> Skills
+  Telemetry --> SkillReview[Skill performance review]
+  SkillReview --> SkillUpdates[Skill PRs]
+  SkillUpdates --> Skills
+```
+
+See [`docs/company-brain.md`](docs/company-brain.md) for the full contract and
+the per-tier docs: [task blackboard](docs/task-blackboard.md),
+[project memory](docs/project-memory.md), [org memory](docs/org-memory.md),
+[telemetry](docs/telemetry.md).
+
 ## Documentation
 
 - [Docs index](docs/README.md)
@@ -167,6 +198,14 @@ usage shows they are useful independently.
   HTTPS → SSH; the ladder an agent must walk before declaring "no GitHub access"
 - [Project memory](docs/project-memory.md) — the per-project knowledge file every skill
   reads on start and updates after every successful task; preserved through per-task cleanup
+- [Company Brain](docs/company-brain.md) — the self-improving loop that ties
+  the three memory tiers, blackboard, outcome feedback, telemetry, rule
+  promotion, and the eval harness together
+- [Org memory](docs/org-memory.md) — cross-project tier above per-project
+  memory, plus the project ↔ shared-library index
+- [Task blackboard](docs/task-blackboard.md) — per-task shared working memory
+  every skill reads and writes during a task
+- [Telemetry](docs/telemetry.md) — append-only event log per project
 - [Skill-source resolution](docs/skill-source-resolution.md) — which skill directory the
   agent must use when more than one is present on disk
 - [Updates](docs/updates.md) — how to notice and apply new agent-skills releases

@@ -18,7 +18,7 @@ compatibility: >-
   .agent-skills.yml). See docs/execution-modes.md.
 metadata:
   author: wamalalawrence
-  version: "0.30.0"
+  version: "0.31.0"
   homepage: "https://github.com/wamalalawrence/agent-skills"
 ---
 
@@ -295,3 +295,123 @@ named `domain-modeler` as its `recommended_owner`:
 - The phase's `Expected outputs` typically names the `CONTEXT.md` or `docs/adr/NNNN-slug.md`
   to produce.
 - Do not refine outside the phase's stated scope.
+
+## Expected Output Contract
+
+This contract follows the workspace-wide
+[output-discipline rules](../../docs/output-discipline.md).
+**Omit empty sections** from the produced artifacts: do not ship a
+`CONTEXT.md` with an empty `## Open Questions` placeholder, do not ship an
+ADR with an empty `## Alternatives Considered`. If a section has nothing to
+say in this run, delete the heading rather than shipping a stub.
+
+Every `domain-modeler` run MUST produce one or both of the following durable
+artifacts, written to the repo (not only to chat):
+
+- A `CONTEXT.md` (per-context or workspace-root context map) following
+  [`references/CONTEXT-FORMAT.md`](./references/CONTEXT-FORMAT.md). Required
+  sections in the produced file: `# <Context Name>`, `## Purpose`,
+  `## Ubiquitous Language`, `## Boundaries`, `## Owned Data`,
+  `## Inbound / Outbound Events`, `## Open Questions`.
+- An ADR at `docs/adr/NNNN-<slug>.md` with the sections from
+  [`references/ADR-FORMAT.md`](./references/ADR-FORMAT.md): `# ADR NNNN: ...`,
+  `## Status`, `## Context`, `## Decision`, `## Consequences`,
+  `## Alternatives Considered`.
+
+Chat output for the run is a short summary that names the artifact paths,
+lists open questions, and stops. No prose duplication of the artifact body
+into chat.
+
+## Quality Standards
+
+- Ubiquitous language is concrete: every term has a one-line definition tied
+  to a verb the business actually performs, not a generic noun.
+- Boundaries are stated as what the context **owns** and what it
+  **explicitly does not own**; ambiguity here is the most common cause of
+  later cross-cutting bugs.
+- Each context lists at least one open question; "no open questions" is a
+  warning sign, not a success signal.
+- ADRs name at least one rejected alternative and the consequence that made
+  it lose; an ADR with no alternatives is a memo, not a decision record.
+- Diagrams (if any) are Mermaid, embedded in the artifact, not external
+  image links.
+
+## Guardrails
+
+- Do not invent domain terms the source material does not support. Cite
+  where each term came from (issue, code path, stakeholder note).
+- Do not collapse two contexts into one to make the diagram simpler. If two
+  teams own them or two transactions span them, they are two contexts.
+- Do not write code, schemas, or migrations in this skill. Hand off to
+  `software-engineer` once `CONTEXT.md` / ADR is merged.
+- Do not silently rename or delete an existing ADR. Supersede with a new
+  ADR and update the old one's `## Status` to `Superseded by NNNN`.
+- Stop on missing inputs (no source material, no SME access) — do not
+  fabricate a context model from intuition.
+
+## Example Prompts
+
+- "Map the contexts touched by the new returns flow. Produce a workspace
+  `CONTEXT.md` and one ADR per new context boundary."
+- "We are about to extract billing into its own service. Write the ADR for
+  the split and update the workspace context map."
+- "Two teams disagree about who owns `Customer`. Use the domain-modeler skill
+  to surface the boundary question and propose an ADR with two named
+  alternatives."
+
+
+## Company Brain integration
+
+This skill participates in the workspace-wide self-improving loop documented
+in [../../docs/company-brain.md](../../docs/company-brain.md). Concretely, every
+run of this skill MUST:
+
+1. **On start, read the three memory tiers** (any of these returning non-zero
+   exit means the tier has not been initialised yet — proceed):
+
+   ```bash
+   python3 ../../scripts/org-memory.py read || true
+   python3 ../../scripts/project-memory.py read <project> || true
+   python3 ../../scripts/blackboard.py read <issue-key> || \
+     python3 ../../scripts/blackboard.py init <issue-key> \
+       --project <project> --skill domain-modeler=<this-version>
+   ```
+
+2. **Record this skill's version on the task blackboard** so outcome
+   attribution stays honest:
+
+   ```bash
+   python3 ../../scripts/blackboard.py record-skill <issue-key> \
+     --name domain-modeler --version <this-version>
+   ```
+
+3. **Append new findings to the blackboard as they are produced** — not only
+   at the end of the run:
+
+   ```bash
+   python3 ../../scripts/blackboard.py append <issue-key> \
+     --section facts|assumptions|unknowns|decisions \
+     --by domain-modeler --text "..."
+   ```
+
+4. **On completion, emit a telemetry event** so per-skill counters move:
+
+   ```bash
+   python3 ../../scripts/telemetry.py emit <project> completed \
+     --field skill=domain-modeler --field issue=<issue-key>
+   ```
+
+5. **When the PR's fate is known** (merged, reverted, hotfixed, blocked,
+   abandoned), the engineer or owner skill closing the task MUST call:
+
+   ```bash
+   python3 ../../scripts/outcome-recorder.py record \
+     --project <project> --issue <issue-key> \
+     --outcome merged|reverted|hotfixed|blocked|abandoned \
+     --skills domain-modeler=<this-version>[,<other>=<ver>...] \
+     [--summary "..."] [--lesson "..."] \
+     [--promote-to-org --confirmed-in N]
+   ```
+
+Anything that should outlive the per-task cleanup must be lifted into project
+memory **before** `project-memory.py cleanup-task <issue-key>` is called.

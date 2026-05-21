@@ -19,7 +19,7 @@ compatibility: >-
   docs/execution-modes.md.
 metadata:
   author: wamalalawrence
-  version: "0.30.0"
+  version: "0.31.0"
   homepage: "https://github.com/wamalalawrence/agent-skills"
 argument-hint: >-
   issue URL/key, bug report, incident, support ticket, feature request, or task
@@ -783,3 +783,60 @@ a one-line `not available — <what is missing>`.
 See [the issue-investigator bug report
 example](../../../../docs/examples/issue-investigator-bug-report.md) and [starter
 prompts](../../../../docs/starter-prompts.md).
+
+
+## Company Brain integration
+
+This skill participates in the workspace-wide self-improving loop documented
+in [../../../../docs/company-brain.md](../../../../docs/company-brain.md). Concretely, every
+run of this skill MUST:
+
+1. **On start, read the three memory tiers** (any of these returning non-zero
+   exit means the tier has not been initialised yet — proceed):
+
+   ```bash
+   python3 ../../../../scripts/org-memory.py read || true
+   python3 ../../../../scripts/project-memory.py read <project> || true
+   python3 ../../../../scripts/blackboard.py read <issue-key> || \
+     python3 ../../../../scripts/blackboard.py init <issue-key> \
+       --project <project> --skill issue-investigator=<this-version>
+   ```
+
+2. **Record this skill's version on the task blackboard** so outcome
+   attribution stays honest:
+
+   ```bash
+   python3 ../../../../scripts/blackboard.py record-skill <issue-key> \
+     --name issue-investigator --version <this-version>
+   ```
+
+3. **Append new findings to the blackboard as they are produced** — not only
+   at the end of the run:
+
+   ```bash
+   python3 ../../../../scripts/blackboard.py append <issue-key> \
+     --section facts|assumptions|unknowns|decisions \
+     --by issue-investigator --text "..."
+   ```
+
+4. **On completion, emit a telemetry event** so per-skill counters move:
+
+   ```bash
+   python3 ../../../../scripts/telemetry.py emit <project> completed \
+     --field skill=issue-investigator --field issue=<issue-key>
+   ```
+
+5. **When the PR's fate is known** (merged, reverted, hotfixed, blocked,
+   abandoned), the engineer or owner skill closing the task MUST call:
+
+   ```bash
+   python3 ../../../../scripts/outcome-recorder.py record \
+     --project <project> --issue <issue-key> \
+     --outcome merged|reverted|hotfixed|blocked|abandoned \
+     --skills issue-investigator=<this-version>[,<other>=<ver>...] \
+     [--summary "..."] [--lesson "..."] \
+     [--promote-to-org --confirmed-in N]
+   ```
+
+Anything that should outlive the per-task cleanup must be lifted into project
+memory **before** `project-memory.py cleanup-task <issue-key>` is called.
