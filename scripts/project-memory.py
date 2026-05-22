@@ -81,7 +81,11 @@ def ensure_skeleton(pdir: Path, project: str, repo: str | None) -> Path:
         for section in DEFAULT_SECTIONS:
             body.append(f"## {section}")
             body.append("")
-            body.append("- _empty — populated as the agent learns._")
+            body.append(
+                "- _No facts yet. After your first task, this section will "
+                "contain verified build steps, runtime versions, gotchas, and "
+                "outcomes — so the next agent skips re-discovery._"
+            )
             body.append("")
         md.write_text("\n".join(body), encoding="utf-8")
     js = pdir / "memory.json"

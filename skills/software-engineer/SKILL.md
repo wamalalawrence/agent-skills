@@ -20,7 +20,7 @@ compatibility: >-
   .agent-skills.yml). See docs/execution-modes.md.
 metadata:
   author: wamalalawrence
-  version: "0.31.0"
+  version: "0.32.0"
   homepage: "https://github.com/wamalalawrence/agent-skills"
 ---
 
@@ -28,6 +28,32 @@ metadata:
 
 Senior-level engineering workflow for production code. Combines implementation, issue understanding,
 quality assurance, and code review into a single repeatable pair-programming loop.
+
+## ⚠️ PREFLIGHT — Execute before ANY other action
+
+This skill participates in the [Company Brain](../../docs/company-brain.md)
+self-improving loop. Before context discovery, implementation, review, or
+testing, run this ONE command:
+
+```bash
+bash scripts/start-task.sh <project> <issue-key>
+```
+
+If you cannot run the wrapper, run the three individual steps:
+1. `python3 scripts/org-memory.py read` (non-fatal if missing)
+2. `python3 scripts/project-memory.py read <project>` (init the skeleton if missing)
+3. `python3 scripts/blackboard.py init <issue-key> --project <project>`
+
+**The output IS your starting context.** Do not re-discover facts already
+recorded in project memory. Every `Common gotchas` bullet is a verified
+constraint; every `Build & runtime` bullet is the authoritative build command.
+
+After the task, append durable facts with `project-memory.py note` and run
+`project-memory.py cleanup-task <issue-key>`. See
+[`docs/project-memory.md`](../../docs/project-memory.md) for the full contract.
+
+> Skipping these steps is the #1 failure mode. The next agent on this
+> project depends on what you record now.
 
 > All organisation-, repo-, and tool-specific values come from configuration outside this file. In
 > `local-workspace` mode that is `${WORKSPACE_ROOT}/.env` (template in
