@@ -88,7 +88,10 @@ def ensure_skeleton(odir: Path) -> Path:
         for section in DEFAULT_SECTIONS:
             body.append(f"## {section}")
             body.append("")
-            body.append("- _empty — populated as facts are confirmed across projects._")
+            body.append(
+                "- _No facts yet. After patterns recur across 2+ projects, they are "
+                "promoted here so every project benefits from cross-project learning._"
+            )
             body.append("")
         md.write_text("\n".join(body), encoding="utf-8")
     js = odir / "memory.json"

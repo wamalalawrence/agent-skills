@@ -6,7 +6,58 @@ All notable project changes should be recorded here.
 
 - No unreleased changes.
 
-## 0.31.0 - Company Brain Foundations
+## 0.32.0 - Memory Lifecycle Enforcement
+
+This release closes the #1 failure mode observed in real agent-skills usage:
+agents reading the SKILL.md but skipping the Company Brain memory lifecycle
+(read project memory before starting, write project memory after finishing).
+The fix is architectural — making the steps unavoidable rather than trusting
+agent discipline.
+
+### Added
+
+- New [`scripts/start-task.sh`](scripts/start-task.sh) — single-command preflight
+  that loads org memory, project memory, and initialises the per-task blackboard
+  in one call. One tool invocation is more likely to happen than three. Prints a
+  consolidated summary the agent treats as its starting context.
+- New [`.github/copilot-instructions.md`](.github/copilot-instructions.md) —
+  auto-loaded by GitHub Copilot in VS Code. Encodes the non-negotiable read-on-start /
+  write-on-finish contract at the system-prompt level so Copilot sessions cannot skip it.
+- New [`.github/copilot-instructions.example.md`](.github/copilot-instructions.example.md) —
+  template for users to copy into their own project repositories.
+
+### Changed
+
+- **PREFLIGHT block added to all 8 SKILL.md files** — a ~20-line `## ⚠️ PREFLIGHT`
+  section placed immediately after the title paragraph, before any philosophy,
+  purpose, or mindset sections. Contains only the mandatory memory commands and
+  the "output IS your starting context" rule. Agents see it first, not after 200
+  lines of setup philosophy.
+- **Skeleton output improved** in `scripts/project-memory.py` and
+  `scripts/org-memory.py` — placeholders now read "_No facts yet. After your first
+  task, this section will contain…_" instead of "_empty — populated as the agent
+  learns._" The new text signals "this is where value accumulates" rather than
+  "nothing useful here."
+- **`docs/company-brain.md` read order** now names `scripts/start-task.sh` as the
+  recommended single-command entry point alongside the three individual steps.
+- All eight SKILL.md files bumped to `metadata.version: "0.32.0"`.
+- `VERSION` and README status pin moved to `0.32.0`.
+
+### Design rationale
+
+The root cause diagnosed in [#1](#) (the conversation that triggered this release)
+was not that agents don't understand the memory contract — it's that the contract
+was buried 130+ lines deep in a 400+ line file, behind philosophy that satisfies
+curiosity but doesn't gate action. Three architectural fixes:
+
+1. **Position**: PREFLIGHT at line ~27 (after YAML + title), not line ~130.
+2. **Granularity**: One command (`start-task.sh`) instead of three separate
+   invocations.
+3. **Platform enforcement**: `copilot-instructions.md` for the system-prompt
+   layer that agents cannot choose to skip.
+
+The Company Brain loop (`docs/company-brain.md`) is unchanged. This release
+enforces the existing contract, it doesn't change it.
 
 This release turns the eight specialist skills into a self-improving loop:
 every task writes to a per-task blackboard, every PR's fate is recorded as an

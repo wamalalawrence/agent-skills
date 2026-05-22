@@ -49,6 +49,14 @@ per-task cleanup.
 
 Every top-level skill MUST, before any context discovery:
 
+**Recommended: one command.**
+```bash
+bash scripts/start-task.sh <project> <issue-key>
+```
+This loads org memory, project memory, and initialises the blackboard in a single
+call. The output is the agent's consolidated starting context.
+
+**Or run the individual steps:**
 1. `python3 scripts/locate-config.py` — find `.env` / `.agent-skills.yml`.
 2. `python3 scripts/org-memory.py read` (non-zero exit means no org memory yet — proceed).
 3. `python3 scripts/project-memory.py read <project>` (non-zero exit means no
