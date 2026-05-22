@@ -19,7 +19,7 @@ compatibility: >-
   docs/execution-modes.md.
 metadata:
   author: wamalalawrence
-  version: "0.32.0"
+  version: "0.33.0"
   homepage: "https://github.com/wamalalawrence/agent-skills"
 argument-hint: >-
   issue URL/key, bug report, incident, support ticket, feature request, or task
@@ -42,13 +42,23 @@ implementation.
 
 This skill participates in the [Company Brain](../../../../docs/company-brain.md)
 self-improving loop. Before context discovery, investigation, or evidence
-gathering, run this ONE command:
+gathering, run this ONE command. No arguments are required; the script detects
+the project and task id from config, GitHub environment, branch, or cwd:
 
 ```bash
-bash scripts/start-task.sh <project> <issue-key>
+bash scripts/start-task.sh --skill issue-investigator=0.33.0
 ```
 
-If you cannot run the wrapper, run the three individual steps:
+If detection is wrong, rerun with explicit values:
+
+```bash
+bash scripts/start-task.sh <project> <issue-key> --skill issue-investigator=0.33.0
+```
+
+If `scripts/start-task.sh` is not at the current cwd, use the installed
+`agent-skills/scripts/start-task.sh` or `.agent-skills/scripts/start-task.sh`
+path. If you cannot run the wrapper after locating it, run the three individual
+steps:
 1. `python3 scripts/org-memory.py read` (non-fatal if missing)
 2. `python3 scripts/project-memory.py read <project>` (init the skeleton if missing)
 3. `python3 scripts/blackboard.py init <issue-key> --project <project>`
@@ -57,12 +67,20 @@ If you cannot run the wrapper, run the three individual steps:
 recorded in project memory. Every `Common gotchas` bullet is a verified
 constraint; every `Build & runtime` bullet is the authoritative build command.
 
-After the task, append durable facts with `project-memory.py note` and run
-`project-memory.py cleanup-task <issue-key>`. See
+After the task, run:
+
+```bash
+bash scripts/finish-task.sh --skill issue-investigator --summary "<one sentence outcome>"
+```
+
+For blocked or needs-context runs, pass `--status blocked` or
+`--status needs-context`; the finish wrapper preserves scratch in those states.
+See
 [`docs/project-memory.md`](../../../../docs/project-memory.md) for the full contract.
 
-> Skipping these steps is the #1 failure mode. The next agent on this
-> project depends on what you record now.
+> Skipping these steps is the #1 failure mode. Task size does not waive them:
+> a small issue-context lookup and a full root-cause investigation both start
+> and finish through the lifecycle wrappers.
 
 > **Safety floor.** This skill is **read-only by default** and inherits the
 > [destructive-action safety policy](../../../../docs/destructive-action-safety.md). Every
@@ -644,9 +662,15 @@ menu of available sections, not a checklist. **Omit empty sections** — drop
 `## Investigation Result` (the verdict block) and `## Root Cause` (so confidence cannot
 be omitted by accident).
 
+Always include a lifecycle receipt:
+`Lifecycle: start-task=<ran|blocked>; finish-task=<ran|pending|skipped-blocked>;
+memory=<updated|blocked>; skill=issue-investigator@0.33.0`. Do not claim a
+wrapper or memory write ran unless it actually ran.
+
 ```markdown
 ## Investigation Result
 
+- Lifecycle:
 - Issue summary:
 - Issue type classification:
 - Confidence level: low | medium | high
@@ -735,6 +759,8 @@ a one-line `not available — <what is missing>`.
 
 ## Behavior Checklist
 
+- [ ] `start-task.sh` ran before context discovery and `finish-task.sh` is reflected in the final
+  lifecycle receipt, or the final result explains the blocker.
 - [ ] Issue source, affected area, expected behavior source, actual behavior evidence, and access
   limits are stated.
 - [ ] Issue type classification is supported by evidence and confidence.
@@ -809,60 +835,3 @@ a one-line `not available — <what is missing>`.
 See [the issue-investigator bug report
 example](../../../../docs/examples/issue-investigator-bug-report.md) and [starter
 prompts](../../../../docs/starter-prompts.md).
-
-
-## Company Brain integration
-
-This skill participates in the workspace-wide self-improving loop documented
-in [../../../../docs/company-brain.md](../../../../docs/company-brain.md). Concretely, every
-run of this skill MUST:
-
-1. **On start, read the three memory tiers** (any of these returning non-zero
-   exit means the tier has not been initialised yet — proceed):
-
-   ```bash
-   python3 ../../../../scripts/org-memory.py read || true
-   python3 ../../../../scripts/project-memory.py read <project> || true
-   python3 ../../../../scripts/blackboard.py read <issue-key> || \
-     python3 ../../../../scripts/blackboard.py init <issue-key> \
-       --project <project> --skill issue-investigator=<this-version>
-   ```
-
-2. **Record this skill's version on the task blackboard** so outcome
-   attribution stays honest:
-
-   ```bash
-   python3 ../../../../scripts/blackboard.py record-skill <issue-key> \
-     --name issue-investigator --version <this-version>
-   ```
-
-3. **Append new findings to the blackboard as they are produced** — not only
-   at the end of the run:
-
-   ```bash
-   python3 ../../../../scripts/blackboard.py append <issue-key> \
-     --section facts|assumptions|unknowns|decisions \
-     --by issue-investigator --text "..."
-   ```
-
-4. **On completion, emit a telemetry event** so per-skill counters move:
-
-   ```bash
-   python3 ../../../../scripts/telemetry.py emit <project> completed \
-     --field skill=issue-investigator --field issue=<issue-key>
-   ```
-
-5. **When the PR's fate is known** (merged, reverted, hotfixed, blocked,
-   abandoned), the engineer or owner skill closing the task MUST call:
-
-   ```bash
-   python3 ../../../../scripts/outcome-recorder.py record \
-     --project <project> --issue <issue-key> \
-     --outcome merged|reverted|hotfixed|blocked|abandoned \
-     --skills issue-investigator=<this-version>[,<other>=<ver>...] \
-     [--summary "..."] [--lesson "..."] \
-     [--promote-to-org --confirmed-in N]
-   ```
-
-Anything that should outlive the per-task cleanup must be lifted into project
-memory **before** `project-memory.py cleanup-task <issue-key>` is called.

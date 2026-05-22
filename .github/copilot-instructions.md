@@ -7,17 +7,19 @@ SKILL.md files to find it.
 
 ## MANDATORY: Before ANY code change, investigation, review, or testing
 
-Run this ONE command first — it loads project memory, org memory, and initialises
-the per-task blackboard:
+Run this ONE command first — it detects the project/task id, loads project
+memory, loads org memory, records the skill version, and initialises the
+per-task blackboard:
 
 ```bash
-bash agent-skills/scripts/start-task.sh <project> <issue-key>
+bash agent-skills/scripts/start-task.sh --skill <skill-name>=<skill-version>
 ```
 
-If you don't know the project name, resolve it from `${PROJECTS_JSON}` or
-`.agent-skills.yml` first (match the cwd against the configured projects). If
-you don't have an issue key, derive one from the branch name, tracker ticket, or
-user's task description.
+If the detected project or task id is wrong, rerun with explicit values:
+
+```bash
+bash agent-skills/scripts/start-task.sh <project> <issue-key> --skill <skill-name>=<skill-version>
+```
 
 **The output of this command IS your starting context.** Do not re-discover facts
 already recorded in project memory. Every `Common gotchas` bullet is a verified
@@ -25,19 +27,20 @@ constraint; every `Build & runtime` bullet is the authoritative build command.
 
 ## MANDATORY: After ANY task that touches code, investigation, review, or testing
 
-1. **Append durable facts to project memory FIRST:**
+1. **Run the finish wrapper FIRST so durable memory is written before cleanup:**
    ```bash
-   python3 agent-skills/scripts/project-memory.py note <project> \
-     --section "Build & runtime" --text "<verified fact>"
-   python3 agent-skills/scripts/project-memory.py note <project> \
-     --section "Common gotchas" --text "<gotcha that surprised you>"
-   python3 agent-skills/scripts/project-memory.py note <project> \
-     --section "Recent tasks" --text "<issue-key>: <one-sentence outcome>"
+   bash agent-skills/scripts/finish-task.sh <project> <issue-key> \
+     --skill <skill-name> --summary "<one sentence outcome>"
    ```
+   Add `--status blocked` or `--status needs-context` when the task cannot
+   complete; those states preserve per-task scratch for the next agent.
 
-2. **Then clean up per-task scratch:**
+2. **Append extra durable facts when the task discovered them:**
    ```bash
-   python3 agent-skills/scripts/project-memory.py cleanup-task <issue-key>
+   bash agent-skills/scripts/finish-task.sh <project> <issue-key> \
+     --skill <skill-name> --summary "<one sentence outcome>" \
+     --build-runtime "<verified build/runtime fact>" \
+     --gotcha "<gotcha that surprised you>"
    ```
 
 3. **Never** run cleanup before appending memory. The order is: write memory

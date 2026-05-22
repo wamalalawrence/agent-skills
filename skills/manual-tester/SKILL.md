@@ -16,7 +16,7 @@ compatibility: >-
   .agent-skills.yml). See docs/execution-modes.md.
 metadata:
   author: wamalalawrence
-  version: "0.32.0"
+  version: "0.33.0"
   homepage: "https://github.com/wamalalawrence/agent-skills"
 ---
 
@@ -32,14 +32,24 @@ on.
 ## ⚠️ PREFLIGHT — Execute before ANY other action
 
 This skill participates in the [Company Brain](../../docs/company-brain.md)
-self-improving loop. Before context discovery, test planning, or execution,
-run this ONE command:
+self-improving loop. Before context discovery, test planning, or execution, run
+this ONE command. No arguments are required; the script detects the project and
+task id from config, GitHub environment, branch, or cwd:
 
 ```bash
-bash scripts/start-task.sh <project> <issue-key>
+bash scripts/start-task.sh --skill manual-tester=0.33.0
 ```
 
-If you cannot run the wrapper, run the three individual steps:
+If detection is wrong, rerun with explicit values:
+
+```bash
+bash scripts/start-task.sh <project> <issue-key> --skill manual-tester=0.33.0
+```
+
+If `scripts/start-task.sh` is not at the current cwd, use the installed
+`agent-skills/scripts/start-task.sh` or `.agent-skills/scripts/start-task.sh`
+path. If you cannot run the wrapper after locating it, run the three individual
+steps:
 1. `python3 scripts/org-memory.py read` (non-fatal if missing)
 2. `python3 scripts/project-memory.py read <project>` (init the skeleton if missing)
 3. `python3 scripts/blackboard.py init <issue-key> --project <project>`
@@ -48,12 +58,20 @@ If you cannot run the wrapper, run the three individual steps:
 recorded in project memory. Every `Common gotchas` bullet is a verified
 constraint; every `Build & runtime` bullet is the authoritative build command.
 
-After the task, append durable facts with `project-memory.py note` and run
-`project-memory.py cleanup-task <issue-key>`. See
+After the task, run:
+
+```bash
+bash scripts/finish-task.sh --skill manual-tester --summary "<one sentence outcome>"
+```
+
+For blocked or needs-context runs, pass `--status blocked` or
+`--status needs-context`; the finish wrapper preserves scratch in those states.
+See
 [`docs/project-memory.md`](../../docs/project-memory.md) for the full contract.
 
-> Skipping these steps is the #1 failure mode. The next agent on this
-> project depends on what you record now.
+> Skipping these steps is the #1 failure mode. Task size does not waive them:
+> a quick retest, a small defect report, and a full exploratory pass all start
+> and finish through the lifecycle wrappers.
 
 > **Safety floor.** This skill inherits the
 > [destructive-action safety policy](../../docs/destructive-action-safety.md). Manual tests
@@ -333,9 +351,15 @@ for the request and **omit empty sections** — if there are no defects, drop th
 `## Automation Candidates`. The contract below is a menu of available sections, not a
 checklist to fill in.
 
+Always include a lifecycle receipt:
+`Lifecycle: start-task=<ran|blocked>; finish-task=<ran|pending|skipped-blocked>;
+memory=<updated|blocked>; skill=manual-tester@0.33.0`. Do not claim a wrapper
+or memory write ran unless it actually ran.
+
 ```markdown
 ## Manual Test Plan
 
+- Lifecycle:
 - Test scope:
 - Environment/build/version/commit:
 - Test data and user roles:
@@ -392,6 +416,8 @@ qualifying insight exists. See
 
 ## Behavior Checklist
 
+- [ ] `start-task.sh` ran before context discovery and `finish-task.sh` is reflected in the final
+  lifecycle receipt, or the final status explains the blocker.
 - [ ] Intended behavior, acceptance criteria, scope, environment, build/version/commit, user role,
   and test data are known or marked as blocking/unknown.
 - [ ] Scenarios map to acceptance criteria, user workflows, explicit risks, or exploratory charters.
@@ -447,60 +473,3 @@ qualifying insight exists. See
 
 See [the manual-tester test plan example](../../docs/examples/manual-tester-test-plan.md) and
 [starter prompts](../../docs/starter-prompts.md).
-
-
-## Company Brain integration
-
-This skill participates in the workspace-wide self-improving loop documented
-in [../../docs/company-brain.md](../../docs/company-brain.md). Concretely, every
-run of this skill MUST:
-
-1. **On start, read the three memory tiers** (any of these returning non-zero
-   exit means the tier has not been initialised yet — proceed):
-
-   ```bash
-   python3 ../../scripts/org-memory.py read || true
-   python3 ../../scripts/project-memory.py read <project> || true
-   python3 ../../scripts/blackboard.py read <issue-key> || \
-     python3 ../../scripts/blackboard.py init <issue-key> \
-       --project <project> --skill manual-tester=<this-version>
-   ```
-
-2. **Record this skill's version on the task blackboard** so outcome
-   attribution stays honest:
-
-   ```bash
-   python3 ../../scripts/blackboard.py record-skill <issue-key> \
-     --name manual-tester --version <this-version>
-   ```
-
-3. **Append new findings to the blackboard as they are produced** — not only
-   at the end of the run:
-
-   ```bash
-   python3 ../../scripts/blackboard.py append <issue-key> \
-     --section facts|assumptions|unknowns|decisions \
-     --by manual-tester --text "..."
-   ```
-
-4. **On completion, emit a telemetry event** so per-skill counters move:
-
-   ```bash
-   python3 ../../scripts/telemetry.py emit <project> completed \
-     --field skill=manual-tester --field issue=<issue-key>
-   ```
-
-5. **When the PR's fate is known** (merged, reverted, hotfixed, blocked,
-   abandoned), the engineer or owner skill closing the task MUST call:
-
-   ```bash
-   python3 ../../scripts/outcome-recorder.py record \
-     --project <project> --issue <issue-key> \
-     --outcome merged|reverted|hotfixed|blocked|abandoned \
-     --skills manual-tester=<this-version>[,<other>=<ver>...] \
-     [--summary "..."] [--lesson "..."] \
-     [--promote-to-org --confirmed-in N]
-   ```
-
-Anything that should outlive the per-task cleanup must be lifted into project
-memory **before** `project-memory.py cleanup-task <issue-key>` is called.

@@ -47,14 +47,20 @@ per-task cleanup.
 
 ### Read order at the start of every task
 
-Every top-level skill MUST, before any context discovery:
+Every skill in this repository MUST, before any context discovery:
 
-**Recommended: one command.**
+**Recommended: one command. No arguments are required.**
 ```bash
-bash scripts/start-task.sh <project> <issue-key>
+bash scripts/start-task.sh --skill <skill-name>=<skill-version>
 ```
-This loads org memory, project memory, and initialises the blackboard in a single
-call. The output is the agent's consolidated starting context.
+This detects the project/task id where possible, loads org memory, loads or
+initialises project memory, records the skill version, and initialises the
+blackboard in a single call. The output is the agent's consolidated starting
+context. If detection is wrong, rerun with explicit values:
+
+```bash
+bash scripts/start-task.sh <project> <issue-key> --skill <skill-name>=<skill-version>
+```
 
 **Or run the individual steps:**
 1. `python3 scripts/locate-config.py` — find `.env` / `.agent-skills.yml`.
@@ -67,15 +73,23 @@ call. The output is the agent's consolidated starting context.
 
 ### Write order at the end of every task
 
-1. Append durable facts to project memory (`scripts/project-memory.py note ...`).
-2. Record the outcome (`scripts/outcome-recorder.py record ...`). Outcomes
+1. Run the finish wrapper so durable memory is written before scratch cleanup:
+   ```bash
+   bash scripts/finish-task.sh <project> <issue-key> \
+     --skill <skill-name> --summary "<one sentence outcome>"
+   ```
+   If project and issue are omitted, the wrapper reuses the latest
+   `start-task.sh` context from the same cache root.
+   Use `--status blocked` or `--status needs-context` when the task cannot
+   complete; the wrapper preserves per-task scratch in those states.
+2. Record the outcome when the PR fate is known (`scripts/outcome-recorder.py record ...`). Outcomes
    `reverted` and `hotfixed` automatically write a `Lesson` bullet to project
    memory's `Common gotchas` so the next task on the same project sees it on
    read.
-3. (Optional, automatic for the engineer skill) emit a telemetry event for
-   `completed`.
-4. Run `scripts/project-memory.py cleanup-task <issue-key>` — the blackboard
-   and task scratch are removed; org and project memory are preserved.
+3. For special cases, write additional facts with
+   `scripts/project-memory.py note ...` before cleanup. `finish-task.sh` also
+   supports `--build-runtime`, `--gotcha`, and `--fact "Section::text"` for
+   one-command durable notes.
 
 ## Task blackboard
 

@@ -6,6 +6,53 @@ All notable project changes should be recorded here.
 
 - No unreleased changes.
 
+## 0.33.0 - Lifecycle Wrappers Everywhere
+
+This release addresses field feedback that agents can read a skill, decide a
+task is "simple", and then skip the required workflow. The fix applies across
+all skills: make the lifecycle easier to run than to skip, require a visible
+receipt, and keep small tasks proportional without making gates optional.
+
+### Added
+
+- New [`scripts/task-context.sh`](scripts/task-context.sh) shared resolver for
+  project and task ids. It detects context from `.agent-skills.yml`,
+  `${PROJECTS_JSON}`, GitHub environment variables, branch names, and cwd.
+- New [`scripts/finish-task.sh`](scripts/finish-task.sh) one-command closeout.
+  It writes project memory first, emits telemetry, then cleans per-task scratch
+  only when the terminal status is safe. `blocked` and `needs-context` preserve
+  scratch by default.
+- New [`evals/all-skills-lifecycle-compliance.md`](evals/all-skills-lifecycle-compliance.md)
+  covering lifecycle compliance for every skill, even tiny tasks.
+- New [`evals/software-engineer-skill-compliance-sonarqube.md`](evals/software-engineer-skill-compliance-sonarqube.md)
+  covering the exact failure mode: a small SonarQube cleanup must still run
+  memory preflight, proportional planning, reviewer handoff, QA, and closeout.
+- New release evidence in [`eval-runs/v0.33.0/summary.md`](eval-runs/v0.33.0/summary.md).
+
+### Changed
+
+- [`scripts/start-task.sh`](scripts/start-task.sh) no longer requires
+  `<project> <issue-key>`. It auto-detects both, accepts explicit overrides,
+  normalizes URL-shaped task ids into safe cleanup keys, and records
+  `--skill name=version` on the blackboard. It also persists the latest
+  project/task pair in the cache so no-arg `finish-task.sh` closes the same
+  lifecycle run.
+- All eight `SKILL.md` files now use the same top-of-file lifecycle contract:
+  run `start-task.sh --skill <name>=0.33.0` before context discovery and
+  `finish-task.sh --skill <name> --summary ...` before final status.
+- All skill output contracts now require a lifecycle receipt so skipped
+  wrappers, skipped memory writes, or blocked closeout are visible in the final
+  answer.
+- Removed the older duplicate bottom `Company Brain integration` sections from
+  every skill so agents see one current lifecycle path instead of conflicting
+  start/finish examples.
+- `software-engineer` adds a proportional `tiny` lane. It trims evidence volume
+  for mechanical fixes but explicitly keeps lifecycle, review, QA, and memory
+  gates mandatory.
+- Assistant/install docs now state that cloud and IDE agents need access to
+  `scripts/` as well as `skills/`.
+- `VERSION`, README status, and all skill metadata versions moved to `0.33.0`.
+
 ## 0.32.0 - Memory Lifecycle Enforcement
 
 This release closes the #1 failure mode observed in real agent-skills usage:

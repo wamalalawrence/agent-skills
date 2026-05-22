@@ -92,8 +92,8 @@ python3 scripts/org-memory.py index-show --shared-lib auth-core
 
 ## When skills must read org memory
 
-Every top-level skill MUST, before any context discovery and before reading
-project memory:
+Every skill MUST, before any context discovery and before reading project
+memory:
 
 ```bash
 python3 scripts/org-memory.py read || true

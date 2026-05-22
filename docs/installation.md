@@ -21,12 +21,14 @@ things into the target repository:
 1. **`.agent-skills.yml`** at the repo root. Copy from
   [`.agent-skills.example.yml`](../.agent-skills.example.yml), fill in the `project:` block (stack,
   base branch, build/format commands), and commit. It contains **no secrets**.
-2. **Skill content** the agent can read. Two options:
-   - **Vendor the skills** by copying or git-submoduling [`skills/`](../skills/) into the target
-     repo (e.g. at `.agent-skills/skills/`). Best for offline-friendly, reproducible loading.
-   - **Reference the skills** from the agent's prompt or rules file (e.g. `.cursor/rules/*.mdc`,
-     `.github/copilot-instructions.md`, attached files in a chat). Lighter-weight, but the agent host
-     must be able to fetch them.
+2. **Skill content and lifecycle helpers** the agent can read and run. Two options:
+   - **Vendor the skills and scripts** by copying or git-submoduling [`skills/`](../skills/) and
+     [`scripts/`](../scripts/) into the target repo (for example under `.agent-skills/`). Best for
+     offline-friendly, reproducible loading and mandatory memory lifecycle enforcement.
+   - **Reference the skills and scripts** from the agent's prompt or rules file (for example
+     `.cursor/rules/*.mdc`, `.github/copilot-instructions.md`, attached files in a chat). Lighter
+     weight, but the agent host must be able to fetch both `SKILL.md` and the `start-task.sh` /
+     `finish-task.sh` helpers.
 
 Then add `.cache/` to the repo's `.gitignore` so the evidence-pack/repro-recipe/Definition-of-Done
 artifacts the skills write don't leak into commits.

@@ -7,6 +7,26 @@ The `setup.init` command creates `<workspace-root>/.skills` so any assistant tha
 workspace-level skill folders will find them in `local-workspace` mode; in `in-repo` mode the skills
 must be vendored or referenced from inside the target repo.
 
+Every assistant also needs access to the lifecycle helpers in [`../scripts/`](../scripts/).
+The required start command is no-arg by default:
+
+```bash
+bash agent-skills/scripts/start-task.sh --skill <skill-name>=<skill-version>
+```
+
+The required finish command writes project memory before cleanup:
+
+```bash
+bash agent-skills/scripts/finish-task.sh <project> <issue-key> \
+  --skill <skill-name> --summary "<one sentence outcome>"
+```
+
+Use the relative path that matches your install (`agent-skills/scripts`,
+`.agent-skills/scripts`, or `scripts`). If an assistant cannot run shell
+commands, put these commands into the human/operator checklist and require the
+assistant's final answer to include the lifecycle receipt from the skill output
+contract.
+
 ## Local assistants (`local-workspace` mode)
 
 > Skill-source resolution is documented in
@@ -23,13 +43,15 @@ frontmatter for skill discovery.
 ### Cursor / Windsurf / Continue
 
 Reference the relevant `SKILL.md` from your project rules or attach it as instructions for the
-chat.
+chat. Include the start/finish lifecycle commands in the same rules file so the assistant sees them
+before task-specific instructions.
 
 ### GitHub Copilot Chat
 
 Copilot in VS Code or JetBrains does not have a native "skill source" picker. Attach a `SKILL.md`
 to a chat with `#file:`, copy its contents into `.github/copilot-instructions.md`, or save it as a
-[prompt file](https://code.visualstudio.com/docs/copilot/copilot-customization).
+[prompt file](https://code.visualstudio.com/docs/copilot/copilot-customization). The instructions
+file should also include the no-arg `start-task.sh` command and `finish-task.sh` closeout command.
 
 ### ChatGPT / generic chat
 

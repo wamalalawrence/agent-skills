@@ -17,14 +17,18 @@ Use this repo when you want portable, evidence-first workflows for:
 ## Fastest path
 
 1. Open the `SKILL.md` for the role you need.
-2. Attach or paste it into your assistant.
-3. Ask the assistant to follow that workflow for one task.
-4. Provide the repository, issue, acceptance criteria, logs, or test evidence the workflow asks for.
+2. Make sure the assistant can run [`../scripts/start-task.sh`](../scripts/start-task.sh) and
+   [`../scripts/finish-task.sh`](../scripts/finish-task.sh), either from this checkout or a
+   vendored copy in the target repo.
+3. Attach or paste the skill into your assistant.
+4. Ask the assistant to follow that workflow for one task.
+5. Provide the repository, issue, acceptance criteria, logs, or test evidence the workflow asks for.
 
 Example:
 
 ```text
 Use the software-engineer skill from skills/software-engineer/SKILL.md.
+First run scripts/start-task.sh, and before final status run scripts/finish-task.sh.
 Work on this repository. First gather the smallest useful context, then propose a short plan before
 changing files.
 ```

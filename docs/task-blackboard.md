@@ -27,8 +27,8 @@ ${AGENT_SKILLS_CACHE_DIR:-${WORKSPACE_ROOT:-$REPO_ROOT}/.cache/agent-skills}/
   "created_at": "2026-05-22T09:14:01Z",
   "updated_at": "2026-05-22T09:31:18Z",
   "skill_versions": {
-    "software-engineer": "0.31.0",
-    "code-reviewer":     "0.31.0"
+    "software-engineer": "0.33.0",
+    "code-reviewer":     "0.33.0"
   },
   "facts":       [{"at": "...", "by": "software-engineer", "text": "..."}],
   "assumptions": [{"at": "...", "by": "issue-investigator", "text": "..."}],

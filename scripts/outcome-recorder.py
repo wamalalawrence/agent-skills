@@ -187,7 +187,7 @@ def main(argv: list[str] | None = None) -> int:
     sp.add_argument(
         "--skills",
         required=True,
-        help="Comma-separated name=version pairs, e.g. software-engineer=0.31.0,code-reviewer=0.31.0",
+        help="Comma-separated name=version pairs, e.g. software-engineer=0.33.0,code-reviewer=0.33.0",
     )
     sp.add_argument("--summary", default=None)
     sp.add_argument("--blast-radius", type=int, default=None)

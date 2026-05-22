@@ -18,7 +18,7 @@ compatibility: >-
   .agent-skills.yml). See docs/execution-modes.md.
 metadata:
   author: wamalalawrence
-  version: "0.32.0"
+  version: "0.33.0"
   homepage: "https://github.com/wamalalawrence/agent-skills"
 ---
 
@@ -37,14 +37,24 @@ the result of a real trade-off.
 ## ⚠️ PREFLIGHT — Execute before ANY other action
 
 This skill participates in the [Company Brain](../../docs/company-brain.md)
-self-improving loop. Before context discovery, modeling, or ADR generation,
-run this ONE command:
+self-improving loop. Before context discovery, modeling, or ADR generation, run
+this ONE command. No arguments are required; the script detects the project and
+task id from config, GitHub environment, branch, or cwd:
 
 ```bash
-bash scripts/start-task.sh <project> <issue-key>
+bash scripts/start-task.sh --skill domain-modeler=0.33.0
 ```
 
-If you cannot run the wrapper, run the three individual steps:
+If detection is wrong, rerun with explicit values:
+
+```bash
+bash scripts/start-task.sh <project> <issue-key> --skill domain-modeler=0.33.0
+```
+
+If `scripts/start-task.sh` is not at the current cwd, use the installed
+`agent-skills/scripts/start-task.sh` or `.agent-skills/scripts/start-task.sh`
+path. If you cannot run the wrapper after locating it, run the three individual
+steps:
 1. `python3 scripts/org-memory.py read` (non-fatal if missing)
 2. `python3 scripts/project-memory.py read <project>` (init the skeleton if missing)
 3. `python3 scripts/blackboard.py init <issue-key> --project <project>`
@@ -53,12 +63,20 @@ If you cannot run the wrapper, run the three individual steps:
 recorded in project memory. Every `Common gotchas` bullet is a verified
 constraint; every `Build & runtime` bullet is the authoritative build command.
 
-After the task, append durable facts with `project-memory.py note` and run
-`project-memory.py cleanup-task <issue-key>`. See
+After the task, run:
+
+```bash
+bash scripts/finish-task.sh --skill domain-modeler --summary "<one sentence outcome>"
+```
+
+For blocked or needs-context runs, pass `--status blocked` or
+`--status needs-context`; the finish wrapper preserves scratch in those states.
+See
 [`docs/project-memory.md`](../../docs/project-memory.md) for the full contract.
 
-> Skipping these steps is the #1 failure mode. The next agent on this
-> project depends on what you record now.
+> Skipping these steps is the #1 failure mode. Task size does not waive them:
+> a single glossary term, a small ADR check, and a full domain pass all start
+> and finish through the lifecycle wrappers.
 
 > **Safety floor.** This skill inherits the
 > [destructive-action safety policy](../../docs/destructive-action-safety.md). It is read-only
@@ -331,6 +349,11 @@ This contract follows the workspace-wide
 ADR with an empty `## Alternatives Considered`. If a section has nothing to
 say in this run, delete the heading rather than shipping a stub.
 
+Always include a lifecycle receipt in the chat summary:
+`Lifecycle: start-task=<ran|blocked>; finish-task=<ran|pending|skipped-blocked>;
+memory=<updated|blocked>; skill=domain-modeler@0.33.0`. Do not claim a wrapper
+or memory write ran unless it actually ran.
+
 Every `domain-modeler` run MUST produce one or both of the following durable
 artifacts, written to the repo (not only to chat):
 
@@ -384,60 +407,3 @@ into chat.
 - "Two teams disagree about who owns `Customer`. Use the domain-modeler skill
   to surface the boundary question and propose an ADR with two named
   alternatives."
-
-
-## Company Brain integration
-
-This skill participates in the workspace-wide self-improving loop documented
-in [../../docs/company-brain.md](../../docs/company-brain.md). Concretely, every
-run of this skill MUST:
-
-1. **On start, read the three memory tiers** (any of these returning non-zero
-   exit means the tier has not been initialised yet — proceed):
-
-   ```bash
-   python3 ../../scripts/org-memory.py read || true
-   python3 ../../scripts/project-memory.py read <project> || true
-   python3 ../../scripts/blackboard.py read <issue-key> || \
-     python3 ../../scripts/blackboard.py init <issue-key> \
-       --project <project> --skill domain-modeler=<this-version>
-   ```
-
-2. **Record this skill's version on the task blackboard** so outcome
-   attribution stays honest:
-
-   ```bash
-   python3 ../../scripts/blackboard.py record-skill <issue-key> \
-     --name domain-modeler --version <this-version>
-   ```
-
-3. **Append new findings to the blackboard as they are produced** — not only
-   at the end of the run:
-
-   ```bash
-   python3 ../../scripts/blackboard.py append <issue-key> \
-     --section facts|assumptions|unknowns|decisions \
-     --by domain-modeler --text "..."
-   ```
-
-4. **On completion, emit a telemetry event** so per-skill counters move:
-
-   ```bash
-   python3 ../../scripts/telemetry.py emit <project> completed \
-     --field skill=domain-modeler --field issue=<issue-key>
-   ```
-
-5. **When the PR's fate is known** (merged, reverted, hotfixed, blocked,
-   abandoned), the engineer or owner skill closing the task MUST call:
-
-   ```bash
-   python3 ../../scripts/outcome-recorder.py record \
-     --project <project> --issue <issue-key> \
-     --outcome merged|reverted|hotfixed|blocked|abandoned \
-     --skills domain-modeler=<this-version>[,<other>=<ver>...] \
-     [--summary "..."] [--lesson "..."] \
-     [--promote-to-org --confirmed-in N]
-   ```
-
-Anything that should outlive the per-task cleanup must be lifted into project
-memory **before** `project-memory.py cleanup-task <issue-key>` is called.

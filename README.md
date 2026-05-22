@@ -4,7 +4,7 @@ Reusable [Agent Skills](https://agentskills.io/) for software-engineering work �
 role-shaped workflows your AI assistant can load on demand so the same model produces
 senior-engineer, product-owner, tester, or reviewer output instead of generic answers.
 
-> **Status:** `0.32.0` — pre-1.0. Core skill set is shipped and stable enough for public use;
+> **Status:** `0.33.0` — pre-1.0. Core skill set is shipped and stable enough for public use;
 > interfaces may still evolve.
 
 New here? Start with the [quickstart](docs/quickstart.md), then read [starter
@@ -51,9 +51,10 @@ workspace folder:
 
 1. Copy [`.agent-skills.example.yml`](.agent-skills.example.yml) to `.agent-skills.yml` at the
   **target repository's** root and fill in the `project:` block. No secrets in this file.
-2. Vendor the `skills/` folder you want to use into the target repo (copy or `git submodule add`),
-  or reference specific `SKILL.md` files from your agent's instruction surface
-  (`.github/copilot-instructions.md`, `.cursor/rules/`, project-attached files, …).
+2. Vendor the `skills/` folder and `scripts/` lifecycle helpers you want to use into the target
+  repo (copy or `git submodule add`), or reference specific `SKILL.md` files and the
+  `start-task.sh` / `finish-task.sh` commands from your agent's instruction surface
+  (`.github/copilot-instructions.md`, `.cursor/rules/`, project-attached files, etc.).
 3. Add `.cache/` to the target repo's `.gitignore`.
 4. Inject any required secrets (`JIRA_API_TOKEN`, `GITHUB_TOKEN`, …) via the host platform's secret
   mechanism.
@@ -92,7 +93,7 @@ vendor script (see [docs/updates.md](docs/updates.md#in-repo-cloud--online-agent
 
 ## Skills
 
-This repository currently contains **five top-level skills** and **two nested support skills**. The
+This repository currently contains **six top-level skills** and **two nested support skills**. The
 top-level skills are intended to be invoked directly. The nested support skills are loaded by the
 engineering workflow when investigation or review needs a more specific checklist.
 
@@ -134,6 +135,12 @@ usage shows they are useful independently.
 - Purpose: designs stable automated tests at the right level and prevents brittle
   automation.
 
+### [`domain-modeler`][domain-modeler] (top-level)
+
+- Key collaborators: `product-owner`, `software-engineer`, `delivery-planner`.
+- Purpose: maintains canonical domain terminology and records ADRs only when the
+  decision is hard to reverse and worth preserving.
+
 ### [`issue-investigator`][issue-investigator] (nested support)
 
 - Key collaborators: `software-engineer`, `manual-tester`, `product-owner`.
@@ -152,6 +159,7 @@ usage shows they are useful independently.
 [product-owner]: skills/product-owner/
 [manual-tester]: skills/manual-tester/
 [tae]: skills/test-automation-engineer/
+[domain-modeler]: skills/domain-modeler/
 [issue-investigator]: skills/software-engineer/skills/issue-investigator/
 [code-reviewer]: skills/software-engineer/skills/code-reviewer/
 

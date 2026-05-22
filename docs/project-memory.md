@@ -25,7 +25,23 @@ cleanup.
 
 ## When skills must read project memory
 
-Every top-level skill that touches a repository must, **before any other context discovery**:
+Every skill that touches a repository must, **before any other context discovery**,
+prefer the lifecycle wrapper:
+
+```bash
+bash scripts/start-task.sh --skill <skill-name>=<skill-version>
+```
+
+It auto-detects project and task ids from `.agent-skills.yml`, `${PROJECTS_JSON}`,
+GitHub environment, branch name, or cwd. If detection is wrong, rerun with
+explicit values:
+
+```bash
+bash scripts/start-task.sh <project> <issue-key> --skill <skill-name>=<skill-version>
+```
+
+If the wrapper is unavailable after locating the installed `agent-skills/scripts`
+directory, run the individual steps:
 
 1. Resolve the project name from `${PROJECTS_JSON}` (local-workspace) or the `project:` block
    in `.agent-skills.yml` (in-repo).
@@ -60,7 +76,22 @@ What does **not** belong:
 
 ## What gets cleaned up after a task completes
 
-When a task reaches a terminal state (`done` after PR opened, `blocked`, or explicitly abandoned):
+When a task reaches a terminal state (`done` after PR opened, `blocked`, or explicitly abandoned),
+prefer the lifecycle wrapper:
+
+```bash
+bash scripts/finish-task.sh <project> <issue-key> \
+  --skill <skill-name> --summary "<one sentence outcome>"
+```
+
+When `<project> <issue-key>` are omitted, the wrapper reuses the latest
+`start-task.sh` context from the same cache root.
+
+Use `--status blocked` or `--status needs-context` to keep per-task scratch for
+the next agent. Use `--build-runtime`, `--gotcha`, or
+`--fact "Section::text"` for additional durable notes.
+
+Manual fallback:
 
 1. The agent writes the final updates to project memory **first** — at minimum a `Recent tasks`
    bullet, plus any new "Build & runtime" or "Common gotchas" facts the task surfaced.
