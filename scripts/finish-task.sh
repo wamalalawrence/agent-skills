@@ -16,6 +16,7 @@ source "${SCRIPT_DIR}/task-context.sh"
 PYTHON3="${PYTHON3:-python3}"
 PM_SCRIPT="${SCRIPT_DIR}/project-memory.py"
 TELEMETRY_SCRIPT="${SCRIPT_DIR}/telemetry.py"
+CACHE_ROOT="$(agent_skills_resolve_cache_root)"
 
 PROJECT=""
 ISSUE_KEY=""
@@ -192,7 +193,8 @@ note() {
   local section="$1"
   local text="$2"
   [[ -n "${text}" ]] || return 0
-  "${PYTHON3}" "${PM_SCRIPT}" note "${PROJECT}" --section "${section}" --text "${text}"
+  "${PYTHON3}" "${PM_SCRIPT}" --cache-root "${CACHE_ROOT}" note "${PROJECT}" \
+    --section "${section}" --text "${text}"
 }
 
 echo "== agent-skills finish-task =="
@@ -231,7 +233,7 @@ event="completed"
 if [[ "${STATUS}" == "blocked" || "${STATUS}" == "needs-context" ]]; then
   event="stopped"
 fi
-"${PYTHON3}" "${TELEMETRY_SCRIPT}" emit "${PROJECT}" "${event}" \
+"${PYTHON3}" "${TELEMETRY_SCRIPT}" --cache-root "${CACHE_ROOT}" emit "${PROJECT}" "${event}" \
   --field "skill=${SKILL}" \
   --field "issue_key=${ISSUE_KEY}" \
   --field "status=${STATUS}" >/dev/null
@@ -245,7 +247,7 @@ fi
 
 if [[ "${CLEANUP}" == "true" ]]; then
   echo "[3/3] cleanup: removing per-task scratch after memory write..."
-  "${PYTHON3}" "${PM_SCRIPT}" cleanup-task "${ISSUE_KEY}"
+  "${PYTHON3}" "${PM_SCRIPT}" --cache-root "${CACHE_ROOT}" cleanup-task "${ISSUE_KEY}"
 else
   echo "[3/3] cleanup: skipped; per-task scratch preserved for resumption."
 fi

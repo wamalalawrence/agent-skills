@@ -43,7 +43,7 @@ resolve_cache_root() {
     echo "${WORKSPACE_ROOT}/.cache/agent-skills"
     return
   fi
-  echo "${HOME}/.cache/agent-skills"
+  echo "${PWD}/.cache/agent-skills"
 }
 
 # ---------------------------------------------------------------------------
@@ -82,7 +82,7 @@ Arguments:
 Examples:
   ./start-task.sh
   ./start-task.sh example-api ABC-156
-  ./start-task.sh checkout-svc gh-pr-789 --skill software-engineer=0.33.0
+  ./start-task.sh checkout-svc gh-pr-789 --skill software-engineer=0.33.1
   ./start-task.sh --project my-project --task refactor-auth --no-org
 EOF
 }

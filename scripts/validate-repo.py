@@ -132,6 +132,7 @@ REQUIRED_FILES = [
     "eval-runs/v0.21.0/setup-update-preserves-credentials.md",
     "eval-runs/v0.21.0/updating-discoverability.md",
     "eval-runs/v0.33.0/summary.md",
+    "eval-runs/v0.33.1/summary.md",
     "evals/code-reviewer-verdict-gating.md",
     "scripts/test-setup-update-preserves-credentials.sh",
 ]

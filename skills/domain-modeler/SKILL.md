@@ -18,7 +18,7 @@ compatibility: >-
   .agent-skills.yml). See docs/execution-modes.md.
 metadata:
   author: wamalalawrence
-  version: "0.33.0"
+  version: "0.33.1"
   homepage: "https://github.com/wamalalawrence/agent-skills"
 ---
 
@@ -42,13 +42,13 @@ this ONE command. No arguments are required; the script detects the project and
 task id from config, GitHub environment, branch, or cwd:
 
 ```bash
-bash scripts/start-task.sh --skill domain-modeler=0.33.0
+bash scripts/start-task.sh --skill domain-modeler=0.33.1
 ```
 
 If detection is wrong, rerun with explicit values:
 
 ```bash
-bash scripts/start-task.sh <project> <issue-key> --skill domain-modeler=0.33.0
+bash scripts/start-task.sh <project> <issue-key> --skill domain-modeler=0.33.1
 ```
 
 If `scripts/start-task.sh` is not at the current cwd, use the installed
@@ -351,7 +351,7 @@ say in this run, delete the heading rather than shipping a stub.
 
 Always include a lifecycle receipt in the chat summary:
 `Lifecycle: start-task=<ran|blocked>; finish-task=<ran|pending|skipped-blocked>;
-memory=<updated|blocked>; skill=domain-modeler@0.33.0`. Do not claim a wrapper
+memory=<updated|blocked>; skill=domain-modeler@0.33.1`. Do not claim a wrapper
 or memory write ran unless it actually ran.
 
 Every `domain-modeler` run MUST produce one or both of the following durable

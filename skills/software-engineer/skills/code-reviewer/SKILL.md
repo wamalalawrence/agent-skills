@@ -16,7 +16,7 @@ compatibility: >-
   .agent-skills.yml). See docs/execution-modes.md.
 metadata:
   author: wamalalawrence
-  version: "0.33.0"
+  version: "0.33.1"
   homepage: "https://github.com/wamalalawrence/agent-skills"
 argument-hint: >-
   optional: mode inner|outer, base branch, issue key/URL, PR URL, or task description
@@ -40,13 +40,13 @@ ONE command. No arguments are required; the script detects the project and task
 id from config, GitHub environment, branch, or cwd:
 
 ```bash
-bash scripts/start-task.sh --skill code-reviewer=0.33.0
+bash scripts/start-task.sh --skill code-reviewer=0.33.1
 ```
 
 If detection is wrong, rerun with explicit values:
 
 ```bash
-bash scripts/start-task.sh <project> <issue-key> --skill code-reviewer=0.33.0
+bash scripts/start-task.sh <project> <issue-key> --skill code-reviewer=0.33.1
 ```
 
 If `scripts/start-task.sh` is not at the current cwd, use the installed
@@ -601,14 +601,14 @@ one-line `## Final Verdict` at the bottom.
 
 Always include a lifecycle receipt:
 `Lifecycle: start-task=<ran|blocked>; finish-task=<ran|pending|skipped-blocked>;
-memory=<updated|blocked>; skill=code-reviewer@0.33.0`. Do not claim a wrapper
+memory=<updated|blocked>; skill=code-reviewer@0.33.1`. Do not claim a wrapper
 or memory write ran unless it actually ran.
 
 ```markdown
 ## Code Review — <repo> @ <branch>
 
 <one line each, in this order, dropped if obvious or empty>
-- Lifecycle: start-task=<ran|blocked>; finish-task=<ran|pending|skipped-blocked>; memory=<updated|blocked>; skill=code-reviewer@0.33.0
+- Lifecycle: start-task=<ran|blocked>; finish-task=<ran|pending|skipped-blocked>; memory=<updated|blocked>; skill=code-reviewer@0.33.1
 - Mode: inner | outer | pr | manual · Issue awareness: issue-aware | partial | none
 - Base: <base> · Files reviewed: <kept>/<total>
 - Standards used: <repo docs / supplied URLs / none>

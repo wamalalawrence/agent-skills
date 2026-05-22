@@ -6,6 +6,25 @@ All notable project changes should be recorded here.
 
 - No unreleased changes.
 
+## 0.33.1 - Lifecycle Cache-Root Patch
+
+Patch release for `0.33.0`. Post-release closeout found that `start-task.sh`
+and `finish-task.sh` could default to different cache roots when neither
+`AGENT_SKILLS_CACHE_DIR` nor `WORKSPACE_ROOT` was set. That could make no-arg
+finish write memory to one cache while trying to clean scratch from another.
+
+### Changed
+
+- `start-task.sh` now defaults to `cwd/.cache/agent-skills`, matching the
+  Python memory scripts' fallback after `AGENT_SKILLS_CACHE_DIR` and
+  `WORKSPACE_ROOT`.
+- `finish-task.sh` passes the resolved cache root explicitly to
+  `project-memory.py` and `telemetry.py`, so memory writes, telemetry, persisted
+  last-context lookup, and cleanup all target the same cache.
+- Added [`eval-runs/v0.33.1/summary.md`](eval-runs/v0.33.1/summary.md) with
+  the patch-release smoke evidence.
+- `VERSION`, README status, and all skill metadata versions moved to `0.33.1`.
+
 ## 0.33.0 - Lifecycle Wrappers Everywhere
 
 This release addresses field feedback that agents can read a skill, decide a
