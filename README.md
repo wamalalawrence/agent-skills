@@ -4,7 +4,7 @@ Reusable [Agent Skills](https://agentskills.io/) for software-engineering work �
 role-shaped workflows your AI assistant can load on demand so the same model produces
 senior-engineer, product-owner, tester, or reviewer output instead of generic answers.
 
-> **Status:** `0.33.1` — pre-1.0. Core skill set is shipped and stable enough for public use;
+> **Status:** `0.34.0` — pre-1.0. Core skill set is shipped and stable enough for public use;
 > interfaces may still evolve.
 
 New here? Start with the [quickstart](docs/quickstart.md), then read [starter
@@ -93,7 +93,7 @@ vendor script (see [docs/updates.md](docs/updates.md#in-repo-cloud--online-agent
 
 ## Skills
 
-This repository currently contains **six top-level skills** and **two nested support skills**. The
+This repository currently contains **seven top-level skills** and **two nested support skills**. The
 top-level skills are intended to be invoked directly. The nested support skills are loaded by the
 engineering workflow when investigation or review needs a more specific checklist.
 
@@ -109,6 +109,23 @@ usage shows they are useful independently.
   sequence of small, self-contained **execution phases**. Each phase is sized so a fresh agent
   loaded with `destination.md` + one `phase-NN.md` has enough — and only enough — context to
   execute it well. Decomposes work; does not execute it.
+
+### [`delivery-runner`][delivery-runner] (top-level)
+
+- Key collaborators: `delivery-planner`, `software-engineer`, `issue-investigator`,
+  `product-owner`, `manual-tester`, `test-automation-engineer`.
+- Purpose: execute a `delivery-planner` plan end-to-end with no manual handoff —
+  it reads the plan index's dispatch pointer, opens a **fresh empty-context
+  agent for each phase** (just like re-opening a new chat), waits, verifies the
+  result from the persisted plan artifacts (never from chat), then advances
+  until the plan is done, blocked, or needs a human. Dispatches fresh agents; it
+  does not implement phases itself, so the depth-cap review bound stays intact.
+- Sample command:
+
+  ```text
+  Use the delivery-runner skill to execute the PROJ-1234 plan end-to-end.
+  Dispatch each phase as a fresh sub-agent and stop if anything blocks.
+  ```
 
 ### [`software-engineer`][software-engineer] (top-level)
 
@@ -155,6 +172,7 @@ usage shows they are useful independently.
   definition of done.
 
 [delivery-planner]: skills/delivery-planner/
+[delivery-runner]: skills/delivery-runner/
 [software-engineer]: skills/software-engineer/
 [product-owner]: skills/product-owner/
 [manual-tester]: skills/manual-tester/
