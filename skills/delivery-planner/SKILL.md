@@ -20,7 +20,7 @@ compatibility: >-
   .agent-skills.yml). See docs/execution-modes.md.
 metadata:
   author: wamalalawrence
-  version: "0.34.0"
+  version: "0.35.0"
   homepage: "https://github.com/wamalalawrence/agent-skills"
 ---
 
@@ -49,13 +49,13 @@ this ONE command. No arguments are required; the script detects the project and
 task id from config, GitHub environment, branch, or cwd:
 
 ```bash
-bash scripts/start-task.sh --skill delivery-planner=0.34.0
+bash scripts/start-task.sh --skill delivery-planner=0.35.0
 ```
 
 If detection is wrong, rerun with explicit values:
 
 ```bash
-bash scripts/start-task.sh <project> <issue-key> --skill delivery-planner=0.34.0
+bash scripts/start-task.sh <project> <issue-key> --skill delivery-planner=0.35.0
 ```
 
 If `scripts/start-task.sh` is not at the current cwd, use the installed
@@ -523,7 +523,41 @@ The dispatch-pointer rules are **binding** and mirrored in the
   `current_dispatch_pointer` MUST be `null`. The planner has nothing to
   dispatch; the next action is on the user, not on an executor.
 
-### 6. Self-validation pass (bounded)
+### 6. Create the plan branch
+
+Every phase of a plan commits to the **same branch**. The planner creates it
+once before any executor runs so there is exactly one feature branch for the
+entire delivery, regardless of phase count.
+
+1. **Derive the branch name** from `${GIT_BRANCH_NAME_FORMAT}` and the
+   `work_key`. Use the convention's prefix: `feature/` by default, `bugfix/`
+   for defects, `hotfix/` only for actual hotfix flow. The branch name MUST
+   contain the `work_key` (ticket key or local slug).
+2. **Determine the base branch** from `${PROJECTS_JSON}` for the affected
+   project, falling back to `${GITHUB_DEFAULT_BRANCH}`.
+3. **Attempt branch creation** (best-effort; plan artifacts are valid with or
+   without successful creation):
+   - Verify git access: `git -C <repo-root> rev-parse --git-dir`.
+   - Update base: `git fetch origin && git checkout <base> && git pull origin
+     <base>`.
+   - Create: `git checkout -b <plan_branch>`.
+   - Push (when remote access exists): `git push -u origin <plan_branch>`.
+   - If git access is unavailable, record the planned branch name anyway and
+     note in the plan output that the first executor must create it.
+4. **Record `plan_branch`** in ALL plan artifacts:
+   - `destination.md` YAML header: `plan_branch: <name>` (or the planned name
+     when creation was skipped).
+   - `evidence-pack.yml.delivery_plan`: `plan_branch: <name>`.
+   - `phased-plan/README.md` YAML header: `plan_branch: <name>`.
+   - `phased-plan/README.md` "Inputs for the next agent" section: the plan
+     branch with checkout instructions.
+5. **When git access is unavailable**, set `plan_branch` to the derived name
+   and add a note in the `## Open Questions Or Missing Evidence` output
+   section: "Plan branch `<name>` could not be created — first executor must
+   create and push it." The plan is still dispatchable; the branch name is
+   recorded so all executors converge on the same name.
+
+### 7. Self-validation pass (bounded)
 
 Before emitting the final result, run **one** self-check against the
 [plan-quality checklist](./references/plan-quality-checklist.md). Items that
@@ -533,7 +567,7 @@ time.** This loop is bounded by the universal rules in
 [docs/review-loops.md](../../docs/review-loops.md#universal-loop-bounds): one
 revision round, no recursion, depth cap of two skills.
 
-### 7. When the plan goes stale
+### 8. When the plan goes stale
 
 A phased plan is a snapshot, not a contract. Re-run the planner (and update
 `destination.md` + the affected phase files in place) when:
@@ -599,7 +633,7 @@ omitted by accident).
 
 Always include a lifecycle receipt:
 `Lifecycle: start-task=<ran|blocked>; finish-task=<ran|pending|skipped-blocked>;
-memory=<updated|blocked>; skill=delivery-planner@0.34.0`. Do not claim a
+memory=<updated|blocked>; skill=delivery-planner@0.35.0`. Do not claim a
 wrapper or memory write ran unless it actually ran.
 
 ```markdown
@@ -610,6 +644,7 @@ wrapper or memory write ran unless it actually ran.
 - Destination file: <relative path written or updated this run>
 - Phased-plan index: <relative path written or updated this run>
 - Evidence pack: <relative path written or updated this run; REQUIRED for every dispatchable plan>
+- Plan branch: <branch name, or "not created — git access unavailable; first executor must create">
 - Phases total / ready / done / blocked:
 - Current dispatch pointer: <phase id, REQUIRED for READY_FOR_DISPATCH and
   READY_FOR_DISCOVERY (point at the discovery phase id); "none" only when

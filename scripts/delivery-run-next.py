@@ -140,6 +140,7 @@ def decide(index_path: Path) -> dict[str, object]:
 
     base = {
         "work_key": header.get("work_key", "unknown"),
+        "plan_branch": header.get("plan_branch", None),
         "index_path": str(index_path),
         "destination_path": str(index_path.parent.parent / "destination.md"),
         "pointer": pointer or None,

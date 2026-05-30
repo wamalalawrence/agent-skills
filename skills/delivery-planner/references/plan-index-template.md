@@ -29,6 +29,8 @@ Do not invent extra fields. If something is genuinely not applicable, write
 ---
 work_key: AUTH-SSO-PARITY        # MUST equal destination.md's work_key
 destination_path: ../destination.md
+plan_branch: feature/AUTH-SSO-PARITY-sso-parity  # planner-created branch for ALL phases;
+                                                  # null when git access unavailable
 state: active | superseded       # superseded = a fresh plan replaced this one;
                                  # kept on disk so back-references still resolve
 created_at: 2026-05-06
@@ -68,7 +70,11 @@ enough context to start. Always include this block, regenerate it on every
 checkpoint, and use repo-relative paths from this README's location:
 
 - **Destination brief**: `../destination.md` — outcome, success signals,
-  scope, non-goals, constraints. Read first.
+  scope, non-goals, constraints, and the plan branch. Read first.
+- **Plan branch**: `<plan_branch>` — the single branch ALL phases commit to.
+  Created by `delivery-planner`. Check out this branch; do NOT create a new
+  one. If the remote branch does not exist yet and no prior phase has pushed
+  it, create it from the project base branch and push it.
 - **Evidence pack**: `../evidence-pack.yml` — durable continuity record
   including `delivery_plan.phases[]` state, `current_dispatch_pointer`, and
   prior `last_completed_*` mirrors. The dispatch contract.

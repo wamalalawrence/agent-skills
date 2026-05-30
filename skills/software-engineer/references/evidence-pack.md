@@ -112,6 +112,7 @@ review:
 delivery_plan:
   destination_path: ".cache/agent-skills/PROJ-1234/destination.md"
   index_path: ".cache/agent-skills/PROJ-1234/phased-plan/README.md"
+  plan_branch: feature/PROJ-1234-sso-parity  # planner-created branch for ALL phases; null until planner runs
   current_dispatch_pointer: phase-03 # next phase id, or null when no phase is dispatchable
   last_completed_phase_id: phase-02
   last_completed_at: 2026-05-06T14:00:00Z
@@ -289,7 +290,22 @@ push, or PR-affecting action, the executor MUST record and self-check the follow
    `software-engineer`) or the equivalent step in other executors.
 2. `base_branch` ← the project's `base_branch` from `${PROJECTS_JSON}` (or
    `${GITHUB_DEFAULT_BRANCH}` fallback) for the repo this phase touches.
-3. **Branch-isolation assertion.** For any phase that mutates the repo (commits, pushes, or opens
+3. **Plan-branch gate (binding).** When `delivery_plan.plan_branch` is set (non-null,
+   non-empty), this phase is part of a planner-created single-branch plan. The executor MUST
+   NOT create a new branch. Instead:
+   a. Fetch the plan branch from remote: `git fetch origin <plan_branch>`.
+   b. If the remote branch exists, check it out: `git checkout <plan_branch>` and pull.
+   c. If the remote branch does NOT exist and this is the first repo-mutating phase (no prior
+      phase has a `working_branch` equal to `plan_branch`), create the local branch from the
+      updated base: `git checkout <base_branch> && git pull origin <base_branch> &&
+      git checkout -b <plan_branch>`. Push it so subsequent phases can fetch it.
+   d. If the remote branch does NOT exist but a prior phase DID already have
+      `working_branch == plan_branch`, stop with `BLOCKED: plan branch <plan_branch> should
+      exist remotely after the first repo-mutating phase pushed it`. This is a plan-health
+      check — do not silently re-create.
+   When `plan_branch` is NOT set (standalone phase execution, pre-planner workflow), the
+   executor creates its own branch as normal (see §1.3 Git branching in the owner skill).
+4. **Branch-isolation assertion.** For any phase that mutates the repo (commits, pushes, or opens
    a PR — i.e. `software-engineer` and any other repo-mutating owner), `working_branch` MUST NOT
    equal `base_branch`. If they are equal, the executor stops with
    `BLOCKED: phase would commit to base branch <name>` and writes `phases[<id>].state: blocked`
@@ -298,7 +314,7 @@ push, or PR-affecting action, the executor MUST record and self-check the follow
    confirm the intended branch first. Read-only owners (`issue-investigator`,
    `manual-tester` against deployed environments, `product-owner` discovery) skip this assertion
    and instead record `working_branch: not-applicable — read-only`.
-4. **Owner-skill verification.** The executor MUST verify that the resolved canonical skill
+5. **Owner-skill verification.** The executor MUST verify that the resolved canonical skill
    source contains a `SKILL.md` for `phases[<id>].recommended_owner`. The verification is a file
    read, not a host listing — see
    [skill-source-resolution.md](../../../docs/skill-source-resolution.md#owner-skill-verification-recipe).

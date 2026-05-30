@@ -28,6 +28,17 @@ Read these, in order, before doing anything else:
    skills/software-engineer/references/evidence-pack.md (reconstruct the minimal
    delivery_plan from the index + phase files; if you cannot, stop BLOCKED).
 
+Plan branch (BINDING): <plan-branch>
+This is the single branch ALL phases of this plan commit to. It was created by
+delivery-planner. Do NOT create a new branch for this phase.
+- Fetch the plan branch: `git fetch origin <plan-branch>`.
+- If it exists remotely: `git checkout <plan-branch> && git pull origin <plan-branch>`.
+- If it does NOT exist remotely and you are the first repo-mutating phase:
+  create it from the project base branch (`git checkout <base> && git pull &&
+  git checkout -b <plan-branch>`) and push it so subsequent phases can fetch it.
+- If it does NOT exist remotely but a prior phase already had it as working_branch,
+  stop with BLOCKED — the plan branch should have been pushed by the first phase.
+
 Owner skill (BINDING): load and follow
 <skill-source>/<recommended-owner>/SKILL.md from the canonical skill source.
 This phase's recommended_owner is "<recommended-owner>". If that SKILL.md cannot
@@ -40,9 +51,9 @@ Do this:
   PREFLIGHT start-task.sh and closing finish-task.sh lifecycle wrappers.
 - Honor the phase's scope (in/out), validation/exit criteria, and rollback
   notes. Do not start, edit, or "get ahead" on any other phase.
-- Before any repo mutation, run the pre-work isolation gate (working_branch,
-  base_branch, branch-isolation assertion, owner-skill verification) from
-  skills/software-engineer/references/evidence-pack.md.
+- Before any repo mutation, run the pre-work isolation gate (plan-branch gate,
+  working_branch, base_branch, branch-isolation assertion, owner-skill
+  verification) from skills/software-engineer/references/evidence-pack.md.
 - Before returning, write the phase-continuity checkpoint to evidence-pack.yml
   (state -> done or blocked, completed_at/blocked_at, completed_by, summary,
   artifacts, validation, follow_up_context, the last_completed_* mirrors, and
@@ -61,6 +72,12 @@ current_dispatch_pointer.
 
 ## Filling rules
 
+- `<plan-branch>` is the `plan_branch` from `phased-plan/README.md`'s YAML header
+  and `evidence-pack.yml.delivery_plan.plan_branch`. The runner reads it from
+  `delivery-run-next.py`'s `plan_branch` field. It is the single branch ALL
+  phases of this plan commit to. When `null` / empty (planner ran without git
+  access), instruct the first executor to create the branch from the convention
+  and record it.
 - `<phase-id>-<slug>.md` is the file matching `current_dispatch_pointer`; the
   runner gets the exact filename from `delivery-run-next.py` (`phase.phase_file`).
 - `<recommended-owner>` is the phase's owner skill from the index phase table

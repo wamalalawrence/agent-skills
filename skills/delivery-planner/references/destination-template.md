@@ -22,6 +22,9 @@ title: SSO parity for the example-api login flow
 state: draft | active | superseded   # active = currently the dispatch source;
                                      # superseded = a newer destination replaced it,
                                      # kept on disk so back-references still resolve
+plan_branch: feature/AUTH-SSO-PARITY-sso-parity  # planner-created branch for ALL phases;
+                                                  # null only when git access was unavailable
+                                                  # and the first executor must create it
 created_at: 2026-05-06
 updated_at: 2026-05-06        # MUST bump on every in-place edit
 source_refs:                  # pointers to the inputs this destination came from

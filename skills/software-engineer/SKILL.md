@@ -20,7 +20,7 @@ compatibility: >-
   .agent-skills.yml). See docs/execution-modes.md.
 metadata:
   author: wamalalawrence
-  version: "0.34.0"
+  version: "0.35.0"
   homepage: "https://github.com/wamalalawrence/agent-skills"
 ---
 
@@ -37,13 +37,13 @@ testing, run this ONE command. No arguments are required; the script detects the
 project and task id from config, GitHub environment, branch, or cwd:
 
 ```bash
-bash scripts/start-task.sh --skill software-engineer=0.34.0
+bash scripts/start-task.sh --skill software-engineer=0.35.0
 ```
 
 If detection is wrong, rerun with explicit values:
 
 ```bash
-bash scripts/start-task.sh <project> <issue-key> --skill software-engineer=0.34.0
+bash scripts/start-task.sh <project> <issue-key> --skill software-engineer=0.35.0
 ```
 
 If `scripts/start-task.sh` is not at the current cwd, use the installed
@@ -526,6 +526,19 @@ Use the locally installed CLI first, fall back to direct REST only when the CLI 
 
 ### 1.3 Git branching
 
+- [ ] Check if this run is part of a `delivery-planner` phase by reading
+  `evidence-pack.yml.delivery_plan`. If `plan_branch` is set (non-null, non-empty), this is
+  a plan-branch run — **do NOT create a new branch.** Instead:
+  - Fetch the plan branch: `git fetch origin <plan_branch>`.
+  - If it exists remotely: `git checkout <plan_branch> && git pull origin <plan_branch>`.
+  - If it does NOT exist remotely and this is the first repo-mutating phase (no prior phase
+    has `working_branch == plan_branch`), create it locally from the updated base:
+    `git checkout <base> && git pull origin <base> && git checkout -b <plan_branch>`, then
+    push it so subsequent phases can fetch it.
+  - If it does NOT exist remotely but a prior phase DID push it, stop with
+    `BLOCKED: plan branch should exist remotely after the first phase pushed it`.
+  - Skip the rest of the branch-creation steps below (the name is already determined) and
+    record `working_branch = <plan_branch>`.
 - [ ] Determine the base branch by looking up the project in `${PROJECTS_JSON}` and reading its
   `base_branch`; fall back to `${GITHUB_DEFAULT_BRANCH}` if the project has no override.
 - [ ] `gh auth status` to confirm GitHub authentication. If the active account cannot see the
@@ -538,7 +551,8 @@ Use the locally installed CLI first, fall back to direct REST only when the CLI 
   target repo, never the active token.
 - [ ] Verify repo git identity: `git config user.name`, `git config user.email`.
 - [ ] Update the base branch: `git fetch origin && git checkout <base> && git pull origin <base>`.
-- [ ] Create a branch from the updated base. Format hint: `${GIT_BRANCH_NAME_FORMAT}`.
+- [ ] If this is NOT a plan-branch run, create a branch from the updated base. Format hint:
+  `${GIT_BRANCH_NAME_FORMAT}`.
 - [ ] Use prefixes intentionally: `feature/` by default, `bugfix/` for defects, `hotfix/` only for
   actual hotfix flow, `wip/` or `private/` only for non-public work.
 - [ ] Branch name **must** contain the ticket key for ticket-driven public work.
@@ -999,13 +1013,14 @@ If this run was invoked because a [`delivery-planner`](../delivery-planner/SKILL
   for `software-engineer` itself: read `<canonical>/software-engineer/SKILL.md` directly and
   confirm its `name:` field. The host IDE's skill-listing absence is **not** evidence the file
   is missing on disk. Record the verified path on `phases[<this phase id>].owner_skill_source`.
-- [ ] Run the **branch-isolation pre-check** from the
-  [phase-continuity checkpoint](./references/evidence-pack.md#phase-continuity-checkpoint).
-  Capture `working_branch` from `git rev-parse --abbrev-ref HEAD` after section 1.3 created
-  the feature branch, and `base_branch` from the matched `${PROJECTS_JSON}` entry. If
-  `working_branch == base_branch`, stop with
-  `BLOCKED: phase would commit to base branch <name>`; do NOT silently `git checkout -b` and
-  proceed.
+- [ ] Run the **pre-work isolation gate** from the
+  [phase-continuity checkpoint](./references/evidence-pack.md#phase-continuity-checkpoint),
+  including the plan-branch gate when `delivery_plan.plan_branch` is set. When
+  `plan_branch` is set, check out (do NOT create) that branch (see §1.3). Capture
+  `working_branch` from `git rev-parse --abbrev-ref HEAD` and `base_branch` from the
+  matched `${PROJECTS_JSON}` entry. If `working_branch == base_branch`, stop with
+  `BLOCKED: phase would commit to base branch <name>`; do NOT silently `git checkout -b`
+  and proceed.
 - [ ] Before material work starts, write `phases[<this phase id>].state: in-progress`,
   `working_branch`, `base_branch`, `owner_skill_source`, and `last_continuity_checkpoint_at`,
   then re-read `evidence-pack.yml` to confirm the checkpoint.
@@ -1113,7 +1128,7 @@ review ran. Required-even-if-empty: the `Final status:` line.
 Always include a lifecycle receipt for code-changing work:
 `Lifecycle: start-task=<ran|blocked>; task-size=<tiny|small|medium|large>;
 review=<inner/outer status>; finish-task=<ran|pending|skipped-blocked>;
-memory=<updated|blocked>; skill=software-engineer@0.34.0`. Do not claim a
+memory=<updated|blocked>; skill=software-engineer@0.35.0`. Do not claim a
 wrapper, review, memory write, test, or PR action ran unless it actually ran.
 
 ```markdown

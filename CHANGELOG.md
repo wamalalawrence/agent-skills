@@ -6,6 +6,46 @@ All notable project changes should be recorded here.
 
 - No unreleased changes.
 
+## 0.35.0 - Single Plan Branch (Planner Creates Branch)
+
+Minor release. Fixes the multi-branch fragmentation problem where each
+`delivery-runner` dispatched phase agent created its own feature branch, producing
+N branches for N phases. Now `delivery-planner` creates one branch for the entire
+plan, records `plan_branch` in all plan artifacts, and every dispatched phase
+executor checks out (and continues on) that single branch.
+
+### Added
+
+- `plan_branch` field added to `destination.md`, `evidence-pack.yml.delivery_plan`,
+  and `phased-plan/README.md` headers. The planner derives the branch name from
+  `${GIT_BRANCH_NAME_FORMAT}` and the issue key, creates the branch (and pushes
+  it when git access is available), then records it so every downstream phase
+  executor knows which branch to use.
+- `delivery-run-next.py` now extracts `plan_branch` from the index header and
+  includes it in each dispatch-decision JSON so the runner can communicate it.
+- Pre-work isolation gate updated: when `delivery_plan.plan_branch` is set, the
+  executor checks out (not creates) that branch; branch creation is planner-only.
+- New eval `evals/plan-branch-single-branch-per-plan.md` verifying that all phases
+  commit to the same planner-created branch.
+
+### Changed
+
+- `delivery-planner` step 5 (Sequence and dispatch) now includes explicit branch
+  creation and `plan_branch` recording before the final dispatch pointer is set.
+- `delivery-runner` handoff prompt now communicates the plan branch and instructs
+  executors to check it out rather than create a new one.
+- `software-engineer` Phase 1.3 (Git branching) and the "When invoked from a
+  delivery-planner phase" section now detect `plan_branch` and checkout instead
+  of create.
+- `phase-execution-branch-isolation` eval updated to reflect the plan-branch
+  contract: phase 02 must continue on the same plan branch, not create a new one.
+- All skill `metadata.version` fields bumped to `0.35.0`.
+
+### Fixed
+
+- Multi-branch fragmentation: N-phase plans no longer produce N separate feature
+  branches. One plan = one branch, regardless of phase count.
+
 ## 0.34.0 - Delivery Runner (Autonomous Phase Handoff)
 
 Minor release. Adds a new top-level skill, `delivery-runner`, that executes a

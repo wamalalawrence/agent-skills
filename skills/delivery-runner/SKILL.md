@@ -22,7 +22,7 @@ compatibility: >-
   docs/execution-modes.md.
 metadata:
   author: wamalalawrence
-  version: "0.34.0"
+  version: "0.35.0"
   homepage: "https://github.com/wamalalawrence/agent-skills"
 ---
 
@@ -49,13 +49,13 @@ ONE command. The runner records its own participation; each dispatched phase
 agent runs its **own** lifecycle wrappers inside its fresh session.
 
 ```bash
-bash scripts/start-task.sh --skill delivery-runner=0.34.0
+bash scripts/start-task.sh --skill delivery-runner=0.35.0
 ```
 
 If detection is wrong, rerun with explicit values:
 
 ```bash
-bash scripts/start-task.sh <project> <issue-key> --skill delivery-runner=0.34.0
+bash scripts/start-task.sh <project> <issue-key> --skill delivery-runner=0.35.0
 ```
 
 If `scripts/start-task.sh` is not at the current cwd, use the installed
@@ -239,7 +239,9 @@ active. Ask the user before resuming; do not dispatch a duplicate.
 Repeat until a stop condition fires:
 
 1. **Decide.** Run `delivery-run-next.py`. On `action: stop` or `action: error`,
-   leave the loop and go to step 3. On `action: dispatch`, continue.
+   leave the loop and go to step 3. On `action: dispatch`, continue. Extract
+   `plan_branch` from the decision JSON — it is the single branch ALL phases
+   of this plan commit to.
 2. **Verify the owner skill resolves.** Read the `recommended_owner`'s `SKILL.md`
    from the resolved canonical skill source (a file read, not a host listing —
    see [skill-source resolution](../../docs/skill-source-resolution.md)). If it
@@ -251,11 +253,12 @@ Repeat until a stop condition fires:
    dispatch.
 4. **Build the handoff.** Fill the
    [handoff-prompt template](./references/handoff-prompt-template.md) with the
-   work key, the pointer phase id and file path, the destination path, the
-   evidence-pack path, the resolved owner skill path, and the binding
-   instructions (run the owner skill's full workflow including its own
-   start-task/finish-task wrappers, write the phase-continuity checkpoint and
-   regenerate the index, do ONLY this phase, do not touch other phases).
+   work key, the plan branch from step 1, the pointer phase id and file path,
+   the destination path, the evidence-pack path, the resolved owner skill path,
+   and the binding instructions (run the owner skill's full workflow including
+   its own start-task/finish-task wrappers, write the phase-continuity
+   checkpoint and regenerate the index, do ONLY this phase, do not touch other
+   phases).
 5. **Dispatch a fresh-context agent** with that handoff (sub-agent, CLI, or
    human-relayed). Wait for it to finish.
 6. **Verify from artifacts.** Re-run `delivery-run-next.py` (and read the phase
@@ -324,7 +327,7 @@ Required-even-if-empty: `## Run Summary`.
 
 Always include a lifecycle receipt:
 `Lifecycle: start-task=<ran|blocked>; finish-task=<ran|pending|skipped-blocked>;
-memory=<updated|blocked>; skill=delivery-runner@0.34.0`. Do not claim a wrapper
+memory=<updated|blocked>; skill=delivery-runner@0.35.0`. Do not claim a wrapper
 or memory write ran unless it actually ran.
 
 ```markdown
