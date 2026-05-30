@@ -23,5 +23,9 @@ Thumbs.db
 *.swo
 *~
 
+# Python bytecode caches
+__pycache__/
+*.pyc
+
 # Logs
 *.log

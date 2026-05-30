@@ -35,7 +35,8 @@ See [SKILL.md](./SKILL.md) for the full workflow. References live under
 - Does not invoke other skills. It produces artifacts; executors invoke
   whichever skill the phase recommends. This keeps the depth-cap-of-two
   universal rule in [docs/review-loops.md](../../docs/review-loops.md#universal-loop-bounds)
-  intact.
+  intact. To run the resulting phases end-to-end without hand-dispatching each
+  one, hand the plan to [`delivery-runner`](../delivery-runner/).
 - Does not invent goals, success criteria, or constraints. When they are not
   stated and cannot be derived from real evidence, the readiness decision is
   `NEEDS_CLARIFICATION`.

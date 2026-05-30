@@ -6,6 +6,49 @@ All notable project changes should be recorded here.
 
 - No unreleased changes.
 
+## 0.34.0 - Delivery Runner (Autonomous Phase Handoff)
+
+Minor release. Adds a new top-level skill, `delivery-runner`, that executes a
+`delivery-planner` phased plan end-to-end with no manual handoff between phases,
+and realigns every skill `metadata.version` with `VERSION` (the `0.33.2` patch
+bumped `VERSION` but left the skills at `0.33.1`).
+
+### Added
+
+- New skill [`skills/delivery-runner`](skills/delivery-runner/SKILL.md). It reads
+  a plan's `current_dispatch_pointer`, opens a **fresh, empty-context agent per
+  phase** (sub-agent / Task tool, external CLI re-invocation, or a human-relayed
+  handoff), waits, then verifies each phase from the persisted plan artifacts
+  (the index plus the phase-continuity checkpoint) — never from chat — before
+  advancing. It dispatches fresh agents rather than invoking executor skills in
+  its own context, so the depth-cap-of-two review bound stays intact inside each
+  phase.
+- Bounded error handling in the runner: a phase that wrote `state: blocked` stops
+  the run (no auto-retry); a crashed phase with no checkpoint is retried at most
+  once; a hard iteration cap and a no-progress guard prevent spinning; index ↔
+  evidence-pack disagreement and superseded plans stop and route back to the
+  planner.
+- Read-only helper [`scripts/delivery-run-next.py`](scripts/delivery-run-next.py)
+  that parses `phased-plan/README.md` and prints a deterministic JSON dispatch
+  decision (`dispatch` / `stop` / `error`) for each loop iteration. The index —
+  which lifecycle cleanup preserves across phase boundaries — is the source of
+  truth, not the per-phase `evidence-pack.yml`.
+- Reference files
+  [`handoff-prompt-template.md`](skills/delivery-runner/references/handoff-prompt-template.md)
+  and [`run-loop-checklist.md`](skills/delivery-runner/references/run-loop-checklist.md).
+- New eval
+  [`evals/delivery-runner-autonomous-handoff.md`](evals/delivery-runner-autonomous-handoff.md)
+  and release notes under [`eval-runs/v0.34.0/`](eval-runs/v0.34.0/summary.md).
+
+### Changed
+
+- Documented the runner as a dispatcher that sits **outside** the cross-skill
+  review loops in [`docs/review-loops.md`](docs/review-loops.md).
+- `delivery-planner` now points at `delivery-runner` for end-to-end execution in
+  its `Related And Reused Skills` and dispatch sections.
+- Bumped `VERSION`, README status, and every `SKILL.md` `metadata.version` to
+  `0.34.0`, resolving the `0.33.1`/`0.33.2` drift.
+
 ## 0.33.2 - Preserve Plan Artifacts Across Phase Cleanup
 
 Patch release for `0.33.1`. The `cleanup-task` subcommand of `project-memory.py`

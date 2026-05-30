@@ -20,7 +20,7 @@ compatibility: >-
   .agent-skills.yml). See docs/execution-modes.md.
 metadata:
   author: wamalalawrence
-  version: "0.33.1"
+  version: "0.34.0"
   homepage: "https://github.com/wamalalawrence/agent-skills"
 ---
 
@@ -49,13 +49,13 @@ this ONE command. No arguments are required; the script detects the project and
 task id from config, GitHub environment, branch, or cwd:
 
 ```bash
-bash scripts/start-task.sh --skill delivery-planner=0.33.1
+bash scripts/start-task.sh --skill delivery-planner=0.34.0
 ```
 
 If detection is wrong, rerun with explicit values:
 
 ```bash
-bash scripts/start-task.sh <project> <issue-key> --skill delivery-planner=0.33.1
+bash scripts/start-task.sh <project> <issue-key> --skill delivery-planner=0.34.0
 ```
 
 If `scripts/start-task.sh` is not at the current cwd, use the installed
@@ -163,6 +163,12 @@ See
 - [`domain-modeler`](../domain-modeler/SKILL.md): use when the destination or a
   phase implies an architectural decision that meets the ADR criteria, or when
   domain terminology must be canonicalised before downstream phases refine scope.
+- [`delivery-runner`](../delivery-runner/SKILL.md): the downstream **executor of
+  the whole plan**. When the user wants the phases run end-to-end without
+  hand-dispatching each one, the runner reads this plan's
+  `current_dispatch_pointer` and opens a fresh agent per phase. The planner does
+  not invoke it; the runner is user-started and dispatches fresh agents, so the
+  depth cap is preserved.
 
 This skill **decomposes** work; it does not execute it. It does not call any
 of the skills above to do their job. It produces artifacts those skills (or a
@@ -483,7 +489,10 @@ absorb extra work into a neighbour phase.
 The planner picks the next phase to run and writes its phase ID into the
 index's `current_dispatch_pointer`. From there, dispatch is the user's or
 executor's job — the planner does not call other skills. The recommended
-skill on each phase tells the executor which `SKILL.md` to load.
+skill on each phase tells the executor which `SKILL.md` to load. To run the
+phases end-to-end without dispatching each by hand, hand the plan to
+[`delivery-runner`](../delivery-runner/SKILL.md), which reads this pointer and
+opens a fresh agent per phase.
 
 The dispatch pointer is a contract, not a suggestion. The executing agent must
 load the `recommended_owner` skill from the resolved canonical skill source
@@ -590,7 +599,7 @@ omitted by accident).
 
 Always include a lifecycle receipt:
 `Lifecycle: start-task=<ran|blocked>; finish-task=<ran|pending|skipped-blocked>;
-memory=<updated|blocked>; skill=delivery-planner@0.33.1`. Do not claim a
+memory=<updated|blocked>; skill=delivery-planner@0.34.0`. Do not claim a
 wrapper or memory write ran unless it actually ran.
 
 ```markdown

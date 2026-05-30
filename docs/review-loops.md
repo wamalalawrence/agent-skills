@@ -62,6 +62,18 @@ Each entry: producer → reviewer (mode), trigger, exit rule.
   Evidence` with a one-line gap statement. The planner does **not** invoke any other
   skill — phase dispatch is the executor's job — so this loop introduces no new
   cross-skill recursion and respects the depth cap of two skills.
+- **`delivery-runner` (dispatcher — outside the review loops).** `delivery-runner`
+  is **not** a producer/reviewer pair and does not add a loop level. It is a
+  session driver: it reads a `delivery-planner` plan's `current_dispatch_pointer`
+  and opens a **fresh, empty-context agent per phase**. That dispatched agent is
+  the *root* of its own call chain, so the depth-cap-of-two applies inside the
+  phase (`executor → code-reviewer`) and the runner never appears in it. The
+  runner verifies each phase from the persisted plan artifacts (the index and the
+  phase-continuity checkpoint), never from the dispatched agent's chat, and never
+  edits the plan. Its only bounds are operational, not review bounds: at most one
+  retry of a crashed (no-checkpoint) phase, a hard iteration cap, and a
+  no-progress guard — a phase that wrote `state: blocked` stops the run rather
+  than triggering another attempt.
 
 ## Universal loop bounds
 
