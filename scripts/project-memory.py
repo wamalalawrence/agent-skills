@@ -25,6 +25,9 @@ Rules:
   * Project memory is **never** deleted by this script.
   * Cleanup only removes `<issue-key>/` directories. Branch deletion is the
     caller's responsibility — this script will not run git commands.
+  * When `<issue-key>/phased-plan/README.md` exists, cleanup preserves
+    `phased-plan/` and `destination.md` so delivery-planner artifacts survive
+    across executor phase boundaries.
   * The script writes to disk only inside the resolved cache root.
 """
 from __future__ import annotations
@@ -146,6 +149,22 @@ def cleanup_task(cache_root: Path, issue_key: str) -> Path | None:
         return None
     if not target.is_dir():
         raise SystemExit(f"FAIL not a directory: {target}")
+
+    # Preserve delivery-planner artifacts (destination.md + phased-plan/)
+    # when a phased plan is present. The plan must survive across executor
+    # phase boundaries so each phase can load destination.md + its
+    # phase-NN.md from a fresh agent session.
+    plan_index = target / "phased-plan" / "README.md"
+    if plan_index.exists():
+        for child in sorted(target.iterdir()):
+            if child.name in ("phased-plan", "destination.md"):
+                continue
+            if child.is_dir():
+                shutil.rmtree(child)
+            else:
+                child.unlink()
+        return target
+
     shutil.rmtree(target)
     return target
 

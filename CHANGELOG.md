@@ -6,6 +6,22 @@ All notable project changes should be recorded here.
 
 - No unreleased changes.
 
+## 0.33.2 - Preserve Plan Artifacts Across Phase Cleanup
+
+Patch release for `0.33.1`. The `cleanup-task` subcommand of `project-memory.py`
+used `shutil.rmtree` on the entire `<issue-key>/` cache directory. When an
+executor agent finished a phase and the `finish-task.sh` wrapper called cleanup,
+it deleted the delivery-planner's `destination.md` and `phased-plan/` artifacts.
+The next executor phase then had no plan to load.
+
+### Fixed
+
+- `cleanup_task()` in `scripts/project-memory.py` now detects the presence of
+  `phased-plan/README.md` and preserves `phased-plan/` plus `destination.md`
+  while still removing other per-task scratch (blackboard, evidence pack, etc.).
+  Plan artifacts survive across executor phase boundaries.
+- Docstring updated to document the preservation contract.
+
 ## 0.33.1 - Lifecycle Cache-Root Patch
 
 Patch release for `0.33.0`. Post-release closeout found that `start-task.sh`
