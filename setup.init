@@ -453,7 +453,10 @@ check_url_reachable() {
   [[ "${CHECK_CONNECTIVITY}" == "true" ]] || return 0
   command -v curl >/dev/null 2>&1 || return 0
   local code=""
-  code="$(curl -ksS --head -m 5 -o /dev/null -w '%{http_code}' "${url}" 2>/dev/null || true)"
+  # No -k: a probe that ignores certificate errors cannot tell a MITM proxy from
+  # the real host. A self-signed corporate proxy shows up as the same warn-only
+  # "not reachable" result, which is the honest answer for a reachability check.
+  code="$(curl -sS --head -m 5 -o /dev/null -w '%{http_code}' "${url}" 2>/dev/null || true)"
   if [[ -z "${code}" || "${code}" == "000" ]]; then
     echo "  WARN: ${label} (${url}) is not reachable from this network." >&2
     echo "        This may be expected on VPN-only or air-gapped setups." >&2
@@ -1115,15 +1118,14 @@ update_workspace_gitignore() {
     printf '%s\n' "${GITIGNORE_END_MARKER}"
   } > "${block_file}"
 
+  # Always create the ignore file, even when the workspace root is not (yet) a
+  # git repository. The generated `.env` carries plaintext tokens, so the ignore
+  # rule must already be in place if anyone later runs `git init` here. Skipping
+  # it because `.git` is absent is how a token gets committed months later.
   if [[ ! -f "${gitignore_file}" ]]; then
-    if [[ -d "${workspace_root}/.git" ]]; then
-      cp "${block_file}" "${gitignore_file}"
-      rm -f "${block_file}"
-      printf 'created'
-      return 0
-    fi
+    cp "${block_file}" "${gitignore_file}"
     rm -f "${block_file}"
-    printf 'skipped'
+    printf 'created'
     return 0
   fi
 
@@ -1153,6 +1155,60 @@ update_workspace_gitignore() {
   mv "${temp_file}" "${gitignore_file}"
   rm -f "${block_file}"
   printf 'updated'
+}
+
+# ------------------------------------------------------------------------------
+# Secret-ignore assertion (fails loudly, does not fail the run)
+#
+# The generated `.env` holds plaintext tokens. `chmod 600` protects it from other
+# local users; only a gitignore rule protects it from being committed. This check
+# asserts the rule actually exists and covers `.env`, so the security claim in
+# this script's header is verified instead of assumed.
+#
+# Exit codes: 0 ignored (or no `.env`), 1 not ignored but no secret stored yet,
+#             2 a secret IS stored and the file is not ignored (real finding).
+# ------------------------------------------------------------------------------
+assert_env_is_ignored() {
+  local workspace_root="$1"
+  local env_file="${workspace_root}/.env"
+  [[ -f "${env_file}" ]] || return 0
+
+  # Only escalate when the file actually carries a non-empty secret.
+  local has_secret=0
+  local key
+  for key in JIRA_API_TOKEN CONFLUENCE_API_TOKEN SONAR_TOKEN; do
+    if grep -Eq "^[[:space:]]*(export[[:space:]]+)?${key}=\"?[^\"[:space:]]+\"?" \
+      "${env_file}" 2>/dev/null; then
+      has_secret=1
+      break
+    fi
+  done
+
+  local gitignore_file="${workspace_root}/.gitignore"
+  local ignored=0
+  if [[ -f "${gitignore_file}" ]] && grep -Eq '^[[:space:]]*\.env[[:space:]]*$' \
+    "${gitignore_file}" 2>/dev/null; then
+    ignored=1
+  fi
+
+  if [[ "${ignored}" -eq 1 ]]; then
+    if [[ "${has_secret}" -eq 1 ]]; then
+      echo "  ok    .env holds a secret and is covered by .gitignore"
+    else
+      echo "  ok    .env is covered by .gitignore"
+    fi
+    return 0
+  fi
+
+  if [[ "${has_secret}" -eq 1 ]]; then
+    echo "  FAIL: ${env_file} contains a plaintext token but is NOT ignored by" >&2
+    echo "        ${gitignore_file}. Committing it would leak the token." >&2
+    echo "        Fix: rerun ./setup.init, or add a '.env' line to that file now." >&2
+    return 2
+  fi
+  echo "  WARN: ${env_file} is not covered by ${gitignore_file}." >&2
+  echo "        Add a '.env' line before storing any token there." >&2
+  return 1
 }
 
 # ------------------------------------------------------------------------------
@@ -1612,6 +1668,13 @@ print("\n".join(missing))
         errors=$((errors + 1))
       fi
     fi
+  fi
+
+  # A stored token that is not ignored is a real finding, not a style note.
+  local ignore_rc=0
+  assert_env_is_ignored "${workspace_root}" || ignore_rc=$?
+  if [[ "${ignore_rc}" -eq 2 ]]; then
+    errors=$((errors + 1))
   fi
 
   # Run the same warn-only blast-radius probe used at first run, so
@@ -2090,6 +2153,11 @@ case "${GITIGNORE_STATUS}" in
   updated) echo "Refreshed agent-skills block in ${WORKSPACE_ROOT}/.gitignore" ;;
   skipped) : ;;
 esac
+
+# Verify the header's security claim rather than assuming it.
+echo ""
+echo "Secret-ignore check:"
+assert_env_is_ignored "${WORKSPACE_ROOT}" || true
 
 # Validate the produced .env can be sourced and PROJECTS_JSON parses.
 set -a

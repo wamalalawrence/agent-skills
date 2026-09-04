@@ -9,16 +9,21 @@ It is intentionally minimal — it does not invoke a model. It checks that:
 
   1. Every eval file under `evals/` has a top-level `# ` heading.
   2. Every eval file declares some context (one of `CONTEXT_SECTIONS`) and
-     some success criteria (one of `CRITERIA_SECTIONS`). The exact section
-     names in the corpus vary by author and skill.
-  3. Skill names referenced in `Expected Skills:` lines exist on disk under
-     `skills/`.
+     some success criteria (one of `CRITERIA_SECTIONS`).
+  3. Every eval file names the skill(s) it exercises in a `## Skill Under Test`
+     or `## Expected Skills` section, and every name resolves to a real skill
+     directory under `skills/`.
   4. Every release-scoped run under `eval-runs/<version>/` ships a
      `summary.md`.
 
+Section names are matched exactly. An earlier version matched prefixes and kept
+growing its alias lists to absorb heading drift, which hid the drift instead of
+surfacing it.
+
 A future iteration can plug a real agent runner behind `--invoke` and compare
-its output against an `Expected Behavior` block. The scaffold is here so the
-contract exists from day one.
+its output against an `Expected Behavior` block. The 12 evals that carry a
+`## Required Output Fields` section are the cheapest starting point: field
+presence is checkable without a model judging prose.
 
 Exit codes: 0 = pass, 1 = at least one failure.
 """
@@ -34,64 +39,87 @@ EVALS_DIR = ROOT / "evals"
 EVAL_RUNS_DIR = ROOT / "eval-runs"
 SKILLS_DIR = ROOT / "skills"
 
-EXPECTED_SECTIONS = ()  # legacy: kept for --strict-sections compatibility
 CONTEXT_SECTIONS = (
     "Input Context",
     "Scenario",
     "Setup",
-    "Why This Scenario",
-    "Why this eval exists",
     "Workspace fixture",
-    "Skill Under Test",
 )
 CRITERIA_SECTIONS = (
     "Expected Behavior",
     "Expected agent behavior",
     "Pass/Fail Checklist",
-    "Pass / Fail Checklist",
     "Pass criteria",
     "Scorecard Criteria",
     "Required Output Fields",
-    "Required Output",
 )
-EXPECTED_SKILLS_RE = re.compile(r"^Expected Skills:\s*(.+)$", re.MULTILINE)
+# Sections in which an eval declares which skill(s) it exercises. Names are
+# written as inline code spans, e.g. "`software-engineer`, `code-reviewer`".
+SKILL_DECLARATION_SECTIONS = ("Skill Under Test", "Expected Skills")
+CODE_SPAN_RE = re.compile(r"`([a-z0-9-]+)`")
 
 
 def discover_skills() -> set[str]:
     return {p.parent.name for p in SKILLS_DIR.glob("**/SKILL.md")}
 
 
+def section_body(text: str, heading: str) -> str | None:
+    """Return the body of an exact `## <heading>` section, or None if absent."""
+    pattern = re.compile(
+        rf"^##\s+{re.escape(heading)}\s*$\n(.*?)(?=^##\s|\Z)",
+        re.MULTILINE | re.DOTALL,
+    )
+    match = pattern.search(text)
+    return match.group(1) if match else None
+
+
 def check_eval_file(path: Path, skills: set[str]) -> list[str]:
     errors: list[str] = []
+    rel_path = path.relative_to(ROOT)
     text = path.read_text(encoding="utf-8")
+
     if not re.search(r"^#\s+\S", text, re.MULTILINE):
-        errors.append(f"{path.relative_to(ROOT)}: missing top-level heading")
+        errors.append(f"{rel_path}: missing top-level heading")
+
     headings = {
-        re.sub(r"\s+", " ", m.group(1).strip().lower())
+        re.sub(r"\s+", " ", m.group(1).strip())
         for m in re.finditer(r"^##\s+(.+?)\s*$", text, re.MULTILINE)
     }
-    if not any(s.lower() in headings or any(h.startswith(s.lower()) for h in headings) for s in CONTEXT_SECTIONS):
+
+    if not any(s in headings for s in CONTEXT_SECTIONS):
         errors.append(
-            f"{path.relative_to(ROOT)}: missing a context section "
+            f"{rel_path}: missing a context section "
             f"(one of: {', '.join(CONTEXT_SECTIONS)})"
         )
-    if not any(s.lower() in headings or any(h.startswith(s.lower()) for h in headings) for s in CRITERIA_SECTIONS):
+    if not any(s in headings for s in CRITERIA_SECTIONS):
         errors.append(
-            f"{path.relative_to(ROOT)}: missing a success-criteria section "
+            f"{rel_path}: missing a success-criteria section "
             f"(one of: {', '.join(CRITERIA_SECTIONS)})"
         )
-    for required in EXPECTED_SECTIONS:
-        if required.lower() not in headings:
-            errors.append(
-                f"{path.relative_to(ROOT)}: missing required section '## {required}'"
-            )
-    for match in EXPECTED_SKILLS_RE.finditer(text):
-        for raw in match.group(1).split(","):
-            name = raw.strip().strip("`").lower()
-            if name and name not in skills:
-                errors.append(
-                    f"{path.relative_to(ROOT)}: references unknown skill {name!r}"
-                )
+
+    declared: set[str] = set()
+    found_declaration = False
+    for heading in SKILL_DECLARATION_SECTIONS:
+        body = section_body(text, heading)
+        if body is None:
+            continue
+        found_declaration = True
+        declared.update(CODE_SPAN_RE.findall(body))
+
+    if not found_declaration:
+        errors.append(
+            f"{rel_path}: missing a skill-declaration section (one of: "
+            f"{', '.join('## ' + s for s in SKILL_DECLARATION_SECTIONS)})"
+        )
+    elif not declared:
+        errors.append(
+            f"{rel_path}: skill-declaration section names no skill in backticks"
+        )
+    else:
+        for name in sorted(declared):
+            if name not in skills:
+                errors.append(f"{rel_path}: references unknown skill {name!r}")
+
     return errors
 
 
@@ -115,7 +143,7 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument(
         "--strict-sections",
         action="store_true",
-        help="Treat missing EXPECTED_SECTIONS as fatal (default: warn only).",
+        help="Treat a missing context/criteria section as fatal (default: warn).",
     )
     args = parser.parse_args(argv)
 
@@ -126,9 +154,11 @@ def main(argv: list[str] | None = None) -> int:
     for path in sorted(EVALS_DIR.glob("*.md")):
         errors = check_eval_file(path, skills)
         for err in errors:
-            if ("missing a context section" in err
-                    or "missing a success-criteria section" in err
-                    or "missing required section" in err) and not args.strict_sections:
+            soft = (
+                "missing a context section" in err
+                or "missing a success-criteria section" in err
+            )
+            if soft and not args.strict_sections:
                 warnings.append(err)
             else:
                 all_errors.append(err)

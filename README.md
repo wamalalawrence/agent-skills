@@ -4,7 +4,7 @@ Reusable [Agent Skills](https://agentskills.io/) for software-engineering work �
 role-shaped workflows your AI assistant can load on demand so the same model produces
 senior-engineer, product-owner, tester, or reviewer output instead of generic answers.
 
-> **Status:** `0.35.0` — pre-1.0. Core skill set is shipped and stable enough for public use;
+> **Status:** `0.36.0` — pre-1.0. Core skill set is shipped and stable enough for public use;
 > interfaces may still evolve.
 
 New here? Start with the [quickstart](docs/quickstart.md), then read [starter
@@ -93,9 +93,27 @@ vendor script (see [docs/updates.md](docs/updates.md#in-repo-cloud--online-agent
 
 ## Skills
 
-This repository currently contains **seven top-level skills** and **two nested support skills**. The
+This repository currently contains **eight top-level skills** and **two nested support skills**. The
 top-level skills are intended to be invoked directly. The nested support skills are loaded by the
 engineering workflow when investigation or review needs a more specific checklist.
+
+New here, or unsure which skill fits? Invoke [`tech-lead`][tech-lead] and describe the work — it
+picks the owner and dispatches. Direct invocation stays first-class and is faster whenever you
+already know the answer.
+
+### [`tech-lead`][tech-lead] (top-level)
+
+- Key collaborators: every skill below — it dispatches to them and implements nothing itself.
+- Purpose: the **single entry point**. Classifies any request, runs the
+  requirement-understanding gate, picks the one skill that owns the next step, and dispatches a
+  **fresh empty-context agent** to do it. Drives multi-specialist chains (refine, implement,
+  test), verifying each step from persisted artifacts before advancing. Dispatches; never
+  implements, reviews, refines, or tests, so the depth-cap review bound stays intact.
+- Sample command:
+
+  ```text
+  Use the tech-lead skill: invoice search drops the status filter on page 2.
+  ```
 
 `issue-investigator` and `code-reviewer` are currently nested under `software-engineer` because they
 support the engineering implementation loop. They may become top-level skills later only if real
@@ -171,6 +189,7 @@ usage shows they are useful independently.
 - Purpose: reviews diffs against issue context, evidence packs, quality risks, and
   definition of done.
 
+[tech-lead]: skills/tech-lead/
 [delivery-planner]: skills/delivery-planner/
 [delivery-runner]: skills/delivery-runner/
 [software-engineer]: skills/software-engineer/
@@ -183,16 +202,16 @@ usage shows they are useful independently.
 
 ## The Company Brain
 
-`agent-skills` is built so the eight specialist skills compound value across
+`agent-skills` is built so the ten specialist skills compound value across
 projects, sessions, and time — not just one task. Every task writes to a
 shared blackboard, every PR's outcome is recorded, every recurring lesson can
-be promoted into org-tier memory, and a telemetry layer makes "the skills are
-improving" a number instead of a feeling. The loop:
+be promoted into org-tier memory, and a telemetry layer records what actually ran
+so "the skills are improving" can become a number rather than a feeling. The loop:
 
 ```mermaid
 flowchart LR
   Task[Task / issue] --> Blackboard[(Per-task blackboard)]
-  Blackboard --> Skills[Skills: SE, PO, MT, TAE, II, CR, DP, DM]
+  Blackboard --> Skills[Skills: TL, SE, PO, MT, TAE, II, CR, DP, DR, DM]
   Skills --> Artifacts[PR + evidence pack]
   Artifacts --> Outcome[merged / reverted / hotfixed / blocked]
   Outcome --> ProjectMem[(Project memory)]
@@ -222,6 +241,15 @@ the per-tier docs: [task blackboard](docs/task-blackboard.md),
   resolution, and the auth preflight that validates without exposing secrets
 - [GitHub access ladder](docs/github-access.md) — `gh auth status` → account switching →
   HTTPS → SSH; the ladder an agent must walk before declaring "no GitHub access"
+- [MCP](docs/mcp.md) — this repository ships and enables no MCP servers; what it does define is
+  the tool-preference order every skill follows, a recommended minimal set, and why the real
+  argument for MCP here is OAuth instead of stored tokens
+- [Repo knowledge](docs/repo-knowledge.md) — the committed, PR-reviewed knowledge base that
+  lives **inside the repository being worked on**, so what one agent learns survives a fresh
+  clone, a CI runner, and a teammate; confidence-scored lessons with budgeted, ranked recall
+- [Lifecycle preflight](docs/lifecycle-preflight.md) — the full contract behind the two
+  commands every skill runs, including the capability report and the statuses that preserve
+  scratch for a resuming agent
 - [Project memory](docs/project-memory.md) — the per-project knowledge file every skill
   reads on start and updates after every successful task; preserved through per-task cleanup
 - [Company Brain](docs/company-brain.md) — the self-improving loop that ties
@@ -240,6 +268,10 @@ the per-tier docs: [task blackboard](docs/task-blackboard.md),
 - [Examples](docs/examples/README.md)
 - [Validation](docs/validation.md)
 - [Skill quality scorecard](docs/skill-quality-scorecard.md)
+- [Writing voice](docs/writing-voice.md) — everything a skill writes for a human reader
+  (code comments, commits, PR text, tracker comments, doc pages) should read as though a
+  careful colleague wrote it; the banned AI tells, and the honesty boundary those rules
+  must never cross
 - [Insightful simplifications](docs/insightful-simplifications.md) — optional bounded
   framing section skills MAY emit when one short architectural observation would help the
   user see the wider shape of the problem

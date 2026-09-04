@@ -17,6 +17,10 @@ boilerplate that contributed nothing the title did not already say.
   the structured-noise problem is testable but the diff is small enough to score
   cleanly).
 
+## Skill Under Test
+
+`code-reviewer`
+
 ## Prompt
 
 ```text

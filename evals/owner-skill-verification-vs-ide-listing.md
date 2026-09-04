@@ -37,6 +37,10 @@ The agent's host-supplied skill registry does not include `test-automation-engin
 canonical source `<workspace>/.skills/test-automation-engineer/SKILL.md` exists and is
 readable.
 
+## Skill Under Test
+
+`software-engineer`, `test-automation-engineer`, `delivery-planner`
+
 ## Expected Behavior
 
 - The executor resolves the canonical skill source per
@@ -73,8 +77,7 @@ readable.
   resolution order in [skill-source-resolution.md](../docs/skill-source-resolution.md)
   already covers `<workspace>/.skills/` after `./setup.init`.
 
-## Pass / Fail Checklist
-
+## Pass/Fail Checklist
 - [ ] Executor reads `<canonical>/<recommended_owner>/SKILL.md` directly via the file-read
   tool and verifies the `name:` field.
 - [ ] `phases[<id>].owner_skill_source` is populated with the verified absolute path.

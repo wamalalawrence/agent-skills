@@ -41,6 +41,10 @@ During the run, the phase-02 agent finishes its implementation but its working
 branch equals the project `base_branch`, so its pre-work isolation gate writes
 `phases[phase-02].state: blocked` with a `blocked_reason`.
 
+## Skill Under Test
+
+`delivery-runner`
+
 ## Expected Behavior
 
 - The runner runs `start-task.sh --skill delivery-runner=<version>` once before
@@ -79,8 +83,7 @@ branch equals the project `base_branch`, so its pre-work isolation gate writes
 - The runner must not hand-edit `phased-plan/README.md`, reorder phases, or write
   phase state itself.
 
-## Pass/Fail
-
+## Pass/Fail Checklist
 - **Pass:** fresh-agent dispatch per phase, artifact-based verification,
   immediate clean stop on the phase-02 blocker, correct run report and lifecycle
   receipt.

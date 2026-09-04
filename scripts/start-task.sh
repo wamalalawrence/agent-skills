@@ -34,6 +34,27 @@ source "${SCRIPT_DIR}/task-context.sh"
 # ---------------------------------------------------------------------------
 # Resolve the cache root (same logic as the Python scripts)
 # ---------------------------------------------------------------------------
+# ---------------------------------------------------------------------------
+# Resolve a `--skill` spec. `name=version` is passed through unchanged; a bare
+# `name` is completed from this repo's VERSION file.
+#
+# Skills pass a bare name so the version is not hardcoded in nine SKILL.md
+# files that then have to be edited on every release. The blackboard still
+# records a concrete version for attribution.
+# ---------------------------------------------------------------------------
+resolve_skill_version() {
+  local spec="$1"
+  if [[ "${spec}" == *"="* ]]; then
+    printf '%s' "${spec}"
+    return
+  fi
+  local version=""
+  if [[ -f "${REPO_ROOT}/VERSION" ]]; then
+    version="$(head -n 1 "${REPO_ROOT}/VERSION" | tr -d '[:space:]')"
+  fi
+  printf '%s=%s' "${spec}" "${version:-unknown}"
+}
+
 resolve_cache_root() {
   if [[ -n "${AGENT_SKILLS_CACHE_DIR:-}" ]]; then
     echo "${AGENT_SKILLS_CACHE_DIR}"
@@ -50,6 +71,11 @@ resolve_cache_root() {
 # Determine python3 command (prefer the one that can import the scripts)
 # ---------------------------------------------------------------------------
 PYTHON3="${PYTHON3:-python3}"
+
+# Character budget for the repo knowledge read. Keep it small: this tier is a
+# starting context, not a document to load wholesale.
+KNOWLEDGE_BUDGET_CHARS="${AGENT_SKILLS_KNOWLEDGE_BUDGET_CHARS:-4000}"
+BRIEF=""
 
 print_separator() {
   echo ""
@@ -75,9 +101,12 @@ Arguments:
   --project P  Same as positional project.
   --issue-key K, --task K
                Same as positional issue-key.
-  --skill name=version
-               Record a participating skill version on the blackboard. Repeat
-               for multiple skills.
+  --skill name[=version]
+               Record a participating skill on the blackboard. When the version
+               is omitted it is read from this repo's VERSION file, so SKILL.md
+               files do not hardcode a version. Repeat for multiple skills.
+  --brief TEXT One-line description of the task. Used to rank the repo knowledge
+               base so the most relevant lessons are shown within the budget.
 
 Examples:
   ./start-task.sh
@@ -131,6 +160,14 @@ while [[ $# -gt 0 ]]; do
       SKILLS+=("${1#*=}")
       shift
       ;;
+    --brief)
+      BRIEF="${2:-}"
+      shift 2
+      ;;
+    --brief=*)
+      BRIEF="${1#*=}"
+      shift
+      ;;
     --help|-h)
       usage
       exit 0
@@ -171,10 +208,21 @@ if [[ "${NORMALIZED_ISSUE_KEY}" != "${ISSUE_KEY}" ]]; then
   ISSUE_SOURCE="${ISSUE_SOURCE}+normalized"
 fi
 
+# Complete any bare `--skill name` into `name=version`.
+if [[ ${#SKILLS[@]} -gt 0 ]]; then
+  RESOLVED_SKILLS=()
+  for skill_spec in "${SKILLS[@]}"; do
+    RESOLVED_SKILLS+=("$(resolve_skill_version "${skill_spec}")")
+  done
+  SKILLS=("${RESOLVED_SKILLS[@]}")
+fi
+
 CACHE_ROOT="$(resolve_cache_root)"
 PM_SCRIPT="${SCRIPT_DIR}/project-memory.py"
 OM_SCRIPT="${SCRIPT_DIR}/org-memory.py"
 BB_SCRIPT="${SCRIPT_DIR}/blackboard.py"
+KB_SCRIPT="${SCRIPT_DIR}/knowledge.py"
+DOCTOR_SCRIPT="${SCRIPT_DIR}/doctor.sh"
 LAST_CONTEXT="${CACHE_ROOT}/.last-task-context"
 
 # ---------------------------------------------------------------------------
@@ -209,13 +257,13 @@ HAD_ERRORS=0
 # Step 1: Org memory (non-fatal if missing)
 # ---------------------------------------------------------------------------
 if [[ "${SKIP_ORG}" == "true" ]]; then
-  echo "[1/3] org-memory: SKIPPED (--no-org)"
+  echo "[1/5] org-memory: SKIPPED (--no-org)"
 else
-  echo "[1/3] org-memory: reading..."
+  echo "[1/5] org-memory: reading..."
   if ${PYTHON3} "${OM_SCRIPT}" --cache-root "${CACHE_ROOT}" read 2>/dev/null; then
-    echo "[1/3] org-memory: read OK"
+    echo "[1/5] org-memory: read OK"
   else
-    echo "[1/3] org-memory: none yet (this is fine — org memory builds up over time)"
+    echo "[1/5] org-memory: none yet (this is fine — org memory builds up over time)"
   fi
 fi
 
@@ -224,13 +272,13 @@ print_separator
 # ---------------------------------------------------------------------------
 # Step 2: Project memory (fatal if cannot init)
 # ---------------------------------------------------------------------------
-echo "[2/3] project-memory: reading ${PROJECT}..."
+echo "[2/5] project-memory: reading ${PROJECT}..."
 PM_OUTPUT="$(${PYTHON3} "${PM_SCRIPT}" --cache-root "${CACHE_ROOT}" read "${PROJECT}" 2>&1)" && PM_OK=0 || PM_OK=$?
 
 if [[ ${PM_OK} -ne 0 ]]; then
-  echo "[2/3] project-memory: no memory file yet — initialising skeleton..."
+  echo "[2/5] project-memory: no memory file yet — initialising skeleton..."
   if ${PYTHON3} "${PM_SCRIPT}" --cache-root "${CACHE_ROOT}" init "${PROJECT}" 2>&1; then
-    echo "[2/3] project-memory: skeleton created — reading it back..."
+    echo "[2/5] project-memory: skeleton created — reading it back..."
     ${PYTHON3} "${PM_SCRIPT}" --cache-root "${CACHE_ROOT}" read "${PROJECT}" 2>&1 || {
       echo "FATAL: project-memory init succeeded but read failed." >&2
       exit 1
@@ -242,15 +290,57 @@ if [[ ${PM_OK} -ne 0 ]]; then
   fi
 else
   echo "${PM_OUTPUT}"
-  echo "[2/3] project-memory: read OK"
+  echo "[2/5] project-memory: read OK"
 fi
 
 print_separator
 
 # ---------------------------------------------------------------------------
-# Step 3: Blackboard init (fatal if fails)
+# Step 3: Repo knowledge base (non-fatal — most repos will not have one yet)
+#
+# This is the tier that travels with the repository. Read is budgeted and ranked
+# rather than dumped, because an unbounded read eventually costs more context
+# than it saves.
 # ---------------------------------------------------------------------------
-echo "[3/3] blackboard: initialising ${ISSUE_KEY} (project: ${PROJECT})..."
+if [[ -f "${KB_SCRIPT}" ]]; then
+  echo "[3/5] repo-knowledge: reading (budget ${KNOWLEDGE_BUDGET_CHARS} chars)..."
+  KB_ARGS=("${KB_SCRIPT}" read --budget-chars "${KNOWLEDGE_BUDGET_CHARS}")
+  if [[ -n "${BRIEF}" ]]; then
+    KB_ARGS+=(--brief "${BRIEF}")
+  fi
+  if ${PYTHON3} "${KB_ARGS[@]}" 2>/dev/null; then
+    echo "[3/5] repo-knowledge: read OK"
+  else
+    echo "[3/5] repo-knowledge: none in this repository yet."
+    echo "        Create one with: ${PYTHON3} ${KB_SCRIPT} init"
+    echo "        It is committed and reviewed, so it survives a fresh clone."
+  fi
+else
+  echo "[3/5] repo-knowledge: SKIPPED (knowledge.py not found)"
+fi
+
+print_separator
+
+# ---------------------------------------------------------------------------
+# Step 4: Capability report (non-fatal)
+#
+# What can this agent actually do here — which CLIs exist, whether tracker and
+# GitHub access resolve. Planning around tools that are not installed wastes
+# steps that could have been skipped.
+# ---------------------------------------------------------------------------
+if [[ -x "${DOCTOR_SCRIPT}" ]]; then
+  echo "[4/5] capability: probing..."
+  bash "${DOCTOR_SCRIPT}" --brief || true
+else
+  echo "[4/5] capability: SKIPPED (doctor.sh not found)"
+fi
+
+print_separator
+
+# ---------------------------------------------------------------------------
+# Step 5: Blackboard init (fatal if fails)
+# ---------------------------------------------------------------------------
+echo "[5/5] blackboard: initialising ${ISSUE_KEY} (project: ${PROJECT})..."
 BB_PATH="$(${PYTHON3} "${BB_SCRIPT}" --cache-root "${CACHE_ROOT}" path "${ISSUE_KEY}" 2>&1)"
 
 BB_ARGS=("${BB_SCRIPT}" --cache-root "${CACHE_ROOT}" init --project "${PROJECT}" "${ISSUE_KEY}")
@@ -259,7 +349,7 @@ for skill in "${SKILLS[@]}"; do
 done
 
 if ${PYTHON3} "${BB_ARGS[@]}" 2>&1; then
-  echo "[3/3] blackboard: ready at ${BB_PATH}"
+  echo "[5/5] blackboard: ready at ${BB_PATH}"
 else
   echo "FATAL: Could not initialise blackboard for '${ISSUE_KEY}'." >&2
   exit 2

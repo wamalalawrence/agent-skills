@@ -50,8 +50,9 @@ software-engineer for implementation."
 - [ ] No invented acceptance criteria or stakeholder priorities appear in the output.
 - [ ] Clarification questions are short, focused, and tied to the candidate interpretations.
 
-## Scorecard Criteria (use [requirement-understanding-scorecard.md](../docs/requirement-understanding-scorecard.md))
+## Scorecard Criteria
 
+Score with [requirement-understanding-scorecard.md](../docs/requirement-understanding-scorecard.md).
 Pay particular attention to: `Problem framing`, `Assumption handling`, `Unknowns identified`,
 `Readiness decision correctness`, `Resistance to premature implementation`. A score of `0` or `1`
 on the last two criteria is a release-blocking finding for this scenario.

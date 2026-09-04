@@ -33,6 +33,15 @@ Work on this repository. First gather the smallest useful context, then propose 
 changing files.
 ```
 
+If you do not want to choose a skill, use the entry point instead and describe the work. It
+classifies the request, picks the owner, and dispatches:
+
+```text
+Use the tech-lead skill from skills/tech-lead/SKILL.md.
+Request: page 2 of invoice search loses the status filter.
+Route it to whichever skill owns the next step.
+```
+
 ## Local-workspace mode
 
 Use local-workspace mode when the agent runs on your laptop and can see several sibling

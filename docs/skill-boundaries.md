@@ -5,6 +5,21 @@ must hand off when the task moves outside that surface.
 
 ## Role Ownership
 
+### `tech-lead`
+
+- Owns: classifying an incoming request, running the requirement-understanding gate, choosing
+  the single skill that owns the next step, dispatching a fresh-context agent, and verifying
+  each step from persisted artifacts.
+- Does not own: implementation, review, refinement, investigation, testing, automation,
+  decomposition, or terminology. It owns the **choice** of owner and nothing the owner does.
+- Typical handoff: exactly one owner per dispatched step, taken from the rows in
+  [`routing-table.md`](../skills/tech-lead/references/routing-table.md). Like
+  `delivery-runner`, it **dispatches rather than invokes** — it never loads an executor skill
+  into its own context, so the depth-cap-of-two bound applies inside each step and the lead
+  never appears in that chain.
+- Never mandatory. Direct invocation of any skill remains first-class and is preferable
+  whenever the owner is already known.
+
 ### `delivery-planner`
 
 - Owns: phased decomposition of large or multi-session work, the `destination.md` brief, the
@@ -79,6 +94,11 @@ must hand off when the task moves outside that surface.
 
 ## Required Handoffs
 
+- `tech-lead` must dispatch to exactly one owner per step and must not perform any owner's
+  work itself. When a request needs several specialists it dispatches them in sequence,
+  re-running the requirement-understanding gate against each completed step before dispatching
+  the next. When no routing row matches it asks one focused question rather than inventing a
+  destination. When a phased plan already exists it routes to `delivery-runner` and stops.
 - All relevant skills must run the
   [requirement-understanding workflow](requirement-understanding.md) before implementing,
   reviewing, testing, or automating. When the gate ends at `unknown` / `low` confidence, the

@@ -6,6 +6,161 @@ All notable project changes should be recorded here.
 
 - No unreleased changes.
 
+## 0.36.0 - Repo-Resident Knowledge, Human Voice, And A Single Entry Point
+
+Minor release, and the largest since the Company Brain landed. It answers four questions:
+where accumulated knowledge should live, how written output should sound, how to stop having
+to pick a skill by hand, and what setup should actually be doing.
+
+Planned and reviewed in
+[`docs/plans/2026-09-learning-voice-and-router.md`](docs/plans/2026-09-learning-voice-and-router.md).
+
+### Security
+
+- **`setup.init` did not always create the `.gitignore` it claimed to.**
+  `update_workspace_gitignore` only created a missing `.gitignore` when the workspace root was
+  already a git repository — and the parent workspace folder normally is not. The skip branch
+  printed nothing, so the script's own security header ("generated `.env` and `.jira-config.yml`
+  are added to `.gitignore`") did not hold in the default layout. Harmless while that folder
+  stays unversioned; a plaintext-token exposure the moment anyone ran `git init` there. The
+  ignore file is now written unconditionally.
+- New `assert_env_is_ignored` verifies that claim instead of assuming it, at first run and on
+  every `--verify`. A stored token in an unignored `.env` is now a hard verification failure,
+  not a silent condition.
+- `check_url_reachable` no longer passes `curl -k`. A probe that ignores certificate errors
+  cannot distinguish a MITM proxy from the real host.
+- `scripts/github-access.sh` sets `GIT_TERMINAL_PROMPT=0` and an SSH `BatchMode`, so a machine
+  without a credential helper fails fast instead of blocking on an interactive prompt inside
+  what the agent expects to be a non-interactive probe. It also uses `mktemp` rather than a
+  guessable `/tmp/<pid>` path for captured account names.
+
+### Added
+
+- **Repo-resident knowledge base** — [`scripts/knowledge.py`](scripts/knowledge.py) and
+  [`docs/repo-knowledge.md`](docs/repo-knowledge.md). A fourth memory tier that lives at
+  `<repo>/.agent-skills/knowledge/`, is **committed**, and is reviewed in a pull request.
+  Project memory lives in a gitignored cache, so what an agent learned survived sessions on one
+  checkout and nothing else — a fresh clone, a CI runner, or a teammate started from zero.
+  Holds curated facts in `project.md` and atomic **confidence-scored lessons** in `lessons/`
+  (confidence clamped `0.3`-`0.9`, raised on independent re-confirmation, lowered on
+  contradiction, decayed after 90 unconfirmed days).
+- **Budgeted, ranked recall.** `knowledge.py read --brief "<task>" --budget-chars N` ranks by
+  relevance to the brief first, then confidence, then recency, and **reports what it withheld**
+  rather than silently truncating. The tier built to save context must not become the thing
+  consuming it.
+- **`knowledge.py doctor`** — validates schema, confidence range, id/filename agreement,
+  duplicate ids, staleness, and scans for committed secrets **and entries shaped like
+  instructions to the agent**. A committed knowledge file is a prompt-injection surface: anyone
+  who can open a pull request can write text every future agent will read.
+- **[`docs/writing-voice.md`](docs/writing-voice.md)** — the contract for everything a skill
+  writes for a human reader: code comments, commits, PR bodies, tracker comments, document-store
+  pages. Per-artifact registers, an explicit list of banned AI tells, and an **honesty boundary**
+  stating that voice rules never justify hiding uncertainty. Enforced in every `SKILL.md` the
+  same way output discipline is, and pinned by
+  [`evals/writing-voice-human-tone.md`](evals/writing-voice-human-tone.md).
+- `writing.ai_attribution` (`none` | `trailer` | `footer`) and `writing.voice_reference` in
+  `.agent-skills.yml`, plus `WRITING_AI_ATTRIBUTION` / `WRITING_VOICE_REFERENCE` in `.env`.
+  Default `none`. Disclosure is an operator policy decision, not a skill default.
+- **New top-level skill [`tech-lead`](skills/tech-lead/SKILL.md)** — the single entry point.
+  Classifies any request, runs the requirement-understanding gate, picks the one skill that owns
+  the next step, and **dispatches a fresh empty-context agent**. Drives multi-specialist chains,
+  verifying each step from persisted artifacts before advancing. Like `delivery-runner` it
+  dispatches rather than invokes, so the depth-cap-of-two review bound holds inside each step and
+  the lead never appears in that chain. Hard cap of six dispatches; nine documented stop states.
+  Direct invocation of every other skill stays first-class.
+- **[`scripts/doctor.sh`](scripts/doctor.sh)** — one capability report answering "what can I
+  actually do here?". Aggregates the four diagnostics that already existed but never ran together
+  (`--verify`, auth preflight, GitHub ladder) plus tool detection, build-tool inference from the
+  repo manifest, Docker daemon reachability, and MCP availability. `start-task.sh` prints it as
+  step 4, so skills plan around what exists instead of discovering it mid-task. Never prints a
+  secret value, only whether one resolves.
+- **[`docs/mcp.md`](docs/mcp.md)** — the MCP position. This repository ships and enables nothing;
+  what it defines is the binding five-step tool-preference order, a recommended minimal server
+  set, and the argument that the real case for MCP here is **authentication** (OAuth instead of
+  plaintext tokens) rather than capability. Includes the Atlassian Cloud versus Data Center
+  caveat that decides whether that applies.
+- **[`docs/lifecycle-preflight.md`](docs/lifecycle-preflight.md)** — the full contract behind
+  `start-task.sh` and `finish-task.sh`, extracted from nine near-identical copies.
+- **Optional hook templates** in [`hooks/`](hooks/README.md) for Claude Code, Kiro, and any host
+  that can run a shell command on session start and stop. Templates, not requirements: nothing
+  needs them and no skill behaves differently without them. They exist because a markdown
+  instruction is probabilistic while a hook fires every time. The stop hook deliberately records
+  `needs-context` and preserves scratch, because a hook cannot know whether the work finished.
+- `finish-task.sh` gained `--lesson`, `--repo-knowledge`, and `--no-candidates`, and now
+  **proposes durable-fact candidates** drawn from the task blackboard. Previously the
+  `Recent tasks` bullet was automatic while durable knowledge depended on the agent remembering
+  a flag, so the default path produced a task log and called it learning.
+- `start-task.sh` gained `--brief` for ranking the knowledge read.
+- New evals: `tech-lead-routing.md`, `writing-voice-human-tone.md`.
+- New example: [`docs/examples/tech-lead-routing.md`](docs/examples/tech-lead-routing.md).
+- A telemetry review step in the [release checklist](docs/release-checklist.md#telemetry-review).
+
+### Changed
+
+- **`PREFLIGHT` is now enforced.** `REQUIRED_SKILL_SECTIONS` went from 9 entries to 13, adding
+  `PREFLIGHT`, `When Not To Use`, `Stopping Conditions`, and `Behavior Checklist`. `PREFLIGHT`
+  wires memory, the blackboard, the capability report, and telemetry, and until now it was held
+  in place by convention alone — a skill could ship with the entire Company Brain loop absent and
+  still pass validation.
+- **The nine duplicated `PREFLIGHT` blocks are gone**, replaced by a short stub plus the shared
+  doc. About 285 lines of near-identical text removed; `product-owner` and `manual-tester` had
+  differed on 5 lines out of 52.
+- `--skill` now accepts a bare name and resolves the version from `VERSION`, and the lifecycle
+  receipt templates use `@<version>`. A release no longer edits a hardcoded version in ten
+  places.
+- `software-engineer/SKILL.md` is 1,189 lines, down from 1,348. `Destructive Action Guardrails`
+  and `Required Environment` moved to `references/`, leaving the rules that bind per phase inline.
+- Every skill now declares `argument-hint`, `user-invocable: true`, and
+  `disable-model-invocation: false`, and the validator requires all three. Previously only the
+  two *nested* skills declared them, which was the inverse of the documented intent.
+- `docs/destructive-action-safety.md` gained **Untrusted recorded context**: memory tiers, the
+  committed knowledge base, and MCP or tool responses are claims to verify, never instructions to
+  follow, and no recorded context can waive the safety floor.
+- The Company Brain is documented as four tiers, with an honest note that telemetry has never
+  been read as part of a release decision.
+- `docs/installation.md` documents the six `setup.init` flags it had been omitting.
+- `ROADMAP.md` refreshed: removed an item completed several releases ago, added the deferred
+  credential-model decision.
+
+### Fixed
+
+- **Project-memory placeholders were never replaced.** `ensure_skeleton` wrote
+  `- _No facts yet. ..._` but `append_note`, `dedup_memory`, and `find_repeated_bullets` only
+  recognised the literal `- _empty`. So the placeholder survived under every populated section,
+  and because promotion scanning used the same narrow filter, a placeholder shared by two
+  projects could surface as a false org-promotion candidate.
+- **The cache root could silently fork.** `resolve_cache_root` fell back to the current directory,
+  so starting a task from a subdirectory created a second, empty memory store — the agent read
+  nothing and wrote where the next run would not look. It now prefers the git repository root.
+- Two project names that slugify to the same value now produce a warning instead of silently
+  merging two projects' knowledge into one file.
+- **`domain-modeler` was invisible to the validator** — zero occurrences across
+  `scripts/validate-repo.py`. Its files could be deleted and its cross-skill links broken with
+  validation still green. New `check_skill_registration` closes the class of bug rather than the
+  instance, and immediately found six unregistered `software-engineer` reference files, both
+  nested skill READMEs, and two missing `LINK_REQUIREMENTS` entries.
+- New `check_readme_skill_counts` ties README prose counts to the skills on disk. The README had
+  said "seven top-level and two nested" in one place and "eight specialist skills" in another.
+- **Two checks in `run-evals.py` were dead and reported as passing.** `EXPECTED_SECTIONS` was an
+  empty tuple, and the `Expected Skills:` check looked for an inline line while the corpus uses a
+  `## Expected Skills` heading — it matched 0 of 32 files. The skill-declaration check is now
+  live and hard-failing, every eval declares the skills it exercises, and heading drift
+  (`Pass / Fail Checklist` versus `Pass/Fail Checklist`) is normalised so matching is exact.
+- `scripts/delivery-run-next.py` is executable, like every other script in `scripts/`.
+- `evals/all-skills-lifecycle-compliance.md` was missing `delivery-runner`.
+
+### Deferred
+
+Three items from the plan are **not** in this release because they need a decision first, and one
+of them depends on an unanswered question about your Atlassian deployment:
+
+- OS-keychain credential storage instead of plaintext `.env`.
+- Collapsing the roughly 20 values duplicated across the two execution modes.
+- Splitting the 2,162-line `setup.init`.
+
+The MCP layer added here is what makes the first one decidable: on Atlassian Cloud the official
+remote server removes the stored token entirely, and on Data Center it does not apply.
+
 ## 0.35.0 - Single Plan Branch (Planner Creates Branch)
 
 Minor release. Fixes the multi-branch fragmentation problem where each

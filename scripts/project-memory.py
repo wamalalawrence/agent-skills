@@ -37,6 +37,7 @@ import json
 import os
 import re
 import shutil
+import subprocess
 import sys
 from datetime import datetime, timezone
 from pathlib import Path
@@ -49,19 +50,62 @@ DEFAULT_SECTIONS = (
 )
 
 
+# A placeholder bullet is any italic-marked bullet the skeleton wrote, e.g.
+# `- _No facts yet. ..._`. Matching only the literal `- _empty` (as this script
+# did before v0.36.0) meant the real skeleton text was never recognised: the
+# placeholder was never replaced by the first real fact, it lingered under every
+# populated section, and because promotion scans used the same narrow filter, an
+# identical placeholder shared by two projects surfaced as a false org-promotion
+# candidate.
+PLACEHOLDER_PREFIX = "- _"
+
+
+def is_placeholder(line: str) -> bool:
+    return line.startswith(PLACEHOLDER_PREFIX)
+
+
 def slugify(name: str) -> str:
     s = re.sub(r"[^A-Za-z0-9._-]+", "-", name.strip()).strip("-").lower()
     return s or "project"
 
 
+def git_toplevel() -> Path | None:
+    """Return the git repository root, or None when not in a repository."""
+    try:
+        out = subprocess.run(
+            ["git", "rev-parse", "--show-toplevel"],
+            capture_output=True,
+            text=True,
+            timeout=10,
+            check=False,
+        )
+    except (OSError, subprocess.SubprocessError):
+        return None
+    if out.returncode == 0 and out.stdout.strip():
+        return Path(out.stdout.strip())
+    return None
+
+
 def resolve_cache_root(explicit: str | None) -> Path:
+    """Resolve the cache root.
+
+    Order: explicit flag, `AGENT_SKILLS_CACHE_DIR`, `WORKSPACE_ROOT`, the git
+    repository root, then cwd. The git root sits above cwd deliberately: with a
+    bare cwd fallback, starting a task from a subdirectory silently created a
+    second, empty memory store, so the agent read nothing and wrote somewhere
+    the next run would not look.
+    """
     if explicit:
         return Path(explicit).resolve()
     env = os.environ.get("AGENT_SKILLS_CACHE_DIR")
     if env:
         return Path(env).resolve()
-    base = os.environ.get("WORKSPACE_ROOT") or os.getcwd()
-    return (Path(base) / ".cache" / "agent-skills").resolve()
+    workspace = os.environ.get("WORKSPACE_ROOT")
+    if workspace:
+        return (Path(workspace) / ".cache" / "agent-skills").resolve()
+    top = git_toplevel()
+    base = top if top is not None else Path.cwd()
+    return (base / ".cache" / "agent-skills").resolve()
 
 
 def project_dir(cache_root: Path, project: str) -> Path:
@@ -107,7 +151,31 @@ def ensure_skeleton(pdir: Path, project: str, repo: str | None) -> Path:
             ),
             encoding="utf-8",
         )
+    else:
+        warn_on_slug_collision(js, project)
     return md
+
+
+def warn_on_slug_collision(js: Path, project: str) -> None:
+    """Warn when two distinct project names resolve to the same slug.
+
+    `slugify` squashes every non-alphanumeric run to a hyphen, so `acme/api` and
+    `acme-api` collide into one memory file. Silently merging two projects'
+    knowledge is worse than either project having none, because the facts
+    contradict each other and neither agent can tell why.
+    """
+    try:
+        data = json.loads(js.read_text(encoding="utf-8"))
+    except (OSError, ValueError):
+        return
+    recorded = data.get("project")
+    if recorded and recorded != project:
+        print(
+            f"WARN slug {slugify(project)!r} already holds memory for project "
+            f"{recorded!r}, not {project!r}. Two names collide on one store; "
+            f"pass a distinct project name or set AGENT_SKILLS_CACHE_DIR.",
+            file=sys.stderr,
+        )
 
 
 def append_note(pdir: Path, section: str, text: str) -> None:
@@ -120,7 +188,7 @@ def append_note(pdir: Path, section: str, text: str) -> None:
     if section_re.search(content):
         # Replace the placeholder line if present, else insert just under the heading.
         new_content, n = re.subn(
-            rf"(^## {re.escape(section)}\s*\n)(- _empty[^\n]*\n)",
+            rf"(^## {re.escape(section)}\s*\n)(- _[^\n]*\n)",
             rf"\1{bullet}",
             content,
             count=1,
@@ -230,7 +298,7 @@ def dedup_memory(pdir: Path) -> int:
             current_section = line[3:].strip()
             out.append(line)
             continue
-        if line.startswith("- ") and not line.startswith("- _empty"):
+        if line.startswith("- ") and not is_placeholder(line):
             key = (current_section, _bullet_payload(line))
             if key in seen:
                 removed += 1
@@ -288,7 +356,7 @@ def find_repeated_bullets(pdir: Path, section: str, min_count: int) -> list[dict
         if line.startswith("## "):
             in_section = line[3:].strip() == section
             continue
-        if not in_section or not line.startswith("- ") or line.startswith("- _empty"):
+        if not in_section or not line.startswith("- ") or is_placeholder(line):
             continue
         payload = _bullet_payload(line)
         counts[payload] = counts.get(payload, 0) + 1

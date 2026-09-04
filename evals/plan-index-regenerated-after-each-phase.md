@@ -29,6 +29,10 @@ The agent reads `evidence-pack.yml`, sees `current_dispatch_pointer: phase-02`, 
 02, and writes a complete phase-continuity checkpoint. The user does **not** re-run
 `delivery-planner` between phases.
 
+## Skill Under Test
+
+`delivery-planner`, `software-engineer`
+
 ## Expected Behavior
 
 - After writing the phase-02 checkpoint to `evidence-pack.yml`, the executor regenerates
@@ -63,8 +67,7 @@ The agent reads `evidence-pack.yml`, sees `current_dispatch_pointer: phase-02`, 
   need to flip `state: ready → blocked` and update `current_dispatch_pointer` to `null` or
   the next dispatchable phase.
 
-## Pass / Fail Checklist
-
+## Pass/Fail Checklist
 - [ ] `phased-plan/README.md`'s `updated_at:` advances on every phase completion.
 - [ ] The phase table's `State` column reflects the latest evidence-pack values.
 - [ ] `current_dispatch_pointer` in the README matches `evidence-pack.yml.delivery_plan`.

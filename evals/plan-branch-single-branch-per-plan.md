@@ -23,6 +23,10 @@ The user then invokes `delivery-runner` to dispatch the three phases. Phase 01
 (`software-engineer`) and phase 02 (`software-engineer`) both mutate the repo;
 phase 03 (`test-automation-engineer`) adds tests.
 
+## Skill Under Test
+
+`delivery-planner`, `delivery-runner`, `software-engineer`, `test-automation-engineer`
+
 ## Expected Behavior
 
 ### Planner
@@ -73,8 +77,7 @@ phase 03 (`test-automation-engineer`) adds tests.
   branch" is not a valid reason to skip fetching and checking out the canonical plan branch.
 - Must not push a phase's work to a different branch than `plan_branch`.
 
-## Pass / Fail Checklist
-
+## Pass/Fail Checklist
 - [ ] Planner creates exactly one branch and records it in all three artifacts.
 - [ ] All repo-mutating phases check out (not create) the plan branch.
 - [ ] All phases' `working_branch` values are identical (equal to `plan_branch`).

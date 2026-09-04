@@ -99,6 +99,10 @@ All flags:
 | `--yes`                                           | Non-interactive; accept all defaults.                            |
 | `--with-jira` / `--no-jira`                       | Force Jira config on or off.                                     |
 | `--with-confluence` / `--no-confluence`           | Force Confluence config on or off.                               |
+| `--with-sonar` / `--no-sonar`                     | Force SonarQube / SonarCloud config on or off.                   |
+| `--with-environments` / `--no-environments`       | Force the read-only deployed-environment pointer prompts on or off. |
+| `--no-connectivity-check`                         | Skip the warn-only `curl` reachability probe on the Jira / Confluence / Sonar hosts. Useful behind a VPN that blocks them. |
+| `--no-credential-probe`                           | Skip the warn-only credential blast-radius probe. See [destructive-action safety](destructive-action-safety.md). |
 | `--no-symlink`                                    | Skip creating the `.skills` symlink.                             |
 | `--check-updates`                                 | Compare local `VERSION` to the latest release tag on `origin`. Exits `0` up-to-date, `10` update available, `2` setup error. |
 | `--update`                                        | Fetch tags, check out the latest release tag (or `--branch NAME`), refresh `.skills` and `.agent-skills.lock`. Refuses on a dirty working tree. |

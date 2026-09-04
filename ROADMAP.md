@@ -5,15 +5,17 @@ the project should grow through proven usefulness rather than a large up-front f
 
 ## Current Focus
 
-- Stabilize the four core delivery skills: [`product-owner`](./skills/product-owner/),
-  [`software-engineer`](./skills/software-engineer/), [`manual-tester`](./skills/manual-tester/), and
-  [`test-automation-engineer`](./skills/test-automation-engineer/).
-- Keep [`software-engineer`](./skills/software-engineer/) strong as the flagship engineering skill.
-- Harden the [Company Brain](./docs/company-brain.md) loop introduced in
-  `v0.31.0` — three memory tiers, per-task blackboard, outcome feedback,
-  telemetry, rule promotion, eval harness — so it is the default operating
-  mode for every skill, not an opt-in.
-- Improve portability across different stacks and workspace layouts.
+- Stabilize the nine shipped skills, with [`tech-lead`](./skills/tech-lead/) as the single
+  entry point and [`software-engineer`](./skills/software-engineer/) as the flagship
+  engineering skill.
+- Make the [Company Brain](./docs/company-brain.md) loop real rather than documented: the
+  [repo knowledge base](./docs/repo-knowledge.md) travels with the repository,
+  the lifecycle wrappers are gated in CI, and telemetry is read at release time instead
+  of only written.
+- Keep everything a skill writes indistinguishable from careful human writing — see
+  [writing voice](./docs/writing-voice.md).
+- Improve portability across different stacks, workspace layouts, and access paths,
+  including [MCP](./docs/mcp.md) where the host already provides it.
 - Tighten token-efficient context gathering for tracker tickets, user descriptions, repository discovery,
   product refinement, testing, and review loops.
 - Collect real-world feedback on where nested skills should remain nested or become standalone
@@ -24,8 +26,6 @@ the project should grow through proven usefulness rather than a large up-front f
 - Add practical examples for installing and invoking skills in common AI coding assistants.
 - Add examples that show cross-skill handoffs across product definition, engineering, manual
   testing, and automation.
-- Add a lightweight validation script for skill frontmatter, required sections, and hardcoded
-  organization-specific strings.
 - Improve contribution examples for new reference checklists and nested skills.
 - Keep known limitations and compatibility notes current as users report them.
 - Wire [`scripts/promote-rules.py`](./scripts/promote-rules.py) candidates
@@ -33,7 +33,12 @@ the project should grow through proven usefulness rather than a large up-front f
   candidate JSON to a reviewable change.
 - Plug a real agent runner behind [`scripts/run-evals.py`](./scripts/run-evals.py)
   `--invoke` so the eval harness produces a measured pass/fail per skill per
-  release, not just a structural check.
+  release, not just a structural check. The twelve evals carrying
+  `## Required Output Fields` are the cheapest first grader: field presence is
+  checkable without a model judging prose.
+- Decide the credential model deferred in
+  [the 2026-09 plan](./docs/plans/2026-09-learning-voice-and-router.md): OS-keychain
+  storage, collapsing the duplicated config surface, and splitting `setup.init`.
 
 ## Later
 

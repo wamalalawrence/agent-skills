@@ -62,6 +62,18 @@ Each entry: producer → reviewer (mode), trigger, exit rule.
   Evidence` with a one-line gap statement. The planner does **not** invoke any other
   skill — phase dispatch is the executor's job — so this loop introduces no new
   cross-skill recursion and respects the depth cap of two skills.
+- **`tech-lead` (dispatcher — outside the review loops).** Like `delivery-runner` below,
+  `tech-lead` is **not** a producer/reviewer pair and adds no loop level. It classifies a
+  request, picks the one skill that owns the next step, and opens a **fresh, empty-context
+  agent** for it. That dispatched agent is the *root* of its own call chain, so the
+  depth-cap-of-two applies inside the step (`executor → code-reviewer`) and the lead never
+  appears in it. Loading an executor into the lead's own context instead would make the chain
+  three deep and break the bound — which is why "dispatch, not invocation" is binding rather
+  than stylistic. The lead verifies each step from persisted artifacts, never from the
+  dispatched agent's chat, and never dispatches `code-reviewer` alongside an implementation
+  step because the engineer already owns that loop. Its bounds are operational, not review
+  bounds: one owner per dispatch, one retry when a step writes no artifact, and a hard cap of
+  six dispatches per run.
 - **`delivery-runner` (dispatcher — outside the review loops).** `delivery-runner`
   is **not** a producer/reviewer pair and does not add a loop level. It is a
   session driver: it reads a `delivery-planner` plan's `current_dispatch_pointer`
