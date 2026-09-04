@@ -14,8 +14,20 @@ Start here when reading the repository outside GitHub's main README.
   workspace lock file is consulted.
 - [Updates](updates.md) - how a user notices a new release and applies it without losing
   local config (`./setup.init --check-updates`, `./setup.init --update`, `git pull`).
+- [Lifecycle preflight](lifecycle-preflight.md) - the full contract behind the two commands
+  every skill runs (`start-task.sh` / `finish-task.sh`): fallbacks, statuses, durable-fact
+  flags, the capability report, and why task size never waives them.
+- [Repo knowledge](repo-knowledge.md) - the committed, PR-reviewed tier that lives inside the
+  repository being worked on: confidence-scored lessons, budgeted and ranked recall, the
+  promotion path up from project memory, and why the file is untrusted input.
+- [MCP](mcp.md) - why this repository ships no MCP servers, the binding tool-preference order
+  every skill follows, the recommended minimal set, and why the strongest case for MCP here is
+  authentication rather than capability.
 - [Output discipline](output-discipline.md) - the canonical conciseness rules every skill
   inherits in its Expected Output Contract; what "menu, not checklist" means in practice.
+- [Writing voice](writing-voice.md) - how everything a skill writes for a human reader
+  should sound, the AI tells that are banned outright, the honesty boundary that voice
+  rules must never cross, and the `ai_attribution` knob.
 - [Insightful simplifications](insightful-simplifications.md) - the optional, bounded
   framing section any skill MAY add when one short architectural observation would help
   the user see the wider shape of the problem.
@@ -33,6 +45,9 @@ Start here when reading the repository outside GitHub's main README.
 - [Skill performance review](skill-performance-review.md) - v0.8.0 manual review notes.
 - [Eval runs](../eval-runs/README.md) - release-scoped scored sample runs.
 - [Release checklist](release-checklist.md) - repeatable pre-release checks.
+- [Plans](plans/2026-09-learning-voice-and-router.md) - the reviewed plan behind
+  `v0.36.0`, kept as written next to its implementation status and the three items
+  deferred pending a decision.
 - [Skill boundaries](skill-boundaries.md) - ownership, handoffs, and nested-skill rationale.
 - [Skill review loops](review-loops.md) - how producer skills hand off to reviewer skills
   with **bounded** revision rounds so the agent never spins forever.

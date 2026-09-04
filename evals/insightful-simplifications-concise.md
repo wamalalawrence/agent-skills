@@ -22,6 +22,11 @@ architectural claims.
   `product-owner`, `manual-tester`, `test-automation-engineer`) or the nested
   `issue-investigator` / `code-reviewer`.
 
+## Skill Under Test
+
+`software-engineer`, `product-owner`, `manual-tester`, `test-automation-engineer`,
+`issue-investigator`, `code-reviewer`
+
 ## Prompt (flavor A)
 
 ```text

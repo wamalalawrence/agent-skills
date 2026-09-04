@@ -10,6 +10,35 @@ when required evidence is missing.
 > asks for an implementation, a story, a test plan, or a verdict. Do not weaken the gate by
 > adding "just do it" framing.
 
+## Start Here If You Do Not Want To Pick A Skill
+
+`tech-lead` is the single entry point. Describe the work and it classifies the request, runs the
+gate, picks the owner, and dispatches a fresh agent — then drives the chain if more than one
+specialist is needed.
+
+```text
+Use the tech-lead skill.
+
+Request: [describe the work — a bug, a feature, a question, a ticket key, a PR link]
+
+Classify it, run the requirement-understanding gate, and route it to the skill that owns the
+next step. If the classification is genuinely ambiguous, ask me one question instead of
+guessing. Stop if any dispatched step comes back blocked.
+```
+
+Two variants worth knowing:
+
+```text
+Use the tech-lead skill to decide who should handle [request], then stop before dispatching.
+```
+
+```text
+Use the tech-lead skill for [ticket key] and take it as far as it can go without me.
+```
+
+Everything below stays first-class. When you already know the owner, invoking it directly is
+faster and better than routing to it.
+
 ## Single-Skill Prompts
 
 ### Implement A Feature With `software-engineer`

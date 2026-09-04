@@ -70,6 +70,27 @@ confluence:
 cache_dir: ""
 
 # -----------------------------------------------------------------------------
+# Writing voice. See docs/writing-voice.md.
+# -----------------------------------------------------------------------------
+# Everything a skill writes for a human reader should read as though a careful
+# colleague wrote it. These two knobs are the only parts of that contract an
+# operator needs to decide.
+writing:
+  # Whether written output discloses that it was AI-assisted. Some workplaces
+  # require this; that is a policy call, not a skill default.
+  # ALLOWED: none | trailer | footer
+  #   none    - no attribution anywhere (default)
+  #   trailer - one `Assisted-by:` trailer on commits
+  #   footer  - one short disclosure line on PR bodies and tracker comments
+  ai_attribution: "none"
+
+  # OPTIONAL path to a local writing sample whose voice the skills should match
+  # (a style guide, a handbook page, a well-written existing PR). Resolved
+  # relative to this YAML file. When set, it outranks the defaults in
+  # docs/writing-voice.md. EXAMPLE: "docs/voice.md".
+  voice_reference: ""
+
+# -----------------------------------------------------------------------------
 # Skill-source resolution. See docs/skill-source-resolution.md.
 # -----------------------------------------------------------------------------
 # A workspace can have more than one place where SKILL.md files live (the

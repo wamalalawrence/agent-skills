@@ -28,6 +28,10 @@ Then the user starts a fresh agent with only:
 Implement phase 1 from ${AGENT_SKILLS_CACHE_DIR}/EXAMPLE-123/phased-plan/phase-01-confirm-contract.md
 ```
 
+## Skill Under Test
+
+`delivery-planner`, `software-engineer`
+
 ## Expected Behavior
 
 - `delivery-planner` creates `${AGENT_SKILLS_CACHE_DIR}/EXAMPLE-123/evidence-pack.yml` in the same
@@ -56,8 +60,7 @@ Implement phase 1 from ${AGENT_SKILLS_CACHE_DIR}/EXAMPLE-123/phased-plan/phase-0
 - Must not require the user to rerun `delivery-planner` just to learn what phase is next.
 - Must not invent a new cache location or write continuity into a one-off summary file.
 
-## Pass / Fail Checklist
-
+## Pass/Fail Checklist
 - [ ] Planner-created greenfield plans include `evidence-pack.yml`.
 - [ ] Executor refuses or reconstructs when the evidence pack is missing; it does not proceed
   silently.

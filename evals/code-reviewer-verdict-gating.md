@@ -16,6 +16,10 @@ test passing and one failing during Spring context startup.
 were never filled, or because `--update` blanked them — the v0.21.0
 `setup.init` fix addresses the latter).
 
+## Skill Under Test
+
+`code-reviewer`
+
 ## Failure modes the skill must prevent
 
 1. **Auth-discovery failure buried as a Note.** The reviewer cannot read the

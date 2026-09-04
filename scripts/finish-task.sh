@@ -28,7 +28,12 @@ SKILL="${AGENT_SKILLS_ACTIVE_SKILL:-unknown}"
 FACTS=()
 BUILD_FACTS=()
 GOTCHAS=()
+LESSONS=()
+REPO_FACTS=()
 RECENT_TASK_ONLY="false"
+SHOW_CANDIDATES="true"
+KB_SCRIPT="${SCRIPT_DIR}/knowledge.py"
+BB_SCRIPT="${SCRIPT_DIR}/blackboard.py"
 
 usage() {
   cat <<'EOF'
@@ -54,6 +59,16 @@ Options:
   --fact "Section::text"
                Append text under an arbitrary project-memory section.
                Repeatable.
+  --repo-knowledge "Section::text"
+               Append a durable fact to the COMMITTED repo knowledge base
+               (.agent-skills/knowledge/project.md). Survives a fresh clone;
+               shows up in the diff for review. Repeatable.
+  --lesson "id::trigger::action[::domain]"
+               Record a confidence-scored lesson in the repo knowledge base.
+               Repeating an existing id reconfirms it and raises confidence.
+               Repeatable.
+  --no-candidates
+               Skip the durable-fact suggestions drawn from the blackboard.
   --cleanup    Force cleanup even for blocked/needs-context runs.
   --no-cleanup Keep per-task scratch even for complete runs.
   --recent-task-only
@@ -123,6 +138,26 @@ while [[ $# -gt 0 ]]; do
       ;;
     --fact=*)
       FACTS+=("${1#*=}")
+      shift
+      ;;
+    --lesson)
+      LESSONS+=("${2:-}")
+      shift 2
+      ;;
+    --lesson=*)
+      LESSONS+=("${1#*=}")
+      shift
+      ;;
+    --repo-knowledge)
+      REPO_FACTS+=("${2:-}")
+      shift 2
+      ;;
+    --repo-knowledge=*)
+      REPO_FACTS+=("${1#*=}")
+      shift
+      ;;
+    --no-candidates)
+      SHOW_CANDIDATES="false"
       shift
       ;;
     --cleanup)
@@ -226,6 +261,93 @@ if [[ "${RECENT_TASK_ONLY}" != "true" ]]; then
     text="${raw#*::}"
     note "${section}" "${text}"
   done
+
+  # Committed tier. Unlike project memory this lands in the repository, so it
+  # appears in the diff and a human approves it.
+  for raw in "${REPO_FACTS[@]+"${REPO_FACTS[@]}"}"; do
+    if [[ "${raw}" != *"::"* ]]; then
+      echo "ERROR: --repo-knowledge expects Section::text, got: ${raw}" >&2
+      exit 3
+    fi
+    "${PYTHON3}" "${KB_SCRIPT}" note --section "${raw%%::*}" --text "${raw#*::}" \
+      || echo "  WARN: could not write repo knowledge (is this a git repo?)" >&2
+  done
+
+  for raw in "${LESSONS[@]+"${LESSONS[@]}"}"; do
+    lesson_id="${raw%%::*}"
+    lesson_rest="${raw#*::}"
+    lesson_trigger="${lesson_rest%%::*}"
+    lesson_rest="${lesson_rest#*::}"
+    lesson_action="${lesson_rest%%::*}"
+    lesson_domain="process"
+    if [[ "${lesson_rest}" == *"::"* ]]; then
+      lesson_domain="${lesson_rest##*::}"
+    fi
+    if [[ -z "${lesson_id}" || -z "${lesson_trigger}" || -z "${lesson_action}" ]]; then
+      echo "ERROR: --lesson expects id::trigger::action[::domain], got: ${raw}" >&2
+      exit 3
+    fi
+    "${PYTHON3}" "${KB_SCRIPT}" lesson add \
+      --id "${lesson_id}" \
+      --trigger "${lesson_trigger}" \
+      --action "${lesson_action}" \
+      --domain "${lesson_domain}" \
+      --evidence "${ISSUE_KEY}" \
+      || echo "  WARN: could not record lesson ${lesson_id}" >&2
+  done
+fi
+
+# ---------------------------------------------------------------------------
+# Durable-fact candidates.
+#
+# Writing the Recent tasks bullet is automatic; writing durable knowledge used
+# to depend on the agent remembering to pass a flag, which meant the default
+# path produced a task log rather than learning. Surfacing candidates from the
+# blackboard inverts that: the agent rejects a suggestion instead of having to
+# invent one.
+# ---------------------------------------------------------------------------
+if [[ "${SHOW_CANDIDATES}" == "true" && -f "${BB_SCRIPT}" ]]; then
+  CANDIDATES="$("${PYTHON3}" - "$@" <<PYEOF 2>/dev/null || true
+import json
+import pathlib
+import sys
+
+path = pathlib.Path("${CACHE_ROOT}") / "${ISSUE_KEY}" / "blackboard.json"
+if not path.exists():
+    sys.exit(0)
+try:
+    data = json.loads(path.read_text(encoding="utf-8"))
+except (OSError, ValueError):
+    sys.exit(0)
+
+seen = []
+for section in ("facts", "decisions"):
+    for entry in data.get(section, []) or []:
+        text = entry.get("text") if isinstance(entry, dict) else str(entry)
+        if not text:
+            continue
+        text = " ".join(str(text).split())
+        if text not in seen:
+            seen.append(text)
+
+for text in seen[:8]:
+    print(text)
+PYEOF
+)"
+  if [[ -n "${CANDIDATES}" ]]; then
+    echo ""
+    echo "Durable-fact candidates from this task's blackboard:"
+    while IFS= read -r line; do
+      [[ -n "${line}" ]] || continue
+      echo "  - ${line}"
+    done <<< "${CANDIDATES}"
+    echo ""
+    echo "  Anything above that will still be true next month belongs in the"
+    echo "  COMMITTED repo knowledge base, not just the local cache:"
+    echo "    ${PYTHON3} ${KB_SCRIPT} note --section Gotchas --text \"<fact>\""
+    echo "    ${PYTHON3} ${KB_SCRIPT} lesson add --id <slug> --trigger \"<when>\" --action \"<do>\""
+    echo "  Reject the rest — a task log is not knowledge."
+  fi
 fi
 
 echo "[2/3] telemetry: recording outcome..."

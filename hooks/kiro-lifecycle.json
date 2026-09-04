@@ -1,0 +1,21 @@
+{
+  "version": "v1",
+  "hooks": [
+    {
+      "name": "agent-skills: load memory on session start",
+      "trigger": "SessionStart",
+      "action": {
+        "type": "command",
+        "command": "bash <AGENT_SKILLS>/scripts/start-task.sh --skill \"${AGENT_SKILLS_ACTIVE_SKILL:-unknown}\" || true"
+      }
+    },
+    {
+      "name": "agent-skills: preserve knowledge on session stop",
+      "trigger": "Stop",
+      "action": {
+        "type": "command",
+        "command": "bash <AGENT_SKILLS>/scripts/finish-task.sh --skill \"${AGENT_SKILLS_ACTIVE_SKILL:-unknown}\" --status needs-context --no-cleanup --no-candidates --summary \"session ended without an explicit finish-task call\" || true"
+      }
+    }
+  ]
+}

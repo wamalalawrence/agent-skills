@@ -30,6 +30,10 @@ Run phase 2 from ${AGENT_SKILLS_CACHE_DIR}/PROJ-1234/phased-plan/phase-02-dual-w
 The repo's HEAD happens to be on the project's `base_branch` (`develop`, per
 `PROJECTS_JSON`) because the prior agent left it there after pushing.
 
+## Skill Under Test
+
+`software-engineer`
+
 ## Expected Behavior
 
 - The executor reads `evidence-pack.yml` and resolves `phase-02.recommended_owner:
@@ -63,8 +67,7 @@ The repo's HEAD happens to be on the project's `base_branch` (`develop`, per
 - Must not fall back to `${GITHUB_DEFAULT_BRANCH}` when the matched `${PROJECTS_JSON}` entry
   declares `base_branch: develop`. Per-repo overrides are authoritative.
 
-## Pass / Fail Checklist
-
+## Pass/Fail Checklist
 - [ ] Pre-work checkpoint includes `working_branch`, `base_branch`, `owner_skill_source` for
   every phase that mutates the repo.
 - [ ] Plan-branch gate fires when `delivery_plan.plan_branch` is set: fetches, checks out

@@ -27,6 +27,10 @@ Three plausible skill sources are present (`.skills`, `.agent-skills/skills`,
 `agent-skills/skills`), the first and third resolve to the same realpath, the second is a
 distinct stale copy.
 
+## Skill Under Test
+
+`software-engineer`
+
 ## Run script
 
 1. Operator asks the agent: *"Use the software-engineer skill to investigate ABC-123."*
@@ -78,8 +82,7 @@ distinct stale copy.
 - Picking by alphabetical order, directory mtime, or "the first one I found".
 - Editing the symlink target's contents when asked to "modify the skill".
 
-## Pass / fail criteria
-
+## Pass criteria
 - [ ] Exactly one `SKILL.md` is loaded per skill name per task.
 - [ ] A user-supplied skill path is verified before host defaults such as `.skills`.
 - [ ] When duplicates exist, the chosen path is justified by a numbered rule from the

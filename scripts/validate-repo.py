@@ -49,9 +49,13 @@ REQUIRED_FILES = [
     "docs/auth-discovery.md",
     "docs/github-access.md",
     "docs/project-memory.md",
+    "docs/repo-knowledge.md",
+    "docs/mcp.md",
+    "docs/lifecycle-preflight.md",
     "docs/skill-source-resolution.md",
     "docs/updates.md",
     "docs/output-discipline.md",
+    "docs/writing-voice.md",
     "docs/insightful-simplifications.md",
     "docs/examples/requirement-understanding.md",
     "scripts/validate-repo.py",
@@ -59,15 +63,31 @@ REQUIRED_FILES = [
     "scripts/auth-preflight.py",
     "scripts/locate-config.py",
     "scripts/project-memory.py",
+    "scripts/knowledge.py",
     "scripts/start-task.sh",
     "scripts/finish-task.sh",
     "scripts/task-context.sh",
     "scripts/github-access.sh",
+    "scripts/doctor.sh",
+    "hooks/README.md",
+    "hooks/claude-code-settings.json",
+    "hooks/kiro-lifecycle.json",
+    "hooks/generic-session-hooks.sh",
     "scripts/check-updates.py",
     "skills/software-engineer/SKILL.md",
     "skills/software-engineer/README.md",
+    "skills/software-engineer/references/architecture-patterns.md",
+    "skills/software-engineer/references/code-review-checklist.md",
+    "skills/software-engineer/references/definition-of-done.md",
+    "skills/software-engineer/references/destructive-action-guardrails.md",
+    "skills/software-engineer/references/required-environment.md",
+    "skills/software-engineer/references/evidence-pack.md",
+    "skills/software-engineer/references/security-checklist.md",
+    "skills/software-engineer/references/sonarqube-checklist.md",
     "skills/software-engineer/skills/issue-investigator/SKILL.md",
+    "skills/software-engineer/skills/issue-investigator/README.md",
     "skills/software-engineer/skills/code-reviewer/SKILL.md",
+    "skills/software-engineer/skills/code-reviewer/README.md",
     "skills/product-owner/SKILL.md",
     "skills/product-owner/README.md",
     "skills/manual-tester/SKILL.md",
@@ -84,6 +104,16 @@ REQUIRED_FILES = [
     "skills/delivery-runner/README.md",
     "skills/delivery-runner/references/handoff-prompt-template.md",
     "skills/delivery-runner/references/run-loop-checklist.md",
+    "skills/tech-lead/SKILL.md",
+    "skills/tech-lead/README.md",
+    "skills/tech-lead/references/routing-table.md",
+    "skills/tech-lead/references/handoff-prompt-template.md",
+    "evals/tech-lead-routing.md",
+    "docs/examples/tech-lead-routing.md",
+    "skills/domain-modeler/SKILL.md",
+    "skills/domain-modeler/README.md",
+    "skills/domain-modeler/references/ADR-FORMAT.md",
+    "skills/domain-modeler/references/CONTEXT-FORMAT.md",
     "scripts/delivery-run-next.py",
     "evals/delivery-runner-autonomous-handoff.md",
     "eval-runs/v0.34.0/summary.md",
@@ -110,6 +140,7 @@ REQUIRED_FILES = [
     "evals/skill-source-resolution-ambiguity.md",
     "evals/jira-issue-scope-and-existing-pr.md",
     "evals/code-reviewer-concise-output.md",
+    "evals/writing-voice-human-tone.md",
     "evals/insightful-simplifications-concise.md",
     "eval-runs/README.md",
     "eval-runs/v0.9.0/summary.md",
@@ -140,6 +171,7 @@ REQUIRED_FILES = [
     "eval-runs/v0.21.0/updating-discoverability.md",
     "eval-runs/v0.33.0/summary.md",
     "eval-runs/v0.33.1/summary.md",
+    "eval-runs/v0.36.0/summary.md",
     "evals/code-reviewer-verdict-gating.md",
     "scripts/test-setup-update-preserves-credentials.sh",
 ]
@@ -174,12 +206,20 @@ SETUP_MARKER_START = "# >>> agent-skills setup.init"
 SETUP_MARKER_END = "# <<< agent-skills setup.init"
 
 REQUIRED_SKILL_SECTIONS = [
+    # The lifecycle block is first because it is load-bearing: it wires memory,
+    # the blackboard, the capability report, and telemetry. It was held in place
+    # by convention alone until v0.36.0, which meant a skill could ship with the
+    # entire Company Brain loop absent and still pass validation.
+    "⚠️ PREFLIGHT — Execute before ANY other action",
     "Purpose",
     "When To Use",
+    "When Not To Use",
     "Related And Reused Skills",
     "Required Inputs",
     "Required Workflow",
+    "Stopping Conditions",
     "Expected Output Contract",
+    "Behavior Checklist",
     "Quality Standards",
     "Guardrails",
     "Example Prompts",
@@ -225,6 +265,37 @@ LINK_REQUIREMENTS = {
         "skills/manual-tester/SKILL.md",
         "skills/test-automation-engineer/SKILL.md",
         "skills/software-engineer/skills/issue-investigator/SKILL.md",
+    ],
+    "skills/tech-lead/SKILL.md": [
+        "skills/software-engineer/SKILL.md",
+        "skills/product-owner/SKILL.md",
+        "skills/manual-tester/SKILL.md",
+        "skills/test-automation-engineer/SKILL.md",
+        "skills/delivery-planner/SKILL.md",
+        "skills/delivery-runner/SKILL.md",
+        "skills/domain-modeler/SKILL.md",
+        "skills/software-engineer/skills/issue-investigator/SKILL.md",
+        "skills/software-engineer/skills/code-reviewer/SKILL.md",
+    ],
+    "skills/domain-modeler/SKILL.md": [
+        "skills/product-owner/SKILL.md",
+        "skills/software-engineer/SKILL.md",
+        "skills/delivery-planner/SKILL.md",
+    ],
+    "skills/software-engineer/skills/code-reviewer/SKILL.md": [
+        "skills/software-engineer/SKILL.md",
+        "skills/software-engineer/skills/issue-investigator/SKILL.md",
+        "skills/product-owner/SKILL.md",
+        "skills/manual-tester/SKILL.md",
+        "skills/test-automation-engineer/SKILL.md",
+    ],
+    "skills/software-engineer/skills/issue-investigator/SKILL.md": [
+        "skills/software-engineer/SKILL.md",
+        "skills/software-engineer/skills/code-reviewer/SKILL.md",
+        "skills/product-owner/SKILL.md",
+        "skills/manual-tester/SKILL.md",
+        "skills/test-automation-engineer/SKILL.md",
+        "skills/delivery-planner/SKILL.md",
     ],
 }
 
@@ -374,6 +445,24 @@ def _hand_parse(block: str) -> dict[str, object]:
         index += 1
 
     return result
+
+
+def yaml_bool(value: object) -> bool | None:
+    """Interpret a hand-parsed frontmatter scalar as a YAML boolean.
+
+    ``_hand_parse`` deliberately keeps every scalar as a string, so a caller that
+    needs a boolean has to normalise it. Returns None when the value is neither a
+    boolean nor a recognised boolean spelling.
+    """
+    if isinstance(value, bool):
+        return value
+    if isinstance(value, str):
+        lowered = value.strip().lower()
+        if lowered in {"true", "yes", "on"}:
+            return True
+        if lowered in {"false", "no", "off"}:
+            return False
+    return None
 
 
 def strip_frontmatter(text: str) -> str:
@@ -677,6 +766,24 @@ def validate_frontmatter(path: Path, fm: dict[str, object], repo_version: str, r
     if isinstance(version, str) and version != repo_version:
         result.error(f"{rel(path)}: metadata.version {version!r} must match VERSION {repo_version!r}")
 
+    # Invocability is declared explicitly on every skill rather than left to host
+    # defaults. Before v0.36.0 only the two nested skills declared these keys,
+    # which was the inverse of the documented intent — the top-level skills are
+    # the ones meant to be invoked directly.
+    #
+    # `_hand_parse` returns every scalar as a string, so compare against the YAML
+    # spelling rather than a Python bool.
+    if yaml_bool(fm.get("user-invocable")) is not True:
+        result.error(f"{rel(path)}: frontmatter 'user-invocable: true' is required")
+    if yaml_bool(fm.get("disable-model-invocation")) is not False:
+        result.error(
+            f"{rel(path)}: frontmatter 'disable-model-invocation: false' is required "
+            f"(every skill in this repo is model-invocable)"
+        )
+    hint = fm.get("argument-hint")
+    if not isinstance(hint, str) or not hint.strip():
+        result.error(f"{rel(path)}: frontmatter 'argument-hint' is required and must be non-empty")
+
 
 def validate_skill_sections(path: Path, text: str, result: Result) -> None:
     body = strip_frontmatter(text)
@@ -907,6 +1014,8 @@ REQUIRED_SKILLS_BLOCK_KEYS = (
 
 OUTPUT_DISCIPLINE_DOC = "docs/output-discipline.md"
 OUTPUT_DISCIPLINE_PHRASE = "Omit empty sections"
+WRITING_VOICE_DOC = "docs/writing-voice.md"
+WRITING_VOICE_PHRASE = "Write like a person"
 
 
 def _extract_h2_section(body: str, heading: str) -> str | None:
@@ -970,6 +1079,16 @@ def check_skill_output_discipline(result: Result) -> None:
             result.error(
                 f"{rel(path)}: Expected Output Contract must restate the "
                 f"'{OUTPUT_DISCIPLINE_PHRASE}' rule inline so it cannot drift"
+            )
+        if "writing-voice.md" not in section:
+            result.error(
+                f"{rel(path)}: Expected Output Contract must link to "
+                f"{WRITING_VOICE_DOC} (writing-voice rule)"
+            )
+        if WRITING_VOICE_PHRASE not in section:
+            result.error(
+                f"{rel(path)}: Expected Output Contract must restate the "
+                f"'{WRITING_VOICE_PHRASE}' rule inline so it cannot drift"
             )
 
 
@@ -1045,6 +1164,130 @@ def check_agent_skills_yaml_skills_block(result: Result) -> None:
             )
 
 
+NUMBER_WORDS = {
+    1: "one",
+    2: "two",
+    3: "three",
+    4: "four",
+    5: "five",
+    6: "six",
+    7: "seven",
+    8: "eight",
+    9: "nine",
+    10: "ten",
+    11: "eleven",
+    12: "twelve",
+}
+
+
+def discovered_skills() -> tuple[list[Path], list[Path]]:
+    """Return (top_level, nested) SKILL.md paths found on disk.
+
+    A skill at ``skills/<name>/SKILL.md`` is top-level. One at
+    ``skills/<parent>/skills/<name>/SKILL.md`` is nested.
+    """
+    top_level: list[Path] = []
+    nested: list[Path] = []
+    for path in sorted(ROOT.glob("skills/**/SKILL.md")):
+        depth = len(path.relative_to(ROOT / "skills").parts)
+        if depth == 2:
+            top_level.append(path)
+        else:
+            nested.append(path)
+    return top_level, nested
+
+
+def check_skill_registration(result: Result) -> None:
+    """Every skill on disk must be registered in both hand-maintained registries.
+
+    ``REQUIRED_FILES`` and ``LINK_REQUIREMENTS`` are edited by hand, so a new
+    skill can ship without either entry. That happened once: `domain-modeler`
+    was absent from both, which meant its files could be deleted and its
+    cross-skill links broken with validation still passing. This check closes
+    the class of bug rather than the single instance.
+    """
+    required = set(REQUIRED_FILES)
+    top_level, nested = discovered_skills()
+
+    for path in top_level + nested:
+        skill_rel = rel(path)
+        skill_dir = path.parent
+
+        if skill_rel not in required:
+            result.error(
+                f"{skill_rel}: skill is not listed in REQUIRED_FILES "
+                f"(scripts/validate-repo.py) — add it so deletion cannot pass CI"
+            )
+
+        readme_rel = rel(skill_dir / "README.md")
+        if (skill_dir / "README.md").exists() and readme_rel not in required:
+            result.error(f"{readme_rel}: skill README is not listed in REQUIRED_FILES")
+
+        for reference in sorted((skill_dir / "references").glob("*.md")):
+            reference_rel = rel(reference)
+            if reference_rel not in required:
+                result.error(
+                    f"{reference_rel}: skill reference file is not listed in REQUIRED_FILES"
+                )
+
+        if skill_rel not in LINK_REQUIREMENTS:
+            result.error(
+                f"{skill_rel}: skill has no LINK_REQUIREMENTS entry "
+                f"(scripts/validate-repo.py) — its cross-skill links are unverified"
+            )
+
+    for skill_rel in sorted(LINK_REQUIREMENTS):
+        if not (ROOT / skill_rel).exists():
+            result.error(
+                f"{skill_rel}: listed in LINK_REQUIREMENTS but the file does not exist"
+            )
+
+
+def check_readme_skill_counts(result: Result) -> None:
+    """README prose counts must match the number of skills on disk.
+
+    The README claimed "seven top-level and two nested" in one place and "the
+    eight specialist skills" in another. Prose that restates a countable fact
+    drifts unless something counts it.
+    """
+    readme_path = ROOT / "README.md"
+    if not readme_path.exists():
+        return
+    text = read_text(readme_path)
+    top_level, nested = discovered_skills()
+    total = len(top_level) + len(nested)
+
+    expectations = [
+        (
+            r"\*\*(\w+) top-level skills\*\*",
+            len(top_level),
+            "top-level skill count",
+        ),
+        (
+            r"\*\*(\w+) nested support skills\*\*",
+            len(nested),
+            "nested support skill count",
+        ),
+        (
+            r"the (\w+) specialist skills",
+            total,
+            "total specialist skill count",
+        ),
+    ]
+
+    for pattern, expected, label in expectations:
+        for match in re.finditer(pattern, text):
+            stated = match.group(1).lower()
+            expected_word = NUMBER_WORDS.get(expected, str(expected))
+            if stated not in {expected_word, str(expected)}:
+                line_number = text[: match.start()].count("\n") + 1
+                result.error(
+                    f"README.md:{line_number}: {label} says {stated!r} but "
+                    f"{expected} skill(s) exist on disk (expected "
+                    f"{expected_word!r})"
+                )
+
+
 def main() -> int:
     result = Result(errors=[], warnings=[])
     check_required_files(result)
@@ -1052,6 +1295,8 @@ def main() -> int:
     check_markdown_structure(result)
     check_source_readability(result)
     check_skill_files(result, repo_version)
+    check_skill_registration(result)
+    check_readme_skill_counts(result)
     check_skill_link_consistency(result)
     check_skill_output_discipline(result)
     check_no_code_reviewer_model(result)

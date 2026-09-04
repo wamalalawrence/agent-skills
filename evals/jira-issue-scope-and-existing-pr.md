@@ -24,6 +24,10 @@ The GitHub remote has:
   `bugfix/PROJ-123-saml-expiry-redirect`.
 - No PR for `PROJ-456`.
 
+## Skill Under Test
+
+`software-engineer`
+
 ## Run script
 
 1. User asks:
@@ -54,8 +58,7 @@ The GitHub remote has:
 - Must not treat linked parent, duplicate, or related tickets as implementation scope unless the
   user explicitly made one of them the primary Jira task for that branch.
 
-## Pass / Fail Checklist
-
+## Pass/Fail Checklist
 - [ ] One primary Jira task maps to one branch and one PR.
 - [ ] Multiple independent Jira keys stop implementation before branch creation.
 - [ ] Open PRs and remote branches for the primary key are checked before creating a branch.

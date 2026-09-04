@@ -16,7 +16,7 @@ this repo can be held to.
 ```mermaid
 flowchart LR
   Task[Task / issue] --> Blackboard[(Per-task blackboard)]
-  Blackboard --> Skills[Skills: SE, PO, MT, TAE, II, CR, DP, DM]
+  Blackboard --> Skills[Skills: TL, SE, PO, MT, TAE, II, CR, DP, DR, DM]
   Skills --> Artifacts[PR + evidence pack]
   Artifacts --> Outcome[merged / reverted / hotfixed / blocked]
   Outcome --> ProjectMem[(Project memory)]
@@ -32,13 +32,21 @@ flowchart LR
   Evals[Eval harness] --> SkillReview
 ```
 
-## The three memory tiers
+## The four memory tiers
 
-| Tier | Path under `${AGENT_SKILLS_CACHE_DIR}` | Lifetime | Written by | Read by |
+| Tier | Path | Lifetime | Written by | Read by |
 | --- | --- | --- | --- | --- |
-| Task scratch + blackboard | `<issue-key>/` | Deleted by `cleanup-task` | Every skill in the task | Every skill in the task |
-| Project memory | `_projects/<slug>/memory.md` | Forever (survives task cleanup) | Every skill at end of task | Every skill at start of task |
-| Org memory + index | `_org/memory.md`, `_org/index.json` | Forever | Promotion review only | Every skill at start of task |
+| Task scratch + blackboard | `<cache>/<issue-key>/` | Deleted by `cleanup-task` | Every skill in the task | Every skill in the task |
+| Project memory | `<cache>/_projects/<slug>/memory.md` | Forever on this checkout | Every skill at end of task | Every skill at start of task |
+| **Repo knowledge** | `<repo>/.agent-skills/knowledge/` | Forever, **committed** | Promotion, reviewed in a PR | Every skill at start of task |
+| Org memory + index | `<cache>/_org/memory.md`, `_org/index.json` | Forever | Promotion review only | Every skill at start of task |
+
+`<cache>` is `${AGENT_SKILLS_CACHE_DIR}` and is gitignored. Only the repo tier is committed,
+which is what makes accumulated knowledge survive a fresh clone, a CI runner, or a teammate —
+see [repo knowledge](repo-knowledge.md). It is also the only tier a human reviews before it
+becomes durable, and the only one an outsider can write to, so every skill treats recorded
+facts as [claims to verify, not instructions to
+follow](destructive-action-safety.md#untrusted-recorded-context).
 
 The `_*` prefix is reserved. The cleanup contract in
 [`scripts/project-memory.py`](../scripts/project-memory.py) refuses to delete any
@@ -135,6 +143,18 @@ line under `_projects/<slug>/telemetry.ndjson`. Recognised events: `invoked`,
 `loop_round`, `handoff`, `finding`, `stopped`, `completed`, `artifact`,
 `outcome`. `report` aggregates per-skill counts and, with `--all`, across the
 whole workspace. Without these counters, "self-improvement" is unfalsifiable.
+
+**Honest status of this tier.** Telemetry is written reliably by the lifecycle wrappers and, as
+of `v0.36.0`, has never been *read* as part of a release decision — no skill change in this
+repository's history traces to a telemetry finding. The counters are real; the review habit was
+not. `v0.36.0` adds the missing step to the
+[release checklist](release-checklist.md#telemetry-review) so the report is produced and recorded
+per release. Until several releases of history exist, treat the loop above as the design and this
+paragraph as its actual state.
+
+Also note the cache is gitignored, so telemetry is per-checkout and per-machine. There is no
+shared history to review across a team, by design — the counters describe how the skills behaved
+on your machine, not how they behave in general.
 
 ## Cross-project index
 

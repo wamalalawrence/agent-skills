@@ -13,7 +13,7 @@ the `agent-skills` lifecycle scripts.
 ## Expected Skills
 
 `product-owner`, `manual-tester`, `test-automation-engineer`, `domain-modeler`, `delivery-planner`,
-`issue-investigator`, `code-reviewer`, `software-engineer`
+`delivery-runner`, `issue-investigator`, `code-reviewer`, `software-engineer`
 
 ## Expected Behavior
 

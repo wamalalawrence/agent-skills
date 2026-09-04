@@ -3,6 +3,8 @@
 Each example shows an input prompt, assumed context, expected behavior, sample output structure, and
 what the skill should avoid.
 
+- [Tech lead routing](tech-lead-routing.md) — how the single entry point classifies a request,
+  why it routes a clear-sounding defect to investigation first, and what it refuses to do itself.
 - [Delivery planner feature decomposition](delivery-planner-feature-decomposition.md)
 - [Software engineer bugfix](software-engineer-bugfix.md)
 - [Issue investigator bug report](issue-investigator-bug-report.md)
