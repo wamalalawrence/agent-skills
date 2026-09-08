@@ -44,10 +44,16 @@ No new warning category appeared, and no warning names real infrastructure.
 
 | Suite | Assertions | Result |
 | --- | --- | --- |
-| `scripts/test-global-install.sh` | 78 | pass |
-| `scripts/test-access-resolution.sh` | 77 | pass |
+| `scripts/test-global-install.sh` | 103 | pass |
+| `scripts/test-access-resolution.sh` | 100 | pass |
 | `scripts/test-setup-update-preserves-credentials.sh` | 10 exact `.env` lines | pass |
-| `scripts/test-release-readiness.sh` | 59 | pass |
+| `scripts/test-release-readiness.sh` | 66 | pass |
+
+Both new suites grew after a pre-merge review of the release diff: `test-global-install.sh` from 78
+to 103, `test-access-resolution.sh` from 77 to 100. See
+[what the pre-merge review changed](#what-the-pre-merge-review-changed) — the added assertions cover
+defects the original suites could not have caught, and were each confirmed to fail against the
+pre-fix code.
 
 ### Global installation
 
@@ -215,6 +221,102 @@ hypothesis, not a measurement.
 `agent-skills knowledge doctor` passes on a fresh knowledge base and still rejects an
 instruction-shaped entry.
 
+## What the pre-merge review changed
+
+The release was validated green — every suite passing, the checklist run end to end — and then
+reviewed as a diff before merge. That review returned **25 issues, 5 reproduced live**, including two
+against the criterion this release calls critical. Recording it here because "all suites passed" was
+true at the time and was not sufficient.
+
+Five of these reproduced live in sandboxes; the rest were confirmed by reading. Each accepted finding
+has a regression test, and the security ones were confirmed to fail against the pre-fix code.
+
+**Reproduced live.**
+
+1. **A repository file routed a machine credential.** A repo `.env` supplied `host` while an
+   auto-selected identity supplied `token`, and the result was `status: resolved` — a corporate
+   credential aimed at an attacker-chosen endpoint, without the repository ever naming an identity.
+   Blocking *selection* was not enough, because resolution fills fields independently.
+   *Fix:* tracked-check every credential source inside the repository, and refuse an identity whose
+   recorded `resource` disagrees with a repo-supplied host, reporting a `security:` finding.
+   *Pinned by* `test-access-resolution.sh`.
+2. **The tracked-file check failed open.** Any `git` failure — no binary, dubious ownership, a broken
+   `GIT_DIR` — read as "untracked, therefore trusted", so with `git` off `PATH` a *committed*
+   `.agent-skills.local.yml` selected the profile.
+   *Fix:* a tri-state `tracked` / `untracked` / `unknown`, where `unknown` refuses the file and says
+   why. *Pinned by* `test-access-resolution.sh`.
+3. **`agent-skills install --hosts` looped forever, printing nothing.** `--hosts`, `--source`, and
+   `--branch` used `shift 2`, which shifts nothing when the flag is the last argument.
+   *Fix:* an explicit value guard on every such flag, in both the CLI and `setup.init`.
+   *Pinned by* `test-global-install.sh`, using a timeout so a hang is distinguishable from a refusal.
+4. **A foreign *dangling* symlink was adopted, then deleted by `uninstall`** — the user lost both
+   their link and ours. The rationale had been that a broken link holds no data; the link is the data.
+   *Fix:* ownership by location (inside the install root) or by literal target; a dangling link
+   satisfying neither is a conflict to preserve. *Pinned by* `test-global-install.sh`.
+5. **A legacy workspace was silently migrated.** The workspace was detected only under `--verify`, so
+   the same machine answered "legacy" for `--verify` and "global" for the bare run and for
+   `--update` — the command v0.36 documented for updating.
+   *Fix:* legacy detection applies to every command, migrating is opt-in via `--global`, and the
+   global path no longer sources a legacy `.env` that could redirect `AGENT_SKILLS_HOME` or `PATH`.
+   *Pinned by* `test-global-install.sh`.
+
+**Found by reading, fixed.**
+
+6. **Two install failures reported success.** A missing `lib/hosts.registry` or a missing `python3`
+   registered nothing, wrote no manifest, printed "installed globally", and exited 0. Both ran inside
+   `$(...)`, which discards the exit status of what it contains.
+   *Fix:* both checked as prerequisites before anything is written; the manifest verified before the
+   banner. *Pinned by* `test-global-install.sh`.
+7. **`verify` could never go green after a name collision.** Install preserves a user's own same-named
+   skill on purpose; verify counted that as a broken registration and exited 1.
+   *Fix:* distinguish "ours but broken" from "yours, left alone". *Pinned by*
+   `test-global-install.sh`.
+8. **A capability resolution reported no fields.** `status: resolved` came back with `fields_present`
+   and `fields_missing` both empty, and the probes ignored `--resource`, so a `gh` session for
+   github.com resolved a GitHub Enterprise host.
+   *Fix:* populate the fields from the request, and require a probe to be able to serve the named
+   resource before it short-circuits. *Pinned by* `test-access-resolution.sh`.
+9. **Task scratch dirtied every repository.** `.cache/` was created at the repo root with nothing
+   ignoring it, so `git add -A` would commit ticket notes and investigation state.
+   *Fix:* `.git/info/exclude` on first write — local to the clone, never committed, and no edit to a
+   tracked `.gitignore`. *Pinned by* `test-global-install.sh`.
+10. **A profile split across two stores lost one.** `backend` was a scalar overwritten by the most
+    recent write, leaving the earlier secret unreadable *and* undeletable.
+    *Fix:* storage recorded per secret field; the scalar remains only so older profiles resolve.
+    *Pinned by* `test-access-resolution.sh`.
+11. **`import-legacy --apply` overwrote an existing identity** and read in-repo files with no tracked
+    check. *Fix:* the tracked check applies, and a clash refuses and points at `--force`.
+    *Pinned by* `test-access-resolution.sh`.
+12. **`migrate --remove-obsolete` deleted `.skills` on filename alone** — the one deletion in the
+    release that did not verify the target was ours. *Fix:* ownership checked first, against both the
+    install root and the source tree.
+13. **A committed `project.build` was the one value marked as needing no confirmation**, despite being
+    an executable command editable by anyone who can open a pull request.
+    *Fix:* committed `build` and `format` are listed under `needs_confirmation`; descriptive fields
+    are unchanged.
+14. **A bare `./setup.init --yes` erased the credentials in its own managed block.** Found while
+    fixing defect 5: once a bare run correctly stays on the legacy path, it runs the legacy writer,
+    which emits empty strings for any service whose mode resolves to "no". `--update` had been immune
+    because it already opted populated services back in. This is pre-v0.37.0 behaviour that the
+    routing fix exposed rather than introduced — previously the bare run migrated to global and never
+    touched `.env`, so the data loss was hidden behind a different bug.
+    *Fix:* the opt-in logic is shared between both paths and honours an explicit `--no-jira`.
+    *Pinned by* `test-release-readiness.sh`, whose fixture now seeds the credential **inside** the
+    managed block. Appending it after the block — as the fixture did before — tests a shape
+    `setup.init` deliberately normalises away, so that assertion had been passing for the wrong reason.
+
+Documentation corrected in the same pass: the resolution order is described as per-field rather than
+"first step that satisfies every required field wins" (the mismatch the routing hole depended on); a
+tracked local override is documented as ignored **whole**, not just its `credentials:` block; rule 5
+of skill-source resolution is given an internal order so the claim that the order is total holds; the
+consequence of rule 3 — a vendored copy silently outranking the global install — is now stated; and
+the claim that `access resolve` is "the single mechanism every skill uses" is scoped to what is true,
+with the tracker migration recorded as follow-up 7.
+
+Two residual risks were accepted rather than fixed, with the reasoning recorded at the call site and
+in the review: the macOS Keychain write passes the secret in argv (piping it instead makes `security`
+store an empty secret — measured), and lone-compatible-identity auto-selection stays on by default.
+
 ## What this run does not prove
 
 Stated plainly, because the tables above are easy to over-read.
@@ -241,6 +343,10 @@ Stated plainly, because the tables above are easy to over-read.
   skills directory at exactly the wrong moment is discussed in the review, not tested.
 - **Long-run behaviour is untested by construction.** Whether one global install stays healthy across
   months of clone moves, host updates, and OS upgrades is the actual claim, and it needs months.
+- **A green suite was not enough, and this one may not be either.** Every suite passed before the
+  pre-merge review found five live defects, two of them in the criterion this release calls critical.
+  The suites now cover those specific defects. They do not establish that no similar class remains,
+  and the honest reading of the table above is "these cases pass", not "this code is correct".
 
 ## Follow-ups
 
@@ -258,3 +364,14 @@ Stated plainly, because the tables above are easy to over-read.
    about how many users hold several identities for one service.
 6. Revisit the nine-host registry each release. Agent Skills discovery paths are still moving, and a
    stale row is worse than an absent one because it reads as verified.
+7. Move the tracker preflight in `scripts/doctor.sh` and the `locate-config` guidance in the skills
+   onto `agent-skills access resolve`. The resolver is the general mechanism and is reachable through
+   `docs/auth-discovery.md`, but Jira and Confluence still go through `auth-preflight.py`, so the
+   release ships two paths to the same answer. Deferred rather than rushed: it touches nine `SKILL.md`
+   files and their evals, which is not last-mile work.
+8. Teach capability probes to report the host they actually serve, instead of falling back to a static
+   table. `gh auth status` and `jira` both know their configured host; parsing that would turn
+   "cannot confirm it serves this resource" into a real answer for Enterprise and multi-tenant setups.
+9. Run a diff-level review *before* declaring a release green, not after. This release passed every
+   gate and then failed a reading of its own diff. The review skill exists; the checklist did not
+   require it.

@@ -51,6 +51,43 @@ resolve_legacy_root() {
 
 LEGACY_ROOT="$(resolve_legacy_root || true)"
 
+# True when `link` points into an agent-skills source tree.
+#
+# The legacy `.skills` symlink pointed at `<clone>/skills`, not into the install
+# home, so the install-root ownership test alone would reject a genuine one. Both
+# tests together are what let `--remove-obsolete` delete our own link and only
+# our own link.
+as_link_points_into_source() {
+  local link="$1"
+  local source_dir source_real target target_real dir
+  [ -L "${link}" ] || return 1
+  source_dir="$(as_source_dir 2>/dev/null || true)"
+  [ -n "${source_dir}" ] || return 1
+  source_real="$(as_realpath "${source_dir}" 2>/dev/null || printf '%s' "${source_dir}")"
+  target="$(readlink "${link}" 2>/dev/null || true)"
+  [ -n "${target}" ] || return 1
+  case "${target}" in
+    /*) : ;;
+    *)
+      dir="$(cd -P "$(dirname "${link}")" >/dev/null 2>&1 && pwd)" || return 1
+      target="${dir}/${target}"
+      ;;
+  esac
+  # Compare both the literal and resolved forms of both sides. A workspace under
+  # a temp dir is reached as /var/... but resolves to /private/var/... on macOS,
+  # and a plain string compare of one form against the other never matches.
+  target_real="$(as_realpath "${target}" 2>/dev/null || printf '%s' "${target}")"
+  case "${target}" in
+    "${source_dir}"|"${source_dir}"/*) return 0 ;;
+    "${source_real}"|"${source_real}"/*) return 0 ;;
+  esac
+  case "${target_real}" in
+    "${source_dir}"|"${source_dir}"/*) return 0 ;;
+    "${source_real}"|"${source_real}"/*) return 0 ;;
+  esac
+  return 1
+}
+
 printf 'agent-skills migrate\n'
 printf '  Upgrading from a v0.36.x workspace installation to the global install.\n\n'
 
@@ -113,10 +150,25 @@ printf '    resolver still reads it, so leaving it in place costs nothing.\n'
 
 if [ "${REMOVE_OBSOLETE}" = "true" ]; then
   printf '\nRemoving obsolete artifacts\n'
+  # shellcheck source=lib/install.sh
+  . "${AS_LIB_DIR}/install.sh"
   removed=0
   for artifact in .skills .agent-skills.lock; do
     target="${LEGACY_ROOT}/${artifact}"
-    if [ -L "${target}" ] || [ -f "${target}" ]; then
+    if [ -L "${target}" ]; then
+      # `.skills` is a symlink agent-skills wrote, but the name is not proof of
+      # that: the path comes from --workspace-root or the environment, so a
+      # same-named link pointing somewhere else is somebody else's. Every other
+      # deletion in this release checks ownership before unlinking; this one used
+      # to trust the filename alone.
+      if as_is_owned_link "${target}" || as_link_points_into_source "${target}"; then
+        rm -f "${target}"
+        as_ok "removed ${artifact}"
+        removed=$((removed + 1))
+      else
+        as_warn "left ${artifact} alone: it does not point into an agent-skills tree"
+      fi
+    elif [ -f "${target}" ]; then
       rm -f "${target}"
       as_ok "removed ${artifact}"
       removed=$((removed + 1))

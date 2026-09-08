@@ -87,6 +87,28 @@ trust boundary around repository-supplied content.
 - [ ] Record residual risks, the control offered for each, and why that control is not the default.
 - [ ] Pin any behaviour the review decided is intentional with a test, so it cannot drift away from
       the documentation later.
+- [ ] **Show each security probe failing when the property is removed.** A probe that asserts against
+      a mechanism the code does not use passes regardless of whether the property holds. In v0.37.0
+      the critical-criterion probe did exactly that — it targeted `.agent-skills.yml`, which the
+      resolver never reads — and two real holes shipped past it. Revert the fix, watch the test fail,
+      restore it.
+
+## Diff Review
+
+Run **after** validation is green and **before** merge. A release that passes every gate can still be
+wrong; v0.37.0 passed all of them and a reading of its own diff found five live defects, two in the
+criterion the release called critical.
+
+- [ ] Review the complete diff against the base branch, not just the files you remember touching:
+      `git diff main...HEAD`.
+- [ ] Have the review done by something that did not write the code — a second person, or a review
+      agent with no stake in the change being correct.
+- [ ] Reproduce every claimed defect before fixing it, and record which ones reproduced. A finding
+      that cannot be reproduced is a hypothesis.
+- [ ] Add a regression test per accepted finding, and confirm it fails against the pre-fix code.
+- [ ] Re-run the full validation section afterwards. Fixes are changes.
+- [ ] Record what the review changed in `eval-runs/<version>/summary.md`, including the fact that the
+      suites were green beforehand.
 
 ## Release Publication
 

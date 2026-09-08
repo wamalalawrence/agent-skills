@@ -255,6 +255,7 @@ fi
 print_separator
 
 mkdir -p "${CACHE_ROOT}"
+agent_skills_ensure_cache_ignored "${CACHE_ROOT}"
 {
   printf 'project=%s\n' "${PROJECT}"
   printf 'issue_key=%s\n' "${ISSUE_KEY}"

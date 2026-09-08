@@ -35,6 +35,40 @@ agent_skills_resolve_cache_root() {
   printf '%s\n' "${PWD}/.cache/agent-skills"
 }
 
+# Keep the cache out of the user's `git status` without touching their repo.
+#
+# Under the global install the cache lands inside the repository being worked on,
+# so `agent-skills start-task` used to leave an untracked `.cache/` behind in an
+# arbitrary repo — and an agent running `git add -A` would commit ticket notes and
+# investigation state. Writing to a tracked `.gitignore` would be its own
+# surprise (an edit to a file the user owns, in a diff they did not ask for), so
+# the entry goes in `.git/info/exclude`: local to that clone, never committed,
+# never shown as a change.
+agent_skills_ensure_cache_ignored() {
+  local cache_root="$1"
+  local git_root=""
+  git_root="$(git rev-parse --show-toplevel 2>/dev/null || true)"
+  [[ -n "${git_root}" ]] || return 0
+  # Only when the cache is actually inside this repository.
+  case "${cache_root}" in
+    "${git_root}"/*) : ;;
+    *) return 0 ;;
+  esac
+  # Already ignored, by .gitignore or by a previous run.
+  git -C "${git_root}" check-ignore -q .cache 2>/dev/null && return 0
+  local exclude="${git_root}/.git/info/exclude"
+  [[ -d "${git_root}/.git" ]] || return 0
+  mkdir -p "$(dirname "${exclude}")" 2>/dev/null || return 0
+  if [[ -f "${exclude}" ]] && grep -qx '\.cache/' "${exclude}" 2>/dev/null; then
+    return 0
+  fi
+  {
+    printf '\n# added by agent-skills: task scratch, safe to delete\n'
+    printf '.cache/\n'
+  } >> "${exclude}" 2>/dev/null || return 0
+  return 0
+}
+
 agent_skills_last_context_path() {
   printf '%s/.last-task-context\n' "$(agent_skills_resolve_cache_root)"
 }

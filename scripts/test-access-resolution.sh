@@ -567,34 +567,46 @@ fi
 # ------------------------------------------------------------------------------
 section "SECURITY: no silent downgrade from a secure store"
 # ------------------------------------------------------------------------------
-BOX="$(new_box)"
-AS_EXTRA_ENV="AGENT_SKILLS_SECRET_VALUE_TOKEN=${CANARY}" \
-  run_access "${BOX}" set --profile keychain-only --service demo-service \
-  --field host=https://demo.example.com --secret-field token >/dev/null 2>&1
-# Rewrite the recorded backend to one that cannot possibly be available here.
-python3 - "${BOX}/home/.config/agent-skills/credentials.json" <<'PY'
+# Storage is recorded per secret field, with the profile-level `backend` scalar
+# kept only so profiles written by earlier versions still resolve. The refusal has
+# to hold for both shapes, so each is exercised: "legacy" is a profile carrying
+# only the scalar, "per-field" is one carrying the map this version writes.
+for SHAPE in legacy per-field; do
+  BOX="$(new_box)"
+  AS_EXTRA_ENV="AGENT_SKILLS_SECRET_VALUE_TOKEN=${CANARY}" \
+    run_access "${BOX}" set --profile keychain-only --service demo-service \
+    --field host=https://demo.example.com --secret-field token >/dev/null 2>&1
+  # Rewrite the recorded store to one that cannot possibly be available here.
+  python3 - "${BOX}/home/.config/agent-skills/credentials.json" "${SHAPE}" <<'PY'
 import json
 import sys
 
-path = sys.argv[1]
+path, shape = sys.argv[1], sys.argv[2]
 with open(path, encoding="utf-8") as handle:
     data = json.load(handle)
-data["profiles"]["keychain-only"]["backend"] = "secret-service"
+entry = data["profiles"]["keychain-only"]
+if shape == "legacy":
+    # A profile written before per-field records existed.
+    entry.pop("secret_backends", None)
+    entry["backend"] = "secret-service"
+else:
+    entry["secret_backends"] = {"token": "secret-service"}
 with open(path, "w", encoding="utf-8") as handle:
     json.dump(data, handle, indent=2)
 PY
-OUT="$(run_access "${BOX}" resolve --service demo-service --require host,token \
-  --secret token --no-capability 2>&1)"
-if printf '%s' "${OUT}" | grep -qi 'refusing to fall back to weaker storage'; then
-  ok "an unavailable secure store is reported instead of downgraded"
-else
-  bad "an unavailable secure store is reported instead of downgraded" "${OUT}"
-fi
-if printf '%s' "${OUT}" | grep -q 'status: needs-setup'; then
-  ok "the downgrade refusal leaves the request unresolved rather than half-resolved"
-else
-  bad "the downgrade refusal leaves the request unresolved" "${OUT}"
-fi
+  OUT="$(run_access "${BOX}" resolve --service demo-service --require host,token \
+    --secret token --no-capability 2>&1)"
+  if printf '%s' "${OUT}" | grep -qi 'refusing to fall back to weaker storage'; then
+    ok "an unavailable secure store is reported instead of downgraded (${SHAPE})"
+  else
+    bad "an unavailable secure store is reported instead of downgraded (${SHAPE})" "${OUT}"
+  fi
+  if printf '%s' "${OUT}" | grep -q 'status: needs-setup'; then
+    ok "the downgrade refusal leaves the request unresolved (${SHAPE})"
+  else
+    bad "the downgrade refusal leaves the request unresolved (${SHAPE})" "${OUT}"
+  fi
+done
 if run_access "${BOX}" set --profile x --service y --backend no-such-backend \
   --field host=z >/dev/null 2>&1; then
   bad "an unknown forced backend is rejected"
@@ -794,6 +806,241 @@ if printf '%s' "${OUT}" | grep -q "${CANARY}"; then
 else
   ok "forget never prints the secret it removed"
 fi
+
+
+# ------------------------------------------------------------------------------
+section "SECURITY: a committed legacy .env cannot supply credential values"
+# ------------------------------------------------------------------------------
+# The tracked-file rule was written for .agent-skills.local.yml, but the legacy
+# files are the ones carrying the actual values. Without the same check, a
+# committed .env inside a repository was read on the same footing as one the user
+# wrote by hand in their own workspace.
+BOX="$(new_box)"
+AS_EXTRA_ENV="AGENT_SKILLS_SECRET_VALUE_TOKEN=${CANARY}" \
+  run_access "${BOX}" set --profile work-jira --service jira \
+  --resource https://corp.example.atlassian.net \
+  --field login=victim@corp.example --secret-field token >/dev/null 2>&1
+cat > "${BOX}/repo/.env" <<'ENVEOF'
+JIRA_HOST=https://evil.attacker.example
+JIRA_LOGIN=victim@corp.example
+ENVEOF
+( cd "${BOX}/repo" && git add .env && git commit -q -m "add config" ) >/dev/null 2>&1
+OUT="$(run_access "${BOX}" resolve --service jira --require host,login,token \
+  --secret token --no-capability 2>&1)"
+case "${OUT}" in
+  *"status: resolved"*) bad "a committed .env does not complete a resolution" "${OUT}" ;;
+  *) ok "a committed .env does not complete a resolution" ;;
+esac
+case "${OUT}" in
+  *"tracked by git"*) ok "the report names the committed file it refused" ;;
+  *) bad "the report names the committed file it refused" "${OUT}" ;;
+esac
+case "${OUT}" in
+  *evil.attacker.example*) bad "the refused host is not echoed into the report" "${OUT}" ;;
+  *) ok "the refused host is not echoed into the report" ;;
+esac
+
+# ------------------------------------------------------------------------------
+section "SECURITY: a repository cannot aim an identity at another host"
+# ------------------------------------------------------------------------------
+# Even an untracked .env is repository-local. Supplying `host` from there while a
+# machine identity supplies `token` used to report `resolved`, handing a corporate
+# secret to an attacker-chosen endpoint. Selection was never the only lever.
+BOX="$(new_box)"
+AS_EXTRA_ENV="AGENT_SKILLS_SECRET_VALUE_TOKEN=${CANARY}" \
+  run_access "${BOX}" set --profile work-jira --service jira \
+  --resource https://corp.example.atlassian.net \
+  --field login=victim@corp.example --secret-field token >/dev/null 2>&1
+cat > "${BOX}/repo/.env" <<'ENVEOF'
+JIRA_HOST=https://evil.attacker.example
+ENVEOF
+printf '.env\n' > "${BOX}/repo/.gitignore"
+( cd "${BOX}/repo" && git add .gitignore && git commit -q -m init ) >/dev/null 2>&1
+OUT="$(run_access "${BOX}" resolve --service jira --require host,login,token \
+  --secret token --no-capability 2>&1)"
+case "${OUT}" in
+  *"status: resolved"*) bad "a repo-supplied host does not complete a resolution" "${OUT}" ;;
+  *) ok "a repo-supplied host does not complete a resolution" ;;
+esac
+case "${OUT}" in
+  *"refused identity"*) ok "the identity is explicitly refused" ;;
+  *) bad "the identity is explicitly refused" "${OUT}" ;;
+esac
+case "${OUT}" in
+  *"security:"*) ok "the mismatch is raised as a security finding" ;;
+  *) bad "the mismatch is raised as a security finding" "${OUT}" ;;
+esac
+case "${OUT}" in
+  *"${CANARY}"*) bad "no secret is printed while refusing" ;;
+  *) ok "no secret is printed while refusing" ;;
+esac
+# The same identity must still resolve normally for its own host.
+OUT="$(run_access "${BOX}" resolve --service jira --require login,token \
+  --secret token --no-capability 2>&1)"
+case "${OUT}" in
+  *"status: resolved"*) ok "the identity still resolves when no host is contested" ;;
+  *) bad "the identity still resolves when no host is contested" "${OUT}" ;;
+esac
+
+# ------------------------------------------------------------------------------
+section "SECURITY: the tracked-file check fails closed"
+# ------------------------------------------------------------------------------
+# git_root() returned None for every git failure, and None meant "untracked",
+# which meant trusted. Removing git from PATH was enough to make a COMMITTED
+# .agent-skills.local.yml select the profile.
+BOX="$(new_box)"
+AS_EXTRA_ENV="AGENT_SKILLS_SECRET_VALUE_TOKEN=${CANARY}" \
+  run_access "${BOX}" set --profile work-jira --service jira \
+  --resource https://corp.example.atlassian.net \
+  --field host=https://corp.example.atlassian.net --secret-field token >/dev/null 2>&1
+cat > "${BOX}/repo/.agent-skills.local.yml" <<'YEOF'
+credentials:
+  jira: work-jira
+YEOF
+( cd "${BOX}/repo" && git add .agent-skills.local.yml \
+    && git commit -q -m "claim identity" ) >/dev/null 2>&1
+OUT="$(run_access "${BOX}" resolve --service jira --require host,token \
+  --secret token --no-capability 2>&1)"
+case "${OUT}" in
+  *"project-local:.agent-skills.local.yml"*)
+    bad "a committed override does not select the profile (git present)" "${OUT}" ;;
+  *) ok "a committed override does not select the profile (git present)" ;;
+esac
+# Same repository, git unreachable. PATH deliberately excludes any git.
+OUT="$(env -i HOME="${BOX}/home" \
+  AGENT_SKILLS_CONFIG_DIR="${BOX}/home/.config/agent-skills" \
+  AGENT_SKILLS_SECRET_BACKEND=file PATH="/nonexistent-bin" TERM=dumb \
+  /usr/bin/python3 "${ACCESS}" --cwd "${BOX}/repo" resolve --service jira \
+  --require host,token --secret token --no-capability 2>&1)"
+case "${OUT}" in
+  *"project-local:.agent-skills.local.yml"*)
+    bad "a committed override does not select the profile (git absent)" "${OUT}" ;;
+  *) ok "a committed override does not select the profile (git absent)" ;;
+esac
+case "${OUT}" in
+  *"could not confirm it is untracked"*)
+    ok "the report says the file was refused because git could not answer" ;;
+  *) bad "the report says the file was refused because git could not answer" "${OUT}" ;;
+esac
+
+# ------------------------------------------------------------------------------
+section "capability short-circuit reports fields and respects --resource"
+# ------------------------------------------------------------------------------
+# Resolving via an authenticated tool returned status: resolved with BOTH
+# fields_present and fields_missing empty, so a caller branching on
+# fields_missing concluded it held a host and a token. The probes also matched on
+# service name alone, so a github.com session answered for an Enterprise host.
+BOX="$(new_box)"
+FAKE_BIN="${BOX}/fake-bin"
+mkdir -p "${FAKE_BIN}"
+printf '#!/bin/sh\nexit 0\n' > "${FAKE_BIN}/gh"
+chmod +x "${FAKE_BIN}/gh"
+OUT="$(env -i HOME="${BOX}/home" \
+  AGENT_SKILLS_CONFIG_DIR="${BOX}/home/.config/agent-skills" \
+  AGENT_SKILLS_SECRET_BACKEND=file PATH="${FAKE_BIN}:/usr/bin:/bin" TERM=dumb \
+  python3 "${ACCESS}" --cwd "${BOX}/repo" resolve --service github \
+  --require host,token --json 2>&1)"
+if printf '%s' "${OUT}" | python3 -c '
+import json, sys
+data = json.load(sys.stdin)
+assert data["status"] == "resolved", data["status"]
+assert sorted(data["fields_present"]) == ["host", "token"], data["fields_present"]
+assert data["fields_missing"] == [], data["fields_missing"]
+' >/dev/null 2>&1; then
+  ok "a capability resolution lists the fields the tool satisfies"
+else
+  bad "a capability resolution lists the fields the tool satisfies" "${OUT}"
+fi
+# Same logged-in gh, but the caller asked for an Enterprise host it cannot serve.
+OUT="$(env -i HOME="${BOX}/home" \
+  AGENT_SKILLS_CONFIG_DIR="${BOX}/home/.config/agent-skills" \
+  AGENT_SKILLS_SECRET_BACKEND=file PATH="${FAKE_BIN}:/usr/bin:/bin" TERM=dumb \
+  python3 "${ACCESS}" --cwd "${BOX}/repo" resolve --service github \
+  --resource https://github.enterprise.example.com --require host,token 2>&1)"
+case "${OUT}" in
+  *"status: resolved"*)
+    bad "a github.com session does not resolve an Enterprise host" "${OUT}" ;;
+  *) ok "a github.com session does not resolve an Enterprise host" ;;
+esac
+case "${OUT}" in
+  *"could not be confirmed to serve"*)
+    ok "the report explains why the authenticated tool was not used" ;;
+  *) bad "the report explains why the authenticated tool was not used" "${OUT}" ;;
+esac
+
+# ------------------------------------------------------------------------------
+section "one identity split across two secret stores"
+# ------------------------------------------------------------------------------
+# `backend` was a single scalar overwritten by the most recent write, so a second
+# `access set` with a different store left the earlier secret unreadable AND
+# undeletable: forget looked for it in the wrong place.
+BOX="$(new_box)"
+AS_EXTRA_ENV="AGENT_SKILLS_SECRET_VALUE_TOKEN=${CANARY}" \
+  run_access "${BOX}" set --profile split --service demo-service \
+  --field host=https://demo.example.com --secret-field token >/dev/null 2>&1
+AS_EXTRA_ENV="AGENT_SKILLS_SECRET_VALUE_CLIENT_SECRET=${CANARY}-two" \
+  run_access "${BOX}" set --profile split --service demo-service \
+  --secret-field client_secret >/dev/null 2>&1
+if python3 - "${BOX}/home/.config/agent-skills/credentials.json" <<'PY'
+import json, sys
+with open(sys.argv[1], encoding="utf-8") as handle:
+    data = json.load(handle)
+entry = data["profiles"]["split"]
+per_field = entry.get("secret_backends") or {}
+assert sorted(entry["secret_fields"]) == ["client_secret", "token"], entry["secret_fields"]
+assert sorted(per_field) == ["client_secret", "token"], per_field
+PY
+then
+  ok "storage is recorded per secret field, not once per profile"
+else
+  bad "storage is recorded per secret field, not once per profile"
+fi
+OUT="$(run_access "${BOX}" resolve --service demo-service \
+  --require host,token,client_secret --secret token,client_secret --no-capability 2>&1)"
+case "${OUT}" in
+  *"status: resolved"*) ok "both secret fields resolve from their own stores" ;;
+  *) bad "both secret fields resolve from their own stores" "${OUT}" ;;
+esac
+OUT="$(run_access "${BOX}" forget --profile split 2>&1)"
+case "${OUT}" in
+  *"deleted from the store: 2"*) ok "forget deletes every field it stored" ;;
+  *) bad "forget deletes every field it stored" "${OUT}" ;;
+esac
+case "${OUT}" in
+  *"${CANARY}"*) bad "forget never prints a secret it removed" ;;
+  *) ok "forget never prints a secret it removed" ;;
+esac
+
+# ------------------------------------------------------------------------------
+section "import-legacy does not overwrite an existing identity"
+# ------------------------------------------------------------------------------
+BOX="$(new_box)"
+AS_EXTRA_ENV="AGENT_SKILLS_SECRET_VALUE_TOKEN=${CANARY}" \
+  run_access "${BOX}" set --profile jira-imported --service jira \
+  --field host=https://mine.example.com --secret-field token >/dev/null 2>&1
+cat > "${BOX}/home/.env" <<'ENVEOF'
+JIRA_HOST=https://legacy.example.com
+JIRA_LOGIN=me@example.com
+JIRA_API_TOKEN=legacy-token-value
+ENVEOF
+OUT="$(AS_EXTRA_ENV="WORKSPACE_ROOT=${BOX}/home" \
+  run_access "${BOX}" import-legacy --apply 2>&1)"
+IMPORT_RC=$?
+if [ "${IMPORT_RC}" -ne 0 ]; then
+  ok "import-legacy refuses to replace an existing identity"
+else
+  bad "import-legacy refuses to replace an existing identity" "${OUT}"
+fi
+case "${OUT}" in
+  *"--force"*) ok "the refusal says how to override it deliberately" ;;
+  *) bad "the refusal says how to override it deliberately" "${OUT}" ;;
+esac
+OUT="$(run_access "${BOX}" resolve --service jira --require host \
+  --no-capability 2>&1)"
+case "${OUT}" in
+  *"status: resolved"*) ok "the pre-existing identity survived the refused import" ;;
+  *) bad "the pre-existing identity survived the refused import" "${OUT}" ;;
+esac
 
 # ------------------------------------------------------------------------------
 printf '\n'

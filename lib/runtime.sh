@@ -220,25 +220,6 @@ else:
 }
 
 # ------------------------------------------------------------------------------
-# Semver comparison. Echoes -1, 0, or 1 for a<b, a==b, a>b.
-# ------------------------------------------------------------------------------
-as_semver_cmp() {
-  local a="${1#v}"
-  local b="${2#v}"
-  if [ "${a}" = "${b}" ]; then
-    printf '0'
-    return 0
-  fi
-  local higher
-  higher="$(printf '%s\n%s\n' "${a}" "${b}" | sort -V | tail -n 1)"
-  if [ "${higher}" = "${a}" ]; then
-    printf '%s' '1'
-  else
-    printf '%s' '-1'
-  fi
-}
-
-# ------------------------------------------------------------------------------
 # Output helpers. Status lines are stable enough to grep in tests.
 # ------------------------------------------------------------------------------
 as_ok() { printf '  ok    %s\n' "$1"; }

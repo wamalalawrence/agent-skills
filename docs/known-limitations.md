@@ -59,6 +59,18 @@ runtime enforcement, or guaranteed outcomes.
   automatic path.
 - **Legacy plaintext exposure is not undone by migration.** Importing a token from a `.env` into the
   keychain moves it; it does not un-expose it. Rotate anything you believe was exposed.
+- **On macOS the Keychain *write* passes the secret in argv.** `security add-generic-password` takes
+  the value as an argument, so it is visible to a same-user `ps` for the duration of that one call.
+  Reads are unaffected, and the file fallback never puts a value in argv. This is accepted rather than
+  fixed because the obvious alternative is worse: piping the value on stdin makes `security` exit 0
+  while storing an *empty* secret, which is silent credential loss. See
+  [the security review](security-review-v0.37.0.md) for the measurements.
+- **A repository may describe a service but never route a credential.** A file inside the repository
+  cannot select an identity, and cannot supply a host that disagrees with the identity providing the
+  secret. Where git cannot confirm a file is untracked, the file is refused rather than trusted — so
+  on a machine with no `git`, or in a repository git refuses over ownership, a legitimate
+  `.agent-skills.local.yml` stops working. Use `agent-skills access bind` or process environment
+  variables there.
 - **Resolution is not authorization.** Finding a credential grants no permission to act. The
   [destructive-action safety policy](destructive-action-safety.md) is a separate contract and still
   applies to everything a resolver reports as available.

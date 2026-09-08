@@ -100,8 +100,22 @@ jira:
   host: "https://sandbox.example.atlassian.net"
 ```
 
-Add it to `.gitignore` before you create it. If git tracks it, the resolver ignores its
-`credentials:` block and says why — that is the enforcement point above, not an inconvenience.
+Add it to `.gitignore` before you create it. If git tracks it, the resolver ignores the **whole
+file** — not just its `credentials:` block — and says why. The `jira.host` above would be dropped
+too. That is the enforcement point described earlier, not an inconvenience: once the file is
+committed, nothing in it is distinguishable from anything else a pull request could add.
+
+The same rule covers a legacy `.env`, `.env.local`, or `.jira-config.yml` **inside** the repository.
+Those files outside the repository, such as in the legacy workspace folder above it, are unaffected.
+
+If git cannot answer whether the file is tracked — git not installed, or refusing to read the
+repository — the file is refused rather than trusted. "Provably untracked" is the condition, and an
+unanswerable question is not a yes.
+
+Within step 4 of the [resolution order](access-resolution.md#resolution-order), an untracked
+`.agent-skills.local.yml` takes precedence over `agent-skills access bind`: the file is closer to
+your checkout, so it wins for that one repository. Delete the `credentials:` entry if you want the
+global binding to apply.
 
 An equivalent, and often better, alternative keeps the repository completely clean:
 

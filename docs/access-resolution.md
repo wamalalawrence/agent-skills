@@ -1,6 +1,6 @@
 # Access Resolution
 
-This is the single mechanism every skill uses to reach an external service. One command, any
+This is the general-purpose mechanism for reaching an external service. One command, any
 service, resolved only when a task actually needs it.
 
 ```bash
@@ -62,7 +62,16 @@ because it never contains a secret value.
 
 ## Resolution order
 
-Deterministic, walked once, top to bottom. The first step that satisfies every required field wins.
+Deterministic, walked once, top to bottom. Resolution is **per field**, not per step: each step
+fills in the required fields still missing, and the first step to supply a given field owns it.
+The walk stops early only at step 1, where an authenticated tool holds the credential itself and
+there is nothing left to resolve.
+
+That distinction matters for more than pedantry. Because fields are filled independently, a single
+resolution can draw `host` from one source and `token` from another — which is why a file inside
+the repository is not allowed to supply a host that disagrees with the identity supplying the
+secret. See [a committed file may never select a credential
+profile](#a-committed-file-may-never-select-a-credential-profile).
 
 ```text
 Task needs an external resource
@@ -210,6 +219,23 @@ Profile selection comes only from:
 
 So a repository cannot contain "use `production-readonly-db`" and thereby reach a credential that
 has nothing to do with it.
+
+Selection is not the only lever, and blocking it alone is not enough. Because resolution fills
+fields independently, a repository could once supply the **host** while a machine identity supplied
+the **token** — never naming an identity, yet still aiming a corporate credential at an endpoint of
+its choosing. Two rules close that:
+
+- Any credential source **inside the repository** is checked for tracked status, not just
+  `.agent-skills.local.yml`. A committed `.env`, `.env.local`, or `.jira-config.yml` is refused with
+  an explanation. Files outside the repository — the legacy workspace folder, a user's own home —
+  are unaffected.
+- When a file inside the repository supplies a host-shaped field, it is compared against the
+  `resource` recorded for the identity being used. A mismatch refuses the identity and reports a
+  `security:` finding rather than resolving.
+
+Both rules fail **closed**. If git cannot answer whether a file is tracked — not installed, refusing
+a repository over ownership, a broken `GIT_DIR` — the file is refused, because "provably untracked"
+is the only condition under which it is trusted.
 
 ### Resolution is not authorization
 

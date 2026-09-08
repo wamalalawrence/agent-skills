@@ -168,10 +168,22 @@ Everything below the install is available through one command:
 EOF
 }
 
+# Guard every flag whose value is a separate argument. `shift 2` shifts nothing
+# when the flag is the last argument left; under `set -e` that aborts the script
+# with no explanation, and without it the parse loop spins forever.
+require_option_value() {
+  if [[ $# -lt 2 ]]; then
+    echo "Option $1 requires a value." >&2
+    usage >&2
+    exit 2
+  fi
+}
+
 while [[ $# -gt 0 ]]; do
   case "$1" in
     --workspace-root)
-      WORKSPACE_ROOT="${2:-}"
+      require_option_value "$@"
+      WORKSPACE_ROOT="$2"
       WORKSPACE_ROOT_EXPLICIT="true"
       INSTALL_MODE="legacy"
       shift 2
@@ -184,7 +196,7 @@ while [[ $# -gt 0 ]]; do
       ;;
     --legacy-workspace) INSTALL_MODE="legacy"; shift ;;
     --global) INSTALL_MODE="global"; shift ;;
-    --hosts) GLOBAL_HOSTS="${2:-}"; shift 2 ;;
+    --hosts) require_option_value "$@"; GLOBAL_HOSTS="$2"; shift 2 ;;
     --hosts=*) GLOBAL_HOSTS="${1#*=}"; shift ;;
     --all-hosts) GLOBAL_ALL_HOSTS="true"; shift ;;
     --no-path-link) GLOBAL_NO_PATH="true"; shift ;;
@@ -204,7 +216,7 @@ while [[ $# -gt 0 ]]; do
     --check-updates) CHECK_UPDATES_MODE="true"; shift ;;
     --update) UPDATE_MODE="true"; shift ;;
     --branch)
-      UPDATE_REF="${2:-}"; shift 2 ;;
+      require_option_value "$@"; UPDATE_REF="$2"; shift 2 ;;
     --branch=*)
       UPDATE_REF="${1#*=}"; shift ;;
     --help|-h) usage; exit 0 ;;
@@ -1523,8 +1535,15 @@ run_self_update() {
   # marker block. We source the existing .env (if present), then default each
   # mode to "yes" when the corresponding required value is non-empty so the
   # rerun re-emits the same value instead of clearing it.
+  #
+  # Legacy mode only. Sourcing that file with `set -a` executes shell code the
+  # global model does not own and exports every assignment in it, so under a
+  # global install an `AGENT_SKILLS_HOME`, `AGENT_SKILLS_CONFIG_DIR`,
+  # `AGENT_SKILLS_SOURCE` or `PATH` line in a stale workspace `.env` would
+  # redirect where the install lands. Global mode rewrites no `.env`, so it has
+  # nothing to preserve.
   local existing_env="${workspace_root}/.env"
-  if [[ -f "${existing_env}" ]]; then
+  if [[ "${INSTALL_MODE:-legacy}" != "global" && -f "${existing_env}" ]]; then
     set -a
     # shellcheck disable=SC1090
     source "${existing_env}" 2>/dev/null || true
@@ -1533,29 +1552,53 @@ run_self_update() {
   else
     UPDATE_PRESERVE_EXISTING="false"
   fi
-  if [[ -n "${JIRA_HOST:-}" || -n "${JIRA_API_TOKEN:-}" || -n "${JIRA_LOGIN:-}" ]]; then
-    JIRA_MODE="yes"
-  else
-    JIRA_MODE="no"
-  fi
-  if [[ -n "${CONFLUENCE_HOST:-}" || -n "${CONFLUENCE_API_TOKEN:-}" ]]; then
-    CONFLUENCE_MODE="yes"
-  else
-    CONFLUENCE_MODE="no"
-  fi
-  if [[ -n "${SONAR_HOST_URL:-}" || -n "${SONAR_TOKEN:-}" ]]; then
-    SONAR_MODE="yes"
-  else
-    SONAR_MODE="no"
-  fi
-  if [[ -n "${ENVIRONMENTS_JSON:-}" && "${ENVIRONMENTS_JSON:-}" != "[]" ]]; then
-    ENVIRONMENTS_MODE="yes"
-  else
-    ENVIRONMENTS_MODE="no"
-  fi
+  preserve_populated_service_modes false
   UPDATE_MODE="false"
   CHECK_UPDATES_MODE="false"
   return 0
+}
+
+# Opt each already-populated service back in before the managed block is rewritten.
+#
+# This is not a convenience, it prevents data loss. The managed-block writer emits
+# hardcoded empty strings whenever a service's mode resolves to "no", so "no" does
+# not mean "leave it alone", it means "erase it". Any non-interactive rerun over an
+# existing `.env` therefore has to re-assert every service that already has values,
+# or it silently wipes credentials the user never asked it to touch.
+#
+# `respect_explicit=true` leaves a mode the user set on the command line alone, so
+# `--no-jira` still removes Jira. The `--update` path passes false, because there
+# the whole point is to preserve whatever is already configured.
+preserve_populated_service_modes() {
+  local respect_explicit="${1:-false}"
+  if [[ -n "${JIRA_HOST:-}" || -n "${JIRA_API_TOKEN:-}" || -n "${JIRA_LOGIN:-}" ]]; then
+    if [[ "${respect_explicit}" != "true" || "${JIRA_MODE}" == "ask" ]]; then
+      JIRA_MODE="yes"
+    fi
+  elif [[ "${respect_explicit}" != "true" ]]; then
+    JIRA_MODE="no"
+  fi
+  if [[ -n "${CONFLUENCE_HOST:-}" || -n "${CONFLUENCE_API_TOKEN:-}" ]]; then
+    if [[ "${respect_explicit}" != "true" || "${CONFLUENCE_MODE}" == "ask" ]]; then
+      CONFLUENCE_MODE="yes"
+    fi
+  elif [[ "${respect_explicit}" != "true" ]]; then
+    CONFLUENCE_MODE="no"
+  fi
+  if [[ -n "${SONAR_HOST_URL:-}" || -n "${SONAR_TOKEN:-}" ]]; then
+    if [[ "${respect_explicit}" != "true" || "${SONAR_MODE}" == "ask" ]]; then
+      SONAR_MODE="yes"
+    fi
+  elif [[ "${respect_explicit}" != "true" ]]; then
+    SONAR_MODE="no"
+  fi
+  if [[ -n "${ENVIRONMENTS_JSON:-}" && "${ENVIRONMENTS_JSON:-}" != "[]" ]]; then
+    if [[ "${respect_explicit}" != "true" || "${ENVIRONMENTS_MODE}" == "ask" ]]; then
+      ENVIRONMENTS_MODE="yes"
+    fi
+  elif [[ "${respect_explicit}" != "true" ]]; then
+    ENVIRONMENTS_MODE="no"
+  fi
 }
 
 # ------------------------------------------------------------------------------
@@ -1806,8 +1849,16 @@ resolve_install_mode() {
     INSTALL_MODE="legacy"
     return 0
   fi
-  if [[ -f "${DEFAULT_WORKSPACE_ROOT}/.env" && "${VERIFY_MODE}" == "true" ]] \
-    && ! as_is_installed; then
+  # A legacy workspace beside this clone, on a machine with no global install.
+  #
+  # This is checked for every command, not just --verify. Restricting it to
+  # --verify made the same machine answer "legacy" for `./setup.init --verify`
+  # and "global" for a bare run or `--update`, which meant an existing user
+  # typing the v0.36-documented `./setup.init --update` was silently converted
+  # to a global install — different layout, registrations in every detected
+  # host, a launcher on PATH, and `.skills` / PROJECTS_JSON left unmanaged.
+  # Migrating is opt-in: `./setup.init --global`.
+  if [[ -f "${DEFAULT_WORKSPACE_ROOT}/.env" ]] && ! as_is_installed; then
     INSTALL_MODE="legacy"
     return 0
   fi
@@ -1922,6 +1973,15 @@ if [[ "${ASSUME_YES}" == "true" && -f "${ENV_FILE}" && -z "${UPDATE_PRESERVE_EXI
   # shellcheck disable=SC1090
   source "${ENV_FILE}" 2>/dev/null || true
   set +a
+  # Sourcing alone is not enough. Reading the old values back into the shell does
+  # not stop the writer erasing them: a service whose mode resolves to "no" is
+  # written as empty strings regardless of what was just read. So opt each
+  # populated service back in, while still honouring an explicit --no-jira.
+  #
+  # Without this, `./setup.init --yes` on an existing workspace cleared JIRA_HOST,
+  # JIRA_LOGIN, and JIRA_API_TOKEN from inside the managed block. `--update` was
+  # unaffected because run_self_update already did this.
+  preserve_populated_service_modes true
 fi
 
 # Pre-detect GitHub org so we can offer a richer ORG_NAME default.

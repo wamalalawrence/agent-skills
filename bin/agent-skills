@@ -128,19 +128,29 @@ AS_OPT_JSON="false"
 AS_UPDATE_REF=""
 export AS_OPT_HOSTS AS_OPT_ALL_HOSTS AS_OPT_NO_PATH AS_OPT_PURGE
 
+# Guard every flag that takes its value as a separate argument.
+#
+# `shift 2` is a no-op when the flag is the last argument left: it returns
+# non-zero and shifts nothing, so `while [ "$#" -gt 0 ]` re-reads the same
+# argument forever. This script runs without `set -e`, so the failed shift is
+# not fatal on its own — the loop just spins silently. Fail loudly instead.
+need_value() {
+  [ "$#" -ge 2 ] || as_die "option '$1' requires a value" 2
+}
+
 parse_install_options() {
   while [ "$#" -gt 0 ]; do
     case "$1" in
       --yes|-y) AS_OPT_YES="true"; shift ;;
-      --hosts) AS_OPT_HOSTS="${2:-}"; shift 2 ;;
+      --hosts) need_value "$@"; AS_OPT_HOSTS="$2"; shift 2 ;;
       --hosts=*) AS_OPT_HOSTS="${1#*=}"; shift ;;
       --all-hosts) AS_OPT_ALL_HOSTS="true"; shift ;;
       --no-path-link) AS_OPT_NO_PATH="true"; shift ;;
       --purge) AS_OPT_PURGE="true"; shift ;;
       --json) AS_OPT_JSON="true"; shift ;;
-      --source) AGENT_SKILLS_SOURCE="${2:-}"; export AGENT_SKILLS_SOURCE; shift 2 ;;
+      --source) need_value "$@"; AGENT_SKILLS_SOURCE="$2"; export AGENT_SKILLS_SOURCE; shift 2 ;;
       --source=*) AGENT_SKILLS_SOURCE="${1#*=}"; export AGENT_SKILLS_SOURCE; shift ;;
-      --branch) AS_UPDATE_REF="${2:-}"; shift 2 ;;
+      --branch) need_value "$@"; AS_UPDATE_REF="$2"; shift 2 ;;
       --branch=*) AS_UPDATE_REF="${1#*=}"; shift ;;
       --help|-h) usage; exit 0 ;;
       *) as_die "unknown option for '${COMMAND}': $1" 2 ;;
@@ -201,8 +211,9 @@ case "${COMMAND}" in
     ;;
 
   migrate)
+    # No need to source install.sh here: the exec replaces this shell, and
+    # migrate.sh sources what it needs itself.
     require_source
-    . "${AS_LIB_DIR}/install.sh"
     exec bash "${AS_SOURCE_DIR}/lib/migrate.sh" "$@"
     ;;
 

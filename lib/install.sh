@@ -97,6 +97,30 @@ as_is_owned_link() {
   return 1
 }
 
+# True when `path` sits inside the install root.
+#
+# Location-based ownership, as opposed to the target-based test above. We create
+# `~/.agent-skills` and everything in it, so an entry there is ours regardless of
+# where it currently points. Entries in a host's own skills directory get no such
+# presumption — that directory belongs to the user.
+as_in_install_namespace() {
+  local path="$1"
+  local home home_real parent parent_real
+  home="$(as_home)"
+  home_real="$(as_realpath "${home}" 2>/dev/null || printf '%s' "${home}")"
+  parent="$(dirname "${path}")"
+  parent_real="$(cd -P "${parent}" >/dev/null 2>&1 && pwd)" || parent_real="${parent}"
+  case "${parent}" in
+    "${home}"|"${home}"/*) return 0 ;;
+    "${home_real}"|"${home_real}"/*) return 0 ;;
+  esac
+  case "${parent_real}" in
+    "${home}"|"${home}"/*) return 0 ;;
+    "${home_real}"|"${home_real}"/*) return 0 ;;
+  esac
+  return 1
+}
+
 # Create or refresh a symlink at `link` pointing to `target`.
 # Echoes one of: created | kept | relinked | conflict
 as_link_path() {
@@ -108,10 +132,20 @@ as_link_path() {
       printf '%s' 'kept'
       return 0
     fi
-    # A dangling symlink holds no data, so replacing it cannot lose anything —
-    # whatever it used to point at is already gone. This is the repair path for
-    # an install whose source tree was moved and then restored.
-    if [ ! -e "${link}" ] || as_is_owned_link "${link}"; then
+    # Two ways a link may be replaced, and a dangling link needs one of them.
+    #
+    #   * It lives inside our own install root, a namespace we created. Anything
+    #     at `~/.agent-skills/<tree>` is ours by location no matter what it now
+    #     points at, so a canonical tree left dangling by a moved source clone is
+    #     repaired here.
+    #   * Or its literal target points into our install root, which is how a
+    #     registration in a host's directory proves it is ours.
+    #
+    # Neither holds for a dangling link somebody else wrote into a host's skills
+    # directory — an unmounted volume, a repo not yet cloned on this machine, a
+    # directory synced from elsewhere. The link is itself the data, so that is a
+    # conflict to preserve, not a free slot to claim.
+    if as_in_install_namespace "${link}" || as_is_owned_link "${link}"; then
       rm -f "${link}"
       ln -s "${target}" "${link}"
       printf '%s' 'relinked'
@@ -308,6 +342,17 @@ as_install_global() {
   home="$(as_home)"
   version="$(as_read_version_file "${source_dir}/VERSION" || printf 'unknown')"
 
+  # Hard prerequisites, checked before anything is written. Both of these used to
+  # fail silently mid-install and still print "installed globally": the host loop
+  # and the manifest writer are both driven through `$(...)`, which discards the
+  # exit status of whatever ran inside.
+  command -v python3 >/dev/null 2>&1 \
+    || as_die "python3 is required to install agent-skills (it writes the install manifest and resolves access)" 2
+  as_registry_path >/dev/null 2>&1 \
+    || as_die "host registry not found; this source tree is incomplete (expected lib/hosts.registry)" 2
+  [ -n "$(as_registry_rows)" ] \
+    || as_die "host registry is empty; this source tree is incomplete (expected lib/hosts.registry)" 2
+
   printf 'Installing agent-skills %s\n' "${version}"
   printf '  source: %s\n' "${source_dir}"
   printf '  home:   %s\n' "${home}"
@@ -399,7 +444,12 @@ EOF
     as_warn "no writable PATH directory found; use ${home}/bin/agent-skills directly"
   fi
 
-  as_write_manifest "${source_dir}" "${registered}" "${cli_link}"
+  # The manifest is what every later command reads to decide whether this machine
+  # is installed at all, so a failed write must not reach the success banner.
+  as_write_manifest "${source_dir}" "${registered}" "${cli_link}" \
+    || as_die "could not write the install manifest at $(as_manifest_path)" 2
+  [ -s "$(as_manifest_path)" ] \
+    || as_die "install manifest missing or empty at $(as_manifest_path)" 2
 
   printf '\n'
   printf 'Agent Skills v%s installed globally.\n' "${version}"
@@ -476,23 +526,28 @@ as_verify_install() {
     fi
   fi
 
-  local tree
+  local tree tree_errors=0
   for tree in ${AS_LINKED_TREES}; do
     if [ ! -e "${home}/${tree}" ]; then
       # docs and hooks are convenience trees; their absence is not a fault.
       case "${tree}" in docs|hooks) continue ;; esac
       as_fail "${home}/${tree} is missing"
       errors=$((errors + 1))
+      tree_errors=$((tree_errors + 1))
     elif [ -L "${home}/${tree}" ] && [ ! -e "$(as_realpath "${home}/${tree}")" ]; then
       as_fail "${home}/${tree} is a broken symlink"
       errors=$((errors + 1))
+      tree_errors=$((tree_errors + 1))
     fi
   done
-  [ "${errors}" -eq 0 ] && as_ok "canonical trees resolve"
+  # Report on the trees only, not on `errors`, which earlier checks also feed —
+  # otherwise an unrelated earlier failure silently suppresses this line and the
+  # trees look unreported rather than fine.
+  [ "${tree_errors}" -eq 0 ] && as_ok "canonical trees resolve"
 
   # Host integrations: every registration must resolve into the canonical tree.
   printf '\nHost integrations\n'
-  local row id label global_dir register skill_count linked stale name
+  local row id label global_dir register skill_count linked stale foreign entry name
   local canonical="${home}/skills"
   while IFS= read -r row; do
     [ -n "${row}" ] || continue
@@ -513,30 +568,43 @@ as_verify_install() {
     skill_count=0
     linked=0
     stale=0
+    foreign=0
     while IFS= read -r name; do
       [ -n "${name}" ] || continue
       skill_count=$((skill_count + 1))
-      if [ -L "${HOME}/${global_dir}/${name}" ]; then
-        if [ -e "${HOME}/${global_dir}/${name}/SKILL.md" ] \
-          && as_same_path "${HOME}/${global_dir}/${name}" "${canonical}/${name}"; then
+      entry="${HOME}/${global_dir}/${name}"
+      [ -e "${entry}" ] || [ -L "${entry}" ] || continue
+      if as_is_owned_link "${entry}"; then
+        # One of ours: registered only if it still resolves to the canonical
+        # tree, otherwise the source moved and install needs rerunning.
+        if [ -e "${entry}/SKILL.md" ] && as_same_path "${entry}" "${canonical}/${name}"; then
           linked=$((linked + 1))
         else
           stale=$((stale + 1))
         fi
+      else
+        # Not ours. Install deliberately leaves a same-named user skill alone, so
+        # verify must not call that preserved state a failure — there would be no
+        # way to get verify green short of deleting the user's own work.
+        foreign=$((foreign + 1))
       fi
     done <<INNER
 $(as_top_level_skills "${source_dir:-${home}}")
 INNER
 
-    if [ "${linked}" -eq 0 ]; then
+    if [ "${linked}" -eq 0 ] && [ "${stale}" -eq 0 ]; then
       as_info "${label}: no agent-skills registrations in ~/${global_dir}"
     elif [ "${stale}" -gt 0 ]; then
-      as_fail "${label}: ${stale} broken or foreign registration(s) in ~/${global_dir}"
+      as_fail "${label}: ${stale} agent-skills registration(s) in ~/${global_dir} no longer resolve"
+      printf '        Run: agent-skills install   (re-links them)\n' >&2
       errors=$((errors + 1))
-    elif [ "${linked}" -lt "${skill_count}" ]; then
+    elif [ "${linked}" -lt $((skill_count - foreign)) ]; then
       as_warn "${label}: ${linked}/${skill_count} skills registered; rerun install"
     else
       as_ok "${label}: ${linked}/${skill_count} skills resolve to the canonical tree"
+    fi
+    if [ "${foreign}" -gt 0 ]; then
+      as_info "${label}: ${foreign} name(s) in ~/${global_dir} are yours, not ours, and were left alone"
     fi
   done <<EOF
 $(as_registry_rows)

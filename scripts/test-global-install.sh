@@ -611,6 +611,209 @@ fi
 refute "no global install was needed for the in-repo case" \
   test -f "${H10}/.agent-skills/install.json"
 
+
+# ------------------------------------------------------------------------------
+section "a flag given without its value fails instead of hanging"
+# ------------------------------------------------------------------------------
+# `shift 2` shifts nothing when the flag is the last argument, so the parse loop
+# used to spin forever printing nothing. A timeout is the assertion: a hang is a
+# different failure from a rejection, and only the timeout tells them apart.
+H11="$(new_home)"
+for FLAG in --hosts --source --branch; do
+  FLAG_OUT="$(
+    env -i HOME="${H11}" AGENT_SKILLS_HOME="${H11}/.agent-skills" \
+      PATH="/usr/bin:/bin:/usr/local/bin:/opt/homebrew/bin" TERM=dumb \
+      timeout 10 bash "${CLI}" install "${FLAG}" 2>&1
+  )"
+  FLAG_RC=$?
+  if [ "${FLAG_RC}" -eq 124 ]; then
+    bad "install ${FLAG} with no value fails fast" "timed out: still looping"
+  elif [ "${FLAG_RC}" -eq 0 ]; then
+    bad "install ${FLAG} with no value fails fast" "exited 0, should have refused"
+  else
+    ok "install ${FLAG} with no value fails fast"
+  fi
+  case "${FLAG_OUT}" in
+    *"requires a value"*) ok "install ${FLAG} says the value is missing" ;;
+    *) bad "install ${FLAG} says the value is missing" "${FLAG_OUT}" ;;
+  esac
+done
+
+# ------------------------------------------------------------------------------
+section "a foreign DANGLING link in a host directory is not adopted"
+# ------------------------------------------------------------------------------
+# A live foreign link is already covered above. A dangling one was the broken
+# case: ownership was skipped for any link whose target was missing, so a user's
+# link to an unmounted volume was replaced, then deleted by uninstall.
+H12="$(new_home)"
+mkdir -p "${H12}/.claude/skills"
+ln -s "${H12}/not-mounted-volume/my-skills/tech-lead" "${H12}/.claude/skills/tech-lead"
+as_run "${H12}" install --yes >/dev/null 2>&1
+FOREIGN_TARGET="$(readlink "${H12}/.claude/skills/tech-lead" 2>/dev/null || printf '')"
+case "${FOREIGN_TARGET}" in
+  *not-mounted-volume*) ok "a dangling link we did not write still points where it did" ;;
+  *) bad "a dangling link we did not write still points where it did" \
+       "now points at: ${FOREIGN_TARGET}" ;;
+esac
+check "install still registered a skill it does own" \
+  test -L "${H12}/.claude/skills/software-engineer"
+as_run "${H12}" uninstall --yes >/dev/null 2>&1
+check "uninstall did not delete the foreign dangling link" \
+  test -L "${H12}/.claude/skills/tech-lead"
+
+# ------------------------------------------------------------------------------
+section "verify agrees with install about a name collision"
+# ------------------------------------------------------------------------------
+# Install preserves a user's own same-named skill on purpose. Verify used to call
+# that preserved state a FAIL and exit 1, so verify could never go green without
+# deleting the user's own work.
+H13="$(new_home)"
+mkdir -p "${H13}/.claude/skills/tech-lead"
+printf -- '---\nname: tech-lead\n---\nmy own skill\n' \
+  > "${H13}/.claude/skills/tech-lead/SKILL.md"
+as_run "${H13}" install --yes >/dev/null 2>&1
+V13="$(as_run "${H13}" verify 2>&1)"
+V13_RC=$?
+if [ "${V13_RC}" -eq 0 ]; then
+  ok "verify exits 0 when the only oddity is a user skill install kept"
+else
+  bad "verify exits 0 when the only oddity is a user skill install kept" "${V13}"
+fi
+case "${V13}" in
+  *"are yours, not ours"*) ok "verify says whose the preserved entry is" ;;
+  *) bad "verify says whose the preserved entry is" "${V13}" ;;
+esac
+check "the user's own skill file was never touched" \
+  test -f "${H13}/.claude/skills/tech-lead/SKILL.md"
+
+# ------------------------------------------------------------------------------
+section "an incomplete source tree fails loudly, not silently"
+# ------------------------------------------------------------------------------
+# A missing host registry used to register nothing, print "installed globally",
+# and exit 0, because the host loop runs inside $(...) where the exit status of
+# whatever it contains is discarded.
+H14="$(new_home)"
+BROKEN_SRC="${H14}/broken-source"
+mkdir -p "${BROKEN_SRC}"
+for ITEM in bin lib scripts skills docs hooks VERSION; do
+  [ -e "${REPO_ROOT}/${ITEM}" ] && cp -R "${REPO_ROOT}/${ITEM}" "${BROKEN_SRC}/" 2>/dev/null
+done
+rm -f "${BROKEN_SRC}/lib/hosts.registry"
+B14="$(
+  env -i HOME="${H14}" AGENT_SKILLS_HOME="${H14}/.agent-skills" \
+    AGENT_SKILLS_SOURCE="${BROKEN_SRC}" \
+    PATH="/usr/bin:/bin:/usr/local/bin:/opt/homebrew/bin" TERM=dumb \
+    bash "${BROKEN_SRC}/bin/agent-skills" install --yes 2>&1
+)"
+B14_RC=$?
+if [ "${B14_RC}" -ne 0 ]; then
+  ok "install fails when the host registry is missing"
+else
+  bad "install fails when the host registry is missing" "exit 0: ${B14}"
+fi
+case "${B14}" in
+  *"installed globally"*) bad "install does not claim success without a registry" "${B14}" ;;
+  *) ok "install does not claim success without a registry" ;;
+esac
+case "${B14}" in
+  *registry*) ok "install names the registry as the missing piece" ;;
+  *) bad "install names the registry as the missing piece" "${B14}" ;;
+esac
+
+# ------------------------------------------------------------------------------
+section "task scratch does not dirty the repository it runs in"
+# ------------------------------------------------------------------------------
+# The cache moved inside the repo being worked on, so start-task left an
+# untracked .cache/ behind and an agent running `git add -A` would commit it.
+H15="$(new_home)"
+as_run "${H15}" install --yes >/dev/null 2>&1
+SCRATCH_REPO="${H15}/scratch-repo"
+mkdir -p "${SCRATCH_REPO}"
+(
+  cd "${SCRATCH_REPO}" || exit 1
+  git init --quiet 2>/dev/null
+  git config user.email t@example.com 2>/dev/null
+  git config user.name tester 2>/dev/null
+  printf 'hello\n' > README.md
+  git add README.md 2>/dev/null
+  git commit --quiet -m init 2>/dev/null
+)
+env -i HOME="${H15}" AGENT_SKILLS_HOME="${H15}/.agent-skills" \
+  PATH="/usr/bin:/bin:/usr/local/bin:/opt/homebrew/bin" TERM=dumb \
+  bash -c "cd '${SCRATCH_REPO}' && bash '${CLI}' start-task --skill software-engineer" \
+  >/dev/null 2>&1
+DIRT="$(cd "${SCRATCH_REPO}" && git status --porcelain 2>/dev/null)"
+case "${DIRT}" in
+  *.cache*) bad "start-task leaves the repository clean" "git status shows: ${DIRT}" ;;
+  *) ok "start-task leaves the repository clean" ;;
+esac
+if grep -qx '\.cache/' "${SCRATCH_REPO}/.git/info/exclude" 2>/dev/null; then
+  ok "the cache is excluded locally, without editing a tracked .gitignore"
+else
+  bad "the cache is excluded locally, without editing a tracked .gitignore"
+fi
+refute "no tracked .gitignore was created in the user repo" \
+  test -f "${SCRATCH_REPO}/.gitignore"
+
+
+# ------------------------------------------------------------------------------
+section "an existing legacy workspace is not silently migrated"
+# ------------------------------------------------------------------------------
+# resolve_install_mode consulted the legacy .env beside the clone only when
+# --verify was passed, so the same machine answered "legacy" for
+# `./setup.init --verify` and "global" for a bare run or --update. An existing
+# user typing the v0.36-documented command was converted without being told.
+H16="$(new_home)"
+LEGACY_WS="${H16}/legacy workspace"
+LEGACY_CLONE="${LEGACY_WS}/agent-skills"
+mkdir -p "${LEGACY_CLONE}"
+for ITEM in bin lib scripts skills docs hooks VERSION setup.init .env.example; do
+  [ -e "${REPO_ROOT}/${ITEM}" ] && cp -R "${REPO_ROOT}/${ITEM}" "${LEGACY_CLONE}/" 2>/dev/null
+done
+# A v0.36-shaped workspace: a managed .env beside the clone, plus the artifacts
+# that model created.
+cat > "${LEGACY_WS}/.env" <<'ENVEOF'
+# >>> agent-skills setup.init
+JIRA_HOST=
+JIRA_LOGIN=
+# <<< agent-skills setup.init
+ENVEOF
+ln -s "${LEGACY_CLONE}/skills" "${LEGACY_WS}/.skills"
+printf '0.36.0\n' > "${LEGACY_WS}/.agent-skills.lock"
+
+as_setup() {
+  env -i HOME="${H16}" \
+    PATH="/usr/bin:/bin:/usr/sbin:/sbin:/usr/local/bin:/opt/homebrew/bin" \
+    TERM=dumb \
+    bash "${LEGACY_CLONE}/setup.init" "$@" 2>&1
+}
+
+for INVOCATION in "--verify" "--yes --no-connectivity-check --no-credential-probe"; do
+  # shellcheck disable=SC2086
+  ROUTE_OUT="$(as_setup ${INVOCATION})"
+  case "${ROUTE_OUT}" in
+    *"legacy workspace model"*)
+      ok "setup.init ${INVOCATION} keeps the legacy workspace model" ;;
+    *)
+      bad "setup.init ${INVOCATION} keeps the legacy workspace model" \
+        "$(printf '%s' "${ROUTE_OUT}" | head -5)" ;;
+  esac
+done
+refute "no global install root was created behind the user's back" \
+  test -e "${H16}/.agent-skills/install.json"
+refute "no launcher was put on PATH behind the user's back" \
+  test -e "${H16}/.local/bin/agent-skills"
+check "the legacy .skills symlink is still there" test -L "${LEGACY_WS}/.skills"
+
+# Opting in explicitly must still work.
+ROUTE_OUT="$(as_setup --global --yes)"
+case "${ROUTE_OUT}" in
+  *"installed globally"*) ok "--global still opts in to the new model" ;;
+  *) bad "--global still opts in to the new model" \
+       "$(printf '%s' "${ROUTE_OUT}" | tail -5)" ;;
+esac
+check "opting in created the global install" test -f "${H16}/.agent-skills/install.json"
+
 # ------------------------------------------------------------------------------
 printf '\n'
 if [ "${FAIL}" -eq 0 ]; then

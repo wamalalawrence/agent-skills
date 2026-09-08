@@ -107,12 +107,18 @@ Install once. Use from any local project. Configure external access only when ne
 
 ### Security
 
-- **A committed file can never select a credential identity.** `.agent-skills.yml` is checked into a
-  repository, so from the resolver's point of view it is attacker-controlled. It may declare *what*
-  a service is; its `credentials:` block is never read. `.agent-skills.local.yml` is honoured only
-  when **git confirms it is untracked**, verified rather than inferred from the filename. Probed
-  with two identities present so nothing could be auto-selected: the committed request yielded
-  `needs-setup`, and no secret was reached.
+- **A committed file can never select a credential identity, nor route one.** `.agent-skills.yml` is
+  checked into a repository, so from the resolver's point of view it is attacker-controlled. It may
+  declare *what* a service is; its `credentials:` block is never read. `.agent-skills.local.yml` is
+  honoured only when **git confirms it is untracked**, verified rather than inferred from the
+  filename, and refused outright when git cannot answer.
+  Blocking *selection* turned out not to be sufficient, and a pre-merge review of this release's own
+  diff proved it: because resolution fills fields independently, a repository `.env` could supply
+  `host` while a machine identity supplied `token`, aiming a corporate credential at an
+  attacker-chosen endpoint and reporting `resolved` — without ever naming an identity. Every
+  credential source inside a repository is now tracked-checked, and a repo-supplied host that
+  disagrees with the identity's recorded `resource` refuses the identity and reports a `security:`
+  finding. Both holes are pinned by tests confirmed to fail against the pre-fix code.
 - **Secrets leave plaintext `.env` behind.** A credential that is genuinely needed goes to the OS
   credential store. Metadata — profile name, service, resource, account, field names, timestamps —
   lives in user configuration at mode `0600`; values never do.
@@ -125,15 +131,19 @@ Install once. Use from any local project. Configure external access only when ne
 - **Resolution is not authorization.** Every result restates it, because finding a credential is
   exactly the moment the distinction gets lost. The
   [destructive-action safety policy](docs/destructive-action-safety.md) is unchanged.
-- **The installer never touches what it does not own.** Only symlinks resolving into the install root
-  are created, replaced, or removed. An attacker-planted symlink at a name we register is left
-  pointing where it was and reported; an unmanaged path at a canonical location makes the install
-  refuse rather than replace it.
+- **The installer never touches what it does not own.** A link is ours by **location** (inside the
+  install root we created) or by **literal target** (a registration pointing back into it). Anything
+  satisfying neither is left pointing where it was and reported, including a *dangling* link — a
+  broken link is still the user's data, and a link to an unmounted volume is not a free slot. An
+  unmanaged path at a canonical location makes the install refuse rather than replace it.
 - **Names are rejected, not sanitised.** Eight hostile profile and service names were probed and
   refused, with no injection artifact created. One transformation is applied and now documented
   precisely: case-folding, so `Work-Jira` and `work-jira` are one identity.
-- **One finding raised during the review and resolved**, plus **one residual risk accepted and
-  documented** with a control. Both are recorded in the security review rather than left implicit.
+- **Three findings raised and fixed; two residual risks accepted and documented** with controls and
+  measurements. One finding came from the review itself, two from a pre-merge review of the diff after
+  the release was already green. The security review records all of it, including the fact that its
+  own first probe of the critical criterion passed for an unrelated reason and therefore proved
+  nothing.
 
 ### Fixed
 
@@ -145,7 +155,54 @@ Install once. Use from any local project. Configure external access only when ne
   clone was moved or deleted, `uninstall` no longer recognised its own links and orphaned them.
   Ownership now also checks the literal link target, which is what survives a broken chain.
 - **A dangling symlink at a managed path could not be repaired**, because it was treated as a
-  conflict. A dangling link holds no data, so it is now always replaceable.
+  conflict. Repair is now driven by ownership: a link inside the install root, or one whose literal
+  target points back into it, is replaceable even while broken. A dangling link that is neither stays
+  put.
+
+Found by a pre-merge review of the release diff, after every suite was already passing:
+
+- **`agent-skills install --hosts` looped forever, printing nothing.** `--hosts`, `--source`, and
+  `--branch` used `shift 2`, which shifts nothing when the flag is the last argument, so the parse
+  loop re-read it indefinitely. The same three flags in `setup.init` exited 1 with no message. Every
+  flag taking a separate value now fails with a reason.
+- **A missing `lib/hosts.registry` or missing `python3` reported success.** Install registered
+  nothing, wrote no manifest, printed "installed globally", and exited 0 — after which every
+  manifest-dependent command reported the machine as not installed. Both are now prerequisites checked
+  before anything is written, and the manifest is verified before the success banner.
+- **`./setup.init` and `./setup.init --update` silently migrated a legacy workspace.** The legacy
+  workspace was detected only under `--verify`, so the same machine answered "legacy" for `--verify`
+  and "global" for the command v0.36 documented for updates. Legacy detection now applies to every
+  command; moving to the global model is opt-in via `--global`. The global path also no longer sources
+  a legacy `.env`, which could otherwise redirect `AGENT_SKILLS_HOME` or `PATH`.
+- **`agent-skills verify` could never go green after a name collision.** Install deliberately preserves
+  a user's own same-named skill; verify counted that as a broken registration and exited 1. Verify now
+  distinguishes "ours but broken" from "yours, left alone".
+- **A resolution via an authenticated tool reported no fields at all.** `status: resolved` came back
+  with `fields_present` and `fields_missing` both empty, so a caller branching on the latter concluded
+  it held a host and a token. The probes also matched on service name alone, so a `gh` session for
+  github.com "resolved" a GitHub Enterprise host. Fields are now populated, and a probe that cannot be
+  shown to serve the requested resource no longer short-circuits.
+- **Task scratch dirtied every repository it ran in.** `start-task` created `.cache/` at the repo root
+  with nothing ignoring it, so an agent running `git add -A` would commit ticket notes and
+  investigation state. The entry now goes in `.git/info/exclude`: local to the clone, never committed,
+  and no edit to a tracked `.gitignore`.
+- **A profile split across two secret stores lost one of them.** `backend` was a single scalar
+  overwritten by the most recent write, so an earlier secret became unreadable *and* undeletable —
+  `forget` looked in the wrong store. Storage is now recorded per secret field.
+- **`access import-legacy --apply` overwrote an existing identity** and read in-repo files without a
+  tracked check. A clash now refuses and points at `--force`.
+- **`migrate --remove-obsolete` deleted `.skills` on filename alone**, the one deletion in the release
+  that did not verify the target was ours. It now checks ownership first.
+- **A committed `project.build` was the one value an agent was told it need not confirm.** Committed
+  build and format commands are executable and editable by anyone who can open a pull request, so they
+  are now listed under `needs_confirmation`. Descriptive fields are unchanged.
+- **A bare `./setup.init --yes` on an existing legacy workspace erased its own credentials.** The
+  managed-block writer emits empty strings for any service whose mode resolves to "no", so "no" meant
+  *erase* rather than *leave alone*, and a non-interactive rerun cleared `JIRA_HOST`, `JIRA_LOGIN`,
+  and `JIRA_API_TOKEN` from inside the block. `--update` was unaffected because it already opted
+  populated services back in; that logic is now shared, and honours an explicit `--no-jira` so
+  removing a service still works. This predates v0.37.0, and was found because the routing fix above
+  sends a bare run down the legacy path instead of quietly migrating it.
 
 ### Telemetry review
 

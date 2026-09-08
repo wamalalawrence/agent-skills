@@ -69,6 +69,15 @@ to show for it.
 If `<repo>/.agent-skills/skills/` exists, use it. This is the recommended layout for cloud and
 offline agents, and a repository that vendored a copy did so on purpose.
 
+Be aware of what this means: a vendored copy **silently outranks the global install**, so cloning a
+repository can change the instruction set an agent executes. Before v0.37.0 that combination stopped
+and asked. It no longer does, because in the layouts this rule exists to serve — cloud runners,
+offline machines — stopping was the wrong answer far more often than it was the right one.
+
+The mitigations are drift detection below, and the fact that these files are visible in the
+repository's own diff. Treat an unexpected `.agent-skills/skills/` in a repository you do not
+control the same way you would treat an unexpected CI workflow change.
+
 ### 4. Global canonical install
 
 `${AGENT_SKILLS_HOME}/skills` — the default `~/.agent-skills/skills`. This is the normal answer for
@@ -81,8 +90,12 @@ already here: those are symlinks into this tree.
 
 For installs that predate v0.37.0 and have not migrated:
 
-- `<workspace>/.skills/` — the symlink the old `setup.init` created;
-- `<workspace>/agent-skills/skills/` — a sibling clone with no symlink.
+In this order, so the rule stays decidable when both are present:
+
+1. `<workspace>/.skills/` — the symlink the old `setup.init` created. Preferred, because it is what
+   that installer actually pointed agents at.
+2. `<workspace>/agent-skills/skills/` — a sibling clone with no symlink. The fallback for a
+   workspace whose symlink was never created or has since been deleted.
 
 Both still work. Surface a one-line note that `./setup.init` now installs globally and
 `agent-skills migrate` explains the move. Do not block on it.
@@ -98,9 +111,10 @@ The old rule "two or more sources match and none is configured ⇒ stop and ask"
 because `.skills`, a sibling clone, and a vendored copy were genuinely ambiguous, and the operator
 was the only one who could break the tie.
 
-The order above is now total: every rule has a strictly higher precedence than the next. There is
-always a first match, so there is nothing to ask about. Keeping an ambiguity rule that can no longer
-fire would be historical baggage that teaches agents to stop when they should proceed.
+The order above is now total, including inside rule 5, where the two legacy sources are ranked
+against each other rather than listed side by side. There is always a first match, so there is
+nothing to ask about. Keeping an ambiguity rule that can no longer fire would be historical baggage
+that teaches agents to stop when they should proceed.
 
 What remains is drift detection, below. That was always the part with real value.
 

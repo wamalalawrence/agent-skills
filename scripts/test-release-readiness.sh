@@ -231,8 +231,24 @@ if git worktree add -q --detach "$UP/previous" "$PREVIOUS_TAG" 2>/dev/null; then
   else
     bad "$PREVIOUS_TAG layout" "$(tail -5 "$UP/old.log")"
   fi
-  printf 'JIRA_HOST="https://legacy.example.com"\n' >> "$UP/work/.env"
-  printf 'JIRA_API_TOKEN="legacy-token-value-1234"\n' >> "$UP/work/.env"
+  # Put the credentials where setup.init itself writes them: inside the managed
+  # block. Appending them after the block instead tests a shape setup.init
+  # deliberately normalises away, which made this section pass for the wrong
+  # reason. In-block is what a real v0.36 user has.
+  python3 - "$UP/work/.env" <<'PY'
+import sys
+path = sys.argv[1]
+with open(path, encoding="utf-8") as handle:
+    text = handle.read()
+text = text.replace('JIRA_HOST=""', 'JIRA_HOST="https://legacy.example.com"')
+text = text.replace('JIRA_LOGIN=""', 'JIRA_LOGIN="me@example.com"')
+text = text.replace('JIRA_API_TOKEN=""', 'JIRA_API_TOKEN="legacy-token-value-1234"')
+with open(path, "w", encoding="utf-8") as handle:
+    handle.write(text)
+PY
+  grep -q 'JIRA_HOST="https://legacy.example.com"' "$UP/work/.env" \
+    && good "fixture seeded a credential inside the managed block" \
+    || bad "fixture could not seed the managed block"
 
   rm -rf "$UP/work/agent-skills"
   cp -R "$REPO" "$UP/work/agent-skills"
@@ -244,13 +260,42 @@ if git worktree add -q --detach "$UP/previous" "$PREVIOUS_TAG" 2>/dev/null; then
       AGENT_SKILLS_CONFIG_DIR="$UP_HOME/.config/agent-skills" \
       PATH="$UP_HOME/.local/bin:$PATH" "$@"
   }
+  # A bare run on an existing legacy workspace must KEEP the legacy model. Before
+  # v0.37.0 this silently converted the user to a global install, which is a
+  # different layout, registrations in every detected host, and a launcher on
+  # PATH — none of it asked for. Migrating is opt-in via --global.
   ( cd "$UP/work/agent-skills" && run_upgraded ./setup.init --yes ) >"$UP/new.log" 2>&1 \
-    && good "upgrade install exits 0" || bad "upgrade install" "$(tail -5 "$UP/new.log")"
+    && good "a bare run on a legacy workspace exits 0" \
+    || bad "bare run on a legacy workspace" "$(tail -5 "$UP/new.log")"
+  grep -q 'legacy workspace model' "$UP/new.log" \
+    && good "a bare run keeps the legacy workspace model" \
+    || bad "bare run did not report the legacy model" "$(tail -5 "$UP/new.log")"
   [ -f "$UP_HOME/.agent-skills/install.json" ] \
-    && good "upgrade produced a global install" || bad "no global install after upgrade"
+    && bad "a bare run silently migrated the user to a global install" \
+    || good "a bare run created no global install"
   [ -f "$UP/work/.env" ] && good "upgrade did not delete the legacy .env" || bad "legacy .env deleted"
   [ -L "$UP/work/.skills" ] \
     && good "upgrade left the legacy .skills alone" || bad ".skills removed by upgrade"
+  # The managed-block writer emits empty strings for any service whose mode
+  # resolves to "no", so a rerun that does not opt populated services back in
+  # erases credentials it was never asked to touch.
+  grep -q 'JIRA_HOST="https://legacy.example.com"' "$UP/work/.env" \
+    && good "a bare rerun preserved the in-block Jira credential" \
+    || bad "a bare rerun cleared the in-block Jira credential" \
+         "$(grep -E '^JIRA_(HOST|LOGIN|API_TOKEN)=' "$UP/work/.env")"
+  grep -q 'JIRA_API_TOKEN="legacy-token-value-1234"' "$UP/work/.env" \
+    && good "a bare rerun preserved the in-block Jira token" \
+    || bad "a bare rerun cleared the in-block Jira token"
+
+  # Opting in explicitly is what produces the new model.
+  ( cd "$UP/work/agent-skills" && run_upgraded ./setup.init --global --yes ) \
+    >"$UP/optin.log" 2>&1 \
+    && good "--global exits 0 on a legacy workspace" \
+    || bad "--global on a legacy workspace" "$(tail -5 "$UP/optin.log")"
+  [ -f "$UP_HOME/.agent-skills/install.json" ] \
+    && good "--global produced the global install" || bad "no global install after --global"
+  [ -f "$UP/work/.env" ] \
+    && good "opting in still did not delete the legacy .env" || bad "--global deleted the legacy .env"
 
   ( cd "$UP/work/agent-skills" \
       && run_upgraded bash lib/migrate.sh --workspace-root "$UP/work" ) >"$UP/migrate.log" 2>&1

@@ -398,6 +398,20 @@ def build_context(cwd):
             "build command %r is inferred from the build system, not read from this "
             "repository. Confirm it before treating a run as authoritative." % build
         )
+    # A committed value is more specific than inference, which is why it wins in
+    # `pick` — but `.agent-skills.yml` is editable by anyone who can open a pull
+    # request, and these two fields are shell commands that get executed. Being
+    # read from the repository is not the same as being vouched for by the user,
+    # so committed commands are listed for confirmation rather than presented as
+    # established. Descriptive fields like the project name are not commands and
+    # do not get this treatment.
+    for command_field, command_value in (("build", build), ("format", fmt)):
+        if command_value and sources.get(command_field, "").startswith("committed"):
+            needs_confirmation.append(
+                "%s command %r comes from the committed .agent-skills.yml, which anyone "
+                "who can open a pull request can edit. Confirm it before running it."
+                % (command_field, command_value)
+            )
     if not in_git:
         needs_confirmation.append(
             "this directory is not a git repository, so branch, remote, and diff-based "

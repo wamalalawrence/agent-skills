@@ -1,8 +1,15 @@
 #!/usr/bin/env python3
 """Resolve access to an external service, lazily and generically.
 
-This is the single access-resolution mechanism every skill uses. It replaced a
-per-skill scramble through `.env`, `.jira-config.yml`, and ad-hoc prompting.
+This is the general-purpose access-resolution mechanism, and the documented path
+for any service the project has no bespoke support for. It replaces a per-skill
+scramble through `.env`, `.jira-config.yml`, and ad-hoc prompting.
+
+Adoption is partial as of v0.37.0, and saying otherwise would be a lie an auditor
+could check: skills reach it through `docs/auth-discovery.md`, and `doctor.sh`
+reports on secret storage through it, but the tracker preflight still runs
+`auth-preflight.py`. Migrating that is tracked as a follow-up in
+`eval-runs/v0.37.0/summary.md`.
 
 Three properties matter more than any feature here:
 
@@ -215,6 +222,21 @@ class KeychainBackend:
         return "agent-skills:%s:%s" % (profile, field)
 
     def store(self, profile: str, field: str, value: str) -> None:
+        # The value is passed in argv, so it is visible to a same-user `ps` for
+        # the duration of this call. That is a known and accepted exposure, not an
+        # oversight — the two alternatives are worse:
+        #
+        #   * `-w` with no value and the secret piped on stdin exits 0 and stores
+        #     an EMPTY secret (measured on macOS 15). Silent credential loss.
+        #   * `security -i` does read commands from stdin, but it parses them as a
+        #     command stream, so a secret containing a newline would inject a
+        #     second `security` command. Trading a local timing window for an
+        #     injection vector is not an improvement.
+        #
+        # There is no stdlib Keychain API, and adding a dependency to a
+        # zero-dependency installer costs more than it buys. Recorded in
+        # docs/known-limitations.md and docs/security-review-v0.37.0.md.
+        #
         # `-U` updates in place, so re-running set does not stack entries.
         result = subprocess.run(
             [
@@ -402,14 +424,13 @@ def select_backend(preferred: str = ""):
     return FileBackend()
 
 
-def backend_for_profile(entry: dict):
-    """Return the backend a stored profile says it used.
+def _backend_named(recorded: str, entry: dict):
+    """Resolve a recorded backend name to an instance, refusing downgrades.
 
     A profile written to the keychain must not silently start reading from the
     file fallback: that is how a "working" credential quietly becomes a
     different, weaker one. Downgrades are reported, never assumed.
     """
-    recorded = entry.get("backend", "")
     for backend in BACKENDS:
         if backend.name == recorded:
             if backend.available():
@@ -422,23 +443,88 @@ def backend_for_profile(entry: dict):
     return select_backend(), None
 
 
+def backend_for_field(entry: dict, field: str):
+    """Backend one specific secret field was stored in.
+
+    Storage is recorded per field, not per profile. A single `backend` scalar
+    could not describe a profile whose `token` went to the Keychain and whose
+    later `client_secret` was written with `--backend file`: the second write
+    overwrote the scalar, so the Keychain value became unreadable *and*
+    undeletable — `forget` looked for it in the wrong store, and the secret
+    outlived the identity that owned it.
+    """
+    per_field = entry.get("secret_backends")
+    recorded = ""
+    if isinstance(per_field, dict):
+        recorded = str(per_field.get(field, "") or "")
+    if not recorded:
+        # Profiles written before per-field records existed carry one scalar.
+        recorded = str(entry.get("backend", "") or "")
+    return _backend_named(recorded, entry)
+
+
+def backend_for_profile(entry: dict):
+    """Backend for a profile as a whole. Prefer `backend_for_field`."""
+    return _backend_named(str(entry.get("backend", "") or ""), entry)
+
+
+def profile_secret_backends(entry: dict):
+    """Every distinct backend holding a secret for this profile, with its fields."""
+    grouped = {}
+    for field in entry.get("secret_fields", []) or []:
+        per_field = entry.get("secret_backends")
+        recorded = ""
+        if isinstance(per_field, dict):
+            recorded = str(per_field.get(field, "") or "")
+        if not recorded:
+            recorded = str(entry.get("backend", "") or "")
+        grouped.setdefault(recorded, []).append(field)
+    return grouped
+
+
 # ----------------------------------------------------------------------------
 # Repository identity and trust
 # ----------------------------------------------------------------------------
 def run_git(args, cwd: Path):
+    state, output, _ = run_git_checked(args, cwd)
+    return output if state == "ok" else None
+
+
+def run_git_checked(args, cwd: Path):
+    """Run git and report whether git itself was able to answer.
+
+    Returns `(state, stdout, stderr)` where state is one of:
+
+      "ok"        git ran and exited 0 — the output is an answer.
+      "refused"   git ran and exited non-zero — also an answer ("no").
+      "unusable"  git could not answer: no binary, unreadable cwd, dubious
+                  ownership, a broken GIT_DIR, a permissions error on .git.
+
+    The third state exists because "git says this file is not tracked" and "git
+    could not tell me whether this file is tracked" must not collapse into the
+    same value. Collapsing them is what makes a tracked-file check fail open.
+    """
     try:
         result = subprocess.run(
             ["git"] + args,
             cwd=str(cwd),
             stdout=subprocess.PIPE,
-            stderr=subprocess.DEVNULL,
+            stderr=subprocess.PIPE,
             text=True,
         )
     except OSError:
-        return None
-    if result.returncode != 0:
-        return None
-    return result.stdout.strip()
+        return "unusable", "", ""
+    if result.returncode == 0:
+        return "ok", result.stdout.strip(), result.stderr.strip()
+    return "refused", result.stdout.strip(), result.stderr.strip()
+
+
+# git exits non-zero both for "this is not a repository" and for conditions that
+# mean "I refuse to operate here". Only the first is an answer.
+_GIT_NOT_A_REPO = re.compile(
+    r"not a git repository|does not appear to be a git repository", re.I
+)
+_GIT_DID_NOT_MATCH = re.compile(r"did not match any file", re.I)
 
 
 def git_root(cwd: Path):
@@ -488,22 +574,69 @@ def project_identity(cwd: Path) -> dict:
     }
 
 
-def path_is_tracked(path: Path) -> bool:
-    """True when git tracks this path.
+def tracked_state(path: Path) -> str:
+    """Whether git tracks this path: "tracked", "untracked", or "unknown".
 
-    Used to enforce the rule that a committed file cannot select a credential
-    profile. Checked with git rather than inferred from the filename, because
-    `.agent-skills.local.yml` is only trustworthy if it is actually untracked.
+    Enforces the rule that a committed file cannot select a credential profile
+    or supply credential values. Asked of git rather than inferred from the
+    filename, because `.agent-skills.local.yml` is only trustworthy if it really
+    is untracked.
+
+    "unknown" is a distinct answer on purpose. An earlier version returned a
+    plain bool and mapped every git failure to False — "not tracked", therefore
+    trusted — so removing git from PATH, or a `detected dubious ownership`
+    error, or a restricted-PATH agent container was enough to make a *committed*
+    file authoritative. Callers must treat "unknown" as untrusted.
     """
-    root = git_root(path.parent)
-    if root is None:
-        return False
+    state, output, stderr = run_git_checked(
+        ["rev-parse", "--show-toplevel"], path.parent
+    )
+    if state == "unusable":
+        return "unknown"
+    if state == "refused":
+        # A genuine "there is no repository here" is an answer: nothing can have
+        # committed this file. Anything else means git declined to operate.
+        return "untracked" if _GIT_NOT_A_REPO.search(stderr) else "unknown"
+    if not output:
+        return "unknown"
+    root = Path(output)
     try:
         relative = path.resolve().relative_to(root.resolve())
     except ValueError:
-        return False
-    listed = run_git(["ls-files", "--error-unmatch", str(relative)], root)
-    return bool(listed)
+        # Outside the work tree git just reported, so that repository cannot be
+        # tracking it. Reached via symlinked paths.
+        return "untracked"
+    state, _, stderr = run_git_checked(
+        ["ls-files", "--error-unmatch", str(relative)], root
+    )
+    if state == "ok":
+        return "tracked"
+    if state == "refused":
+        return "untracked" if _GIT_DID_NOT_MATCH.search(stderr) else "unknown"
+    return "unknown"
+
+
+def path_is_trusted_untracked(path: Path):
+    """`(trusted, reason)` for a file that is only credible when not committed.
+
+    `reason` is None when the file may be used, and a user-facing explanation
+    when it may not.
+    """
+    state = tracked_state(path)
+    if state == "untracked":
+        return True, None
+    if state == "tracked":
+        return False, (
+            "%s is tracked by git and was ignored. A committed file must not "
+            "carry credentials or name a credential profile. Remove it from git "
+            "and add it to .gitignore." % path.name
+        )
+    return False, (
+        "%s was ignored because git could not confirm it is untracked. This "
+        "file is only trusted when it is provably not committed, so it is "
+        "refused when that cannot be checked (git missing, or refusing to read "
+        "this repository)." % path.name
+    )
 
 
 # ----------------------------------------------------------------------------
@@ -656,6 +789,25 @@ CAPABILITY_PROBES = (
     ),
 )
 
+# The host(s) a successful probe can be trusted to speak for, keyed by the first
+# needle of each group above.
+#
+# A probe answers "is this tool logged in", not "is this tool logged in to the
+# host the caller asked about". Without this, a `gh` session for github.com
+# resolved a GitHub Enterprise request and a `jira` CLI configured for one tenant
+# resolved another. An empty tuple means the host cannot be determined from the
+# probe at all, so a request naming a specific resource is never short-circuited
+# on that tool alone.
+CAPABILITY_SERVED_HOSTS = {
+    "github": ("github.com",),
+    "gitlab": ("gitlab.com",),
+    "aws": (),
+    "gcp": (),
+    "azure": (),
+    "kubernetes": (),
+    "jira": (),
+}
+
 MCP_CONFIG_CANDIDATES = (
     ".mcp.json",
     "mcp.json",
@@ -710,17 +862,43 @@ def detect_mcp(service: str, cwd: Path):
     }
 
 
-def detect_capability(service: str, cwd: Path):
+def detect_capability(service: str, cwd: Path, resource: str = ""):
+    """Report an already-authenticated tool that could serve this request.
+
+    `serves_resource` in the result says whether the probe can be trusted for the
+    resource the caller named. False means "this tool is logged in, but not
+    provably to the host you asked about" — worth telling the user about, not
+    worth treating as a resolution.
+    """
     lowered = service.lower()
+    wanted = resource_host(resource) if resource else ""
     for needles, kind, detail, probe in CAPABILITY_PROBES:
         if not any(needle in lowered for needle in needles):
             continue
         try:
-            if probe():
-                return {"kind": kind, "detail": detail, "source": "cli"}
+            if not probe():
+                continue
         except Exception:
             continue
-    return detect_mcp(service, cwd)
+        served = CAPABILITY_SERVED_HOSTS.get(needles[0], ())
+        if not wanted:
+            serves = True
+        elif served and wanted in served:
+            serves = True
+        else:
+            serves = False
+        result = {"kind": kind, "detail": detail, "source": "cli", "serves_resource": serves}
+        if not serves:
+            result["detail"] = (
+                "%s, but it could not be confirmed to serve %s, so it was not "
+                "treated as resolving this request" % (detail, resource)
+            )
+        return result
+    found = detect_mcp(service, cwd)
+    if found is not None:
+        # MCP detection reads configuration files; it never confirms a host.
+        found.setdefault("serves_resource", not wanted)
+    return found
 
 
 # ----------------------------------------------------------------------------
@@ -769,12 +947,9 @@ def read_local_overrides(root: Path):
     path = local_override_path(root)
     if not path.is_file():
         return {}, None
-    if path_is_tracked(path):
-        return {}, (
-            "%s is tracked by git and was ignored. A committed file must not "
-            "carry credentials or name a credential profile. Remove it from git "
-            "and add it to .gitignore." % path.name
-        )
+    trusted, reason = path_is_trusted_untracked(path)
+    if not trusted:
+        return {}, reason
     return read_simple_yaml(path), None
 
 
@@ -814,16 +989,48 @@ def read_legacy_sources(root: Path, cwd: Path):
     """
     values = {}
     sources = []
+    refusals = []
+    repo_supplied = set()
+    root_resolved = root.resolve()
+
+    def inside_repo(path: Path) -> bool:
+        try:
+            path.resolve().relative_to(root_resolved)
+        except ValueError:
+            return False
+        return True
+
+    def usable(path: Path) -> bool:
+        """A legacy config file is only credible when it is not committed.
+
+        The tracked-file rule was written for `.agent-skills.local.yml`, but the
+        legacy files are the ones that carry the actual values, so it has to
+        apply here too. Without it a committed `.env` inside a repository is read
+        on the same footing as one a user wrote by hand in their own workspace.
+        """
+        if not inside_repo(path):
+            return True
+        trusted, reason = path_is_trusted_untracked(path)
+        if not trusted:
+            refusals.append(reason)
+        return trusted
+
     for directory in legacy_config_candidates(root, cwd):
         for name in (".env", ".env.local"):
             path = directory / name
             if path.is_file():
+                if not usable(path):
+                    continue
                 found = read_env_file(path)
                 if found:
                     values.update(found)
                     sources.append(str(path))
+                    if inside_repo(path):
+                        repo_supplied.update(found)
         jira_config = directory / ".jira-config.yml"
         if jira_config.is_file():
+            if not usable(jira_config):
+                continue
             parsed = read_simple_yaml(jira_config)
             mapped = {}
             if isinstance(parsed.get("server"), str):
@@ -843,7 +1050,9 @@ def read_legacy_sources(root: Path, cwd: Path):
             if mapped:
                 values.update(mapped)
                 sources.append(str(jira_config))
-    return values, sources
+                if inside_repo(jira_config):
+                    repo_supplied.update(mapped)
+    return values, sources, refusals, repo_supplied
 
 
 # ----------------------------------------------------------------------------
@@ -891,6 +1100,11 @@ def resource_host(resource: str) -> str:
     return value.split("@")[-1].lower()
 
 
+# Fields that name where a credential will be sent. Treated as one class because
+# a wrong value in any of them redirects the request.
+HOST_FIELDS = ("host", "base_url", "url", "server", "resource")
+
+
 class Resolution:
     """The answer to one access request. Never holds a secret value."""
 
@@ -906,6 +1120,9 @@ class Resolution:
         self.notes = []
         self.candidates = []
         self.next_steps = []
+        # Things a caller should surface to the user rather than just log: a
+        # repository tried to influence credential selection or routing.
+        self.security_findings = []
 
     def to_dict(self) -> dict:
         return {
@@ -919,6 +1136,7 @@ class Resolution:
             "field_sources": self.sources,
             "candidates": self.candidates,
             "notes": self.notes,
+            "security_findings": self.security_findings,
             "next_steps": self.next_steps,
             "authorization": (
                 "Resolution answers authentication only. It grants no "
@@ -937,10 +1155,22 @@ def resolve_access(service, resource, required, secrets, cwd, allow_capability=T
 
     # 1. An already-authenticated tool or session beats storing another secret.
     if allow_capability:
-        capability = detect_capability(service, cwd)
-        if capability and capability["kind"] not in ("mcp-present",):
+        capability = detect_capability(service, cwd, resource)
+        if (
+            capability
+            and capability["kind"] not in ("mcp-present",)
+            and capability.get("serves_resource", True)
+        ):
             resolution.status = "resolved"
             resolution.via = capability["kind"]
+            # Record the requested fields as satisfied by the tool. Leaving both
+            # lists empty alongside `status: resolved` told a caller branching on
+            # `fields_missing` that it held a host and a token when it held
+            # neither — the tool holds them, and the caller must use the tool.
+            resolution.fields_present = sorted(required)
+            resolution.fields_missing = []
+            for field in required:
+                resolution.sources[field] = "%s (held by the tool, not by us)" % capability["kind"]
             resolution.notes.append(capability["detail"])
             resolution.notes.append(
                 "No credential was read or stored. Use the authenticated tool directly."
@@ -976,7 +1206,17 @@ def resolve_access(service, resource, required, secrets, cwd, allow_capability=T
                 found[field] = value
                 resolution.sources[field] = "project-local:.agent-skills.local.yml"
 
-    legacy_values, legacy_sources = read_legacy_sources(root, cwd)
+    # Fields a file inside the repository supplied. Tracked separately because a
+    # repository is a weaker authority than the machine: it may describe what it
+    # needs, but it must not end up steering a machine-held secret somewhere the
+    # user did not choose. See the mismatch check before the identity merge.
+    repo_controlled_fields = set()
+
+    legacy_values, legacy_sources, legacy_refusals, legacy_repo_keys = read_legacy_sources(
+        root, cwd
+    )
+    for refusal in legacy_refusals:
+        resolution.notes.append(refusal)
     if legacy_values:
         for field in required:
             if field in found:
@@ -985,6 +1225,8 @@ def resolve_access(service, resource, required, secrets, cwd, allow_capability=T
                 if legacy_values.get(name):
                     found[field] = legacy_values[name]
                     resolution.sources[field] = "legacy-config:%s" % name
+                    if name in legacy_repo_keys:
+                        repo_controlled_fields.add(field)
                     break
         if legacy_sources:
             resolution.notes.append(
@@ -1059,31 +1301,70 @@ def resolve_access(service, resource, required, secrets, cwd, allow_capability=T
             )
             profile_name = None
 
+    # An identity must not be pointed at a host the repository chose.
+    #
+    # The invariant this release states is that a committed file cannot *select*
+    # an identity, and that holds. But selection is not the only way to misuse
+    # one: a file inside the repository can supply `host` while the identity
+    # supplies `token`, and the merge below would hand a corporate secret to an
+    # attacker-chosen endpoint and report `resolved`. `compatible_profiles`
+    # cannot catch it, because on the default path the caller passes no
+    # `--resource` to filter on. So compare the host that was actually resolved
+    # against the one recorded for the identity, and refuse a mismatch.
+    if profile_name is not None:
+        repo_host = ""
+        repo_host_field = ""
+        for field in HOST_FIELDS:
+            if field in repo_controlled_fields and found.get(field):
+                repo_host = found[field]
+                repo_host_field = field
+                break
+        recorded = str(profiles.get(profile_name, {}).get("resource", "") or "")
+        if repo_host and recorded:
+            if resource_host(repo_host) != resource_host(recorded):
+                resolution.notes.append(
+                    "refused identity %r: this repository supplies %s, which is not the "
+                    "host that identity was created for. A file inside a repository may "
+                    "not aim a machine-held credential at a different host. Set %s "
+                    "outside the repository, or bind an identity for that host "
+                    "explicitly." % (profile_name, repo_host_field, repo_host_field)
+                )
+                resolution.security_findings.append(
+                    "repository-supplied %s did not match the resource recorded for "
+                    "identity %r; the identity was not used"
+                    % (repo_host_field, profile_name)
+                )
+                profile_name = None
+
     if profile_name is not None:
         entry = profiles[profile_name]
         resolution.profile = profile_name
         resolution.notes.append("using identity %r (%s)" % (profile_name, binding_source))
-        backend, downgrade_error = backend_for_profile(entry)
-        if downgrade_error:
-            resolution.notes.append(downgrade_error)
-        else:
-            stored_fields = entry.get("fields", {})
-            if isinstance(stored_fields, dict):
-                for field, value in sorted(stored_fields.items()):
-                    if field in found or field not in required:
-                        continue
-                    if value:
-                        found[field] = str(value)
-                        resolution.sources[field] = "identity:%s" % profile_name
-            for field in entry.get("secret_fields", []) or []:
+        stored_fields = entry.get("fields", {})
+        if isinstance(stored_fields, dict):
+            for field, value in sorted(stored_fields.items()):
                 if field in found or field not in required:
                     continue
-                value = backend.fetch(profile_name, field)
                 if value:
-                    found[field] = value
-                    resolution.sources[field] = "identity:%s (%s)" % (
-                        profile_name, backend.name,
-                    )
+                    found[field] = str(value)
+                    resolution.sources[field] = "identity:%s" % profile_name
+        # Each secret field is read from the store it was written to, so a
+        # profile split across two stores resolves fully instead of reporting the
+        # fields in the other store as missing.
+        for field in entry.get("secret_fields", []) or []:
+            if field in found or field not in required:
+                continue
+            backend, downgrade_error = backend_for_field(entry, field)
+            if backend is None:
+                if downgrade_error:
+                    resolution.notes.append(downgrade_error)
+                continue
+            value = backend.fetch(profile_name, field)
+            if value:
+                found[field] = value
+                resolution.sources[field] = "identity:%s (%s)" % (
+                    profile_name, backend.name,
+                )
 
     # A resource the caller supplied is itself a resolved field when the service
     # needs a host and nothing else provided one.
@@ -1184,6 +1465,8 @@ def render_resolution(resolution) -> str:
         lines.append("missing fields:")
         for field in resolution.fields_missing:
             lines.append("  - %s" % field)
+    for finding in resolution.security_findings:
+        lines.append("security: %s" % finding)
     for note in resolution.notes:
         lines.append("note: %s" % note)
     for step in resolution.next_steps:
@@ -1365,6 +1648,16 @@ def cmd_set(args) -> int:
     entry["fields"] = merged_fields
     existing_secrets = entry.get("secret_fields") or []
     entry["secret_fields"] = sorted(set(list(existing_secrets) + list(collected)))
+    # Record storage per field. `backend` stays as the profile-level default so
+    # profiles written by earlier versions keep resolving, but the per-field map
+    # is what `resolve` and `forget` read.
+    per_field = entry.get("secret_backends")
+    if not isinstance(per_field, dict):
+        per_field = {}
+    for field in collected:
+        per_field[field] = backend.name
+    if per_field:
+        entry["secret_backends"] = per_field
     if collected or not entry.get("backend"):
         entry["backend"] = backend.name
     entry["updated_at"] = utc_now()
@@ -1436,14 +1729,27 @@ def cmd_forget(args) -> int:
     if not isinstance(entry, dict):
         print("No identity named %r." % profile)
         return 0
-    backend, error = backend_for_profile(entry)
+    # Delete each field from the store it actually went into. Using one
+    # profile-level backend left secrets behind in any other store the profile
+    # had ever written to, unreachable once the metadata was gone.
     removed = 0
-    if backend is not None:
-        for field in entry.get("secret_fields") or []:
-            if backend.delete(profile, field):
-                removed += 1
-    elif error:
-        print("WARN %s" % error, file=sys.stderr)
+    stranded = []
+    for field in entry.get("secret_fields") or []:
+        backend, error = backend_for_field(entry, field)
+        if backend is None:
+            stranded.append(field)
+            if error:
+                print("WARN %s" % error, file=sys.stderr)
+            continue
+        if backend.delete(profile, field):
+            removed += 1
+    if stranded:
+        print(
+            "WARN could not delete %s: the store they were written to is unavailable. "
+            "Re-run this command when it is, or remove them with that store's own tools."
+            % ", ".join(sorted(stranded)),
+            file=sys.stderr,
+        )
     del profiles[profile]
     save_profiles(state)
 
@@ -1524,7 +1830,11 @@ def cmd_import_legacy(args) -> int:
     """
     cwd = Path(args.cwd)
     root = git_root(cwd) or cwd
-    values, sources = read_legacy_sources(root, cwd)
+    values, sources, refusals, _repo_keys = read_legacy_sources(root, cwd)
+    for refusal in refusals:
+        print("skipped: %s" % refusal)
+    if refusals:
+        print("")
     if not values:
         print("No legacy .env / .env.local / .jira-config.yml was found.")
         return 0
@@ -1575,6 +1885,26 @@ def cmd_import_legacy(args) -> int:
 
     state = load_profiles()
     profiles = state.setdefault("profiles", {})
+
+    # Importing must not quietly replace a working identity's stored secret.
+    # `--apply` is a yes to "copy my legacy files in", not to "overwrite what I
+    # already have"; `--force` is how you say the second thing.
+    if not getattr(args, "force", False):
+        clashes = [
+            "%s-imported" % service
+            for service, _present in plan
+            if isinstance(profiles.get("%s-imported" % service), dict)
+        ]
+        if clashes:
+            print("")
+            print("FAIL these identities already exist: %s" % ", ".join(sorted(clashes)),
+                  file=sys.stderr)
+            print("      Importing would replace their stored secrets. Re-run with "
+                  "--force to overwrite, or remove them first:", file=sys.stderr)
+            for name in sorted(clashes):
+                print("        agent-skills access forget --profile %s" % name, file=sys.stderr)
+            return 2
+
     imported = 0
     for service, present in plan:
         profile = "%s-imported" % service
@@ -1602,6 +1932,13 @@ def cmd_import_legacy(args) -> int:
             entry["account"] = plain["login"]
         entry["fields"] = plain
         entry["secret_fields"] = sorted(set((entry.get("secret_fields") or []) + secret_names))
+        per_field = entry.get("secret_backends")
+        if not isinstance(per_field, dict):
+            per_field = {}
+        for field in secret_names:
+            per_field[field] = backend.name
+        if per_field:
+            entry["secret_backends"] = per_field
         entry["backend"] = backend.name
         entry["updated_at"] = utc_now()
         entry["imported_from"] = "legacy .env"
@@ -1731,6 +2068,11 @@ def build_parser() -> argparse.ArgumentParser:
         "import-legacy", help="Review legacy .env credentials and optionally import them."
     )
     legacy.add_argument("--apply", action="store_true", help="Actually import (opt-in).")
+    legacy.add_argument(
+        "--force",
+        action="store_true",
+        help="Overwrite an existing <service>-imported identity (replaces its stored secret).",
+    )
     legacy.add_argument("--backend", default="")
     legacy.set_defaults(func=cmd_import_legacy)
 
