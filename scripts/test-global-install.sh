@@ -399,6 +399,77 @@ else
 fi
 
 # ------------------------------------------------------------------------------
+section "progressive project context (zero-config repositories work)"
+# ------------------------------------------------------------------------------
+CTX="${REPO_ROOT}/scripts/project-context.py"
+
+# A repository with no agent-skills configuration of any kind.
+HZ="$(new_home)"
+ZERO="${HZ}/code/zero config repo"
+mkdir -p "${ZERO}"
+( cd "${ZERO}" && git init -q && git config user.email "t@example.com" \
+    && git config user.name T && git commit -q --allow-empty -m init ) >/dev/null 2>&1
+printf '<project/>\n' > "${ZERO}/pom.xml"
+ZJSON="$(python3 "${CTX}" --cwd "${ZERO}" --json 2>&1)"
+if printf '%s' "${ZJSON}" | python3 -c 'import json,sys; json.load(sys.stdin)' 2>/dev/null; then
+  ok "project context emits valid JSON for a zero-config repository"
+else
+  bad "project context emits valid JSON for a zero-config repository" "${ZJSON}"
+fi
+ZSTACK="$(python3 "${CTX}" --cwd "${ZERO}" --field stack 2>&1)"
+if [ "${ZSTACK}" = "java" ]; then
+  ok "stack inferred from the build manifest with no config file"
+else
+  bad "stack inferred from the build manifest with no config file" "got ${ZSTACK}"
+fi
+ZBUILD="$(python3 "${CTX}" --cwd "${ZERO}" --field build 2>&1)"
+if [ -n "${ZBUILD}" ]; then
+  ok "a build command is offered for a zero-config repository (${ZBUILD})"
+else
+  bad "a build command is offered for a zero-config repository"
+fi
+if python3 "${CTX}" --cwd "${ZERO}" --field needs_confirmation | grep -q 'inferred'; then
+  ok "an inferred build command is flagged for confirmation rather than asserted"
+else
+  bad "an inferred build command is flagged for confirmation rather than asserted"
+fi
+if python3 "${CTX}" --cwd "${ZERO}" >/dev/null 2>&1; then
+  ok "project context exits 0 with no configuration present (sparse is not an error)"
+else
+  bad "project context exits 0 with no configuration present"
+fi
+ZNAME="$(python3 "${CTX}" --cwd "${ZERO}" --field slug 2>&1)"
+if [ "${ZNAME}" = "zero-config-repo" ]; then
+  ok "project slug derives from a directory name containing spaces"
+else
+  bad "project slug derives from a directory name containing spaces" "got ${ZNAME}"
+fi
+
+# Committed configuration wins over inference, because a human wrote it.
+printf 'mode: in-repo\nproject:\n  name: "declared-name"\n  build: "make verify"\n' \
+  > "${ZERO}/.agent-skills.yml"
+if [ "$(python3 "${CTX}" --cwd "${ZERO}" --field build)" = "make verify" ]; then
+  ok "committed .agent-skills.yml build command outranks inference"
+else
+  bad "committed .agent-skills.yml build command outranks inference"
+fi
+if [ "$(python3 "${CTX}" --cwd "${ZERO}" --field mode)" = "in-repo" ]; then
+  ok "committed mode: in-repo is honoured"
+else
+  bad "committed mode: in-repo is honoured"
+fi
+rm -f "${ZERO}/.agent-skills.yml"
+
+# Inference works from a nested directory, not just the repository root.
+NESTED="${ZERO}/src/main/java/deep"
+mkdir -p "${NESTED}"
+if [ "$(python3 "${CTX}" --cwd "${NESTED}" --field stack)" = "java" ]; then
+  ok "project context resolves from a nested directory"
+else
+  bad "project context resolves from a nested directory"
+fi
+
+# ------------------------------------------------------------------------------
 section "legacy workspace migration"
 # ------------------------------------------------------------------------------
 H8="$(new_home)"
