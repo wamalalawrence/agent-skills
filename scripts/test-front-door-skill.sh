@@ -343,6 +343,26 @@ assert_class_owners "question rows still order behaviour before product intent" 
 assert_class_owners "validation rows still order manual before automated" \
   '`validation`' '`manual-tester` `test-automation-engineer`'
 
+# Developer tests belong to the engineer who wrote the code. The row that says so
+# names no class token, so none of the five sequences above can see it. Pin it
+# directly: it must exist, be owned by software-engineer, and sit above the
+# automation catch-all, because first-match-wins is what sends "write unit tests
+# for the change I just made" to the engineer rather than to the suite owner.
+DEV_TEST_ROW="$(routing_table_rows | grep -n -F -- 'Tests for a code change' || true)"
+AUTOMATION_CATCHALL_ROW="$(routing_table_rows | grep -n -F -- 'runtime, or a backlog' || true)"
+if [ -z "${DEV_TEST_ROW}" ]; then
+  bad "a routing row owns the developer tests that ship with a change" "row not found"
+elif ! printf '%s' "${DEV_TEST_ROW}" | grep -q -F -- '`software-engineer`'; then
+  bad "developer tests route to software-engineer" "got: ${DEV_TEST_ROW}"
+elif [ -z "${AUTOMATION_CATCHALL_ROW}" ]; then
+  bad "the automation catch-all row is still present" "row not found"
+elif [ "${DEV_TEST_ROW%%:*}" -ge "${AUTOMATION_CATCHALL_ROW%%:*}" ]; then
+  bad "the developer-test row precedes the automation catch-all" \
+    "developer-test row at ${DEV_TEST_ROW%%:*}, catch-all at ${AUTOMATION_CATCHALL_ROW%%:*}"
+else
+  ok "developer tests route to software-engineer, above the automation catch-all"
+fi
+
 # ------------------------------------------------------------------------------
 section "lifecycle CLI accepts the skill"
 # ------------------------------------------------------------------------------

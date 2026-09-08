@@ -33,11 +33,16 @@ must hand off when the task moves outside that surface.
 
 ### `software-engineer`
 
-- Owns: repository context, implementation plan, code changes, validation, and PR readiness.
-- Does not own: product intent invention, standalone root-cause guessing, or final human release
-  approval.
+- Owns: repository context, implementation plan, code changes, validation, PR readiness, and the
+  developer tests that ship with the change — unit tests, the focused integration tests the change
+  needs, and its regression tests, including the unit-boundary, test-double, and
+  state-versus-interaction decisions behind them
+  ([developer testing](../skills/software-engineer/references/developer-testing.md)).
+- Does not own: product intent invention, standalone root-cause guessing, broader suite strategy,
+  or final human release approval.
 - Typical handoff: to `issue-investigator` for unclear bugs, to `code-reviewer` at review gates,
-  and to testing skills for validation coverage.
+  to `manual-tester` for exploratory validation, and to `test-automation-engineer` when coverage
+  belongs to the broader automated suite rather than to this change.
 
 ### `issue-investigator`
 
@@ -49,8 +54,8 @@ must hand off when the task moves outside that surface.
 
 ### `code-reviewer`
 
-- Owns: issue-aware diff review, engineering-quality findings, severity/confidence, and final
-  review verdict.
+- Owns: issue-aware diff review, engineering-quality findings, test-quality review (developer
+  tests and automation alike), severity/confidence, and final review verdict.
 - Does not own: writing the implementation unless asked, guessing issue intent, or generic
   formatting review.
 - Typical handoff: to `issue-investigator` when ticket/root-cause context is unclear and to
@@ -79,8 +84,8 @@ must hand off when the task moves outside that surface.
   artifacts, suite maintenance after product change, failure triage, flake diagnosis, backlog
   prioritisation, suite runtime, and requirement-to-test traceability.
 - Does not own: automating unclear behavior, manual exploration, product intent, root-cause
-  analysis of a product defect, or fixing the product. A failing test that exposes a real bug is
-  routed, not patched.
+  analysis of a product defect, the developer tests that ship with a code change, or fixing the
+  product. A failing test that exposes a real bug is routed, not patched.
 - Typical handoff: to `issue-investigator` for a failure triaged `PRODUCT_DEFECT`, to
   `product-owner` when the behaviour a test should assert was never agreed, to `manual-tester` for
   unstable or exploratory scenarios, and to `code-reviewer` for test-quality review.
@@ -120,7 +125,8 @@ must hand off when the task moves outside that surface.
 - `manual-tester` must hand reproducible defects to `issue-investigator` with environment, build
   SHA, expected vs actual behavior, steps, and evidence.
 - `test-automation-engineer` must consume stable manual or reproduction scenarios and should not
-  automate unclear, subjective, or unstable behavior.
+  automate unclear, subjective, or unstable behavior. It is not a prerequisite for ordinary
+  developer unit testing; `software-engineer` writes the tests that ship with its own change.
 - `delivery-planner` must hand off each phase to exactly one owner skill and must not invoke any
   other skill itself. Executors read `destination.md` plus the current `phase-NN-<slug>.md`
   alongside their normal context. When a phase is too large or its assumptions turn out to be

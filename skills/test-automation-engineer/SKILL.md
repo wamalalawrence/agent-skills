@@ -19,7 +19,7 @@ compatibility: >-
   and docs/access-resolution.md.
 metadata:
   author: wamalalawrence
-  version: "0.39.0"
+  version: "0.40.0"
   homepage: "https://github.com/wamalalawrence/agent-skills"
 argument-hint: "<the automation work — a scenario, a broken suite, a CI failure list, or a flaky test>"
 user-invocable: true
@@ -107,6 +107,12 @@ Skipping the wrappers is the #1 failure mode and task size does not waive them.
 - Do not use it to fix the product. A failing test that exposes a real bug is routed, not patched.
 - Do not use it as a general QA catch-all. Exploratory testing, defect reporting, and retest
   guidance belong to [`manual-tester`](../manual-tester/SKILL.md).
+- Do not use it for the developer tests that ship with a code change. Unit tests, the focused
+  integration tests a change needs, and its regression tests belong to
+  [`software-engineer`](../software-engineer/SKILL.md), which owns the
+  [developer-testing policy](../software-engineer/references/developer-testing.md). An engineer
+  should not need a second specialist to test their own code. This skill owns the suite: broader
+  regression automation, API/system/UI coverage, suite strategy, framework and CI concerns.
 
 ## Related And Reused Skills
 
@@ -363,10 +369,11 @@ condition. Silent quarantine is forbidden.
 ### 7. Review the automation code
 
 **Invoke [`code-reviewer`](../software-engineer/skills/code-reviewer/SKILL.md) in `manual` mode
-with the `test-quality` profile on the new or modified test files.** Test code is production code;
-selector instability, hidden sleeps, global retries, over-mocking, order coupling, fixture leakage,
-duplicated abstractions, unreadable test DSLs, wrong test level, and expensive unnecessary e2e
-coverage are what cause the next three incidents.
+with the [`test-quality` profile](../software-engineer/skills/code-reviewer/SKILL.md#the-test-quality-profile)
+on the new or modified test files** — the shared fundamentals plus the automation and system-test
+layer. Test code is production code; selector instability, hidden sleeps, global retries,
+over-mocking, order coupling, fixture leakage, duplicated abstractions, unreadable test DSLs, wrong
+test level, and expensive unnecessary e2e coverage are what cause the next three incidents.
 
 This is a **bounded** loop per
 [docs/review-loops.md](../../docs/review-loops.md#universal-loop-bounds): one revision round on the

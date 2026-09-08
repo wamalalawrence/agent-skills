@@ -6,7 +6,7 @@ agent's chat summary as proof a step completed.
 
 ## Input Context
 
-Six requests, presented separately in fresh sessions against `example-api`
+Seven requests, presented separately in fresh sessions against `example-api`
 (`base_branch: main`, tracker configured, host supports sub-agents):
 
 - **A — defect, no root cause.** "Invoice search drops the status filter on page 2." No
@@ -18,6 +18,8 @@ Six requests, presented separately in fresh sessions against `example-api`
 - **E — a wall of CI test failures.** "CI has 42 failing tests, sort it out." The failures are in
   the repository's own automated suite. Nothing says whether they are product bugs or broken tests.
 - **F — a slow test suite.** "Our regression suite takes 70 minutes." No budget was ever stated.
+- **G — unit tests for a change in flight.** "Write unit tests for the pricing rules I just
+  changed." The change is in the working tree; nothing is said about the wider suite.
 
 ## Skill Under Test
 
@@ -52,7 +54,13 @@ does a second step go to `issue-investigator`, carrying that cluster and its evi
 where the target is a product decision; a test suite's runtime is owned by the engineers who pay
 it, and the trade between runtime and confidence is the automation engineer's call.
 
-Across all six: exactly one owner per dispatch, each target's `SKILL.md` verified by file read
+**G** classifies as `change`, not `automation`, and dispatches `software-engineer`. The tests that
+ship with a code change belong to the engineer who wrote it, and the unit-boundary and test-double
+decisions are part of writing the change. `test-automation-engineer` is the owner when the ask is
+about the suite — broader regression automation, API/system/UI coverage, level strategy, CI, or an
+existing suite's health — which is not what G asks for.
+
+Across all seven: exactly one owner per dispatch, each target's `SKILL.md` verified by file read
 before dispatch, each step's result verified from a persisted artifact, and a routing reason that
 cites something concrete from the request.
 
@@ -78,6 +86,8 @@ cites something concrete from the request.
 - Route E to `issue-investigator` or `software-engineer` before anything has triaged the failures.
 - Split E into per-failure dispatches, or exceed the dispatch cap fanning out across 42 failures.
 - Route F to `product-owner` by analogy with D. Suite runtime is not a product target.
+- Route G to `test-automation-engineer` because the word "tests" appears. Requiring a second
+  specialist for an engineer's own unit tests is the failure this row exists to prevent.
 - Let `test-automation-engineer` absorb the root-cause analysis for E's product-defect clusters
   instead of handing them on.
 - Bundle two owners into one handoff — for example dispatching "fix it and write the regression
@@ -102,6 +112,8 @@ cites something concrete from the request.
 - [ ] E's second step, if any, went to `issue-investigator` only for clusters already classified
       `PRODUCT_DEFECT`.
 - [ ] F routed as `automation` to `test-automation-engineer`, not to `product-owner`.
+- [ ] G routed as `change` to `software-engineer`, with the reason distinguishing the tests that
+      ship with a change from the suite.
 - [ ] Every dispatch names exactly one owner skill.
 - [ ] Every target `SKILL.md` was verified by file read, not by host skill listing.
 - [ ] No executor skill appears in Wamala's own context.

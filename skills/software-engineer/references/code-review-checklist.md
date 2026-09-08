@@ -80,11 +80,29 @@ review blockers when violated:
 
 ## Testing
 
-- [ ] New code meets the project coverage target (`${COVERAGE_TARGET_PERCENT}` percent or higher)
+See [developer testing](developer-testing.md) for the reasoning behind these items.
+
+- [ ] New code meets the project coverage target (`${COVERAGE_TARGET_PERCENT}` percent or higher),
+      met with real assertions rather than assertion-free tests that only execute lines
 - [ ] Tests cover happy path AND error/edge cases
 - [ ] Tests independent — no shared mutable state
-- [ ] Test names describe the behaviour being tested
-- [ ] External dependencies mocked, not called for real, in unit tests
+- [ ] Tests are at the level that can detect the regression they exist for; logic tested cheaply,
+      wiring/serialization/persistence tested where those actually run
+- [ ] Test names describe the behaviour and its outcome, not the method invoked
+- [ ] Assertions verify observable output or state; interaction assertions appear only where the
+      interaction is itself the behaviour (side effect sent once, call suppressed, protocol shape)
+- [ ] External *process* boundaries — network, third-party APIs, email/SMS, brokers, filesystem,
+      clock, randomness — are substituted rather than called for real in unit tests
+- [ ] Ordinary in-process collaborators that are deterministic, cheap, and owned by this codebase
+      are used for real; being a constructor dependency is not by itself a reason to double one
+- [ ] The least powerful suitable double is used (dummy / stub / fake / spy / mock) and its setup
+      does not dominate the test
+- [ ] Business logic is tested against an owned port, not a stubbed chain of third-party SDK
+      internals; adapters behind owned ports have their own integration or contract coverage
+- [ ] Tests would survive an internal refactor that preserves the behaviour under test, unless the
+      coupling is deliberate and the collaboration is the contract
+- [ ] Difficulty writing a focused test was treated as design feedback rather than absorbed with
+      more test machinery
 - [ ] Integration tests scoped appropriately (`@SpringBootTest`, `@DataJpaTest`, equivalents)
 
 ## SonarQube pre-check

@@ -4,7 +4,7 @@ Reusable [Agent Skills](https://agentskills.io/) for software-engineering work �
 role-shaped workflows your AI assistant can load on demand so the same model produces
 senior-engineer, product-owner, tester, or reviewer output instead of generic answers.
 
-> **Status:** `0.39.0` — pre-1.0. Core skill set is shipped and stable enough for public use;
+> **Status:** `0.40.0` — pre-1.0. Core skill set is shipped and stable enough for public use;
 > interfaces may still evolve.
 
 New here? Start with the [quickstart](docs/quickstart.md), then read [starter
@@ -58,7 +58,7 @@ That is the whole local setup. It installs `agent-skills` on the **machine**, re
 with every supported agent host it finds, and makes the runtime invocable from anywhere:
 
 ```text
-Agent Skills v0.39.0 installed globally.
+Agent Skills v0.40.0 installed globally.
 
 Skills are available to:
   [x] Claude Code (~/.claude/skills)
@@ -125,7 +125,7 @@ npx skills add wamalalawrence/agent-skills
 
 ## Updating
 
-Releases are git tags (`v0.38.0`, `v0.39.0`, …) on this repo. Two commands cover the common case;
+Releases are git tags (`v0.39.0`, `v0.40.0`, …) on this repo. Two commands cover the common case;
 full details, cloud-agent updates, and drift detection are in
 [docs/updates.md](docs/updates.md).
 
@@ -198,8 +198,8 @@ usage shows they are useful independently.
 
 - Key collaborators: `product-owner`, `manual-tester`, `test-automation-engineer`,
   `delivery-planner`.
-- Purpose: end-to-end engineering — context discovery, implementation, QA, self-review,
-  PR preparation.
+- Purpose: end-to-end engineering — context discovery, implementation, the developer tests that
+  ship with the change, QA, self-review, PR preparation.
 
 ### [`product-owner`][product-owner] (top-level)
 
@@ -239,7 +239,7 @@ usage shows they are useful independently.
 
 - Key collaborators: `software-engineer`, `test-automation-engineer`,
   `issue-investigator`.
-- Purpose: reviews diffs against issue context, evidence packs, quality risks, and
+- Purpose: reviews diffs against issue context, evidence packs, quality risks, test quality, and
   definition of done.
 
 [wamala]: skills/wamala/

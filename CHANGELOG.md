@@ -6,6 +6,105 @@ All notable project changes should be recorded here.
 
 - No unreleased changes.
 
+## 0.40.0 - Tests That Survive Refactoring
+
+Minor release. Developer testing stops being a checklist item and becomes a set of judgements.
+[`software-engineer`](skills/software-engineer/SKILL.md) now decides what behaviour a test protects,
+where the unit boundary sits, which collaborators stay real, which test double is the least powerful
+one that answers the question, and whether the behaviour is provable through output or only through
+the interaction itself. [`code-reviewer`](skills/software-engineer/skills/code-reviewer/SKILL.md)
+reviews those same decisions.
+
+The rule this replaces was one line in the code-review checklist:
+
+```text
+External dependencies mocked, not called for real, in unit tests
+```
+
+Read literally — and an agent reads literally — "dependency" means anything injected into a
+constructor, so the safe reading was to mock everything and verify every call. That produces tests
+that pass while the behaviour is broken, because the stubs supply the answers the assertions then
+check, and that break when a refactor moves a call without changing anything observable.
+
+Agent Skills does not adopt Detroit/classical or London/mockist TDD. Both are understood, and the
+question asked at each test is which one gives reliable confidence here with the least unnecessary
+coupling. No universal test-first mandate was added either — the tests and the design that resulted
+are judged, not the order they were written in.
+
+### Added
+
+- **[Developer testing](skills/software-engineer/references/developer-testing.md)**, a new
+  `software-engineer` reference and the policy the rest of this release binds to. It covers choosing
+  the unit, real collaborators versus doubles, the dummy/stub/fake/spy/mock table, state and output
+  verification versus interaction verification, owned ports and adapter boundaries, refactoring
+  resilience, test smells as design feedback, test-level selection, naming, coverage, and a worked
+  mock-heavy versus behaviour-oriented example of the same test.
+- **A unit is a behavioural boundary, not a class.** One pure function, one class, several
+  cooperating domain objects, a small module, or a use case plus cheap in-process collaborators are
+  all valid units, provided the test stays fast, deterministic, focused, isolated from external
+  systems, readable, and informative when it fails. The governing question is what the smallest
+  meaningful behavioural unit worth protecting is.
+- **Six test-design decisions** in `software-engineer`
+  [Phase 2.4](skills/software-engineer/SKILL.md): behaviour to protect, test level, unit boundary,
+  real versus doubled collaborators, double type, verification style — plus the seventh question,
+  whether the test is hard to write because the production design is wrong. Proportional by design:
+  a sentence each on a small change, a paragraph where the regression risk is real. It does not
+  replace the reproduce-before-fix gate; the failing regression test still comes first and still
+  must fail on the parent commit.
+- **A restructured [`test-quality` review
+  profile](skills/software-engineer/skills/code-reviewer/SKILL.md#the-test-quality-profile)** with
+  one shared layer and two specific ones. Shared fundamentals — named behaviour, meaningful
+  assertions, determinism, isolation, readability, failure quality — apply to every test.
+  Developer-test concerns cover unit boundary, real-versus-double choice, double type, verification
+  style, refactoring resilience, adapter boundaries, test level, and design feedback. Automation and
+  system-test concerns keep selector stability, condition-based waits, deterministic parallel-safe
+  data, level appropriateness, and the green-washing rules. Unit-mocking scrutiny does not get
+  applied to a UI automation diff, and selector rules do not get applied to a unit test.
+- **A binding developer-test review check** in `code-reviewer`: any diff that changes tests gets the
+  profile applied, in every review mode, with nine finding shapes covering implementation
+  choreography, stubbed third-party internals, regression tests that pass while the behaviour is
+  broken, call-only verification, wrong test level, unnecessarily doubled deterministic
+  collaborators, setup that hides the scenario, framework bootstrapping for trivial logic, and
+  method-shaped test names. They are shapes, not a list to emit.
+- **Three eval files, ten scenarios**, all judged on the decision rather than on vocabulary:
+  [unit boundary and double selection](evals/developer-testing-unit-boundary-and-doubles.md)
+  (over-mocked service, legitimate external boundary, large fixture graph, unit-is-not-a-class),
+  [third-party boundaries and test levels](evals/developer-testing-boundaries-and-test-levels.md)
+  (deep SDK stubbing, integration-level regression), and
+  [test verification quality](evals/code-reviewer-test-verification-quality.md) (refactor-fragile
+  test, interaction that really is behaviour, coverage-driven tests, mock-heavy but valid
+  orchestrator). Two of the reviewer scenarios contain correct mock-heavy tests: a reviewer that
+  finds problems in all four fails as surely as one that finds problems in none.
+
+### Changed
+
+- **[Code review checklist](skills/software-engineer/references/code-review-checklist.md)
+  testing section** rewritten. The single mocking line becomes a distinction between an external
+  *process* boundary — network, third-party APIs, email/SMS, brokers, filesystem, clock, randomness
+  — which is substituted, and an ordinary in-process collaborator that is deterministic, cheap, and
+  owned, which is not. Being a constructor dependency is explicitly not a reason to double
+  something. Added items for test level, least-powerful double, owned ports versus SDK internals,
+  refactoring resilience, and difficulty-as-design-feedback.
+- **`software-engineer` Phase 3.2** now requires each changed behaviour to have a test at the level
+  that can detect its regression, deterministic owned collaborators to be real unless there is a
+  stated reason, assertions on observable output or state where that proves the behaviour, and
+  business logic to be tested against an owned port rather than a stubbed vendor chain. Test names
+  describe the behaviour and its outcome.
+- **Coverage is evidence, not proof.** High line coverage is not high confidence. Adding
+  assertion-free tests to move a number is forbidden; where a gate is mandatory it is met honestly,
+  and the engineer says so if meeting it required tests of low value. Existing project coverage
+  gates are untouched.
+- **Ownership made explicit.** `software-engineer` owns the tests that ship with a change — unit
+  tests, the focused integration tests it needs, its regression tests.
+  [`test-automation-engineer`](skills/test-automation-engineer/SKILL.md) owns the suite: broader
+  regression automation, API/system/UI coverage, suite strategy, framework and CI concerns. An
+  engineer does not need a second specialist to test their own code. Recorded in both skills, in
+  [skill boundaries](docs/skill-boundaries.md), and in the README.
+- **Three things `code-reviewer` must not do**, now guardrails: no finding against a mock, a stub,
+  or an interaction assertion on principle; no counting of doubles, because there is no threshold;
+  no requiring a testing school or test-first authoring as a condition of approval. Coverage is not
+  accepted as evidence of test quality.
+
 ## 0.39.0 - Test Automation Is A Full Engineering Workflow
 
 Minor release. [`test-automation-engineer`](skills/test-automation-engineer/SKILL.md) stops being
