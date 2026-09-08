@@ -44,9 +44,15 @@ connector policy to hold the line.
 
 Not capability — the CLIs already cover capability. **Auth.**
 
-`setup.init` prompts for Atlassian API tokens and writes them in plaintext to `.env`, protected
-only by file permissions and a gitignore rule. It cannot validate them, cannot scope them, and
-cannot rotate them. That is the weakest part of the whole setup story.
+Before v0.37.0, `setup.init` prompted for Atlassian API tokens and wrote them in plaintext to `.env`,
+protected only by file permissions and a gitignore rule. It could not validate them, could not scope
+them, and could not rotate them. That was the weakest part of the whole setup story.
+
+v0.37.0 fixed the storage half: setup asks for nothing, and a secret that is genuinely needed goes to
+the OS credential store through [access resolution](access-resolution.md), which puts an
+already-authenticated tool or session **above** storing a secret at all. What it cannot fix is the
+nature of a long-lived personal token: it is still long-lived, still broadly scoped, and still
+something you hold. OAuth is a better answer than better storage.
 
 Atlassian now ships an
 [official remote MCP server](https://github.com/atlassian/atlassian-mcp-server) covering Jira,
@@ -66,7 +72,7 @@ justify itself.
 
 | Server | Earns its context because | Replaces |
 | --- | --- | --- |
-| Atlassian official remote | OAuth instead of a stored PAT | `JIRA_API_TOKEN`, `CONFLUENCE_API_TOKEN`, `.jira-config.yml` |
+| Atlassian official remote | OAuth instead of a stored PAT | a stored `jira` / `confluence` credential identity |
 | GitHub | only when `gh` is unavailable or unauthenticated | the [GitHub access ladder](github-access.md) |
 | Browser / devtools | real UI verification for `manual-tester` | nothing — this is a genuine gap today |
 
@@ -139,9 +145,10 @@ MCP configuration belongs to your host, not to this repository. It usually lives
 `agent-skills` reads none of these. `doctor.sh` only checks whether any exist, so a skill can
 know an MCP path might be available.
 
-If you add a tracker MCP server and want the skills to stop asking for tokens, leave
-`JIRA_HOST` and `JIRA_API_TOKEN` blank. The auth preflight will report the tracker as
-unconfigured, and the preference order above sends the agent to MCP instead.
+If you add a tracker MCP server and want the skills to stop asking for tokens, simply do not create a
+credential identity for that service. [Access resolution](access-resolution.md) probes for host MCP
+configuration as step 1 and reports it before considering any stored secret, so the preference order
+above sends the agent to MCP on its own. There is nothing to blank out.
 
 ## What this repository will not do
 

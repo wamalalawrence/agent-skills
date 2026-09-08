@@ -1,136 +1,132 @@
 # Updates
 
-`agent-skills` releases follow [semver](versioning.md) and ship as git tags
-(`v0.18.0`, `v0.19.0`, …) with matching GitHub releases. This page describes how a user who
-has already cloned the repo notices a new release and applies it without losing local config
-or breaking running skill sessions.
+Releases follow [semver](versioning.md) and ship as git tags (`v0.36.0`, `v0.37.0`, …) with matching
+GitHub releases. This page covers noticing a new release and applying it without losing local state.
 
-## How updates flow
+## How an update flows
 
 ```text
-GitHub release  --tag-->  origin/main  --git fetch-->  local clone
-                                                           |
-                                                           |  ./setup.init --update
-                                                           v
-                                                  workspace .skills + .agent-skills.lock
-                                                           |
-                                                           v
-                                                  next agent task uses the new skills
+GitHub release  --tag-->  origin  --git fetch-->  the source clone
+                                                       |
+                                                       |  agent-skills update
+                                                       v
+                                        one canonical tree under AGENT_SKILLS_HOME
+                                                       |
+                                    (host adapters already point here; nothing to re-copy)
+                                                       v
+                                        the next task uses the new skills
 ```
 
-The source-of-truth is the git tag on GitHub. Everything downstream of that — the symlink, the
-vendored copy, the lock file — is derived from the source repo on disk.
+The source of truth is the git tag. Everything downstream — the canonical trees, the per-host
+symlinks, the manifest — is derived from the clone on disk. Because host registrations are symlinks
+into one tree, updating the clone updates every host at once. Nothing is copied, so nothing can go
+stale independently.
 
-## Three update channels
-
-### 1. `setup.init --check-updates` (recommended for most users)
+## Check
 
 ```bash
-cd agent-skills
-./setup.init --check-updates
+agent-skills check-updates
+```
+
+Compares local `VERSION` against the latest release tag on `origin` using `git ls-remote --tags`, and
+compares the local commit against `origin/<branch>`. Reports `up to date`, `update available` with
+the version delta, or `ahead / detached` for a contributor checkout.
+
+Exit codes: `0` up-to-date or ahead, `10` update available, `2` setup error. The distinct `10` makes
+it scriptable in a shell prompt or CI smoke check without being confused with a generic failure.
+
+Read-only. It does not fetch objects, modify the working tree, or touch the install.
+
+## Apply
+
+```bash
+agent-skills update
+agent-skills update --branch main   # track a branch instead of the latest tag
 ```
 
 This:
 
-- Compares the local `VERSION` file against the latest **release tag** on `origin` (using
-  `git ls-remote --tags origin`, no extra dependencies, no GitHub token).
-- Compares the local commit SHA on the current branch against `origin/<branch>`.
-- Reports one of three statuses:
-  - `up to date` — local is at the latest release tag and has no new commits.
-  - `update available` — a newer release tag exists, with the version delta and a one-line
-    summary of how to apply it.
-  - `ahead / detached` — the local branch is ahead of the remote (likely a contributor
-    workflow); the user is told no update is needed.
-- Exits `0` for up-to-date, `10` for update-available, `2` for setup error. The `10` exit
-  code makes it scriptable in a shell prompt or CI smoke check without confusing it with
-  generic failure.
-
-This is read-only. It does **not** fetch large objects, modify the working tree, or touch the
-workspace.
-
-### 2. `setup.init --update` (apply the latest release)
-
-```bash
-cd agent-skills
-./setup.init --update
-```
-
-This:
-
-1. Runs `--check-updates` first. If the working tree is dirty, the command stops and tells the
-   user to commit or stash. No silent overwrites.
+1. Refuses if the clone's working tree is dirty. No silent overwrites.
 2. Runs `git fetch --tags origin`.
-3. Checks out the latest release tag (or the configured branch if `--update --branch main` is
-   passed).
-4. Re-runs the normal `setup.init` flow non-interactively (`--yes`) against the same workspace
-   root, **preserving** every value already in `.env` outside the marker block.
-5. Rewrites `<workspace>/.agent-skills.lock` with the new `version`, `git_sha`, `installed_at`,
-   and `canonical_dir`.
-6. Prints a short changelog excerpt (the `## <new-version>` section from `CHANGELOG.md`) so the
-   operator sees what changed before running their next task.
+3. Checks out the latest release tag, or the branch you named.
+4. Re-runs the global install to refresh the canonical trees, host registrations, and manifest.
+5. Prints the new release's `CHANGELOG.md` section so you can see what changed before your next task.
 
-`--update` is **opt-in**. `setup.init` never auto-updates the user's clone, never writes to
-`origin`, and never pushes anything.
+`update` is opt-in. It never runs on its own, never writes to `origin`, and never pushes anything.
 
-### 3. Manual `git pull`
+### What update guarantees
 
-Power users can update the clone with normal git commands:
+- **One canonical source** is moved; there is no second copy to synchronise.
+- **Host adapters keep pointing at it.** Registrations are refreshed idempotently, so a rerun neither
+  duplicates a skill nor leaves a stale link.
+- **Credentials are untouched.** They live in the OS credential store and the user config directory,
+  neither of which the installer rewrites.
+- **Project bindings are untouched.**
+- **No repository is modified.** Update touches the clone and your home directory, never a project
+  you work on.
+- **Skills you installed yourself survive.** Only links resolving into the install root are managed.
+- **Lock and version metadata are rewritten**, so drift detection is accurate afterwards.
+
+## Manual update
 
 ```bash
-cd agent-skills
+cd /path/to/agent-skills
 git fetch --tags origin
-git checkout v0.19.0          # or: git pull origin main
-./setup.init --yes            # refresh .skills and .agent-skills.lock
+git checkout v0.37.0
+./setup.init                 # refresh the install after a manual checkout
 ```
 
-This is the path contributors take. It is documented for completeness, but most users should
-use `--update` because it includes the dirty-tree check, the lock-file rewrite, and the
-changelog excerpt.
+This is the contributor path. Most users should prefer `agent-skills update` because it includes the
+dirty-tree check, the install refresh, and the changelog excerpt.
 
-## How the agent notices stale skills
+If you `git pull` and forget the refresh, nothing breaks — the canonical trees are symlinks, so the
+new skills are live immediately. Only the manifest goes stale, which `verify` reports as drift.
 
-Every task starts by reading `<workspace>/.agent-skills.lock` (or the in-repo equivalent).
-The agent compares `lock.version` against the `metadata.version` of the chosen `SKILL.md` and
-against the `VERSION` file in the source repo when the source repo is on disk.
+## Drift detection
 
-- **Match** — proceed normally.
-- **Skill ahead of lock** (`SKILL.md` declares a version newer than `lock.version`) — surface
-  `skill drift: lock pinned to v<a>, loaded v<b>` and proceed using the loaded skill. This is
-  expected right after a manual `git pull` before the user reruns `setup.init`.
-- **Lock ahead of skill** — surface `skill drift: lock expects v<a>, loaded v<b> from
-  <path>`. The user likely has a stale vendored copy. Point them at
-  [skill-source-resolution.md](skill-source-resolution.md) and `--update`.
-- **Source repo ahead of lock** — surface `update available: agent-skills v<a> -> v<b>`. The
-  user pulled new code without rerunning setup.
+```bash
+agent-skills verify
+```
 
-These are warnings, not blockers. Skills keep working with the version they loaded. The point
-is to make drift **visible** instead of silent.
+Compares the manifest against what is on disk and reports:
 
-## In-repo (cloud / online agent) updates
+- **version drift** — the manifest says `v0.36.0` and the source tree says `v0.37.0`. Expected right
+  after a manual `git pull`; fixed by `./setup.init`.
+- **a broken canonical link** — the clone was moved or deleted. Reinstall repairs it.
+- **a missing or foreign host registration** — a host directory lost a link, or something else owns
+  that name. Reported per host.
+- **legacy remnants** — a pre-v0.37.0 `.skills` or `.agent-skills.lock` beside the clone.
 
-In-repo mode does not run `setup.init`. The user updates the vendored copy of `skills/` the
-same way they update any other vendored dependency:
+Per-task, an agent that loads a `SKILL.md` compares its `metadata.version` against the installed
+version and surfaces one line when they disagree:
 
-- **Git submodule.** `git submodule update --remote --merge` then commit the new submodule SHA.
-- **Subtree / vendor copy.** Re-run the script that copied `skills/` in (typically a
-  `make vendor-skills` or a one-line `rsync` in `scripts/`); commit the diff.
-- **Reference-only.** If the agent loads `SKILL.md` files via URL (e.g. an attached file in a
-  chat), there is nothing to update — the next message picks up the latest version.
+```text
+skill drift: <name> v<a> chosen, v<b> ignored at <path>
+```
 
-`scripts/check-updates.py` works in this mode too. Point it at the vendored directory:
+Warnings, not blockers. Skills keep working with the version they loaded; the point is to make skew
+**visible** rather than silent. Under a global install the common causes are a stale vendored copy in
+some repository and an un-refreshed manifest.
+
+## Cloud and in-repo updates
+
+Cloud agents do not run the installer. A vendored copy is updated the way any vendored dependency is:
+
+- **git submodule** — `git submodule update --remote --merge`, then commit the new SHA.
+- **subtree or copy** — re-run whatever script vendored `skills/` in, and commit the diff.
+- **reference-only** — nothing to update; the next message picks up the current version.
+
+`scripts/check-updates.py` works in this mode. Point it at the vendored directory:
 
 ```bash
 python3 scripts/check-updates.py --vendored .agent-skills/skills
 ```
 
-It reads the vendored skills' `metadata.version`, queries GitHub for the latest release tag
-(unauthenticated — works for public repos within the rate limit, or pass `--token $GITHUB_TOKEN`
-to lift the limit), and reports `up to date` / `update available` / `ahead`. No git checkout
-required.
+It reads the vendored `metadata.version`, queries GitHub for the latest release tag (unauthenticated,
+which works for public repos within the rate limit; pass `--token` to lift it), and reports `up to
+date` / `update available` / `ahead`. No git checkout required.
 
-## CI smoke check
-
-Add a non-blocking weekly job that surfaces stale clones:
+### CI smoke check
 
 ```yaml
 # .github/workflows/skills-update-check.yml (in your downstream repo)
@@ -147,45 +143,57 @@ jobs:
         continue-on-error: true
 ```
 
-Treat the `10` exit code as informational. The maintainer's recommendation is **not** to fail
-CI on stale skills — instead, surface the warning and let the team upgrade on their cadence.
+Treat exit `10` as informational. The recommendation is **not** to fail CI on stale skills — surface
+the warning and let the team upgrade on its own cadence.
+
+## Legacy workspace updates
+
+An install that predates v0.37.0 keeps its update path:
+
+```bash
+cd agent-skills
+./setup.init --update --workspace-root /path/to/work
+```
+
+Values in `.env` outside the marker block are preserved verbatim, and Jira / Confluence / Sonar
+credentials inside the block survive the rerun — that behaviour is covered by
+`scripts/test-setup-update-preserves-credentials.sh`. An inherited `WORKSPACE_ROOT` pointing at a
+directory with a `.env` also selects this path, so an existing script keeps working.
+
+To move to the global install, see
+[installation.md](installation.md#upgrading-from-v036x-workspace-installation).
 
 ## Watching for releases
 
-For a passive notification stream (no clone polling required):
-
-- **GitHub release notifications.** Open the repo on GitHub → `Watch` → `Custom` →
-  `Releases`. You will receive an email or notification on each tagged release.
-- **RSS / Atom.** `https://github.com/wamalalawrence/agent-skills/releases.atom` works in any
-  feed reader.
-- **`gh` CLI.** `gh release list --repo wamalalawrence/agent-skills --limit 5` prints the most
-  recent five releases.
+- **GitHub notifications.** Repo → `Watch` → `Custom` → `Releases`.
+- **RSS / Atom.** `https://github.com/wamalalawrence/agent-skills/releases.atom`.
+- **`gh` CLI.** `gh release list --repo wamalalawrence/agent-skills --limit 5`.
 
 ## Rollback
 
 ```bash
-cd agent-skills
+cd /path/to/agent-skills
 git fetch --tags origin
-git checkout v0.18.0          # the version you want to roll back to
-./setup.init --yes            # refresh .skills + .agent-skills.lock
+git checkout v0.36.0
+./setup.init
 ```
 
-Rollback is symmetric with update. The lock file is overwritten to reflect the rolled-back
-version so the agent's next task does not warn about drift.
+Symmetric with update. The manifest is rewritten to the rolled-back version so the next task does not
+warn about drift.
 
 ## What does not change on update
 
-- `.env` values **outside** the setup marker block are preserved verbatim.
-- `.jira-config.yml` is left alone (the user owns it after first creation).
-- `.cache/agent-skills/...` is left alone (that is per-task evidence, not config).
-- Vendored copies in **other** repos are not touched. Only the source clone and the workspace
-  symlink are updated.
+- Credential identities and their stored secrets.
+- Project bindings.
+- `.cache/agent-skills/...` in any repository — that is per-task evidence, not config.
+- Legacy `.env` values outside the marker block.
+- Vendored copies in other repositories. Only the source clone and the install are refreshed.
+- Skills you installed yourself in a host directory.
 
 ## Related
 
-- [installation.md](installation.md) — first-time setup.
-- [skill-source-resolution.md](skill-source-resolution.md) — which skill directory the agent
-  must use, and how the lock file is consulted.
-- [versioning.md](versioning.md) — how version numbers are assigned and what counts as a
-  breaking change.
-- [release-checklist.md](release-checklist.md) — the maintainer steps that produce a release.
+- [Installation](installation.md) — first install and migration.
+- [Skill-source resolution](skill-source-resolution.md) — which directory an agent loads, and how the
+  manifest is consulted.
+- [Versioning](versioning.md) — what a version number promises before 1.0.
+- [Release checklist](release-checklist.md) — the maintainer steps that produce a release.

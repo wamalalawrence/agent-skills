@@ -1,82 +1,168 @@
 # Configuration
 
-`agent-skills` supports two execution modes — `local-workspace` (multi-repo, with `setup.init`) and
-`in-repo` (single-repo, for online/cloud agents). Read [execution-modes.md](execution-modes.md)
-first to pick the one that matches where the agent runs. This page documents the configuration for
-each.
+Most repositories need none.
 
-## `local-workspace` mode
+`agent-skills` derives what it can from the repository itself, so configuration is something you add
+when inference is not good enough — not a precondition for using the skills. Credentials are a
+separate concern entirely and never appear in any file described here; see
+[access-resolution.md](access-resolution.md).
 
-```text
-.env in the workspace root
-   |
-   |-- loaded into the shell or agent environment
-   |
-   `-- referenced inside SKILL.md as ${VAR_NAME}
-     skills never contain literal hostnames, tokens, repo names, or org names
-```
-
-The setup command and copied template are intentionally safe: they can describe the current
-workspace as a single local project, leave external systems blank, and avoid fake credentials. That
-is enough for generic planning or a first local dry run, but not enough for issue-aware or
-repository-changing work unless the generated values match the real workspace.
-
-When loading `.env` manually in a shell, export the values so child commands can see them:
+## What is inferred, with no configuration at all
 
 ```bash
-set -a
-source .env
-set +a
+agent-skills project
+agent-skills project --json
+agent-skills project --field build
 ```
 
-If `.env` is missing, a required value is blank, a copied bootstrap value would make the project
-identity ambiguous, or a tracker ticket cannot be read, the skill warns and stops before doing
-accuracy-sensitive work. Silent fallbacks are treated as a bug because they produce wrong work.
+| Value | Derived from |
+| --- | --- |
+| repository root, name, slug | `git rev-parse`, directory name |
+| remote, `owner/name` | `remote.origin.url` |
+| current branch | `git rev-parse --abbrev-ref HEAD` |
+| base branch | `origin/HEAD`, then a conventional `origin/<main\|master\|develop\|trunk>`, then a local branch |
+| stack and build system | `pom.xml`, `build.gradle`, `package.json`, `pyproject.toml`, `go.mod`, `Cargo.toml`, `Gemfile`, `composer.json`, `mix.exs`, `global.json` |
+| package manager | `pnpm-lock.yaml`, `yarn.lock`, `bun.lockb`, `package-lock.json` |
+| build and format commands | the scripts and tool configuration that actually exist in the repo |
+| CI | `.github/workflows/`, `.gitlab-ci.yml`, `Jenkinsfile`, and similar |
+| repo knowledge base | `<repo>/.agent-skills/knowledge/` |
+| vendored skills | `<repo>/.agent-skills/skills/` |
 
-`.jira-config.yml` (or equivalent tracker config) is optional. Tracker-driven work can use the
-environment variables in `.env`
-directly, but if neither tracker credentials nor a user-supplied ticket summary are available, the
-issue-aware skills stop and ask for context.
+Every field reports **where it came from**, and anything that could not be established safely lands
+in `needs_confirmation` rather than being asserted:
 
-When `.jira-config.yml` does exist, its `${JIRA_HOST}` / `${JIRA_LOGIN}` / `${JIRA_AUTH_TYPE}`
-placeholders are resolved from `.env` (or the process environment) at runtime — most CLIs do
-not expand them themselves. The full auth-discovery order, troubleshooting table, and the
-preflight script that validates without exposing secrets are documented in
-[`auth-discovery.md`](auth-discovery.md).
+```text
+confirm before relying on:
+  - build command 'mvn clean verify' is inferred from the build system, not read from this
+    repository. Confirm it before treating a run as authoritative.
+```
 
-## Required variables
+That distinction is the point. An inferred `pytest` for a repository with no tests is a command that
+fails for reasons unrelated to the change under review, so the skills are told to confirm it rather
+than trust it.
 
-See [`.env.example`](../.env.example) for the full annotated list. The minimum useful setup is:
+Node and Python commands are built only from scripts and tool configuration that exist. A repository
+with no `test` script gets no test command, and the gap is reported instead of filled with a guess.
 
-| Variable                         | Why                                                                    |
-| -------------------------------- | ---------------------------------------------------------------------- |
-| `ORG_NAME`                       | Used in summaries and stakeholder-ready output                         |
-| `ORG_DOMAIN`                     | Identity domain for PR / release-note text (optional, defaults to `localhost`) |
-| `WORKSPACE_ROOT`                 | Anchor for resolving repos, cache, and configs                         |
-| `GITHUB_ORG`                     | Required only for GitHub repository discovery, clone, push, or PR work |
-| `GITHUB_DEFAULT_BRANCH`          | Default base branch when a project has no override                     |
-| `PROJECTS_JSON`                  | Multi-project map with stack and command metadata                      |
-| `JIRA_HOST` and `JIRA_API_TOKEN` | Required only for Jira-driven or story-aware modes. For non-Jira trackers (GitLab, Azure DevOps, etc.), equivalent tracker-specific variables apply. |
-| `CONFLUENCE_HOST` and `CONFLUENCE_API_TOKEN` | Required only for Confluence-aware doc lookups. For non-Confluence document stores, equivalent variables apply. |
-| `SONAR_HOST_URL` and `SONAR_TOKEN` | Optional. Required only when CI/CD publishes a Sonar report the agent should reference |
-| `ENVIRONMENTS_JSON`              | Optional. Read-only pointers (host, log paths, kubectl context) to deployed environments used by `issue-investigator` for live evidence collection |
+## When to add committed configuration
 
-`setup.init` auto-populates several of these where it safely can:
+Add `.agent-skills.yml` at the repository root when:
 
-- `ORG_NAME` is inferred from the tracker host (e.g. `acme.atlassian.net` -> `Acme`), then from the
-  GitHub org, then from the workspace root directory name.
-- `ORG_DOMAIN` is inferred from the tracker login email, the tracker host, or the GitHub org.
-- `GITHUB_ORG` is inferred from sibling repo `remote.origin.url` first, then from `gh api user`.
-- `JIRA_PROJECT_KEYS` (or equivalent for other trackers) accepts a pasted ticket key (`ABC-123`) or ticket URL and extracts the
-  project key prefix.
-- `CONFLUENCE_HOST` is inferred from the Jira host (Atlassian Cloud uses `<host>/wiki`; self-hosted
-  `jira.<domain>` becomes `confluence.<domain>`).
+- the real build or format command is not derivable (a wrapper script, an unusual profile, a
+  monorepo target);
+- the base branch is not conventional;
+- the display name should differ from the directory name;
+- a coverage target or runtime version applies to this repository;
+- the repository runs in cloud agents and needs `mode: in-repo`;
+- you want to pin a skill source with `skills.canonical_dir`.
 
-You can always override the inferred default at the prompt.
+Copy [`.agent-skills.example.yml`](../.agent-skills.example.yml), fill in what matters, delete the
+rest, and commit it. Committed values win over inference, because a human wrote them.
 
-## Setup-managed marker block
+```yaml
+project:
+  name: "example-api"
+  stack: "java"
+  base_branch: "develop"
+  build: "mvn -Pintegration clean verify"
+  format: "mvn fmt:format && mvn fmt:check"
+  runtime_version: "21"
+  coverage_target: "85"
+```
 
-`setup.init` owns one block in `.env`, delimited by:
+### `.agent-skills.yml` is secret-free, and that is enforced
+
+It is committed, so from the resolver's point of view it is attacker-controlled: anyone who can open
+a pull request can edit it. Two consequences, both binding:
+
+- **No credential values.** Ever.
+- **No credential profile names.** A committed file may declare *what* a service is (a name, a host);
+  it may not select *which* identity to unlock. Profile selection comes only from the user-global
+  binding registry or an untracked `.agent-skills.local.yml`, and untrackedness is verified with git
+  rather than inferred from the filename.
+
+So a repository cannot contain "use `production-readonly-db`" and thereby reach a credential that
+has nothing to do with it. See
+[access-resolution.md](access-resolution.md#security-boundaries).
+
+## Project-local overrides that are not committed
+
+For values that belong to your checkout rather than the project, use a gitignored
+`.agent-skills.local.yml`:
+
+```yaml
+# .agent-skills.local.yml — add to .gitignore
+credentials:
+  jira: work-jira
+  github: work-github
+
+jira:
+  host: "https://sandbox.example.atlassian.net"
+```
+
+Add it to `.gitignore` before you create it. If git tracks it, the resolver ignores its
+`credentials:` block and says why — that is the enforcement point above, not an inconvenience.
+
+An equivalent, and often better, alternative keeps the repository completely clean:
+
+```bash
+agent-skills access bind --service jira --profile work-jira
+```
+
+That writes to a user-global registry keyed by the repository's git remote, so it survives the repo
+being moved or re-cloned and adds no file to the tree.
+
+## Top-level keys
+
+| Key | Required | Notes |
+| --- | --- | --- |
+| `mode` | for cloud agents | `in-repo`. Omit for local work. |
+| `org_name` | no | Display name in summaries and PR text. |
+| `org_domain` | no | Identity domain for written output. |
+| `github_org` | for clone/push/PR work | GitHub owner. Usually inferable from the remote. |
+| `github_default_branch` | no | Falls back to the detected base branch. |
+| `project` | no | Overrides inference for this repository. |
+| `jira.host`, `jira.default_project_key` | for tracker work | Host metadata only. The credential is never here. |
+| `confluence.host` | for doc lookups | Host metadata only. |
+| `cache_dir` | no | Overrides `<repo>/.cache/agent-skills/`. Same as `AGENT_SKILLS_CACHE_DIR`. |
+| `writing.ai_attribution` | no | `none` \| `trailer` \| `footer`. See [writing voice](writing-voice.md). |
+| `writing.voice_reference` | no | Path to a local writing sample to match. |
+| `skills.canonical_dir` | no | Pin the skill source. See [skill-source resolution](skill-source-resolution.md). |
+
+## Cache path
+
+```text
+${AGENT_SKILLS_CACHE_DIR:-<repo-root>/.cache/agent-skills/<issue-key>/}
+```
+
+Evidence packs, repro recipes, definition-of-done artifacts, project memory, the blackboard, and
+telemetry live here. The repository root is found with `git rev-parse --show-toplevel`, so running a
+skill from a nested directory does not create a second cache.
+
+Add `.cache/` to the repository's `.gitignore`. In legacy workspace mode the cache is
+`${WORKSPACE_ROOT}/.cache/agent-skills/` and `setup.init --legacy-workspace` writes the ignore rule
+for you.
+
+## Legacy workspace configuration
+
+Installs from v0.36.x and earlier keep a `${WORKSPACE_ROOT}/.env` with a managed marker block
+(`ORG_NAME`, `WORKSPACE_ROOT`, `PROJECTS_JSON`, `JIRA_*`, `CONFLUENCE_*`, `SONAR_*`,
+`ENVIRONMENTS_JSON`). That file still works:
+
+- the access resolver discovers it and maps the long-standing variable names onto fields;
+- `./setup.init --legacy-workspace` still writes and refreshes it;
+- `./setup.init --update` with an inherited `WORKSPACE_ROOT` preserves every value in it.
+
+`PROJECTS_JSON` is no longer needed for a repository to be understood — inference covers it — but it
+is still read where present. The annotated schema lives in [`.env.example`](../.env.example), which
+is now a legacy reference rather than the primary configuration surface.
+
+Migration: [installation.md](installation.md#upgrading-from-v036x-workspace-installation), or run
+`agent-skills migrate`.
+
+## Setup-managed marker block (legacy)
+
+`setup.init --legacy-workspace` owns one block in `.env`:
 
 ```text
 # >>> agent-skills setup.init
@@ -84,82 +170,15 @@ You can always override the inferred default at the prompt.
 # <<< agent-skills setup.init
 ```
 
-All setup-managed keys (org identity, workspace, projects, Jira, Confluence) live INSIDE that
-block. The block is overwritten on every rerun. Edits OUTSIDE the block (custom env vars,
-code-reviewer overrides, build tooling hints) are preserved verbatim.
+The block is overwritten on every rerun; edits **outside** it are preserved verbatim. Never define a
+managed key a second time outside the block — shell sourcing means last assignment wins, so a
+duplicate becomes a silent override. Both `setup.init --verify` and `scripts/validate-repo.py` fail
+on that.
 
-Never define a setup-managed key a second time outside the block. The shell loader's
-"last assignment wins" rule turns duplicates into silent overrides. `setup.init --verify` and
-`scripts/validate-repo.py` both fail when a managed key is defined outside the block.
+## Related
 
-If you upgrade from v0.10.0 or earlier and your `.env` carries duplicate top-level definitions of
-managed keys, just rerun `./setup.init`. It strips the legacy duplicates and reports how many it
-removed.
-
-## Multi-project workspaces
-
-Declare repositories once via `PROJECTS_JSON` in `.env`. Skills use this to identify the current
-project, stack, runtime, base branch, build command, and formatting command.
-
-```jsonc
-PROJECTS_JSON='[
-  {"name":"example-api",    "path":"example-api",    "stack":"java",       "base_branch":"main", "build":"mvn clean verify",   "format":"mvn fmt:format && mvn fmt:check"},
-  {"name":"example-web",    "path":"example-web",    "stack":"typescript", "base_branch":"main", "build":"npm ci && npm test", "format":"npm run lint && npm run format:check"},
-  {"name":"example-worker", "path":"example-worker", "stack":"python",     "base_branch":"main", "build":"pytest",             "format":"ruff check . && ruff format --check ."}
-]'
-```
-
-Per-project keys:
-
-- `name`: short identifier
-- `path`: relative path under `${WORKSPACE_ROOT}`
-- `stack`: `java`, `typescript`, `python`, `go`, `mixed`, or `other`
-- `base_branch`: overrides `${GITHUB_DEFAULT_BRANCH}` for this project
-- `build`: full build-and-test command
-- `format`: formatter command to run before commit or PR
-- optional: `runtime_version`, `coverage_target`, `notes`
-
-## `in-repo` mode
-
-When the agent runs inside a single target repository (GitHub Copilot coding agent, Cursor cloud,
-Devin, Codex, Codespaces, Gitpod, Claude.ai web), there is no separate workspace root and no `.env`
-file. Instead, configuration lives in a committed file at the repository root:
-[`.agent-skills.yml`](../.agent-skills.example.yml). Secrets still come from environment variables
-injected by the host platform — never from this file.
-
-Top-level keys:
-
-| Key                                     | Required                    | Notes                                                                                       |
-| --------------------------------------- | --------------------------- | ------------------------------------------------------------------------------------------- |
-| `mode`                                  | yes                         | Must be `in-repo`.                                                                          |
-| `org_name`                              | yes                         | Display name in summaries and PRs.                                                          |
-| `github_org`                            | only for clone/push/PR work | GitHub owner.                                                                               |
-| `github_default_branch`                 | yes                         | Default base branch.                                                                        |
-| `project`                               | yes                         | Single project block; replaces `PROJECTS_JSON`.                                             |
-| `jira.host`, `jira.default_project_key` | only for Jira work          | Host metadata only; the credential `JIRA_API_TOKEN` is an env var.                          |
-| `confluence.host`                       | only for Confluence work    | Host metadata only; the credential `CONFLUENCE_API_TOKEN` is an env var.                    |
-| `cache_dir`                             | no                          | Override; default is `<repo>/.cache/agent-skills/`. Equivalent to `AGENT_SKILLS_CACHE_DIR`. |
-
-`project` keys mirror the per-project schema above (`name`, `stack`, `base_branch`, `build`,
-`format`, `runtime_version`, `coverage_target`, `notes`) but with no `path` field — the project is
-the repo itself.
-
-## Variable resolution order (both modes)
-
-For every value the skills need, the order is:
-
-1. Process environment variable.
-2. `.agent-skills.yml` (in-repo) or `${WORKSPACE_ROOT}/.env` (local-workspace).
-3. Repo-file inference — only for `stack`/`build`/`format`.
-4. Stop with `Missing required setup: <NAME>` if still unresolved.
-
-## Cache path
-
-Skills write the evidence-pack, repro-recipe, and definition-of-done artifacts to:
-
-```
-${AGENT_SKILLS_CACHE_DIR:-${WORKSPACE_ROOT:-$REPO_ROOT}/.cache/agent-skills/<issue-key>/}
-```
-
-That is the workspace root in `local-workspace` mode and the repository root in `in-repo` mode. Add
-`.cache/` to `.gitignore` in either case (`setup.init` does it for you in local-workspace mode).
+- [Access resolution](access-resolution.md) — credentials, which are not configuration.
+- [Installation](installation.md) — the global install and the migration path.
+- [Execution modes](execution-modes.md) — which configuration applies where.
+- [Skill-source resolution](skill-source-resolution.md) — the `skills:` block.
+- [`.agent-skills.example.yml`](../.agent-skills.example.yml) — the annotated template.

@@ -1,39 +1,49 @@
 # Issue Tracker / Document Store Auth Discovery
 
-This page is the canonical reference an agent should follow when it needs Jira, Confluence,
-GitLab, Azure DevOps, or equivalent tracker / document-store access. The goal is simple: an
-agent should not say "I can't access the issue tracker / doc store" until it has
-walked the documented discovery order, attempted placeholder resolution, and run the auth
-preflight. Failing earlier produces avoidable dead ends; the same workspace usually has the
-information available, just not in the place the agent looked first.
+> **This page is a service-specific example, not the architecture.**
+>
+> Since v0.37.0 all external access goes through one generic mechanism documented in
+> [access-resolution.md](access-resolution.md). Start there. It handles any service and any set of
+> fields, and it is what a skill should call — `agent-skills access resolve --service jira
+> --resource https://example.atlassian.net --require host,login,token --secret token`.
+>
+> What remains here is the Jira and Confluence detail that is genuinely service-specific: the
+> `${VAR}` placeholder problem, the shape of the CLI config, and the troubleshooting table. Jira is
+> an example of a service the resolver can reach. It no longer defines how access works.
 
-It pairs with the broader [configuration reference](configuration.md) and the
-[execution modes](execution-modes.md) page.
+This page still matters for one reason: an agent should not say "I can't access the issue tracker"
+until it has walked the documented order. The same machine usually has the information available,
+just not in the place the agent looked first.
 
 ## TL;DR for agents
 
-1. **Locate the files first.** Run `agent-skills locate-config` (or read the [Where the
-  files live](#where-the-files-live) section). Do not say "`.env` not found" until the locator
-  has reported every directory it searched. The most common false dead-end is a `.env` that
-  lives one directory **above** the cwd because `setup.init` writes it to the parent workspace
-  folder, not to the repo root.
-2. Walk the discovery order below in order. Do not skip steps.
-3. Treat unresolved `${VAR}` placeholders in `.jira-config.yml` as **incomplete configuration**,
-  not as missing auth. Resolve them from `.env` or process environment first.
-4. Run `agent-skills auth-preflight` (or the documented equivalent) before declaring auth
-  unusable. The preflight reports which fields are missing, which placeholders are unresolved,
-  and whether the configuration is usable — without printing secrets.
-5. Only after the preflight returns a non-usable result should the agent ask the user, and the
-  ask must name the specific missing fields **and** every directory the locator searched.
+1. **Run the generic resolver first.** `agent-skills access resolve --service jira --require
+  host,login,token --secret token`. It walks the whole precedence order — an authenticated `jira`
+  CLI or MCP tool, process environment, project-local configuration, legacy `.env`, then a named
+  identity — and reports exactly which fields are missing without printing a value.
+2. **If it reports legacy configuration was discovered**, that is the pre-v0.37.0 `.env` /
+  `.jira-config.yml` path below, and it still works.
+3. **Treat unresolved `${VAR}` placeholders in `.jira-config.yml` as incomplete configuration**, not
+  as missing auth. See [Placeholder resolution](#placeholder-resolution).
+4. `agent-skills locate-config` lists every directory searched, when you need to show the user where
+  you looked. `agent-skills auth-preflight` is the legacy Jira-specific checker, kept for
+  compatibility.
+5. Only after resolution fails should the agent ask, and the ask must name the specific missing
+  fields. **Never ask for a secret value in the conversation.**
 
 ## Where the files live
 
-`setup.init` does **not** put `.env` and `.jira-config.yml` inside any specific repository. It
-puts them in the **parent workspace folder** that holds the sibling repos and the `.skills`
-symlink. An agent whose cwd is `<workspace>/<repo>` and which only checks the cwd will
-incorrectly report the files as missing.
+Under a global install there is normally **no** `.env` at all: credentials live in the OS credential
+store as named identities, and configuration is inferred from the repository. If you are looking for
+a `.env`, you are either on a pre-v0.37.0 install or in a repository that keeps its own gitignored
+one.
 
-Authoritative locations, in resolution order:
+For those cases, `setup.init --legacy-workspace` put `.env` and `.jira-config.yml` in the **parent
+workspace folder** holding the sibling repos and the `.skills` symlink — not inside any repository.
+An agent whose cwd is `<workspace>/<repo>` and which only checks the cwd will incorrectly report the
+files as missing.
+
+Authoritative legacy locations, in resolution order:
 
 1. The directory passed via `--workspace-root` to any agent-skills script, or the
   `WORKSPACE_ROOT` environment variable.
@@ -60,8 +70,16 @@ whether each requested file exists. That is enough for an agent to decide whethe
 
 ## Discovery order
 
+> The authoritative order is now in
+> [access-resolution.md](access-resolution.md#resolution-order), and it covers every service. What
+> follows is how the Jira and Confluence sources map onto it, kept because the file layout is
+> service-specific.
+
 Apply this order whenever any skill needs Jira or Confluence access. Stop at the first step that
 yields a usable configuration; otherwise continue.
+
+0. **An authenticated `jira` CLI, or an MCP tracker tool the host already has.** Preferred over
+  everything below, because it stores no additional secret. This is step 1 of the generic order.
 
 1. **`.agent-skills.yml`** at the repository root (in-repo / cloud-agent mode). Provides
   `mode`, `jira.host`, `jira.default_project_key`, `jira.project_keys`, `jira.login`,
@@ -233,10 +251,12 @@ Skills that need Jira or Confluence content must not depend on a specific CLI be
 
 ## Cross-references
 
-- [Configuration reference](configuration.md) — full `.env` / `.agent-skills.yml` schema.
+- [Access resolution](access-resolution.md) — **the generic mechanism this page is an example of.**
+  Read it first.
+- [Configuration reference](configuration.md) — project configuration, which holds no secrets.
 - [Execution modes](execution-modes.md) — when each config source applies.
 - [Quickstart](quickstart.md) — first-time setup.
-- [Installation](installation.md) — `setup.init` flow.
-- [Known limitations](known-limitations.md) — what auth discovery cannot guarantee.
+- [Installation](installation.md) — the global install, and migration off the workspace layout.
+- [Known limitations](known-limitations.md) — what access resolution cannot guarantee.
 - [Destructive-action safety policy](destructive-action-safety.md) — why discovered credentials
   must never be invoked.

@@ -50,20 +50,33 @@ Two qualifications that matter as much as the instruction:
 - **Correct what you disprove.** If this run shows a recorded fact is wrong, fix the record.
   Memory that is never corrected decays into noise.
 
-## If the wrapper is not where you expect
+## If the command is not on PATH
 
-`start-task.sh` lives next to the skills. Depending on the install it is at `scripts/`,
-`agent-skills/scripts/`, or `.agent-skills/scripts/`. Look in all three before concluding it
-is missing — the same "not in cwd is not not-in-the-workspace" rule that applies to
-[config discovery](auth-discovery.md#where-the-files-live).
+`agent-skills` is installed globally and resolves from any repository, so there is no relative path
+to guess. Before v0.37.0 the instruction was to try `scripts/`, `agent-skills/scripts/`, and
+`.agent-skills/scripts/` in turn, which only worked when the clone happened to sit beside the
+current directory. That guessing is gone.
+
+Walk this ladder instead, in order:
+
+1. `agent-skills start-task --skill <skill-name>` — the normal case.
+2. `"${AGENT_SKILLS_HOME:-$HOME/.agent-skills}/bin/agent-skills" start-task --skill <skill-name>` —
+   the absolute launcher, for a hook or sandbox with a minimal `PATH`.
+3. `bash .agent-skills/scripts/start-task.sh --skill <skill-name>` — a repository that vendored the
+   scripts for a cloud agent.
+4. `bash scripts/start-task.sh --skill <skill-name>` — you are inside the `agent-skills` repo itself.
+
+If none resolve, the installation is missing or broken. Report that and point the user at
+`./setup.init`, then `agent-skills verify`. Do not treat it as "memory is unavailable, continue
+silently".
 
 If detection picks the wrong project or task id, pass them explicitly:
 
 ```bash
-bash scripts/start-task.sh <project> <issue-key> --skill <skill-name>
+agent-skills start-task <project> <issue-key> --skill <skill-name>
 ```
 
-If you have located the wrapper and still cannot run it, run the three steps by hand:
+If you have located the runtime and still cannot run it, run the three steps by hand:
 
 ```bash
 agent-skills org-memory read                      # non-fatal if missing

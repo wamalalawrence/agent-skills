@@ -3,27 +3,77 @@
 `agent-skills` provides instructions and workflows. It does not provide deterministic software,
 runtime enforcement, or guaranteed outcomes.
 
-- **Agent behavior varies.** Different assistants may follow the same `SKILL.md` with different
-  levels of consistency, especially for nested skills.
-- **Nested skill support is tool-dependent.** Some agents may not automatically discover or follow
-  `software-engineer/skills/issue-investigator` and `software-engineer/skills/code-reviewer`. In those
-  cases, attach or reference the nested `SKILL.md` directly.
-- **External access depends on your tools and permissions.** Jira, GitHub, Confluence, CI, logs, and
-  cloud environments are only available when your agent session has the right credentials and network
-  access. See [auth-discovery.md](auth-discovery.md) for the documented discovery order skills must
-  walk before reporting Jira / Confluence as unavailable; agents that skip the walk will report
-  "no auth" when the real cause is unloaded `.env` or unresolved `${VAR}` placeholders.
+## Agent behaviour
+
+- **Agent behaviour varies.** Different assistants follow the same `SKILL.md` with different levels
+  of consistency, especially for nested skills.
+- **Nested skill support is host-dependent.** Hosts that walk the skills root recursively find
+  `software-engineer/skills/issue-investigator` and `.../code-reviewer` automatically. Hosts that do
+  not still see the parent skill; reference the nested `SKILL.md` directly if a host does not surface
+  it. Recursion behaviour is not documented for every host.
+- **Generated output requires human review.** Plans, code, tests, acceptance criteria, defect
+  reports, and reviews should be checked by a responsible human before use.
 - **Company-specific standards are not bundled.** Repository conventions, coding standards, ticket
   formats, review rules, deployment practices, and architecture constraints must come from the user,
   the target repository, or attached documentation.
-- **Generated output requires human review.** Plans, code, tests, acceptance criteria, defect
-  reports, and reviews should be checked by a responsible human before use.
-- **Evidence-pack and cache flows depend on the execution environment.** Local-workspace mode,
-  in-repo/cloud-agent mode, ephemeral runners, and web agents may differ in what files they can read,
-  write, or preserve between turns.
-- **Skill-source ambiguity is the operator's call.** When a workspace has more than one
-  on-disk skill source (`.skills`, a vendored `.agent-skills/skills`, or the source clone),
-  the agent walks the resolution order in [skill-source-resolution.md](skill-source-resolution.md)
-  and asks if no winner is determined. It will not silently merge or pick.
-- **No warranty or SLA.** This project offers no guaranteed correctness, availability, response
-  time, support commitment, or fitness for a particular purpose.
+
+## Installation and host discovery
+
+- **The global install is local only.** It lives in your home directory, so a cloud or remote agent
+  cannot see it. Those environments need the in-repo mechanism. Cursor's Cloud Agents are the one
+  partial exception, and only for `~/.cursor/skills` with sync explicitly enabled. See
+  [execution-modes.md](execution-modes.md).
+- **JetBrains needs one manual action.** Global skill directories are IDE settings state, not a
+  filesystem convention, so nothing outside the IDE can register one safely. One entry under Settings,
+  documented in [assistants.md](assistants.md). This is not zero-click and is not claimed to be.
+- **Hosts may list a skill more than once.** Several hosts deliberately scan each other's global
+  directories, and no arrangement of directories avoids that. Every registration is a symlink to one
+  canonical tree, so a duplicate listing is the same file at the same version — but the listing itself
+  is outside this project's control.
+- **Host support is verified against documentation and filesystem behaviour, not against every host
+  release.** Agent Skills support is moving quickly. `agent-skills verify` is the check that matters
+  on your machine; this repository's table can lag a host update.
+- **The install depends on the clone staying put.** Canonical trees are symlinks into the source
+  repository. Move or delete the clone and the install breaks; `agent-skills verify` detects exactly
+  that, and rerunning `./setup.init` repairs it.
+- **Native Windows is not supported.** Run under WSL or Git Bash. PowerShell-native installation, and
+  Windows Credential Manager with it, are evaluated but not implemented.
+
+## Credentials and access
+
+- **External access depends on your tools and permissions.** A tracker, GitHub, a document store, CI,
+  logs, and cloud environments are reachable only when the session has the right credentials and
+  network access. See [access-resolution.md](access-resolution.md) for the order a skill must walk
+  before reporting a service unavailable.
+- **Resolution proves construction, not validity.** A resolved status means a correct request can be
+  built. It does not prove the credential still works on the far side; a rotated token still returns
+  401.
+- **The file fallback is only as strong as filesystem permissions.** When no OS credential store is
+  available, secrets go to a `0600` file in a `0700` directory outside every repository. That is
+  reported every time, never silently substituted, and deliberately not encrypted — an encrypted file
+  beside its own key would be theatre.
+- **A lone compatible identity is used automatically.** That is what makes two repositories share one
+  work account without re-entering a token, and a committed file cannot create or name an identity.
+  It does mean a machine holding both production and sandbox identities for one service can resolve
+  the wrong one if only one exists for that service. `AGENT_SKILLS_STRICT_BINDING=1` removes the
+  automatic path.
+- **Legacy plaintext exposure is not undone by migration.** Importing a token from a `.env` into the
+  keychain moves it; it does not un-expose it. Rotate anything you believe was exposed.
+- **Resolution is not authorization.** Finding a credential grants no permission to act. The
+  [destructive-action safety policy](destructive-action-safety.md) is a separate contract and still
+  applies to everything a resolver reports as available.
+
+## Project context
+
+- **Inference can be wrong.** Build and format commands derived from a build system are hints. Anything
+  not read directly from the repository is reported under `needs_confirmation` rather than asserted,
+  but an agent that ignores that list will act on a guess.
+- **A non-git directory has no branch, remote, or diff.** Inference degrades to the directory name and
+  build manifests, and reports the gap.
+
+## Evidence and caches
+
+- **Evidence-pack and cache flows depend on the execution environment.** Global, in-repo, ephemeral
+  runners, and web agents differ in what they can read, write, or preserve between turns.
+- **No warranty or SLA.** This project offers no guaranteed correctness, availability, response time,
+  support commitment, or fitness for a particular purpose.

@@ -37,14 +37,14 @@ GitHub environment, branch name, or cwd. If detection is wrong, rerun with
 explicit values:
 
 ```bash
-bash scripts/start-task.sh <project> <issue-key> --skill <skill-name>=<skill-version>
+agent-skills start-task <project> <issue-key> --skill <skill-name>=<skill-version>
 ```
 
-If the wrapper is unavailable after locating the installed `agent-skills/scripts`
-directory, run the individual steps:
+If the wrapper cannot be reached after walking the
+[resolution ladder](lifecycle-preflight.md#if-the-command-is-not-on-path), run the individual steps:
 
-1. Resolve the project name from `${PROJECTS_JSON}` (local-workspace) or the `project:` block
-   in `.agent-skills.yml` (in-repo).
+1. Resolve the project name with `agent-skills project --field slug`, or from the `project:` block
+   in `.agent-skills.yml`, or from `${PROJECTS_JSON}` on a legacy workspace install.
 2. Run `agent-skills memory read <project>` (or read the file directly at the
    resolved path). A non-zero exit means no memory exists yet — proceed to step 3.
 3. If no memory exists yet, run
