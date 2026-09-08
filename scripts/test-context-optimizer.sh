@@ -369,6 +369,23 @@ contains "$PACK2" "initialised bean dataSourceFactory" \
 contains "$PACK2" "sampled-repeats" \
   && ok "the startup brief treats the repeated timings as evidence, sampled" \
   || bad "the startup brief samples the repeated timings" "$(printf '%s' "$PACK2" | tail -20)"
+
+# The footer is bounded, so at a tight budget some omission records are not
+# listed. A `sampled-repeats` record says "the four lines you are reading stand
+# for forty", and a reader who does not see it can reasonably conclude there were
+# four. It must therefore survive budget pressure ahead of records that merely
+# describe irrelevant absent bulk. The pre-merge review found it ranked LAST,
+# hidden behind three collapsed-repeats records at every realistic budget.
+for tight_budget in 2000 3000 6000; do
+  TIGHT_OMIT="$(ctx pack "$FX/application.log" --brief "$BRIEF2" \
+    --budget-chars "$tight_budget" --no-cache 2>/dev/null)"
+  if contains "$TIGHT_OMIT" "sampled-repeats"; then
+    ok "the sampling record survives the footer bound at budget $tight_budget"
+  else
+    bad "the sampling record was dropped from the footer at budget $tight_budget" \
+      "$(printf '%s' "$TIGHT_OMIT" | sed -n '/## Omissions/,/## Metrics/p' | head -6)"
+  fi
+done
 contains "$PACK1" "sampled-repeats" \
   && bad "the settlement brief should have collapsed the startup timings as noise" \
   || ok "the settlement brief collapses the startup timings as noise"
@@ -586,6 +603,151 @@ case "$CACHED_MODE" in
 esac
 
 # ------------------------------------------------------------------------------
+sec "9b. redaction holds on every output path, for every strategy"
+# ------------------------------------------------------------------------------
+# Section 9 proves redaction on the log strategy's text output. That is the path a
+# test naturally looks at, and it is not the only path a secret can leave by.
+# This sweep puts a credential-shaped value into one fixture per strategy — placed
+# where each strategy is most likely to surface it — and checks every emitter:
+# pack in three formats, inspect in two, explain in three, expand two ways, the
+# cache listing, and the cache files themselves.
+#
+# The review that produced this sweep found exactly one such gap: `inspect` builds
+# its structure summary on a separate path from `build_pack`, and its `top repeat`
+# row quotes a source line verbatim. `inspect` is the command skills are told to
+# run FIRST, so a leak there precedes every other control.
+SWEEP="$BOX/sweep"
+mkdir -p "$SWEEP"
+SWEEP_TOKEN="AKIA""IOSFODNN7EXAMPLE"
+{
+  for index in 1 2 3 4 5 6 7 8 9 10; do
+    printf '2026-01-01T00:00:%02dZ INFO  [http] token=%s ok\n' "$index" "$SWEEP_TOKEN"
+  done
+  printf '2026-01-01T00:01:00Z ERROR [pay] charge 991 failed: creds token=%s\n' "$SWEEP_TOKEN"
+  printf '    at com.example.Pay.run(Pay.java:9)\n'
+} > "$SWEEP/s.log"
+{
+  printf '##[group]Run deploy.sh\n'
+  printf 'Run deploy.sh --key %s\n' "$SWEEP_TOKEN"
+  printf '[ERROR] BUILD FAILURE: charge 991 rejected\n'
+} > "$SWEEP/s.ci.log"
+{
+  printf -- '-- header comment\n'
+  printf 'CREATE TABLE charge (\n'
+  printf '    id BIGINT PRIMARY KEY,\n'
+  printf "    api_key VARCHAR(64) DEFAULT '%s'\n" "$SWEEP_TOKEN"
+  printf ');\n'
+} > "$SWEEP/s.sql"
+printf '{\n  "charge": {\n    "id": 991,\n    "token": "%s"\n  }\n}\n' "$SWEEP_TOKEN" \
+  > "$SWEEP/s.json"
+printf 'charge:\n  id: 991\n  token: "%s"\n' "$SWEEP_TOKEN" > "$SWEEP/s.yaml"
+{
+  printf 'diff --git a/src/Charge.java b/src/Charge.java\n'
+  printf -- '--- a/src/Charge.java\n'
+  printf '+++ b/src/Charge.java\n'
+  printf '@@ -1,3 +1,3 @@\n'
+  printf -- '-  String key = env("K");\n'
+  printf '+  String key = "%s";\n' "$SWEEP_TOKEN"
+  printf '   charge(991);\n'
+} > "$SWEEP/s.diff"
+{
+  printf 'import os\n\n'
+  printf 'def charge(amount):\n'
+  printf '    api_key = "%s"\n' "$SWEEP_TOKEN"
+  printf '    return amount\n'
+} > "$SWEEP/s.py"
+
+SWEEP_CACHE="$BOX/sweep-cache"
+sweep_ctx() { "$PYTHON3" "$CONTEXT" --cache-root "$SWEEP_CACHE" "$@"; }
+SWEEP_BRIEF="why did charge 991 fail token api_key"
+SWEEP_LEAKS=0
+SWEEP_CHECKED=0
+for fixture in s.log s.ci.log s.sql s.json s.yaml s.diff s.py; do
+  PID="$(sweep_ctx pack "$SWEEP/$fixture" --brief "$SWEEP_BRIEF" --budget-chars 4000 \
+    --format json 2>/dev/null | "$PYTHON3" -c \
+    'import json,sys; print(json.load(sys.stdin)["pack_id"])' 2>/dev/null)"
+  for emitter in \
+    "inspect $SWEEP/$fixture" \
+    "inspect $SWEEP/$fixture --json" \
+    "pack $SWEEP/$fixture --brief $SWEEP_BRIEF --budget-chars 4000" \
+    "pack $SWEEP/$fixture --brief $SWEEP_BRIEF --budget-chars 4000 --format yaml" \
+    "pack $SWEEP/$fixture --brief $SWEEP_BRIEF --budget-chars 4000 --format json" \
+    "explain $PID" "explain $PID --format yaml" "explain $PID --json" \
+    "expand $PID --fragment f1 --budget-chars 4000" \
+    "expand $PID --lines 1-50 --budget-chars 4000" \
+    "cache list"
+  do
+    [ -n "$PID" ] || case "$emitter" in explain*|expand*) continue ;; esac
+    # shellcheck disable=SC2086
+    EMITTED="$(sweep_ctx $emitter 2>&1)"
+    SWEEP_CHECKED=$((SWEEP_CHECKED + 1))
+    if contains "$EMITTED" "$SWEEP_TOKEN"; then
+      bad "credential leaked via: $emitter"
+      SWEEP_LEAKS=$((SWEEP_LEAKS + 1))
+    fi
+  done
+done
+[ "$SWEEP_LEAKS" -eq 0 ] \
+  && ok "no credential reached any emitter ($SWEEP_CHECKED paths across 7 strategies)" \
+  || bad "$SWEEP_LEAKS leaking emitter(s)"
+if grep -rq "$SWEEP_TOKEN" "$SWEEP_CACHE" 2>/dev/null; then
+  bad "the sweep credential was written to a cache file"
+else
+  ok "no credential in any cache file written during the sweep"
+fi
+
+# ------------------------------------------------------------------------------
+sec "9c. edge-case inputs neither crash nor overrun"
+# ------------------------------------------------------------------------------
+# Every one of these was tried by hand during the pre-merge review. Pinning them
+# means a future strategy change cannot quietly start raising on an empty file or
+# an unterminated JSON string, which is the shape of input real evidence actually
+# arrives in.
+EDGE="$BOX/edge"
+mkdir -p "$EDGE"
+: > "$EDGE/empty.txt"
+printf 'one line and no trailing newline' > "$EDGE/nonewline.txt"
+printf '\n\n\n\n\n\n' > "$EDGE/blanks.txt"
+printf '{"a": "unterminated\n' > "$EDGE/badjson.json"
+printf '{"a": [1,2,3' > "$EDGE/truncjson.json"
+printf 'CREATE TABLE t (\n  id INT\n' > "$EDGE/unterminated.sql"
+printf 'diff --git a/x b/x\n' > "$EDGE/hunkless.diff"
+printf -- '--- a/only\n+++ b/only\n@@ -1 +1 @@\n-a\n+b\n' > "$EDGE/nogitheader.diff"
+"$PYTHON3" -c "import sys; sys.stdout.write('x' * 400000)" > "$EDGE/oneline.txt"
+
+EDGE_CRASHES=0
+EDGE_OVERRUNS=0
+for fixture in empty.txt nonewline.txt blanks.txt badjson.json truncjson.json \
+               unterminated.sql hunkless.diff nogitheader.diff oneline.txt; do
+  for strategy in auto log sql structured source diff text; do
+    for budget in 2000 2500; do
+      OUT="$(ctx pack "$EDGE/$fixture" --brief "id t a 991" --strategy "$strategy" \
+        --budget-chars "$budget" --no-cache 2>&1)"
+      if contains "$OUT" "Traceback"; then
+        bad "crash: $fixture as $strategy at budget $budget" \
+          "$(printf '%s' "$OUT" | tail -3)"
+        EDGE_CRASHES=$((EDGE_CRASHES + 1))
+      fi
+      LEN=${#OUT}
+      case "$OUT" in
+        FAIL*) : ;;
+        *)
+          if [ "$LEN" -gt "$budget" ]; then
+            bad "overrun: $fixture as $strategy" "budget $budget rendered $LEN"
+            EDGE_OVERRUNS=$((EDGE_OVERRUNS + 1))
+          fi
+          ;;
+      esac
+    done
+  done
+done
+[ "$EDGE_CRASHES" -eq 0 ] \
+  && ok "no crash across 9 malformed inputs x 7 strategies x 2 budgets" \
+  || bad "$EDGE_CRASHES crash(es) on malformed input"
+[ "$EDGE_OVERRUNS" -eq 0 ] \
+  && ok "no budget overrun on malformed input" || bad "$EDGE_OVERRUNS overrun(s)"
+
+# ------------------------------------------------------------------------------
 sec "10. budget pressure: best material chosen, exclusions reported"
 # ------------------------------------------------------------------------------
 TIGHT="$(ctx pack "$FX/dense.log" --brief "Why was order 55231 rejected?" \
@@ -714,7 +876,8 @@ contains "$INSPECT" "$FAKE_TOKEN" \
   && bad "inspect leaked a token into its structure summary" \
   || ok "inspect does not leak a token into its structure summary"
 
-for guard in "--budget-chars 500:below the 1000-char floor" "--strategy nope:invalid choice"; do
+for guard in "--budget-chars 500:below the 2000-char floor" \
+  "--budget-chars 1999:below the 2000-char floor" "--strategy nope:invalid choice"; do
   flag="${guard%%:*}"
   expect="${guard#*:}"
   # shellcheck disable=SC2086
@@ -757,7 +920,7 @@ esac
 
 # The budget is a hard bound, not a target. Check it across the whole matrix.
 OVERRUNS=0
-for budget in 1000 1500 2500 4000 8000 20000 60000; do
+for budget in 2000 2500 4000 8000 20000 60000; do
   for fixture in application.log ci.log schema.sql orders.json change.diff hostile.log dense.log; do
     OUT="$(ctx pack "$FX/$fixture" \
       --brief "settlement failure for transaction 84721 in payment_attempt" \
@@ -770,7 +933,7 @@ for budget in 1000 1500 2500 4000 8000 20000 60000; do
   done
 done
 [ "$OVERRUNS" -eq 0 ] \
-  && ok "the rendered pack never exceeded the budget (49 combinations)" \
+  && ok "the rendered pack never exceeded the budget (42 combinations)" \
   || bad "$OVERRUNS budget overrun(s)"
 
 # ------------------------------------------------------------------------------
@@ -866,16 +1029,15 @@ probe "provenance" \
   "-- f1  lines " absent
 
 # Probe 5 — remove the budget guarantee. The render must then exceed the bound.
+# Probe 5 — remove the render-size guarantee. The fixture and budget matter: the
+# fill passes already cap content at half the budget, so the guard loop is only
+# load-bearing where the header and footer are large relative to the budget. A CI
+# log at the floor is exactly that case, and with the guarantee gone the pack
+# overruns rather than dropping a fragment.
 probe "budget" \
-  '    for _ in range(len(candidates) + 4):
-        refresh_budget_omission(pack, skipped)
-        if len(render_pack(pack)) <= pack.budget_chars or not pack.fragments:
-            break||>    for _ in range(len(candidates) + 4):
-        refresh_budget_omission(pack, skipped)
-        if True:  # PROBE: budget guarantee removed
-            break' \
-  "application.log" "$BRIEF1" 1200 \
-  "over the 1200-char budget" present
+  '        if len(render_pack(pack)) <= pack.budget_chars or not pack.fragments:||>        if True:  # PROBE: budget guarantee removed' \
+  "ci.log" "Why did the build fail?" 2000 \
+  "over the 2000-char budget" present
 
 # Probe 3 needs its own assertion: the id must stop depending on the source.
 BROKEN_KEY="$BOX/probe-cache-key.py"

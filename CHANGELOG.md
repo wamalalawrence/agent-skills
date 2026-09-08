@@ -72,7 +72,7 @@ current engineering question, while preserving provenance and making omissions e
   version, budget, and window options. An edited file cannot hit a pack built from the old
   bytes, and the stored hash is verified again on read. This is what stops a 100 MB log being
   recompressed for every fresh specialist agent in a chain.
-- **[`scripts/test-context-optimizer.sh`](scripts/test-context-optimizer.sh)** — 97 checks over
+- **[`scripts/test-context-optimizer.sh`](scripts/test-context-optimizer.sh)** — 105 checks over
   ten generated fixtures plus five mutation probes. Fixtures are generated rather than
   committed: they are large by definition, and shipping a 5 MB synthetic log to test
   large-input handling would miss the point.
@@ -96,6 +96,11 @@ current engineering question, while preserving provenance and making omissions e
   Context Optimizer. A 150 MB log behind a one-line bug is not a phased plan.
 - **`delivery-runner` handoffs pass a pack id** rather than a raw path when one exists, so the
   next phase reuses the pack instead of recompressing the file.
+- **The minimum context budget is 2,000 characters, measured rather than chosen.** The first
+  implementation accepted 1,000, at which the provenance header alone does not fit — it failed
+  loudly rather than lying, but it accepted a budget it could never honour. Below roughly 1,500 the
+  header, shape map, and omission records cannot coexist with a fragment at all; below 2,000 a pack
+  renders inside its budget but carries no evidence.
 - **[Token efficiency](docs/token-efficiency.md)** now says plainly that it covers one half of
   the problem. Trimming a SKILL.md by 200 lines is worth doing, and worth nothing next to an
   agent that read a 4 MB log in its first tool call.
@@ -120,8 +125,10 @@ current engineering question, while preserving provenance and making omissions e
 
 ### Fixed
 
-Six defects the new suite and its probes found before release, recorded because a release note
-that only lists features implies the tests found nothing:
+Twelve defects found before release — six by the suite and its probes, six more by the pre-merge
+diff review — recorded because a release note that only lists features implies the tests found
+nothing. Three of the review's findings share one root cause: a field written *after* the budget was
+reconciled, which then changed the rendered length the reconciliation had just checked.
 
 - A tight budget could produce a pack of **pure footer** — zero fragments and a long explanation
   of why — because the omission list crowded out the evidence it was describing. The footer is
@@ -140,6 +147,17 @@ that only lists features implies the tests found nothing:
   value, with frequency discounting on top.
 - Two of the suite's own assertions passed for the wrong reason, matching omission-record
   previews rather than emitted evidence. Both now target the evidence specifically.
+- The omission record that says "the four lines you are reading stand for forty" had no priority
+  entry, so it ranked last and was hidden at every realistic budget — behind records about
+  irrelevant health checks. A reader who does not see it can reasonably conclude there were four.
+- The budget was non-monotonic: a 2,000-char budget emitted evidence where 2,500 emitted none,
+  because a trim pass sized a fragment against an estimate of the footer that then moved.
+- The rendered pack could exceed its budget by one character, because wall-clock time is measured
+  after the budget is reconciled and `0 ms` is shorter than `46 ms`.
+- `scripts/test-global-install.sh` asserted `removed 8 registration(s)` and broke on the ninth
+  skill — a test failing for a reason unrelated to what it tests. Now derived from the skill count.
+- `scripts/test-release-readiness.sh` still expected the `tech-lead` migration notice; the alias
+  removal had updated only one of the two places that asserted it.
 
 ### Deprecations
 

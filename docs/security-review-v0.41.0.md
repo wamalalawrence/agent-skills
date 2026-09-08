@@ -81,12 +81,14 @@ liability. Redactions are reported by kind and count. Cache files are written `0
 only redacted text. `inspect` output — samples, previews, structure summaries — is redacted on the
 same path.
 
-**Status: probed.** §9 of the suite asserts the marker is present, the raw value is absent from the
-pack, the surrounding evidence survived, the redaction is reported, `grep -r` finds no raw value
-anywhere under the cache, and the cache file mode is `0600`. §12 asserts `inspect` does not leak a
-value into its structure summary. CI repeats the probe with an AWS-shaped value. Mutation probe
-`redaction` neuters `redact()` and confirms the raw value then appears — the assertion is
-load-bearing.
+**Status: probed, on every emitter.** §9 asserts the marker is present, the raw value is absent from
+the pack, the surrounding evidence survived, the redaction is reported, `grep -r` finds no raw value
+anywhere under the cache, and the cache file mode is `0600`. §9b then sweeps **77 output paths across
+seven strategies** — `pack` in three formats, `inspect` in two, `explain` in three, `expand` two
+ways, the cache listing, and the cache files — because §9 checked the path a test naturally looks at
+and that is not the only path a secret can leave by. §12 asserts `inspect` does not leak a value into
+its structure summary. CI repeats the probe with an AWS-shaped value. Mutation probe `redaction`
+neuters `redact()` and confirms the raw value then appears, so the assertion is load-bearing.
 
 **Residual risk.** Detection is pattern-based and an internal credential format matching none of the
 ten shapes will pass through into a pack. Stated in
@@ -112,7 +114,7 @@ to `LIMIT_BOUNDS` rather than obeyed, non-numeric values fall back to the defaul
 every override is echoed on stderr so a surprising threshold is visible rather than mysterious.
 
 **Status: probed.** Verified by hand during development: a config setting `budget_chars: "5"` is
-clamped to the 1,000 floor, `relation_depth: "99"` to 6, `max_read_bytes: "1"` to 4,096, and
+clamped to the 2,000 floor, `relation_depth: "99"` to 6, `max_read_bytes: "1"` to 4,096, and
 `budget_chars: "not-a-number"` falls back to 10,000 with a note. Precedence was verified as
 CLI > environment > committed file > default. The suite runs with those environment variables
 explicitly unset via `env -u`, so a developer's own configuration cannot change a test result.
@@ -134,8 +136,11 @@ and the streaming alternative rather than being killed by the kernel. The JSON s
 token-driven rather than character-driven, which is a 32× speedup and also the difference between
 linear-with-a-large-constant and unusable.
 
-**Status: probed for the cap and the refusal; reasoned about for the extremes.** The binary refusal
-and the cap message are asserted in §12. The largest fixture actually exercised is 4.7 MB / 80,632
+**Status: probed for the cap, the refusal, and malformed input; reasoned about for the extremes.**
+The binary refusal and the cap message are asserted in §12, and §9c runs nine malformed inputs —
+empty, no trailing newline, blank lines only, unterminated JSON string, truncated JSON, unterminated
+SQL, hunkless diff, headerless diff, and one 400 KB single line — across all seven strategies at two
+budgets, asserting neither a crash nor an overrun. The largest fixture actually exercised is 4.7 MB / 80,632
 lines, which inspects in about 0.9 s. Behaviour at 40 GB is **unproven** — the streaming design says
 it should be bounded in memory and linear in time, and no test in this repository demonstrates it.
 
@@ -215,7 +220,7 @@ through it.
 
 | Property | Pinned by |
 | --- | --- |
-| Redaction before pack, render, and cache | suite §9, CI probe, mutation probe `redaction` |
+| Redaction on every emitter, every strategy | suite §9 and §9b, CI probe, mutation probe `redaction` |
 | `inspect` output redacted | suite §12 |
 | Injection flagged, preserved, and inert | suite §8, CI probe, mutation probe `injection` |
 | Budget honoured despite hostile instruction | suite §8, CI probe |
@@ -223,6 +228,7 @@ through it.
 | Cache invalidated by source change | suite §11, mutation probe `cache-key` |
 | Provenance on every fragment | suite §12, mutation probe `provenance` |
 | Binary input refused | suite §12 |
+| Malformed input neither crashes nor overruns | suite §9c |
 | Cache files `0600` | suite §9 |
 | Diff packs state their incompleteness | suite §6 |
 

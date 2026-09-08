@@ -145,8 +145,11 @@ A practical ladder:
 | `10000` | Default. Map plus several fragments | Most investigations |
 | `25000` | Map plus a wide slice | A review, or evidence that is genuinely spread out |
 
-The floor is 1000 characters; below that the provenance header alone would not fit, and a pack that
-cannot honour its own budget is worse than no pack.
+The floor is 2,000 characters, and it is measured rather than chosen. Below roughly 1,500 the
+provenance header, the shape map, and the omission records cannot coexist with a fragment at all;
+below 2,000 a pack renders inside its budget but carries no evidence. A floor that admitted budgets
+the runtime cannot honour would be a false promise, so it sits where a pack can still contain what
+it exists to contain.
 
 ## Progressive disclosure
 

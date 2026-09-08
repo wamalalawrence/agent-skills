@@ -27,7 +27,7 @@ bash scripts/test-release-readiness.sh
 | `test-global-install.sh` | pass |
 | `test-access-resolution.sh` | pass |
 | `test-front-door-skill.sh` | pass — 63 assertions |
-| `test-context-optimizer.sh` | pass — 97 assertions |
+| `test-context-optimizer.sh` | pass — 105 assertions |
 | `test-setup-update-preserves-credentials.sh` | pass |
 | Version consistency (11 `SKILL.md` vs `VERSION`) | pass — all `0.41.0` |
 
@@ -90,7 +90,7 @@ Full review: [docs/security-review-v0.41.0.md](../../docs/security-review-v0.41.
 
 | Property | Probe | Result |
 | --- | --- | --- |
-| Credential value never reaches pack, render, or cache | suite §9 + CI | pass |
+| Credential value never reaches pack, render, or cache | suite §9 + §9b (77 paths) + CI | pass |
 | `inspect` output redacted | suite §12 | pass |
 | Instruction-shaped text flagged and preserved | suite §8 + CI | pass |
 | Source text cannot change the budget | suite §8 + CI | pass |
@@ -98,6 +98,7 @@ Full review: [docs/security-review-v0.41.0.md](../../docs/security-review-v0.41.
 | Changed source never served a stale pack | suite §11 | pass |
 | Every fragment carries a locator and a reason | suite §12 | pass |
 | Binary input refused rather than guessed at | suite §12 | pass |
+| Malformed input neither crashes nor overruns | suite §9c (126 combinations) | pass |
 | Cache files mode `0600` | suite §9 | pass |
 | Diff packs state their own incompleteness | suite §6 | pass |
 | Committed config can only adjust a clamped integer bound | manual, recorded in the review | pass |
@@ -114,6 +115,11 @@ Each probe copies the runtime into a sandbox, deletes one guarantee, and asserts
 | `cache-key` | source hash dropped from the pack id | two different sources collide on one id | as expected |
 | `provenance` | fragment header stops printing the locator | `-- f1  lines ` disappears | as expected |
 | `budget` | the render-size guarantee loop is skipped | the pack exceeds its stated budget | as expected |
+
+The `budget` probe is pinned to a CI log at the 2,000-char floor rather than to any fixture: the
+fill passes already cap content at half the budget, so the guard loop is only load-bearing where
+the header and footer are large relative to the budget. Pointed at an easier fixture the probe
+passed while proving nothing, which is the failure mode probes exist to prevent.
 
 ## Findings raised and resolved before release
 
@@ -162,7 +168,12 @@ the v0.37.0 lesson applied deliberately rather than relearned.
 }
 ```
 
-`python3 scripts/telemetry.py report --all`, verbatim.
+`python3 scripts/telemetry.py report --all`, verbatim, run from the repository root.
+
+Section 10 of `test-release-readiness.sh` prints `total_events: 0` for the same command. That is not
+a contradiction: the counters are per-project and the cache root resolves through
+`WORKSPACE_ROOT`, which that suite sets to a sandbox. The repository-root reading above is the one
+that reproduces.
 
 - Two events total, both `completed`. Zero `stopped`, so no skill shows a rising stop share.
 - **No `invoked` events at all**, and nine of eleven skills show nothing. The counters are far too
@@ -183,8 +194,72 @@ Run after validation was green and before merge, per
 beforehand — that is the point of doing it anyway, and v0.37.0 is the precedent: it passed every gate
 and a reading of its own diff found five live defects.
 
-Findings and their resolutions are recorded in the [Findings](#findings-raised-and-resolved-before-release)
-section above and in [the security review](../../docs/security-review-v0.41.0.md).
+It found **four further defects**, all reproduced before fixing, all now pinned by a test. Three of
+them are the same class — a field written *after* the budget was reconciled, which then changed the
+rendered length the reconciliation had just checked.
+
+**R1 (MAJOR) — the omission that prevents a wrong conclusion was ranked last.**
+`OMISSION_PRIORITY` had no entry for `sampled-repeats`, so it fell to the default tier behind three
+`collapsed-repeats` records about irrelevant health checks. That record is the one saying "the four
+lines you are reading stand for forty"; a reader who does not see it can reasonably conclude there
+were four. Reproduced at budgets 1,500, 3,000 **and** 6,000 — it was hidden at every realistic
+budget. Fixed by giving it the same tier as `cascade`, and by re-stating the ordering principle:
+tier 0 is what the reader can act on, tier 1 is what changes how the *retained* fragments must be
+read, tier 2+ describes absent bulk. Pinned by three assertions in §2.
+
+**R2 (MAJOR) — the budget was non-monotonic.** A 2,000-char budget emitted evidence where 2,500
+emitted none. The trim pass sized a fragment against an *estimate* of the header and footer; the
+estimate then moved as the omission record changed, and the drop loop resolved the conflict by
+throwing the fragment away. Fixed by replacing the two competing mechanisms with one,
+`force_fit_one`, which measures the rendered pack instead of estimating it and shrinks the best
+remaining candidate until it fits. Behaviour is now monotonic from the floor upward.
+
+**R3 (MAJOR) — the budget could be exceeded by one character.** `processing_ms` is measured after
+reconciliation and appears in the metrics as `time: N ms`, so `0 ms` during reconciliation became
+`46 ms` afterwards and the pack rendered 2,001 chars against a 2,000-char budget. The redaction and
+instruction-shaped counts had the same shape of problem, being assigned after the fill. Fixed twice
+over: the timing field is now fixed-width, and `Pack.sync_metrics()` keeps the emitted-set metrics
+in step during reconciliation rather than being applied once at the end.
+
+**R4 (MAJOR) — the documented budget floor was a false promise.** `MIN_BUDGET_CHARS` was 1,000, and
+at 1,000 the header alone does not fit: the runtime failed loudly rather than lying, but it accepted
+a budget it could never honour. Measured properly: below ~1,500 the header, map, and omission records
+cannot coexist with a fragment at all, and below 2,000 a pack renders inside its budget but carries
+no evidence. The floor is now 2,000, with the measurement recorded in
+[docs/context-optimizer.md](../../docs/context-optimizer.md#deterministic-budget). The verbose
+`budget` omission record also now names one excluded locator instead of three below 6,000 chars,
+because at a small budget three fully-reasoned locators cost more than the evidence whose absence
+they describe.
+
+Two process findings, both outside `scripts/context.py` and both the same shape — a hardcoded count
+that assumed eight top-level skills:
+
+**R5 (MAJOR) — `scripts/test-global-install.sh` asserted `removed 8 registration(s)`.** It broke the
+moment a ninth skill shipped: a test failing for a reason unrelated to what it tests, which was that
+uninstall can still find its own registrations after the source tree is deleted. Now derived from the
+skill count on disk rather than re-hardcoded to nine.
+
+**R6 (MINOR) — `scripts/test-release-readiness.sh` still expected the `tech-lead` migration notice.**
+The alias removal updated `test-front-door-skill.sh` and missed this second place. Inverted the same
+way: the shipped CLI must now pass the retired name through unchanged.
+
+Three verification sweeps were written during the review and folded into the suite permanently rather
+than left as one-off scripts, since a one-off sweep proves a moment and a test proves a release:
+
+- **§9b** — the redaction claim on **every** emitter for **every** strategy: 77 output paths across
+  seven fixtures (`pack` in three formats, `inspect` in two, `explain` in three, `expand` two ways,
+  the cache listing, and the cache files). Section 9 had checked one strategy's text output, which is
+  the path a test naturally looks at and not the only path a secret can leave by.
+- **§9c** — nine malformed inputs (empty, no trailing newline, blank lines only, unterminated JSON
+  string, truncated JSON, unterminated SQL, hunkless diff, headerless diff, one 400 KB line) against
+  all seven strategies at two budgets: 126 combinations, no crash and no overrun.
+- **§2** — the sampling-record survival checks that pin R1.
+
+The suite grew from 97 to 105 assertions as a result.
+
+Earlier findings and their resolutions are in the
+[Findings](#findings-raised-and-resolved-before-release) section above and in
+[the security review](../../docs/security-review-v0.41.0.md).
 
 ## What this run does not establish
 

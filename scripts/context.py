@@ -81,7 +81,12 @@ DEFAULT_THRESHOLD_CHARS = 65536
 DEFAULT_THRESHOLD_LINES = 2000
 
 DEFAULT_BUDGET_CHARS = 10000
-MIN_BUDGET_CHARS = 1000
+# Measured, not chosen. Below roughly 1,500 characters the header, the shape
+# map, and the omission records cannot coexist with a fragment at all; below
+# 2,000 a pack renders but carries no evidence. A floor that admits budgets the
+# runtime cannot honour is a false promise, so the floor is where a pack can
+# still contain what it exists to contain.
+MIN_BUDGET_CHARS = 2000
 # Below this much free space, trimming a fragment in alongside others produces a
 # stub too short to add anything. Report it as omitted and point at
 # `context expand` instead.
@@ -2719,8 +2724,29 @@ class Pack:
     redaction_count: int
     instruction_shaped: int
     completeness: str
+    map_redactions: list[str] = field(default_factory=list)
     reused_from_cache: bool = False
     rendered_chars: int = 0
+
+    def sync_metrics(self) -> None:
+        """Recompute the metrics derived from the emitted fragment set.
+
+        Called before every render measurement inside the budget reconciliation.
+        These counts describe what the pack CONTAINS, so they can only be known
+        once the budget has chosen the fragments — and the budget can only be
+        reconciled against a render that already includes them. Assigning them
+        after reconciliation grew the footer by one line and pushed the pack back
+        over its own budget, which is how a 2,500-char budget came to emit
+        nothing while 2,000 emitted evidence.
+        """
+        kinds = list(self.map_redactions)
+        for fragment in self.fragments:
+            kinds.extend(fragment.redactions)
+        self.redaction_count = len(kinds)
+        self.redaction_kinds = sorted(set(kinds))
+        self.instruction_shaped = sum(
+            1 for fragment in self.fragments if UNTRUSTED_FLAG in fragment.flags
+        )
 
     @property
     def selected_chars(self) -> int:
@@ -2821,19 +2847,13 @@ def build_pack(source: SourceInput, options: PackOptions, version: str) -> Pack:
         redaction_count=len(map_redactions),
         instruction_shaped=0,
         completeness=selection.completeness,
+        map_redactions=sorted(set(map_redactions)),
     )
+    # The metrics describe what the pack CONTAINS, so they follow the budget's
+    # choice of fragments. `Pack.sync_metrics` keeps them in step during
+    # reconciliation rather than being applied once afterwards.
     fill_budget(pack, selection.fragments)
-    # Counted after the budget fill, not before: the metric must describe what
-    # this pack actually contains. A secret in a candidate that never made it in
-    # is not "redacted in this pack" — it simply is not here.
-    emitted_kinds = list(map_redactions)
-    for fragment in pack.fragments:
-        emitted_kinds.extend(fragment.redactions)
-    pack.redaction_count = len(emitted_kinds)
-    pack.redaction_kinds = sorted(set(emitted_kinds))
-    pack.instruction_shaped = sum(
-        1 for fragment in pack.fragments if UNTRUSTED_FLAG in fragment.flags
-    )
+    pack.sync_metrics()
     pack.processing_ms = int((time.monotonic() - started) * 1000)
     pack.rendered_chars = len(render_pack(pack))
     return pack
@@ -2849,8 +2869,14 @@ def fill_budget(pack: Pack, candidates: list[Fragment]) -> None:
         command that would include it.
     """
     ordered = sorted(candidates, key=lambda item: (-item.score, item.start_line, item.identifier))
+    pack.sync_metrics()
     overhead = len(render_pack(pack))
-    available = max(pack.budget_chars - overhead, pack.budget_chars // 4)
+    # Evidence gets at least half the budget, whatever the header and footer would
+    # like. The alternative was observed and is worse: a pack whose entire content
+    # is a footer explaining, at length, why it contains no evidence. The footer is
+    # bounded in `render_pack` for the same reason, and the guard loop below
+    # reconciles the two so the total still fits.
+    available = max(pack.budget_chars - overhead, pack.budget_chars // 2)
 
     def cost_of(fragment: Fragment) -> int:
         # Provenance and the blank line between fragments are part of the cost.
@@ -2896,12 +2922,9 @@ def fill_budget(pack: Pack, candidates: list[Fragment]) -> None:
     # dense input every window can be wider than the whole remaining space, and
     # returning zero fragments there was a real defect rather than a trade-off.
     room = available - spent - 120
-    if skipped and (room >= MIN_TRIM_ROOM or (not kept and room >= MIN_FRAGMENT_CHARS)):
+    if skipped and room >= MIN_TRIM_ROOM:
         best = min(skipped, key=lambda item: (-item.score, item.start_line))
-        best.text = (
-            best.text[:room].rstrip()
-            + "\n-- fragment trimmed to fit the budget; widen it with `context expand`"
-        )
+        best.text = trimmed_text(best.text, room)
         if "trimmed" not in best.flags:
             best.flags.append("trimmed")
         kept.append(best)
@@ -2916,6 +2939,7 @@ def fill_budget(pack: Pack, candidates: list[Fragment]) -> None:
     # and then exceeding it would make every downstream estimate a lie.
     for _ in range(len(candidates) + 4):
         refresh_budget_omission(pack, skipped)
+        pack.sync_metrics()
         if len(render_pack(pack)) <= pack.budget_chars or not pack.fragments:
             break
         weakest = min(pack.fragments, key=lambda item: (item.score, -item.start_line))
@@ -2924,6 +2948,58 @@ def fill_budget(pack: Pack, candidates: list[Fragment]) -> None:
             weakest = min(others, key=lambda item: (item.score, -item.start_line))
         pack.fragments = [f for f in pack.fragments if f is not weakest]
         skipped.append(weakest)
+    refresh_budget_omission(pack, skipped)
+    force_fit_one(pack, skipped)
+
+
+def trimmed_text(text: str, room: int) -> str:
+    return (
+        text[: max(0, room)].rstrip()
+        + "\n-- fragment trimmed to fit the budget; widen it with `context expand`"
+    )
+
+
+def force_fit_one(pack: Pack, skipped: list[Fragment]) -> None:
+    """Guarantee one fragment when candidates existed, sized to the real render.
+
+    The passes above size a trimmed fragment against an *estimate* of the header
+    and footer. The estimate then moves — adding a fragment changes the omission
+    record, which changes the footer, which changes the space available — and the
+    drop loop resolved that by throwing the fragment away. The observable symptom
+    was a pack of pure footer at a tight budget, and worse, non-monotonic
+    behaviour: a 2,000-char budget produced evidence where 2,500 produced none.
+
+    This measures the rendered pack instead of estimating it, shrinks the best
+    remaining candidate until it fits, and gives up only when even the shortest
+    useful fragment cannot coexist with the header. Deterministic and bounded.
+    """
+    if pack.fragments or not skipped:
+        return
+    best = min(skipped, key=lambda item: (-item.score, item.start_line))
+    remaining = [fragment for fragment in skipped if fragment is not best]
+    original = best.text
+    if "trimmed" not in best.flags:
+        best.flags.append("trimmed")
+    pack.fragments = [best]
+
+    room = len(original)
+    for _ in range(24):
+        refresh_budget_omission(pack, remaining)
+        pack.sync_metrics()
+        overshoot = len(render_pack(pack)) - pack.budget_chars
+        if overshoot <= 0:
+            return
+        room = min(room, len(best.text)) - overshoot - 8
+        if room < MIN_FRAGMENT_CHARS:
+            break
+        best.text = trimmed_text(original, room)
+
+    # Even the shortest useful fragment does not fit. Report nothing rather than
+    # a stub, and leave the budget record saying so.
+    pack.fragments = []
+    best.text = original
+    if "trimmed" in best.flags:
+        best.flags.remove("trimmed")
     refresh_budget_omission(pack, skipped)
 
 
@@ -2934,7 +3010,11 @@ def refresh_budget_omission(pack: Pack, skipped: list[Fragment]) -> None:
     if not relevant:
         return
     ranked = sorted(relevant, key=lambda item: (-item.score, item.start_line))
-    top = ", ".join(f"{fragment.locator()} ({fragment.reason})" for fragment in ranked[:3])
+    # This record is the single largest thing in the footer, and at a small budget
+    # three fully-reasoned locators cost more than the evidence they are describing
+    # the absence of. Name one there, three when there is room.
+    names = 3 if pack.budget_chars >= 6000 else 1
+    top = ", ".join(f"{fragment.locator()} ({fragment.reason})" for fragment in ranked[:names])
     suggested = max(pack.budget_chars * 2, pack.budget_chars + 10000)
     pack.omissions.append(
         Omission(
@@ -2958,19 +3038,30 @@ def refresh_budget_omission(pack: Pack, skipped: list[Fragment]) -> None:
 # fragments, then what was left out. An agent that stops after the map has still
 # learned the shape of the input, which is the point of progressive disclosure.
 # ---------------------------------------------------------------------------
-# Rendering order for omissions. The budget note comes first because it is the
-# one omission the reader can act on immediately, then the categories that
-# change how much of the source is represented at all.
+# Rendering order for omissions, because the footer is bounded and something has
+# to be dropped first at a tight budget. The ordering principle:
+#
+#   0  the reader can act on it right now
+#   1  it changes how the RETAINED fragments must be read
+#   2+ it describes absent bulk, in decreasing likelihood of mattering
+#
+# Tier 1 is the load-bearing one. `sampled-repeats` says "the four lines you are
+# looking at stand for forty" — a reader who does not see it can reasonably
+# conclude there were four. Ranking it below three `collapsed-repeats` records
+# about irrelevant health checks hid it at every realistic budget, which is the
+# wrong-conclusion failure this whole design exists to prevent. `cascade` is the
+# same shape of claim: the one error shown stands for four hundred.
 OMISSION_PRIORITY = {
     "budget": 0,
     "cascade": 1,
-    "generated-bulk": 1,
-    "unrelated-objects": 2,
-    "collapsed-repeats": 2,
-    "array-elements": 3,
-    "unmatched-symbols": 3,
-    "unmatched-nodes": 4,
-    "references": 4,
+    "sampled-repeats": 1,
+    "generated-bulk": 2,
+    "unrelated-objects": 3,
+    "collapsed-repeats": 3,
+    "array-elements": 4,
+    "unmatched-symbols": 4,
+    "unmatched-nodes": 5,
+    "references": 5,
 }
 
 
@@ -3032,19 +3123,33 @@ def render_pack(
         # The footer is bounded too. An unbounded omission list on a small budget
         # would crowd out the evidence it is describing, which is the same
         # mistake in a different place.
-        limit = len(pack.omissions) if all_omissions else max(1, pack.budget_chars // 1500)
-        ranked = sorted(pack.omissions, key=lambda item: OMISSION_PRIORITY.get(item.kind, 5))
+        # The footer competes with the evidence for the same budget, so it is
+        # bounded by CHARACTERS rather than by record count — a record count says
+        # nothing about how much room the records take. Ordering is by priority,
+        # so the records that change how the retained fragments must be read are
+        # the ones that fit. Whatever does not fit is still COUNTED, so a reader
+        # always knows more records exist even when none of them are listed.
+        ranked = sorted(pack.omissions, key=lambda item: OMISSION_PRIORITY.get(item.kind, 6))
+        allowance = 10**9 if all_omissions else max(220, pack.budget_chars // 3)
         lines: list[str] = []
-        for omission in ranked[:limit]:
+        spent = 0
+        shown = 0
+        for omission in ranked:
             where = ""
             if omission.start_line:
                 where = f" (lines {omission.start_line}-{omission.end_line})"
-            lines.append(f"- {omission.kind}: {omission.detail}{where}")
+            block = [f"- {omission.kind}: {omission.detail}{where}"]
             if omission.hint:
-                lines.append(f"    -> {omission.hint}")
-        if len(ranked) > limit:
+                block.append(f"    -> {omission.hint}")
+            cost = sum(len(line) + 1 for line in block)
+            if shown and spent + cost > allowance:
+                break
+            lines.extend(block)
+            spent += cost
+            shown += 1
+        if shown < len(ranked):
             lines.append(
-                f"- {len(ranked) - limit} further omission record(s) not listed at this "
+                f"- {len(ranked) - shown} further omission record(s) not listed at this "
                 f"budget; `context explain` shows all of them."
             )
         parts.append("## Omissions\n\n" + "\n".join(lines))
@@ -3067,7 +3172,11 @@ def render_pack(
             f"  flagged:     {pack.instruction_shaped} fragment(s) contain "
             f"instruction-shaped text, marked untrusted"
         )
-    metrics.append(f"  time:        {pack.processing_ms} ms")
+    # Fixed width on purpose. Wall-clock time is measured after the budget has
+    # been reconciled, so a variable-width rendering of it changes the pack
+    # length after the length was checked. That is how a 2,000-char budget came
+    # to render 2,001 chars: "0 ms" during reconciliation became "46 ms" after.
+    metrics.append(f"  time:        {pack.processing_ms:>9} ms")
     if pack.reused_from_cache:
         metrics.append("  cache:       reused (source hash, brief, budget and strategy unchanged)")
     parts.append("## Metrics\n\n" + "\n".join(metrics))
@@ -3570,8 +3679,8 @@ def cmd_pack(args: argparse.Namespace) -> int:
     if args.budget_chars < MIN_BUDGET_CHARS:
         raise UsageError(
             f"--budget-chars {args.budget_chars} is below the {MIN_BUDGET_CHARS}-char floor; "
-            f"below that the provenance header alone would not fit and the pack could not "
-            f"honour its own budget"
+            f"below that the provenance header, the shape map, and the omission records "
+            f"leave no room for a fragment, so the pack could not carry any evidence"
         )
     if not args.brief or not args.brief.strip():
         raise UsageError(

@@ -123,7 +123,8 @@ context_optimizer:
 
   # Default character budget for a pack when the caller does not pass
   # --budget-chars. Bounds the WHOLE rendered pack, provenance included.
-  # DEFAULT: "10000". Common ladder: 4000 | 10000 | 25000. Floor is 1000.
+  # DEFAULT: "10000". Common ladder: 4000 | 10000 | 25000. Floor is 2000 —
+  # below that the header and omission records leave no room for evidence.
   budget_chars: "10000"
 
   # How far to follow structural relationships — foreign keys in a schema, for
