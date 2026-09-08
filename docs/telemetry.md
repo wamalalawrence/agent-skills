@@ -45,12 +45,12 @@ they can be folded back into this table.
 ## CLI
 
 ```bash
-python3 scripts/telemetry.py emit acme-checkout invoked \
+agent-skills telemetry emit acme-checkout invoked \
   --field skill=software-engineer --field issue=ABC-123
 
-python3 scripts/telemetry.py report acme-checkout --since 2026-05-01T00:00:00Z
+agent-skills telemetry report acme-checkout --since 2026-05-01T00:00:00Z
 
-python3 scripts/telemetry.py report --all
+agent-skills telemetry report --all
 ```
 
 `report` aggregates counts per skill and per event name. Combine with the

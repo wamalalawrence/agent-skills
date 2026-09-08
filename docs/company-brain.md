@@ -71,11 +71,11 @@ bash scripts/start-task.sh <project> <issue-key> --skill <skill-name>=<skill-ver
 ```
 
 **Or run the individual steps:**
-1. `python3 scripts/locate-config.py` — find `.env` / `.agent-skills.yml`.
-2. `python3 scripts/org-memory.py read` (non-zero exit means no org memory yet — proceed).
-3. `python3 scripts/project-memory.py read <project>` (non-zero exit means no
+1. `agent-skills locate-config` — find `.env` / `.agent-skills.yml`.
+2. `agent-skills org-memory read` (non-zero exit means no org memory yet — proceed).
+3. `agent-skills memory read <project>` (non-zero exit means no
    project memory yet — initialise the skeleton with `init`).
-4. `python3 scripts/blackboard.py init <issue-key> --project <project>
+4. `agent-skills blackboard init <issue-key> --project <project>
    --skill <name>=<version>` to create the per-task working memory. Subsequent
    skills append; they do not re-derive.
 

@@ -45,10 +45,10 @@ directory, run the individual steps:
 
 1. Resolve the project name from `${PROJECTS_JSON}` (local-workspace) or the `project:` block
    in `.agent-skills.yml` (in-repo).
-2. Run `python3 scripts/project-memory.py read <project>` (or read the file directly at the
+2. Run `agent-skills memory read <project>` (or read the file directly at the
    resolved path). A non-zero exit means no memory exists yet — proceed to step 3.
 3. If no memory exists yet, run
-   `python3 scripts/project-memory.py init <project> --repo <owner/repo>` to write the skeleton
+   `agent-skills memory init <project> --repo <owner/repo>` to write the skeleton
    before context discovery starts. Recording even an empty skeleton makes the cleanup contract
    well-defined for downstream skills.
 4. Treat what is written there as **starting context**, not gospel. If the recorded fact is
@@ -95,7 +95,7 @@ Manual fallback:
 
 1. The agent writes the final updates to project memory **first** — at minimum a `Recent tasks`
    bullet, plus any new "Build & runtime" or "Common gotchas" facts the task surfaced.
-2. Then the agent runs `python3 scripts/project-memory.py cleanup-task <issue-key>`. This:
+2. Then the agent runs `agent-skills memory cleanup-task <issue-key>`. This:
    - Deletes `${cache_root}/<issue-key>/` and everything below it.
    - Refuses any path starting with `_` or containing `..` or `/`.
    - Does **not** touch `_projects/`.
@@ -112,7 +112,7 @@ knowledge survives.
 Skills should append a note as soon as a fact is verified, not at the end. Use:
 
 ```bash
-python3 scripts/project-memory.py note <project> \
+agent-skills memory note <project> \
   --section "Build & runtime" \
   --text "Module ./api requires sdk@21 and 'mvn -pl api verify' (NOT 'mvn verify')"
 ```

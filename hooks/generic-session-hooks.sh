@@ -18,8 +18,32 @@
 set -uo pipefail
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-SCRIPTS_DIR="$(cd "${SCRIPT_DIR}/../scripts" && pwd)"
 SKILL="${AGENT_SKILLS_ACTIVE_SKILL:-unknown}"
+
+# Prefer the stable CLI, which resolves the installed release from anywhere.
+# Fall back to the absolute launcher, then to the scripts directory beside this
+# file, so the template also works in a clone with nothing installed yet.
+as_lifecycle() {
+  local subcommand="$1"
+  shift
+  if command -v agent-skills >/dev/null 2>&1; then
+    agent-skills "${subcommand}" "$@"
+    return $?
+  fi
+  local launcher="${AGENT_SKILLS_HOME:-${HOME}/.agent-skills}/bin/agent-skills"
+  if [[ -x "${launcher}" ]]; then
+    "${launcher}" "${subcommand}" "$@"
+    return $?
+  fi
+  local scripts_dir=""
+  scripts_dir="$(cd "${SCRIPT_DIR}/../scripts" 2>/dev/null && pwd || true)"
+  if [[ -n "${scripts_dir}" && -f "${scripts_dir}/${subcommand}.sh" ]]; then
+    bash "${scripts_dir}/${subcommand}.sh" "$@"
+    return $?
+  fi
+  echo "agent-skills: cannot locate the ${subcommand} helper" >&2
+  return 1
+}
 
 usage() {
   cat <<'EOF'
@@ -39,14 +63,14 @@ EOF
 
 case "${1:-}" in
   start)
-    bash "${SCRIPTS_DIR}/start-task.sh" --skill "${SKILL}" || {
+    as_lifecycle start-task --skill "${SKILL}" || {
       echo "agent-skills: start-task hook failed; continuing without memory" >&2
     }
     ;;
   stop)
     # A hook cannot know whether the work finished, so it must not claim it did.
     # needs-context preserves scratch; the real status comes from the agent.
-    bash "${SCRIPTS_DIR}/finish-task.sh" \
+    as_lifecycle finish-task \
       --skill "${SKILL}" \
       --status needs-context \
       --no-cleanup \

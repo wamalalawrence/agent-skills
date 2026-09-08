@@ -24,6 +24,14 @@ agent_skills_resolve_cache_root() {
     printf '%s\n' "${WORKSPACE_ROOT}/.cache/agent-skills"
     return 0
   fi
+  # Under the global install the cache belongs to the repository, anchored at
+  # its root so a nested working directory does not create a second cache.
+  local git_root=""
+  git_root="$(git rev-parse --show-toplevel 2>/dev/null || true)"
+  if [[ -n "${git_root}" ]]; then
+    printf '%s\n' "${git_root}/.cache/agent-skills"
+    return 0
+  fi
   printf '%s\n' "${PWD}/.cache/agent-skills"
 }
 

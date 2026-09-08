@@ -5,9 +5,9 @@
     ".claude/settings.json (project scope). Do NOT add it in both places, and do",
     "not add it if a plugin already registers the same commands - duplicate",
     "registration makes every hook fire twice.",
-    "Replace <AGENT_SKILLS>/ with the path to your agent-skills clone, e.g.",
-    "$HOME/work/agent-skills. Hooks cannot expand ${VAR} in every host version,",
-    "so an absolute path is the reliable choice.",
+    "Since v0.37.0 these call the globally installed `agent-skills` command, so",
+    "there is no clone path to substitute. If the command is not on PATH, use the",
+    "absolute form instead: $HOME/.agent-skills/bin/agent-skills start-task ...",
     "See hooks/README.md for why these are templates rather than defaults."
   ],
   "hooks": {
@@ -17,7 +17,7 @@
         "hooks": [
           {
             "type": "command",
-            "command": "bash <AGENT_SKILLS>/scripts/start-task.sh --skill \"${AGENT_SKILLS_ACTIVE_SKILL:-unknown}\" || true",
+            "command": "agent-skills start-task --skill \"${AGENT_SKILLS_ACTIVE_SKILL:-unknown}\" || true",
             "timeout": 60
           }
         ]
@@ -29,7 +29,7 @@
         "hooks": [
           {
             "type": "command",
-            "command": "bash <AGENT_SKILLS>/scripts/finish-task.sh --skill \"${AGENT_SKILLS_ACTIVE_SKILL:-unknown}\" --status needs-context --no-cleanup --no-candidates --summary \"session ended without an explicit finish-task call\" || true",
+            "command": "agent-skills finish-task --skill \"${AGENT_SKILLS_ACTIVE_SKILL:-unknown}\" --status needs-context --no-cleanup --no-candidates --summary \"session ended without an explicit finish-task call\" || true",
             "timeout": 60
           }
         ]

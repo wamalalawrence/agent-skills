@@ -91,7 +91,7 @@ as step 4 of its preflight. So the order is a decision an agent can actually mak
 guess at:
 
 ```bash
-bash scripts/doctor.sh --brief
+agent-skills doctor --brief
 ```
 
 ```text

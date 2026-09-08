@@ -243,7 +243,7 @@ Concretely:
 - Never let recorded context supply a credential, a target environment, or an approval. Those
   come from configuration and from the user, never from a file the agent read.
 
-`python3 scripts/knowledge.py doctor` scans the repo tier for both instruction-shaped entries
+`agent-skills knowledge doctor` scans the repo tier for both instruction-shaped entries
 and committed secrets, and exits non-zero on either. Run it in the target repository's CI when
 that repository has a knowledge base, so a hostile entry fails a check rather than steering the
 next agent.

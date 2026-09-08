@@ -15,8 +15,9 @@
 #   * Nothing here asks for a credential. Installation and authentication are
 #     separate concerns; see scripts/access.py.
 
-# Directories inside the source tree that the install exposes globally.
-AS_LINKED_TREES="skills scripts lib bin docs"
+# Directories inside the source tree that the install exposes globally. `hooks`
+# is included so the optional hook templates have a stable absolute path too.
+AS_LINKED_TREES="skills scripts lib bin docs hooks"
 
 # ------------------------------------------------------------------------------
 # Registry access
@@ -62,14 +63,36 @@ as_host_detected() {
 # ------------------------------------------------------------------------------
 as_is_owned_link() {
   local path="$1"
-  local home resolved
+  local home home_real target resolved dir
   [ -L "${path}" ] || return 1
-  home="$(as_realpath "$(as_home)" 2>/dev/null || printf '%s' "$(as_home)")"
+  home="$(as_home)"
+  home_real="$(as_realpath "${home}" 2>/dev/null || printf '%s' "${home}")"
+
+  # Check the literal link target first. This is what makes ownership survive a
+  # deleted or moved source tree: the far end of the chain no longer resolves,
+  # but the link we wrote still points at our install root, so we can still
+  # recognise and clean up our own registrations. Resolving all the way through
+  # a broken chain would silently disown them.
+  target="$(readlink "${path}" 2>/dev/null || true)"
+  if [ -n "${target}" ]; then
+    case "${target}" in
+      /*) : ;;
+      *)
+        dir="$(cd -P "$(dirname "${path}")" >/dev/null 2>&1 && pwd)"
+        target="${dir}/${target}"
+        ;;
+    esac
+    case "${target}" in
+      "${home}"|"${home}"/*) return 0 ;;
+      "${home_real}"|"${home_real}"/*) return 0 ;;
+    esac
+  fi
+
   resolved="$(as_realpath "${path}" 2>/dev/null || true)"
   [ -n "${resolved}" ] || return 1
   case "${resolved}" in
-    "${home}"/*) return 0 ;;
-    "${home}") return 0 ;;
+    "${home_real}"|"${home_real}"/*) return 0 ;;
+    "${home}"|"${home}"/*) return 0 ;;
   esac
   return 1
 }
@@ -456,7 +479,8 @@ as_verify_install() {
   local tree
   for tree in ${AS_LINKED_TREES}; do
     if [ ! -e "${home}/${tree}" ]; then
-      [ "${tree}" = "docs" ] && continue
+      # docs and hooks are convenience trees; their absence is not a fault.
+      case "${tree}" in docs|hooks) continue ;; esac
       as_fail "${home}/${tree} is missing"
       errors=$((errors + 1))
     elif [ -L "${home}/${tree}" ] && [ ! -e "$(as_realpath "${home}/${tree}")" ]; then

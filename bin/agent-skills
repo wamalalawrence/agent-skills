@@ -56,6 +56,16 @@ Context and access
   project [--json]      Show the project context inferred from this repository
   access <subcommand>   Resolve access to an external service (see below)
 
+Memory and helpers
+  memory [args]         Per-project memory (project-memory.py)
+  knowledge [args]      Repo-resident knowledge base (knowledge.py)
+  blackboard [args]     Per-task shared working memory (blackboard.py)
+  org-memory [args]     Cross-project memory tier (org-memory.py)
+  telemetry [args]      Append-only event log (telemetry.py)
+  plan-next [args]      Read the next actionable phase of a delivery plan
+  locate-config [args]  Locate legacy .env / tracker config files
+  auth-preflight [args] Legacy tracker auth check; prefer `access resolve`
+
 Other
   version               Print the installed version
   help                  Show this message
@@ -201,6 +211,22 @@ case "${COMMAND}" in
   doctor) run_script "scripts/doctor.sh" "$@" ;;
   access) run_script "scripts/access.py" "$@" ;;
   project) run_script "scripts/project-context.py" "$@" ;;
+
+  # Every helper is reachable through this one command, so a skill never has to
+  # guess whether the scripts live at `scripts/`, `agent-skills/scripts/`, or
+  # `.agent-skills/scripts/`. That guessing was the v0.36 instruction, and it
+  # only worked when the clone happened to sit next to the current directory.
+  memory) run_script "scripts/project-memory.py" "$@" ;;
+  knowledge) run_script "scripts/knowledge.py" "$@" ;;
+  blackboard) run_script "scripts/blackboard.py" "$@" ;;
+  org-memory) run_script "scripts/org-memory.py" "$@" ;;
+  telemetry) run_script "scripts/telemetry.py" "$@" ;;
+  plan-next) run_script "scripts/delivery-run-next.py" "$@" ;;
+  locate-config) run_script "scripts/locate-config.py" "$@" ;;
+  auth-preflight) run_script "scripts/auth-preflight.py" "$@" ;;
+  promote-rules) run_script "scripts/promote-rules.py" "$@" ;;
+  outcome) run_script "scripts/outcome-recorder.py" "$@" ;;
+  github-access) run_script "scripts/github-access.sh" "$@" ;;
 
   version)
     if as_is_installed; then

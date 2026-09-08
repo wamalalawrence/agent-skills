@@ -122,7 +122,7 @@ the right test level, avoid brittle checks, and describe the validation command.
 Skills follow a documented [auth discovery order](auth-discovery.md) before reporting that
 The issue tracker or linked document store is inaccessible: `.agent-skills.yml` →
 `.jira-config.yml` (or equivalent tracker config) → `.env` /
-`.env.local` → process environment → `python3 scripts/auth-preflight.py`. Unresolved
+`.env.local` → process environment → `agent-skills auth-preflight`. Unresolved
 `${JIRA_HOST}` placeholders in `.jira-config.yml` mean **incomplete configuration**, not
 "no auth"; load `.env` first or run the preflight to validate. The preflight never prints
 secret values.

@@ -82,6 +82,11 @@ UPDATE_MODE="false"
 UPDATE_REF=""
 CHECK_CONNECTIVITY="true"
 CHECK_CREDENTIAL_PROBE="true"
+# An inherited WORKSPACE_ROOT is how pre-v0.37.0 callers (and existing shell
+# profiles) point at a legacy workspace. Capture it before the local default
+# clears it: without this, `WORKSPACE_ROOT=... ./setup.init --update` would fall
+# through to the global installer and silently change which model the user is on.
+INHERITED_WORKSPACE_ROOT="${WORKSPACE_ROOT:-}"
 WORKSPACE_ROOT=""
 WORKSPACE_ROOT_EXPLICIT="false"
 # auto | global | legacy. `auto` resolves in resolve_install_mode below.
@@ -1791,6 +1796,13 @@ resolve_install_mode() {
 
   # An existing legacy workspace, identified by the file that model depends on.
   if [[ -n "${WORKSPACE_ROOT:-}" && -f "${WORKSPACE_ROOT}/.env" ]]; then
+    INSTALL_MODE="legacy"
+    return 0
+  fi
+  # A WORKSPACE_ROOT inherited from the environment means the caller is already
+  # operating the legacy model. Honour it rather than migrating them silently.
+  if [[ -n "${INHERITED_WORKSPACE_ROOT}" && -f "${INHERITED_WORKSPACE_ROOT}/.env" ]]; then
+    WORKSPACE_ROOT="${INHERITED_WORKSPACE_ROOT}"
     INSTALL_MODE="legacy"
     return 0
   fi

@@ -6,7 +6,7 @@
       "trigger": "SessionStart",
       "action": {
         "type": "command",
-        "command": "bash <AGENT_SKILLS>/scripts/start-task.sh --skill \"${AGENT_SKILLS_ACTIVE_SKILL:-unknown}\" || true"
+        "command": "agent-skills start-task --skill \"${AGENT_SKILLS_ACTIVE_SKILL:-unknown}\" || \"${AGENT_SKILLS_HOME:-$HOME/.agent-skills}/bin/agent-skills\" start-task --skill \"${AGENT_SKILLS_ACTIVE_SKILL:-unknown}\" || true"
       }
     },
     {
@@ -14,7 +14,7 @@
       "trigger": "Stop",
       "action": {
         "type": "command",
-        "command": "bash <AGENT_SKILLS>/scripts/finish-task.sh --skill \"${AGENT_SKILLS_ACTIVE_SKILL:-unknown}\" --status needs-context --no-cleanup --no-candidates --summary \"session ended without an explicit finish-task call\" || true"
+        "command": "agent-skills finish-task --skill \"${AGENT_SKILLS_ACTIVE_SKILL:-unknown}\" --status needs-context --no-cleanup --no-candidates --summary \"session ended without an explicit finish-task call\" || true"
       }
     }
   ]

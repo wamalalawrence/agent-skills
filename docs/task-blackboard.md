@@ -47,7 +47,7 @@ Every skill that participates in a task MUST:
 
 1. **Initialise or read** the blackboard on entry. The first skill in a task
    creates it with
-   `python3 scripts/blackboard.py init <issue-key> --project <project> --skill <name>=<version>`;
+   `agent-skills blackboard init <issue-key> --project <project> --skill <name>=<version>`;
    later skills call `read` and `record-skill`.
 2. **Append** new facts, assumptions, unknowns, and decisions as they are
    produced — not only at the end. Use `blackboard.py append --section ...`.

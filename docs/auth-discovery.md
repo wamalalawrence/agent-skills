@@ -12,7 +12,7 @@ It pairs with the broader [configuration reference](configuration.md) and the
 
 ## TL;DR for agents
 
-1. **Locate the files first.** Run `python3 scripts/locate-config.py` (or read the [Where the
+1. **Locate the files first.** Run `agent-skills locate-config` (or read the [Where the
   files live](#where-the-files-live) section). Do not say "`.env` not found" until the locator
   has reported every directory it searched. The most common false dead-end is a `.env` that
   lives one directory **above** the cwd because `setup.init` writes it to the parent workspace
@@ -20,7 +20,7 @@ It pairs with the broader [configuration reference](configuration.md) and the
 2. Walk the discovery order below in order. Do not skip steps.
 3. Treat unresolved `${VAR}` placeholders in `.jira-config.yml` as **incomplete configuration**,
   not as missing auth. Resolve them from `.env` or process environment first.
-4. Run `python3 scripts/auth-preflight.py` (or the documented equivalent) before declaring auth
+4. Run `agent-skills auth-preflight` (or the documented equivalent) before declaring auth
   unusable. The preflight reports which fields are missing, which placeholders are unresolved,
   and whether the configuration is usable — without printing secrets.
 5. Only after the preflight returns a non-usable result should the agent ask the user, and the
@@ -49,9 +49,9 @@ Authoritative locations, in resolution order:
 The locator script implements exactly this order:
 
 ```bash
-python3 scripts/locate-config.py                   # everything it can find
-python3 scripts/locate-config.py --require .env    # exit 1 if .env still missing
-python3 scripts/locate-config.py --json            # for tools / agents
+agent-skills locate-config                   # everything it can find
+agent-skills locate-config --require .env    # exit 1 if .env still missing
+agent-skills locate-config --json            # for tools / agents
 ```
 
 The script never reads file contents — it only reports paths, the searched-directory list, and
@@ -156,7 +156,7 @@ Confluence is inaccessible. It:
 Typical invocation:
 
 ```bash
-python3 scripts/auth-preflight.py
+agent-skills auth-preflight
 ```
 
 Useful flags:

@@ -319,6 +319,36 @@ else
   bad "verify notices a missing host registration and says how to fix it" "${VERIFY5}"
 fi
 
+# Ownership must survive the source tree disappearing. Otherwise uninstall
+# cannot recognise its own registrations on exactly the machine that most needs
+# cleaning up: one where the clone was deleted or moved.
+H5B="$(new_home)"
+SRC_COPY="${H5B}/source copy"
+mkdir -p "${SRC_COPY}"
+cp -R "${REPO_ROOT}/." "${SRC_COPY}/" 2>/dev/null || true
+mkdir -p "${H5B}/.claude/skills/unrelated-user-skill"
+printf -- '---\nname: unrelated-user-skill\ndescription: keep\n---\n# Keep\n' \
+  > "${H5B}/.claude/skills/unrelated-user-skill/SKILL.md"
+env -i HOME="${H5B}" AGENT_SKILLS_HOME="${H5B}/.agent-skills" \
+  AGENT_SKILLS_CONFIG_DIR="${H5B}/.config/agent-skills" \
+  PATH="${H5B}/.local/bin:/usr/bin:/bin:/usr/local/bin:/opt/homebrew/bin" TERM=dumb \
+  bash "${SRC_COPY}/bin/agent-skills" install --yes >/dev/null 2>&1
+if [ -L "${H5B}/.claude/skills/tech-lead" ]; then
+  ok "pre-condition: installed from a throwaway source copy"
+else
+  bad "pre-condition: installed from a throwaway source copy"
+fi
+rm -rf "${SRC_COPY}"
+UNINST="$(as_run "${H5B}" uninstall --yes 2>&1 || true)"
+if printf '%s' "${UNINST}" | grep -q 'removed 8 registration(s)'; then
+  ok "uninstall still recognises its registrations after the source tree is deleted"
+else
+  bad "uninstall still recognises its registrations after the source tree is deleted" "${UNINST}"
+fi
+refute "the orphaned registration is removed" test -e "${H5B}/.claude/skills/tech-lead"
+check "the unrelated user skill still survives an orphaned uninstall" \
+  test -f "${H5B}/.claude/skills/unrelated-user-skill/SKILL.md"
+
 # ------------------------------------------------------------------------------
 section "version drift"
 # ------------------------------------------------------------------------------
@@ -504,6 +534,33 @@ MIG2="$(
 refute "migrate --remove-obsolete removes the .skills symlink" test -e "${LEGACY}/.skills"
 refute "migrate --remove-obsolete removes the stale lock file" test -e "${LEGACY}/.agent-skills.lock"
 check "migrate --remove-obsolete never deletes .env" test -f "${LEGACY}/.env"
+
+# An inherited WORKSPACE_ROOT means the caller is already running the legacy
+# model. setup.init must honour it instead of quietly installing globally into
+# their real home directory, which is the kind of surprise this release exists
+# to remove rather than introduce.
+H8B="$(new_home)"
+LEGACY_B="${H8B}/work"
+mkdir -p "${LEGACY_B}/agent-skills"
+cp -R "${REPO_ROOT}/." "${LEGACY_B}/agent-skills/" 2>/dev/null || true
+printf 'JIRA_HOST="https://example.atlassian.net"\n' > "${LEGACY_B}/.env"
+MODE_OUT="$(
+  cd "${LEGACY_B}/agent-skills" && env -i HOME="${H8B}" \
+    AGENT_SKILLS_HOME="${H8B}/.agent-skills" \
+    AGENT_SKILLS_CONFIG_DIR="${H8B}/.config/agent-skills" \
+    WORKSPACE_ROOT="${LEGACY_B}" \
+    PATH="/usr/bin:/bin:/usr/local/bin:/opt/homebrew/bin" TERM=dumb \
+    ./setup.init --yes --no-jira 2>&1 || true
+)"
+if printf '%s' "${MODE_OUT}" | grep -q 'legacy workspace model'; then
+  ok "an inherited WORKSPACE_ROOT with a .env selects the legacy model"
+else
+  bad "an inherited WORKSPACE_ROOT with a .env selects the legacy model" \
+    "$(printf '%s' "${MODE_OUT}" | head -5)"
+fi
+refute "an inherited WORKSPACE_ROOT does not trigger a global install" \
+  test -f "${H8B}/.agent-skills/install.json"
+check "the legacy run still produced its workspace artifacts" test -L "${LEGACY_B}/.skills"
 
 # ------------------------------------------------------------------------------
 section "uninstall"

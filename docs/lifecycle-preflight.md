@@ -66,9 +66,9 @@ bash scripts/start-task.sh <project> <issue-key> --skill <skill-name>
 If you have located the wrapper and still cannot run it, run the three steps by hand:
 
 ```bash
-python3 scripts/org-memory.py read                      # non-fatal if missing
-python3 scripts/project-memory.py read <project>        # 'init' first if absent
-python3 scripts/blackboard.py init <issue-key> --project <project>
+agent-skills org-memory read                      # non-fatal if missing
+agent-skills memory read <project>        # 'init' first if absent
+agent-skills blackboard init <issue-key> --project <project>
 ```
 
 If you cannot run any of them — no shell, no Python — say so in the output and continue with
@@ -92,8 +92,8 @@ config resolves and no MCP tracker tool exists has wasted a step it could have s
 Run it directly at any time:
 
 ```bash
-bash scripts/doctor.sh          # full report
-bash scripts/doctor.sh --brief  # the compact form start-task.sh embeds
+agent-skills doctor          # full report
+agent-skills doctor --brief  # the compact form start-task.sh embeds
 ```
 
 ### Tool preference order (binding)

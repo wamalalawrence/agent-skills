@@ -171,7 +171,7 @@ Once `.env` (and optionally `.jira-config.yml`) is in place, validate that an ag
 to use Jira / Confluence:
 
 ```bash
-python3 scripts/auth-preflight.py
+agent-skills auth-preflight
 ```
 
 The preflight loads `.env`, `.env.local`, and `.jira-config.yml`, resolves `${VAR}` placeholders
