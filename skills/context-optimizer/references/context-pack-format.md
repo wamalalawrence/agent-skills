@@ -175,7 +175,7 @@ the run: no budget, path, strategy, credential, or tool policy was taken from th
 ```text
 schema                        "agent-skills.context-pack/v1"
 pack_id                       16 hex chars; the cache key and the handoff id
-generated_at                  UTC ISO-8601
+generated_at                  UTC ISO 8601
 runtime_version               agent-skills VERSION that built it
 strategy                      log | ci | sql | structured | source | diff | text
 strategy_version              bumped when selection changes incompatibly
@@ -183,7 +183,7 @@ source                        path as given
 source_sha256                 full content hash; the staleness check
 source_size_chars             total characters in the source
 source_lines                  total lines in the source
-source_modified_at            UTC ISO-8601
+source_modified_at            UTC ISO 8601
 brief                         the task brief verbatim
 brief_terms                   ["84721:6", "settlement:2", ...] term:weight
 budget_chars                  the requested bound

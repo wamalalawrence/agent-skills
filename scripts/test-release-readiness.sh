@@ -121,7 +121,8 @@ python3 -c 'import yaml; yaml.safe_load(open(".github/workflows/ci.yml"))' 2>/de
 # ------------------------------------------------------------------------------
 sec "3. test suites"
 # ------------------------------------------------------------------------------
-for suite in test-global-install test-access-resolution test-front-door-skill; do
+for suite in test-global-install test-access-resolution test-front-door-skill \
+  test-context-optimizer; do
   if bash "scripts/$suite.sh" </dev/null >"/tmp/as-rr-$suite.log" 2>&1; then
     good "$suite.sh: $(tail -1 "/tmp/as-rr-$suite.log")"
   else

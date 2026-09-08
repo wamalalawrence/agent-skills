@@ -83,6 +83,38 @@ runtime enforcement, or guaranteed outcomes.
 - **A non-git directory has no branch, remote, or diff.** Inference degrades to the directory name and
   build manifests, and reports the gap.
 
+## Context Optimizer
+
+See [context-optimizer.md](context-optimizer.md) for the full treatment. The load-bearing ones:
+
+- **Relevance heuristics can miss evidence.** Selection is deterministic pattern matching over the
+  task brief plus structure, not comprehension. A brief that names nothing present in the input gets
+  a pack built from severity and structure alone, and it says so — but "it said so" is not the same
+  as "it found the answer".
+- **No compression can prove the omitted content was irrelevant.** The omission records say what was
+  dropped and how to get it back. They do not certify that it did not matter, and no algorithm can.
+- **Token estimates are approximate.** The budget is in characters because provider tokenisation
+  differs and making one provider's tokeniser a hard dependency would be a worse trade. Four
+  characters per token is a planning heuristic, not a measurement of any specific model.
+- **No claim of exact API-cost reduction.** Reductions are reported in characters. No figure in this
+  repository was measured against a known model-and-pricing configuration, so no dollar claim is
+  made.
+- **Parsing support varies by format.** The JSON, YAML, and XML scanners are tolerant rather than
+  conformant, which is deliberate — real evidence includes malformed and half-written payloads. It
+  also means deeply unusual YAML, heavily namespaced XML, and JSON carrying documents inside strings
+  are handled approximately.
+- **Binary formats need external tooling.** A NUL byte in the first 8 KiB is refused rather than
+  guessed at.
+- **Generated and minified files are poorly structured by nature.** They are detected and
+  deprioritised, but a single 4 MB line has no internal boundaries to select on.
+- **Structure-bearing formats are read whole.** SQL, JSON/YAML/XML, source, and diffs need the text
+  to find the shape and are capped by `--max-read-bytes`. Only logs and plain text stream.
+- **Secret detection is pattern-based.** It covers the common token shapes and it is not a
+  guarantee. An unrecognised internal credential format will pass through into a pack.
+- **A pack is not a review.** For diffs especially, the pack states how much it covered. An agent
+  that issues a verdict from a partial diff has misused it, and no mechanism here can prevent that
+  — which is why `code-reviewer` owns verdicts.
+
 ## Evidence and caches
 
 - **Evidence-pack and cache flows depend on the execution environment.** Global, in-repo, ephemeral

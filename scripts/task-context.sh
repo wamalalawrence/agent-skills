@@ -10,19 +10,19 @@ agent_skills_slugify() {
 # ---------------------------------------------------------------------------
 # Deprecated skill names.
 #
-# `tech-lead` was renamed to `wamala` in v0.38.0. The rename is a rename, not a
-# fork: there is exactly one skill directory on disk and one discoverable skill
-# name. This table exists only so a saved prompt, shell alias, or CI script
-# written against v0.37.0 keeps working through one deprecation window instead
-# of failing with an unrecognised skill name.
+# Currently empty, and that is the healthy state. The table exists so a rename
+# can be carried for one deprecation window instead of breaking every saved
+# prompt, shell alias, and CI script written against the old name.
 #
-# Deprecation policy: the aliases below are removed in v0.41.0 (three minor
-# releases after the rename). Adding an entry here is a decision to carry it for
-# that long; see docs/versioning.md.
+# Deprecation policy: an alias is carried for three minor releases and is then
+# removed on schedule, as part of that release's checklist. `tech-lead=wamala`
+# was added in v0.38.0 and removed here in v0.41.0 on exactly that schedule.
+# Adding an entry is a commitment to carry it for that long AND to delete it when
+# the release arrives; see docs/versioning.md.
 #
 # Format: one `old=new` pair per line.
 # ---------------------------------------------------------------------------
-AGENT_SKILLS_DEPRECATED_SKILLS="tech-lead=wamala"
+AGENT_SKILLS_DEPRECATED_SKILLS=""
 
 # Map a possibly-deprecated skill name to its canonical name, printing a
 # one-line migration notice on stderr so it never contaminates stdout that a

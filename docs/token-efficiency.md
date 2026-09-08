@@ -6,6 +6,12 @@ working memory. Most files in this repo are **not** auto-loaded; they are read o
 the workflow follows a link. This doc captures the principles, the audit methodology, and the
 v0.22.0 audit findings.
 
+> **This page is one half of the problem.** It is about the cost of the **instructions**. The
+> other half is the cost of the **evidence** — a multi-million-line log, an 800-table schema
+> dump, a 40,000-line diff — and that is [Context Optimizer](context-optimizer.md). Trimming a
+> SKILL.md by 200 lines is worth doing; it is also worth nothing next to an agent that read a
+> 4 MB log wholesale in its first tool call.
+
 > Note: how much is auto-loaded vs lazy-fetched depends on the host (Claude Code, Cursor,
 > Copilot, etc.). The table below describes the **intended** load model the skills are
 > written against, not a guarantee about any specific runtime.
@@ -80,6 +86,41 @@ Headlines:
   and is already lean.
 - **Evals.** The `evals/` directory describes scenarios; verbose worked outputs live in
   `eval-runs/`. No structural change required.
+
+## v0.41.0: the evidence side
+
+Everything above concerns files this repository controls. v0.41.0 added the capability for files it
+does not: [Context Optimizer](context-optimizer.md).
+
+The two are the same principle applied to different inputs, and the second one dominates in
+practice. Measured on the release's own fixtures:
+
+| Input | Source chars | Selected chars | Omitted |
+| --- | --- | --- | --- |
+| 4.7 MB application log | 4,775,858 | 2,043 | 99.96% |
+| 484 KB JSON payload | 484,165 | 196 | 99.96% |
+| 58 KB / 403-table schema | 57,888 | 649 | 98.88% |
+| 35 KB / 63-file diff | 34,681 | 401 | 98.84% |
+| 57 KB CI log | 56,732 | 1,205 | 97.88% |
+
+Those are character counts, not cost figures. Token estimates are approximate and provider
+tokenisation varies, so no dollar claim is made — see
+[the metrics section](context-optimizer.md#metrics) for the defensible version of the claim.
+
+Three principles from this page carry straight over, and one is new:
+
+1. **Persistent artifacts over chat** becomes *pass the pack id, not the pack*. A pack is
+   deterministic and cached, so a fresh agent re-reads it instead of the source; pasting it into a
+   transcript spends the context it exists to save.
+2. **Reference, do not copy** becomes *one shared rule*. Six consumer skills link
+   [the large-input rule](context-optimizer.md#the-shared-large-input-rule) rather than restating
+   it; a per-skill copy would be six places to drift.
+3. **Bounded loops** becomes *bounded budgets*. `--budget-chars` bounds the whole rendered pack,
+   and it is enforced rather than advised.
+4. **New: correctness beats ratio.** Nothing on this page can be optimised to the point of being
+   wrong — a shorter SKILL.md still says what it says. A context pack can be, and a 99.9% reduction
+   that removes the root cause is a failure. That asymmetry is why the evidence side needs its own
+   evals rather than an audit.
 
 ## When to revisit
 
