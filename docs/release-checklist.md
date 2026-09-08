@@ -15,6 +15,8 @@ It covers the structural validators, syntax across every shipped artifact, all f
 the CLI surface, a clean-`HOME` install with drift and uninstall, an upgrade from the previous
 release tag in both the legacy-workspace and global-install shapes, cloud/in-repo mode, the
 public-safety sweep, README and link integrity, the telemetry report, and version consistency.
+Section 3 runs all five test suites, including
+[`test-context-optimizer.sh`](../scripts/test-context-optimizer.sh) and its five mutation probes.
 Everything is sandboxed under `mktemp`; it never touches your real home directory, host skill
 directories, or credential store. It is not in CI because it builds a
 worktree of the previous tag and performs several full installs.

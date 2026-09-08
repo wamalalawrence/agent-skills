@@ -346,10 +346,16 @@ else
 fi
 rm -rf "${SRC_COPY}"
 UNINST="$(as_run "${H5B}" uninstall --yes 2>&1 || true)"
-if printf '%s' "${UNINST}" | grep -q 'removed 8 registration(s)'; then
+# Derived rather than hardcoded. This assertion said "removed 8 registration(s)"
+# and broke the moment a ninth top-level skill shipped, which is a test failing
+# for a reason that has nothing to do with what it is testing — namely that
+# uninstall can still find its own registrations once the source tree is gone.
+EXPECTED_REG="$(find "${REPO_ROOT}/skills" -mindepth 2 -maxdepth 2 -name SKILL.md | wc -l | tr -d ' ')"
+if printf '%s' "${UNINST}" | grep -q "removed ${EXPECTED_REG} registration(s)"; then
   ok "uninstall still recognises its registrations after the source tree is deleted"
 else
-  bad "uninstall still recognises its registrations after the source tree is deleted" "${UNINST}"
+  bad "uninstall still recognises its registrations after the source tree is deleted" \
+    "expected ${EXPECTED_REG}: ${UNINST}"
 fi
 refute "the orphaned registration is removed" test -e "${H5B}/.claude/skills/wamala"
 check "the unrelated user skill still survives an orphaned uninstall" \

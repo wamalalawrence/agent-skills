@@ -20,6 +20,25 @@ python3 scripts/validate_skills.py
 
 GitHub Actions runs the same repository validator on pushes and pull requests to `main`.
 
+Five shell suites sit alongside it and assert **behaviour** rather than structure. CI runs all five;
+[`test-release-readiness.sh`](../scripts/test-release-readiness.sh) runs them together with the rest
+of the mechanical release checks.
+
+```bash
+bash scripts/test-global-install.sh          # install, hosts, uninstall, upgrade
+bash scripts/test-access-resolution.sh       # credential precedence and refusals
+bash scripts/test-front-door-skill.sh        # routing table order and skill identity
+bash scripts/test-context-optimizer.sh       # large-input selection, safety, budget
+bash scripts/test-setup-update-preserves-credentials.sh
+```
+
+[`test-context-optimizer.sh`](../scripts/test-context-optimizer.sh) is the one that generates its own
+fixtures — they are large by definition, and shipping a 5 MB synthetic log to test large-input
+handling would miss the point. It also carries five **mutation probes**: each deletes one guarantee
+from a sandboxed copy of the runtime and asserts the matching check then fails. Without that, a check
+would pass whether or not the property it names actually holds, which is the exact failure mode
+[the release checklist](release-checklist.md) calls out.
+
 ## What It Checks
 
 - Required repository files, docs, config examples, skill files, and evaluation scenarios exist.

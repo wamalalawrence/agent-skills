@@ -4,7 +4,7 @@ Reusable [Agent Skills](https://agentskills.io/) for software-engineering work �
 role-shaped workflows your AI assistant can load on demand so the same model produces
 senior-engineer, product-owner, tester, or reviewer output instead of generic answers.
 
-> **Status:** `0.40.0` — pre-1.0. Core skill set is shipped and stable enough for public use;
+> **Status:** `0.41.0` — pre-1.0. Core skill set is shipped and stable enough for public use;
 > interfaces may still evolve.
 
 New here? Start with the [quickstart](docs/quickstart.md), then read [starter
@@ -58,7 +58,7 @@ That is the whole local setup. It installs `agent-skills` on the **machine**, re
 with every supported agent host it finds, and makes the runtime invocable from anywhere:
 
 ```text
-Agent Skills v0.40.0 installed globally.
+Agent Skills v0.41.0 installed globally.
 
 Skills are available to:
   [x] Claude Code (~/.claude/skills)
@@ -125,7 +125,7 @@ npx skills add wamalalawrence/agent-skills
 
 ## Updating
 
-Releases are git tags (`v0.39.0`, `v0.40.0`, …) on this repo. Two commands cover the common case;
+Releases are git tags (`v0.40.0`, `v0.41.0`, …) on this repo. Two commands cover the common case;
 full details, cloud-agent updates, and drift detection are in
 [docs/updates.md](docs/updates.md).
 
@@ -142,7 +142,7 @@ disagree — for example after a manual `git pull` without a reinstall.
 
 ## Skills
 
-This repository currently contains **eight top-level skills** and **two nested support skills**. The
+This repository currently contains **nine top-level skills** and **two nested support skills**. The
 top-level skills are intended to be invoked directly. The nested support skills are loaded by the
 engineering workflow when investigation or review needs a more specific checklist.
 
@@ -229,6 +229,24 @@ usage shows they are useful independently.
 - Purpose: maintains canonical domain terminology and records ADRs only when the
   decision is hard to reverse and worth preserving.
 
+### [`context-optimizer`][context-optimizer] (top-level)
+
+- Key collaborators: `issue-investigator`, `software-engineer`, `code-reviewer`,
+  `test-automation-engineer`.
+- Purpose: the input itself is too big to read — a multi-million-line log, an 800-table schema
+  dump, a generated specification, a 40,000-line diff, a CI log where one compile error caused
+  four hundred later failures. Inspects it cheaply and locally first (no model sees the whole
+  file), then extracts only the evidence the current question needs. Every fragment carries
+  provenance, every omission is reported, and the character budget is honoured exactly.
+- The runtime behind it is available to **every** skill as `agent-skills context pack`, so no
+  skill dispatches an agent merely to shrink a file.
+- Sample command:
+
+  ```text
+  Use Context Optimizer to extract what matters from this production log for the
+  payment failure on transaction 84721.
+  ```
+
 ### [`issue-investigator`][issue-investigator] (nested support)
 
 - Key collaborators: `software-engineer`, `manual-tester`, `product-owner`.
@@ -250,12 +268,13 @@ usage shows they are useful independently.
 [manual-tester]: skills/manual-tester/
 [tae]: skills/test-automation-engineer/
 [domain-modeler]: skills/domain-modeler/
+[context-optimizer]: skills/context-optimizer/
 [issue-investigator]: skills/software-engineer/skills/issue-investigator/
 [code-reviewer]: skills/software-engineer/skills/code-reviewer/
 
 ## The Company Brain
 
-`agent-skills` is built so the ten specialist skills compound value across
+`agent-skills` is built so the eleven specialist skills compound value across
 projects, sessions, and time — not just one task. Every task writes to a
 shared blackboard, every PR's outcome is recorded, every recurring lesson can
 be promoted into org-tier memory, and a telemetry layer records what actually ran

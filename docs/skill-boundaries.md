@@ -90,6 +90,22 @@ must hand off when the task moves outside that surface.
   `product-owner` when the behaviour a test should assert was never agreed, to `manual-tester` for
   unstable or exploratory scenarios, and to `code-reviewer` for test-quality review.
 
+### `context-optimizer`
+
+- Owns: turning an input too large to read into a bounded, task-specific, traceable context pack.
+  Cheap deterministic inspection, task-aware selection, provenance on every fragment, explicit
+  omissions, and the character budget. See [Context Optimizer](context-optimizer.md).
+- Does not own: any conclusion drawn from the evidence. Not root cause (`issue-investigator`), not
+  a fix (`software-engineer`), not a verdict on a diff (`code-reviewer`), not triage of a failure
+  wall (`test-automation-engineer`). It produces evidence and stops.
+- Typical handoff: a pack id plus the brief that produced it, to whichever skill owns the
+  conclusion. The pack is the handoff; a paraphrase is not, because a paraphrase has no provenance.
+- **Every skill may use the runtime without dispatching this skill.** That is the point of the
+  split: `agent-skills context pack` is a command, not an agent. Route to the skill only when the
+  pack itself is the deliverable, or when judging what survived compression is the work. This keeps
+  the [depth cap of two](review-loops.md#universal-loop-bounds) intact — a dispatch to shrink a
+  file would spend a whole agent's context to save some.
+
 ### `domain-modeler`
 
 - Owns: canonical domain glossary (`CONTEXT.md`), Architecture Decision Records (`docs/adr/`),
@@ -114,6 +130,11 @@ must hand off when the task moves outside that surface.
   correct handoff is to `product-owner` (when product intent is unclear) or to
   `issue-investigator` (when expected vs actual behavior or root cause is unclear), not to
   `software-engineer`, `manual-tester`, or `test-automation-engineer`.
+- Every skill must use **Context Optimizer** before loading an input past the large-input
+  threshold, per the shared rule in [Context Optimizer](context-optimizer.md). This is a runtime
+  call, not a handoff: the skill runs `agent-skills context pack` itself. Reading a multi-megabyte
+  log wholesale spends most of the agent's working memory before it has thought about the problem,
+  and it is the one failure mode this rule exists to stop.
 - `software-engineer` must use `issue-investigator` when expected behavior, issue context, or root
   cause is unclear.
 - `software-engineer` must use `code-reviewer` after implementation and again before final PR or

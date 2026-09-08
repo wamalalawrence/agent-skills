@@ -142,6 +142,38 @@ being moved or re-cloned and adds no file to the tree.
 | `writing.ai_attribution` | no | `none` \| `trailer` \| `footer`. See [writing voice](writing-voice.md). |
 | `writing.voice_reference` | no | Path to a local writing sample to match. |
 | `skills.canonical_dir` | no | Pin the skill source. See [skill-source resolution](skill-source-resolution.md). |
+| `context_optimizer.*` | no | Large-input bounds. See below and [Context Optimizer](context-optimizer.md). |
+
+## Context Optimizer bounds
+
+Past the large-input threshold a skill builds a bounded context pack instead of reading a file
+whole. The defaults were measured against a real repository rather than picked for roundness, but a
+codebase of 300-line services and a monorepo of generated clients will reasonably disagree — so all
+five bounds are configurable.
+
+| Key | Default | What it bounds |
+| --- | --- | --- |
+| `context_optimizer.threshold_chars` | `65536` | Characters past which an input needs a pack. |
+| `context_optimizer.threshold_lines` | `2000` | Lines past which an input needs a pack. |
+| `context_optimizer.budget_chars` | `10000` | Default size of a pack, provenance included. |
+| `context_optimizer.relation_depth` | `1` | How far structural relations (foreign keys) are followed. |
+| `context_optimizer.max_read_bytes` | `67108864` | Whole-file read cap for structure-bearing formats. |
+
+Precedence is `CLI flag` > environment variable > committed `.agent-skills.yml` > default. The
+environment variable is the key upper-cased with an `AGENT_SKILLS_CONTEXT_` prefix, so
+`AGENT_SKILLS_CONTEXT_BUDGET_CHARS=25000` raises the default budget for one session.
+
+Every override is echoed on stderr, so a surprising threshold is visible rather than mysterious:
+
+```text
+-- limit: .agent-skills.yml set threshold_chars to 20000
+```
+
+The scope is deliberately narrow. A committed file may adjust a **resource bound** and nothing
+else: it cannot name a path, a credential, a strategy, or a tool policy. Values outside a sane range
+are clamped rather than obeyed, and a non-numeric value falls back to the default with a note —
+because a committed file is editable by anyone who can open a pull request, which is the same
+reasoning as [access resolution](access-resolution.md).
 
 ## Cache path
 

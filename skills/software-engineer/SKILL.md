@@ -20,7 +20,7 @@ compatibility: >-
   .agent-skills.yml). See docs/execution-modes.md.
 metadata:
   author: wamalalawrence
-  version: "0.40.0"
+  version: "0.41.0"
   homepage: "https://github.com/wamalalawrence/agent-skills"
 argument-hint: "<the change to make — a ticket key, a bug, or a described feature>"
 user-invocable: true
@@ -120,6 +120,21 @@ use the tiny lane; do not skip the gates.
   decision meets the ADR criteria (hard to reverse, surprising without context, result of a real
   trade-off) and its rationale should be recorded, or when domain terminology needs a canonical
   definition in `CONTEXT.md` before implementation proceeds.
+
+### Large inputs
+
+Before loading an input past the large-input threshold, use **Context Optimizer** to inspect it
+and produce a bounded context pack instead of reading it whole. Most often a generated client, a
+migration history, a dependency manifest, or the application log behind a failing test.
+
+```bash
+agent-skills context check <path>                 # exit 10 means: past the threshold
+agent-skills context pack <path> --brief "<the engineering question>"
+```
+
+Call the runtime directly — do not dispatch an agent to shrink a file. The rule, the threshold,
+the per-type strategies, and the untrusted-input contract are in
+[docs/context-optimizer.md](../../docs/context-optimizer.md).
 
 ## When To Use
 

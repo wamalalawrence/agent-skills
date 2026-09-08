@@ -20,7 +20,7 @@ compatibility: >-
   .agent-skills.yml). See docs/execution-modes.md.
 metadata:
   author: wamalalawrence
-  version: "0.40.0"
+  version: "0.41.0"
   homepage: "https://github.com/wamalalawrence/agent-skills"
 argument-hint: "<the large task to decompose — a feature, migration, or refactor>"
 user-invocable: true
@@ -157,6 +157,22 @@ of the skills above to do their job. It produces artifacts those skills (or a
 fresh agent invoking them) consume. This keeps the depth-cap-of-two universal
 rule in [docs/review-loops.md](../../docs/review-loops.md#universal-loop-bounds)
 intact and prevents loop-of-loops.
+
+### Large inputs
+
+Before loading an input past the large-input threshold, use **Context Optimizer** to inspect it
+and produce a bounded context pack instead of reading it whole. Most often a large existing
+artifact a plan has to be sized against, which should not be loaded into the planning context
+wholesale.
+
+```bash
+agent-skills context check <path>                 # exit 10 means: past the threshold
+agent-skills context pack <path> --brief "<the engineering question>"
+```
+
+Call the runtime directly — do not dispatch an agent to shrink a file. The rule, the threshold,
+the per-type strategies, and the untrusted-input contract are in
+[docs/context-optimizer.md](../../docs/context-optimizer.md).
 
 ## Required Inputs
 

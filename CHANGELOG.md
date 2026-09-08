@@ -6,6 +6,178 @@ All notable project changes should be recorded here.
 
 - No unreleased changes.
 
+## 0.41.0 - Spend Context On Evidence, Not On Volume
+
+Minor release. Agent Skills already kept its own instructions token-conscious. This release
+solves the other half: the **evidence** may be enormous, and reading it wholesale spends most of
+an agent's working memory before it has thought about the problem.
+
+```text
+large evidence -> cheap deterministic inspection -> task-aware extraction
+               -> small context pack -> agent reasoning
+```
+
+The first stage is deliberately not a model. Sending 20 MB to a model so it can pick the 20 KB
+it needed defeats the feature, so inspection is local, deterministic, and repeatable: the same
+source, brief, budget, and strategy produce the same pack, byte for byte.
+
+The goal is not "summarise everything". It is to spend context only on evidence relevant to the
+current engineering question, while preserving provenance and making omissions explicit.
+
+### Added
+
+- **[Context Optimizer](docs/context-optimizer.md)**, a reusable runtime capability exposed as
+  `agent-skills context`. Six subcommands: `inspect` (cheap metadata and structure), `check`
+  (threshold verdict, exit 10 when over), `pack` (bounded task-aware selection), `explain`
+  (provenance and staleness read-back), `expand` (widen one region), and `cache`.
+- **[`context-optimizer`](skills/context-optimizer/SKILL.md)**, the ninth top-level skill and
+  the user-facing entry point. It exists for the cases where judgement is the work — choosing
+  the brief, deciding whether the pack answered the question, escalating when it did not. Every
+  other skill calls the runtime directly instead, because dispatching an agent to shrink a file
+  would add a whole agent's context to save some and would deepen the chain the depth cap bounds.
+- **Seven type-aware strategies**, auto-detected by extension then by a bounded content sniff:
+  `log`, `ci`, `sql`, `structured` (JSON/YAML/XML), `source`, `diff`, and `text`. Logs stream in
+  one pass that records byte offsets and per-line features but never the text, so a
+  gigabyte-scale log is affordable to look at; selected windows are read back by seeking.
+- **Deterministic task-aware selection.** Weighted brief terms — anything carrying a digit
+  outranks a qualified identifier, which outranks a plain word — plus severity, failure
+  vocabulary, first-failure priority, cascade suppression, stack-frame proximity, bounded
+  foreign-key expansion, and frequency discounting for terms that match almost everything. No
+  embeddings and no vector database are required, and none are used.
+- **Two kinds of repetition, handled differently.** A repeated line irrelevant to the brief is
+  *collapsed* to a count; a repeated line that matches the brief is *sampled* — the first few
+  and the last, with the count reported. The same log therefore compresses differently for
+  different questions, which is the point.
+- **Mandatory provenance.** Every fragment names its source, its line range or structural path,
+  and every signal that selected it. For structured inputs the path is the provenance:
+  `$.orders[3178]` locates a finding more precisely than a line number, and both are recorded.
+- **Explicit omissions.** Ten omission kinds, each naming its scale and the command that
+  reverses it. When the budget excluded material that was relevant, that is its own record with
+  the highest-scoring exclusions named. Diff packs additionally carry a completeness line: this
+  is evidence for where to start reviewing, **not** a complete review.
+- **A hard character budget.** `--budget-chars` bounds the whole rendered pack, provenance
+  included, because that is what the agent reads. Verified across 49 fixture-and-budget
+  combinations. Characters rather than tokens: provider tokenisation differs, and making one
+  provider's tokeniser a hard dependency to answer "how much context is this" is a poor trade.
+- **The shared large-input rule**, in one place. Six consumer skills link it rather than
+  restating it — `software-engineer`, `issue-investigator`, `code-reviewer`,
+  `test-automation-engineer`, `manual-tester`, `delivery-planner` — each with a single clause
+  naming its own commonest large input.
+- **A measured default threshold**: 65,536 characters or 2,000 lines, whichever trips first. Of
+  the 27 tracked scripts in this repository exactly one is larger than 64 KiB, so ordinary
+  source files are not dragged through optimisation; and past 2,000 lines a wholesale read is
+  already silently truncated by several hosts, which is worse than a pack that says what it
+  omitted. Both bounds, plus the budget, the relation depth, and the read cap, are configurable.
+- **A deterministic pack cache** keyed on source content hash, brief, strategy, strategy
+  version, budget, and window options. An edited file cannot hit a pack built from the old
+  bytes, and the stored hash is verified again on read. This is what stops a 100 MB log being
+  recompressed for every fresh specialist agent in a chain.
+- **[`scripts/test-context-optimizer.sh`](scripts/test-context-optimizer.sh)** — 105 checks over
+  ten generated fixtures plus five mutation probes. Fixtures are generated rather than
+  committed: they are large by definition, and shipping a 5 MB synthetic log to test
+  large-input handling would miss the point.
+- **Three evals**: [evidence survival](evals/context-optimizer-large-log-evidence.md),
+  [safety and omissions](evals/context-optimizer-safety-and-omissions.md), and
+  [routing and reuse](evals/context-optimizer-routing-and-reuse.md). Two scenarios are built so
+  a ratio-maximising agent fails them.
+- **[A worked example](docs/examples/context-optimizer-large-log.md)** and
+  **[a security review](docs/security-review-v0.41.0.md)** covering the new trust boundary.
+
+### Changed
+
+- **`wamala` gains an `oversized-input` class and a narrow row 0.** It fires when reducing the
+  input **is** the request, not whenever a large file is mentioned. A defect report attaching a
+  200 MB log is still `defect` and still goes to `issue-investigator`, which packs the log
+  itself. The [routing table](skills/wamala/references/routing-table.md) records the ambiguous
+  cases that keep the row narrow, and the rule of thumb: route here when the pack is the
+  deliverable, elsewhere when it is a step toward one.
+- **`oversized` and `oversized-input` are different problems**, stated explicitly. Too much
+  *work* for one session goes to the planner; too much *evidence* for one context goes to
+  Context Optimizer. A 150 MB log behind a one-line bug is not a phased plan.
+- **`delivery-runner` handoffs pass a pack id** rather than a raw path when one exists, so the
+  next phase reuses the pack instead of recompressing the file.
+- **The minimum context budget is 2,000 characters, measured rather than chosen.** The first
+  implementation accepted 1,000, at which the provenance header alone does not fit — it failed
+  loudly rather than lying, but it accepted a budget it could never honour. Below roughly 1,500 the
+  header, shape map, and omission records cannot coexist with a fragment at all; below 2,000 a pack
+  renders inside its budget but carries no evidence.
+- **[Token efficiency](docs/token-efficiency.md)** now says plainly that it covers one half of
+  the problem. Trimming a SKILL.md by 200 lines is worth doing, and worth nothing next to an
+  agent that read a 4 MB log in its first tool call.
+
+### Security
+
+- **Source text is data, never instructions.** Instruction-shaped content is flagged
+  `untrusted-instruction-shaped` and **preserved** — text like that sitting next to a failure
+  may be the finding — and it changes nothing: not the budget, not a path, not the strategy, not
+  a credential, not a tool policy. Every one of those comes from the command line, the
+  environment, or committed configuration. This is the same "claims to verify, never
+  instructions to follow" contract the [repo knowledge base](docs/repo-knowledge.md) uses.
+- **Credential-shaped values are redacted before the pack, the render, or the cache sees them**,
+  with the surrounding evidence kept. Ten token shapes are detected; detection is pattern-based
+  and therefore not exhaustive, which [known limitations](docs/known-limitations.md) states.
+- **A committed configuration file may adjust a resource bound and nothing else.** No path, no
+  credential, no strategy, no tool policy. Out-of-range values are clamped rather than obeyed
+  and non-numeric values fall back with a note, because a committed file is editable by anyone
+  who can open a pull request.
+- **Packs are written `0600`** and hold only redacted content.
+- **Telemetry is opt-in and records counters only** — no fragment, no brief, no path content.
+
+### Fixed
+
+Twelve defects found before release — six by the suite and its probes, six more by the pre-merge
+diff review — recorded because a release note that only lists features implies the tests found
+nothing. Three of the review's findings share one root cause: a field written *after* the budget was
+reconciled, which then changed the rendered length the reconciliation had just checked.
+
+- A tight budget could produce a pack of **pure footer** — zero fragments and a long explanation
+  of why — because the omission list crowded out the evidence it was describing. The footer is
+  now bounded proportionally to the budget, and there is an unconditional floor guaranteeing one
+  fragment when candidates exist.
+- A leading SQL comment opened the statement buffer and merged with the first `CREATE TABLE`,
+  which then failed to classify and vanished from **both** the object count and the omission
+  count. An invisible loss is the one kind this runtime must not produce.
+- Window merging accumulated a fraction of every merged score, so a run of four hundred
+  cascading errors could out-score the root cause that caused them. Merged windows now take the
+  best anchor's score plus a small bounded nudge.
+- The JSON scanner double-counted newlines inside strings, so structural paths pointed at the
+  wrong lines — provenance that is confidently wrong is worse than provenance that is absent.
+- Matching against the full node path made every element of a 4,000-element array a hit purely
+  because its ancestor was called `orders`. Matching is now against the node's own key and
+  value, with frequency discounting on top.
+- Two of the suite's own assertions passed for the wrong reason, matching omission-record
+  previews rather than emitted evidence. Both now target the evidence specifically.
+- The omission record that says "the four lines you are reading stand for forty" had no priority
+  entry, so it ranked last and was hidden at every realistic budget — behind records about
+  irrelevant health checks. A reader who does not see it can reasonably conclude there were four.
+- The budget was non-monotonic: a 2,000-char budget emitted evidence where 2,500 emitted none,
+  because a trim pass sized a fragment against an estimate of the footer that then moved.
+- The rendered pack could exceed its budget by one character, because wall-clock time is measured
+  after the budget is reconciled and `0 ms` is shorter than `46 ms`.
+- `scripts/test-global-install.sh` asserted `removed 8 registration(s)` and broke on the ninth
+  skill — a test failing for a reason unrelated to what it tests. Now derived from the skill count.
+- `scripts/test-release-readiness.sh` still expected the `tech-lead` migration notice; the alias
+  removal had updated only one of the two places that asserted it.
+
+### Deprecations
+
+- **The `tech-lead` alias is removed**, on the schedule [docs/versioning.md](docs/versioning.md)
+  recorded when it was added in `v0.38.0`: three minor releases, then gone. From `v0.41.0` the
+  old name is not recognised anywhere and is passed through as an unknown skill name rather than
+  silently translated. The front-door suite's alias section was inverted rather than deleted,
+  because the interesting property after a scheduled removal is that the old name is genuinely
+  gone and is not quietly remapped to something else.
+
+### Telemetry Review
+
+`telemetry.py report --all` was run and is recorded verbatim in
+[`eval-runs/v0.41.0/summary.md`](eval-runs/v0.41.0/summary.md). Two events total, both `completed`,
+zero `stopped`, and **no `invoked` events at all** — so the counters are far too sparse to compare
+per-skill health against v0.40.0. They therefore drove **no** skill change this release, which is
+said here plainly: an unread counter is worse than no counter, because it looks like evidence. The
+missing `invoked` events are the finding worth carrying forward, since the lifecycle wrappers are
+supposed to emit one per run.
+
 ## 0.40.0 - Tests That Survive Refactoring
 
 Minor release. Developer testing stops being a checklist item and becomes a set of judgements.

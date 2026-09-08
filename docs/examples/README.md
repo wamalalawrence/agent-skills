@@ -12,5 +12,7 @@ what the skill should avoid.
 - [Product owner story refinement](product-owner-story-refinement.md)
 - [Manual tester test plan](manual-tester-test-plan.md)
 - [Test automation engineer regression plan](test-automation-engineer-regression-plan.md)
+- [Context Optimizer on a large production log](context-optimizer-large-log.md) — inspecting a
+  4.7 MB log cheaply, packing 2 KB of evidence from it, and reporting the omissions honestly.
 - [Requirement understanding](requirement-understanding.md) — good vs premature outputs across
   ambiguous tickets, conflicting AC, bug vs feature confusion, and security-sensitive requests.

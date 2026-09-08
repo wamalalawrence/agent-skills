@@ -16,7 +16,7 @@ compatibility: >-
   .agent-skills.yml). See docs/execution-modes.md.
 metadata:
   author: wamalalawrence
-  version: "0.40.0"
+  version: "0.41.0"
   homepage: "https://github.com/wamalalawrence/agent-skills"
 argument-hint: "<what to validate — a story, a build, or a defect to retest>"
 user-invocable: true
@@ -108,6 +108,21 @@ Skipping the wrappers is the #1 failure mode and task size does not waive them.
 
 Manual testing validates behavior and discovers risk. It should not duplicate product refinement,
 code implementation, or automation design.
+
+### Large inputs
+
+Before loading an input past the large-input threshold, use **Context Optimizer** to inspect it
+and produce a bounded context pack instead of reading it whole. Most often an application log or
+capture gathered while reproducing a defect.
+
+```bash
+agent-skills context check <path>                 # exit 10 means: past the threshold
+agent-skills context pack <path> --brief "<the engineering question>"
+```
+
+Call the runtime directly — do not dispatch an agent to shrink a file. The rule, the threshold,
+the per-type strategies, and the untrusted-input contract are in
+[docs/context-optimizer.md](../../docs/context-optimizer.md).
 
 ## Required Inputs
 

@@ -121,7 +121,8 @@ python3 -c 'import yaml; yaml.safe_load(open(".github/workflows/ci.yml"))' 2>/de
 # ------------------------------------------------------------------------------
 sec "3. test suites"
 # ------------------------------------------------------------------------------
-for suite in test-global-install test-access-resolution test-front-door-skill; do
+for suite in test-global-install test-access-resolution test-front-door-skill \
+  test-context-optimizer; do
   if bash "scripts/$suite.sh" </dev/null >"/tmp/as-rr-$suite.log" 2>&1; then
     good "$suite.sh: $(tail -1 "/tmp/as-rr-$suite.log")"
   else
@@ -416,10 +417,18 @@ if git worktree add -q --detach "$GU/previous" "$RENAME_TAG" 2>/dev/null; then
       bash "$GU_HOME/.agent-skills/bin/agent-skills" start-task demo demo-1 \
         --no-org --skill tech-lead 2>&1
   )"
+  # The `tech-lead` alias was retired in v0.41.0 on the schedule docs/versioning.md
+  # recorded. Before that release this asserted the migration notice was printed;
+  # it now asserts the opposite, because after a scheduled removal the property
+  # worth holding is that the old name is genuinely gone rather than quietly
+  # remapped to something else.
   case "$ALIAS_OUT" in
-    *"tech-lead was renamed to wamala; using wamala"*)
-      good "the shipped CLI resolves the deprecated skill name with a notice" ;;
-    *) bad "deprecated alias notice" "$(printf '%s' "$ALIAS_OUT" | head -5)" ;;
+    *"was renamed to"*)
+      bad "the retired alias still prints a migration notice" \
+        "$(printf '%s' "$ALIAS_OUT" | grep 'renamed' | head -3)" ;;
+    *"tech-lead"*)
+      good "the shipped CLI passes the retired name through unchanged" ;;
+    *) bad "retired alias passthrough" "$(printf '%s' "$ALIAS_OUT" | head -5)" ;;
   esac
 
   git worktree remove --force "$GU/previous" 2>/dev/null || true

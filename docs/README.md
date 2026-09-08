@@ -40,6 +40,10 @@ Start here when reading the repository outside GitHub's main README.
   the user see the wider shape of the problem.
 - [Token efficiency](token-efficiency.md) - principles, audit methodology, and current
   findings for keeping `agent-skills` cheap to load into agent context.
+- [Context Optimizer](context-optimizer.md) - the other half of that problem: when the
+  **evidence** is enormous. The shared large-input rule every skill inherits, the measured
+  threshold, the character budget, the per-type strategies, mandatory provenance, explicit
+  omissions, and why the input is treated as data rather than instructions.
 - [Assistant setup](assistants.md) - using the skills with common AI assistants.
 - [Starter prompts](starter-prompts.md) - copy-paste prompts for single-skill and multi-skill work.
 - [Examples](examples/README.md) - realistic input/output examples for each skill.

@@ -111,16 +111,17 @@ else
 fi
 
 TOP_LEVEL="$(find "${REPO_ROOT}/skills" -mindepth 2 -maxdepth 2 -name SKILL.md | wc -l | tr -d ' ')"
-if [ "${TOP_LEVEL}" = "8" ]; then
-  ok "eight top-level skills are registerable (${TOP_LEVEL})"
+if [ "${TOP_LEVEL}" = "9" ]; then
+  ok "nine top-level skills are registerable (${TOP_LEVEL})"
 else
-  bad "eight top-level skills are registerable" "found ${TOP_LEVEL}"
+  bad "nine top-level skills are registerable" "found ${TOP_LEVEL}"
 fi
 
 # The specialists keep their role-based names. A rename that swept them up too
 # would break every direct invocation in the wild.
 for specialist in product-owner software-engineer manual-tester \
-  test-automation-engineer delivery-planner delivery-runner domain-modeler; do
+  test-automation-engineer delivery-planner delivery-runner domain-modeler \
+  context-optimizer; do
   check "specialist '${specialist}' keeps its role-based name" \
     test -f "${REPO_ROOT}/skills/${specialist}/SKILL.md"
 done
@@ -410,8 +411,16 @@ else
 fi
 
 # ------------------------------------------------------------------------------
-section "deprecated alias tech-lead -> wamala"
+section "retired alias tech-lead (removed in v0.41.0)"
 # ------------------------------------------------------------------------------
+# `tech-lead` was renamed to `wamala` in v0.38.0 and carried as a lifecycle alias
+# for three minor releases. v0.41.0 is the release the deprecation table named,
+# so this section now verifies the REMOVAL rather than the alias.
+#
+# Before v0.41.0 this section asserted the opposite. Inverting it rather than
+# deleting it is deliberate: the interesting property after a scheduled removal
+# is that the old name is genuinely gone and is not silently translated to
+# something else, which is a different bug from simply not working.
 ALIAS="$(sandbox)"
 mkdir -p "${ALIAS}/repo" "${ALIAS}/home"
 ( cd "${ALIAS}/repo" && git init -q )
@@ -426,45 +435,35 @@ run_alias() {
       bash "${REPO_ROOT}/scripts/${script}" "$@" )
 }
 
-ALIAS_OUT="$(run_alias start-task.sh demo demo-2 --no-org --skill tech-lead 2>&1)"
-if printf '%s' "${ALIAS_OUT}" | grep -q 'tech-lead was renamed to wamala; using wamala'; then
-  ok "start-task prints the migration notice for the deprecated name"
+# The alias table is empty, so the retired name resolves to itself.
+RETIRED="$( . "${REPO_ROOT}/scripts/task-context.sh"; \
+  agent_skills_resolve_skill_name "tech-lead" 2>/dev/null )"
+if [ "${RETIRED}" = "tech-lead" ]; then
+  ok "the retired name is no longer translated"
 else
-  bad "start-task prints the migration notice for the deprecated name" \
-    "$(printf '%s' "${ALIAS_OUT}" | head -5)"
+  bad "the retired name is no longer translated" "got '${RETIRED}'"
 fi
+
+ALIAS_OUT="$(run_alias start-task.sh demo demo-2 --no-org --skill tech-lead 2>&1)"
+if printf '%s' "${ALIAS_OUT}" | grep -q 'was renamed to'; then
+  bad "start-task no longer prints a migration notice for the retired name" \
+    "$(printf '%s' "${ALIAS_OUT}" | grep 'renamed' | head -3)"
+else
+  ok "start-task prints no migration notice for the retired name"
+fi
+
+# The retired name must not be silently remapped to the current one either. It is
+# recorded as given, so an operator sees the name they actually passed.
 ALIAS_BB="$(python3 "${REPO_ROOT}/scripts/blackboard.py" --cache-root "${ALIAS_CACHE}" \
   read demo-2 2>&1)"
-if printf '%s' "${ALIAS_BB}" | grep -q 'wamala'; then
-  ok "the deprecated name is recorded as wamala, not as itself"
-else
-  bad "the deprecated name is recorded as wamala, not as itself" \
-    "$(printf '%s' "${ALIAS_BB}" | head -5)"
-fi
 if printf '%s' "${ALIAS_BB}" | grep -q 'tech-lead'; then
-  bad "the deprecated name does not survive into the blackboard"
+  ok "the retired name is recorded as given, not remapped to wamala"
 else
-  ok "the deprecated name does not survive into the blackboard"
+  bad "the retired name is recorded as given" "$(printf '%s' "${ALIAS_BB}" | head -5)"
 fi
 
-ALIAS_FIN="$(run_alias finish-task.sh demo demo-2 --summary "alias smoke test" \
-  --skill tech-lead --no-candidates 2>&1)"
-if printf '%s' "${ALIAS_FIN}" | grep -q 'tech-lead was renamed to wamala; using wamala'; then
-  ok "finish-task prints the migration notice for the deprecated name"
-else
-  bad "finish-task prints the migration notice for the deprecated name" \
-    "$(printf '%s' "${ALIAS_FIN}" | head -5)"
-fi
-ALIAS_TEL="$(find "${ALIAS_CACHE}" -name telemetry.ndjson -exec cat {} + 2>/dev/null)"
-if printf '%s' "${ALIAS_TEL}" | grep -q '"skill": *"wamala"'; then
-  ok "telemetry from the deprecated name is attributed to wamala"
-else
-  bad "telemetry from the deprecated name is attributed to wamala" \
-    "$(printf '%s' "${ALIAS_TEL}" | tail -2)"
-fi
-
-# A name that is neither current nor deprecated must pass through untouched, so
-# the table cannot silently swallow a typo.
+# A name that is neither current nor deprecated must still pass through
+# untouched, so an empty table cannot start swallowing typos.
 UNKNOWN="$( . "${REPO_ROOT}/scripts/task-context.sh"; \
   agent_skills_resolve_skill_name "not-a-skill" 2>/dev/null )"
 if [ "${UNKNOWN}" = "not-a-skill" ]; then
@@ -473,11 +472,17 @@ else
   bad "an unknown skill name passes through the alias table unchanged" "got '${UNKNOWN}'"
 fi
 
-# The deprecation window is recorded, not open-ended.
-if grep -q '| `tech-lead` | `wamala` |' "${REPO_ROOT}/docs/versioning.md"; then
-  ok "the alias has a documented removal release"
+# The removal is recorded where the addition was, so the schedule stays auditable.
+if grep -q '| _(none)_ | | | |' "${REPO_ROOT}/docs/versioning.md"; then
+  ok "the deprecation table records that no alias is currently carried"
 else
-  bad "the alias has a documented removal release" "no row in docs/versioning.md"
+  bad "the deprecation table records that no alias is carried" \
+    "expected an empty row in docs/versioning.md"
+fi
+if grep -q 'v0.41.0' "${REPO_ROOT}/docs/versioning.md"; then
+  ok "docs/versioning.md still records when the alias was removed"
+else
+  bad "docs/versioning.md records when the alias was removed"
 fi
 
 # ------------------------------------------------------------------------------

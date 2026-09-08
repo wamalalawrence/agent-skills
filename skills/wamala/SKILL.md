@@ -25,7 +25,7 @@ compatibility: >-
   `local-workspace`. See docs/execution-modes.md.
 metadata:
   author: wamalalawrence
-  version: "0.40.0"
+  version: "0.41.0"
   homepage: "https://github.com/wamalalawrence/agent-skills"
 argument-hint: "<the request — a ticket key, a PR link, a bug report, or plain prose>"
 user-invocable: true
@@ -174,6 +174,14 @@ implements those rules rather than restating them.
 - [`delivery-runner`](../delivery-runner/SKILL.md) — owns executing an existing plan. Once the
   planner has produced a plan, Wamala hands the whole run to the runner and stops.
 - [`domain-modeler`](../domain-modeler/SKILL.md) — owns the canonical glossary and ADRs.
+- [`context-optimizer`](../context-optimizer/SKILL.md) — owns turning an input too large to read
+  into a bounded, traceable context pack. The destination when the **evidence** is the problem
+  rather than the task.
+
+Every executor can call the Context Optimizer **runtime** itself
+(`agent-skills context pack ...`), and should. Route to the skill only when reducing the input is
+the request, or when the judgement about what survived compression is the work. Dispatching an
+agent purely to shrink a file adds a whole agent's context to save some.
 
 ## Required Inputs
 
@@ -210,6 +218,7 @@ work as exactly one of:
 
 | Class | Signal |
 | --- | --- |
+| `oversized-input` | the evidence is the problem: a log, dump, spec, or diff too large to read |
 | `defect` | something behaves differently than expected, and someone noticed |
 | `change` | new or altered behaviour is wanted, and intent is already clear |
 | `intent-unclear` | a want is expressed, but scope or acceptance is not established |
@@ -219,6 +228,11 @@ work as exactly one of:
 | `automation` | the automated test suite itself is the subject — coverage to add, a suite that broke, CI failures, flakes, runtime, or what to automate |
 | `terminology` | a term or a hard-to-reverse decision needs recording |
 | `oversized` | more than one focused session, whatever the class |
+
+`oversized` and `oversized-input` are different problems. `oversized` is too much **work** for one
+session and goes to the planner. `oversized-input` is too much **evidence** for one context and
+goes to Context Optimizer. A 150 MB log behind a single one-line bug is `oversized-input`, not a
+phased plan.
 
 Record the class and the one-line reason on the blackboard. When two classes fit, prefer the
 one that gathers evidence: `intent-unclear` over `change`, `defect` over `change`.
@@ -245,6 +259,7 @@ Take the first row that matches. The full table with rationale is in
 | Condition | Dispatch to | Because |
 | --- | --- | --- |
 | `oversized` | `delivery-planner`, then hand the plan to `delivery-runner` | Decompose before executing |
+| `oversized-input` — reducing the evidence is the request | `context-optimizer` | Owns bounded, traceable extraction from huge inputs |
 | Confidence `unknown`/`low`, intent missing | `product-owner` | Intent is never invented |
 | Confidence `unknown`/`low`, behaviour or cause missing | `issue-investigator` | Root cause precedes any fix |
 | `defect`, root cause not established | `issue-investigator` | Evidence before a fix |

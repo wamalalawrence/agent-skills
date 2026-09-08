@@ -32,7 +32,12 @@ and an existing global installation has its old registration removed on the next
 
 | Deprecated | Current | Since | Removed in |
 | --- | --- | --- | --- |
-| `tech-lead` | `wamala` | `v0.38.0` | `v0.41.0` |
+| _(none)_ | | | |
+
+`tech-lead` to `wamala` is the only entry this table has held. It was added in `v0.38.0` and removed
+in `v0.41.0`, three minor releases later, exactly as scheduled. From `v0.41.0` the old name is not
+recognised anywhere: `--skill tech-lead` passes through as an unknown skill name rather than being
+silently translated.
 
 The aliases live in `AGENT_SKILLS_DEPRECATED_SKILLS` in
 [`scripts/task-context.sh`](../scripts/task-context.sh). Adding a row is a commitment to carry it

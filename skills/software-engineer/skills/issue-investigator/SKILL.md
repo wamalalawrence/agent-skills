@@ -19,7 +19,7 @@ compatibility: >-
   docs/execution-modes.md.
 metadata:
   author: wamalalawrence
-  version: "0.40.0"
+  version: "0.41.0"
   homepage: "https://github.com/wamalalawrence/agent-skills"
 argument-hint: >-
   issue URL/key, bug report, incident, support ticket, feature request, or task
@@ -126,6 +126,22 @@ Skipping the wrappers is the #1 failure mode and task size does not waive them.
 Issue investigation owns facts, evidence, classification, root cause, and next-step recommendation.
 It does not own broad implementation quality; that belongs to [`software-engineer`](../../SKILL.md)
 and [`code-reviewer`](../code-reviewer/SKILL.md).
+
+### Large inputs
+
+Before loading an input past the large-input threshold, use **Context Optimizer** to inspect it
+and produce a bounded context pack instead of reading it whole. Most often a production log, a CI
+run, or a captured payload. A pack keeps line-range provenance, which an evidence table needs and
+a paraphrase cannot give.
+
+```bash
+agent-skills context check <path>                 # exit 10 means: past the threshold
+agent-skills context pack <path> --brief "<the engineering question>"
+```
+
+Call the runtime directly — do not dispatch an agent to shrink a file. The rule, the threshold,
+the per-type strategies, and the untrusted-input contract are in
+[docs/context-optimizer.md](../../../../docs/context-optimizer.md).
 
 ## Required Inputs
 
