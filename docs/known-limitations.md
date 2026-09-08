@@ -115,6 +115,34 @@ See [context-optimizer.md](context-optimizer.md) for the full treatment. The loa
   that issues a verdict from a partial diff has misused it, and no mechanism here can prevent that
   — which is why `code-reviewer` owns verdicts.
 
+## Execution Guard
+
+[Execution Guard](execution-guard.md) is a second layer, not a solution. Its limits are listed
+in full in [its own section](execution-guard.md#known-limitations); the ones most often
+overstated:
+
+- **Coverage is per host, and four hosts have a blocking hook today.** For the rest the guard is
+  advisory or wrapper-only. `agent-skills guard doctor` reports the real level per host, and
+  never claims `enforced` where the hook is not actually registered.
+- **It does not solve prompt injection.** It changes the *consequence* of a successful
+  injection, because the resulting command still has to cross a deterministic gate. The content
+  scanner reports `SUSPICIOUS_INSTRUCTION_SHAPED_CONTENT` — evidence for a reviewer — and
+  deliberately does not claim to have found an attack.
+- **Shell parsing has edge cases.** Aliases, shell functions, and variables only the live shell
+  can expand are not knowable from the command string. They are reported as unresolved, which
+  resolves to `ASK` rather than `ALLOW` — but "unresolved" is not "understood".
+- **An interpreted program can hide its behaviour.** `python -c` bodies are matched for
+  behavioural patterns, not understood, and a script that assembles its command at runtime is
+  not visible from its invocation. A binary is judged by its name.
+- **A local user can disable a user-level hook.** These are the user's own configuration files.
+  The guard raises the cost of an accident and of a steered agent; it is not a control against
+  the person at the keyboard.
+- **It is not a sandbox and not IAM.** Scoped credentials, read-only roles, network policy, and
+  human-controlled execution remain the stronger controls, and the
+  [destructive-action policy](destructive-action-safety.md) still requires them.
+- **There is a time-of-check/time-of-use gap.** The decision is made against the command as
+  written, immediately before execution. A target that changes in that interval is not covered.
+
 ## Evidence and caches
 
 - **Evidence-pack and cache flows depend on the execution environment.** Global, in-repo, ephemeral

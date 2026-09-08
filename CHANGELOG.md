@@ -6,6 +6,139 @@ All notable project changes should be recorded here.
 
 - No unreleased changes.
 
+## 0.42.0 - Even If The Agent Is Wrong
+
+Minor release. Agent Skills already said what an agent must not do. The
+[destructive-action safety policy](docs/destructive-action-safety.md) has been the single source
+of truth for that since v0.30.0, and every `SKILL.md` inherits it.
+
+That policy works on the agent's reasoning. It therefore holds while the agent is reasoning
+correctly, and the failure modes it exists to prevent are precisely the ones where it is not:
+a model that made a mistake, a hostile `README` that steered it, a tool response carrying
+instruction-shaped text, a chain of individually reasonable steps that ended somewhere
+unrecoverable.
+
+This release adds the second layer:
+
+```text
+skill policy -> agent reasoning -> generated action
+                                        |
+                                  EXECUTION GUARD
+                                        |
+                             allow  /   ask   \  deny
+                                        |
+                                  tool / runtime
+```
+
+> **Prompt-level safety works on cooperative reasoning. Execution Guard works on actions.**
+
+Neither layer makes the machine safe, and the documentation says so in the same voice it uses
+for what the feature does.
+
+### Added
+
+- **[Execution Guard](docs/execution-guard.md)**, exposed as `agent-skills guard`. One canonical
+  engine decides; every host adapter converts that host's request into an `Action`, calls the
+  same `resolve()`, and converts the `Decision` back. No adapter contains a rule, so two hosts
+  cannot drift into disagreeing about what `rm -rf /` means.
+- **Deterministic classification.** No model is consulted for a blocking decision. Sending
+  `rm -rf /` to a language model and asking whether it looks dangerous makes the answer
+  probabilistic exactly where it must not be, and puts a network round trip in front of every
+  shell command.
+- **`ALLOW` / `ASK` / `DENY`**, each carrying a rule id, a risk category, a reason, the resolved
+  target, and a **safe alternative**. 50 rules, 30 of them hard floor. `agent-skills guard rules`
+  prints the catalogue with each rule's effective outcome under the current configuration;
+  `agent-skills guard explain` answers "why was this blocked?" for a human.
+- **Structural command decomposition** rather than pattern matching. `&&`, `||`, `;`, `&`,
+  newline, pipelines, `$( )`, backticks, `<( )`, subshells, brace groups, `VAR=x` prefixes,
+  `sudo`/`env`/`nohup`/`timeout`/`xargs` wrappers, nested `bash -c`, `ssh host '…'`, and
+  `find -exec` are all followed. `echo "rm -rf /"` is `ALLOW`, because quoting is honoured and
+  the dangerous text is an argument, not a command.
+- **Target awareness.** `rm -rf ./build` is `ALLOW`, `rm -rf src` is `ASK`, `rm -rf /` is `DENY`.
+  Paths are canonicalised before classification, so `repo/tmp -> /important/data` is caught as
+  `FS_SYMLINK_ESCAPE` rather than trusted for starting with the repository path. Globs are judged
+  by the directory they would sweep; unresolvable variables become `ASK`, not `ALLOW`.
+- **Configuration trust levels.** Repository configuration — committed or repo-local — may add
+  restrictions and may never remove them. A `guard:` block that tries to lower a rule is ignored
+  and reported; an invented knob such as `allow_rm_rf: true` is refused by name rather than
+  silently dropped. Hard-floor rules cannot be lowered by any layer, including the user's own
+  machine policy. This is the same rule the [access resolver](docs/access-resolution.md) already
+  enforces for credentials.
+- **Host integration for four hook-capable hosts**: Claude Code (`PreToolUse`), Cursor
+  (`beforeShellExecution` + `beforeMCPExecution`, registered `failClosed`), Kiro (`preToolUse`),
+  and Codex (`PreToolUse`). `agent-skills guard doctor` reports `ENFORCED` / `AVAILABLE` /
+  `PARTIAL` / `ADVISORY` per host, and never claims enforcement a host does not offer.
+- **Ownership-safe installation.** `guard install` merges rather than replaces: hooks you already
+  had survive, a backup is left beside each modified file, a config that is not valid JSON is
+  refused, a same-named file we did not write is left alone, running it twice produces one
+  registration, and `guard uninstall` removes only entries carrying the agent-skills signature.
+- **Structured-tool and MCP gating.** The engine is built around an action abstraction, not a
+  shell string. An MCP `query` argument carrying `DROP TABLE` is denied, a structured `Write` to
+  `/etc/hosts` is denied, and an ordinary MCP write is left alone — a guard that asks about every
+  tool call is a guard that gets switched off.
+- **Redacted local auditing.** Decisions are recorded at `<config-dir>/guard/decisions.ndjson`,
+  `0600`, bounded, never uploaded. **No raw command line is stored**: the record carries the rule,
+  the classification, a redacted target, and a SHA-256 fingerprint of the redacted command.
+- **`agent-skills guard scan-content`**, which flags instruction-shaped, waiver-shaped,
+  download-and-execute, credential-shaped, and destructive-command text in untrusted files. It
+  reports `SUSPICIOUS_INSTRUCTION_SHAPED_CONTENT` — evidence for a reviewer — and deliberately
+  does not claim to have found an attack.
+- **`agent-skills guard run`**, wrapper mode for hosts with no pre-execution hook.
+- **[`scripts/test-guard.sh`](scripts/test-guard.sh)**: 104 checks over a 220-case corpus, all
+  four host dialects, the trust model, redaction, and seven mutation probes.
+
+### Changed
+
+- `agent-skills doctor` reports Execution Guard status per host, in both the brief and full
+  reports and in `--json`.
+- `agent-skills install` prints an Execution Guard recommendation and the exact commands. It does
+  **not** install it. Registering the guard edits the host configuration files that decide what a
+  user's agent may do, and doing that as a side effect of installing skills would be a surprise
+  in the one category where surprises are least acceptable.
+- [`docs/destructive-action-safety.md`](docs/destructive-action-safety.md) gains a runtime-
+  enforcement section stating the relationship in both directions: the policy remains
+  authoritative and covers what no runtime check can see; where the two disagree the stricter
+  outcome wins; a guard `ALLOW` is not permission.
+- [`docs/release-checklist.md`](docs/release-checklist.md) gains an Execution Guard section,
+  including re-verifying each host's contract against its **current** documentation rather than
+  an older reading, and watching the false-positive corpus for usability regressions.
+- `scripts/test-release-readiness.sh` runs the guard suite with the other five.
+
+### Fixed
+
+Defects found by the corpus and the probes while building this release, each now pinned by a
+test:
+
+- A workspace under `/var`, `/private`, or a `mktemp` directory was classified as a system path,
+  so `rm -rf build` was denied in any repository checked out there. Workspace membership is now
+  decided before the absolute-path rules, and the repository root is the credible signal.
+- Home and credential directories were checked after the temp exemption, so a `$HOME` inside a
+  temp tree lost its protection. `~/.ssh` is now `HOME_ROOT` wherever `$HOME` points, and `$HOME`
+  is compared as a real path so a symlinked home does not silently disable the rule.
+- Symlink escapes were compared only against the canonicalised workspace root, so the lexical
+  test failed whenever the root's two spellings differed — silently disabling the check that
+  catches `repo/tmp` pointing elsewhere.
+- The relaxation ceiling started at each rule's compiled default, which clamped every machine-
+  scope relaxation back to that default and made user policy inert.
+- `timeout 5 rm -rf /` parsed the duration as the command. `env | curl …` lost the `env`
+  entirely to wrapper stripping. `rm --recursive --force /` was not recognised as recursive.
+- A refused weakening attempt attached an `ASK` finding to every decision, so one bad key in one
+  configuration file degraded every command in the session. It is now a note, raised to a finding
+  only when it targeted a rule the action actually triggered.
+- The content scanner reported one signal per line and hid the rest, so a sentence that was both
+  a policy waiver and a destructive command was reported only as the former.
+- A hook payload whose command field was missing or renamed produced an empty action, which
+  matched no rule and read as `ALLOW` — turning a host schema change into a silent total bypass.
+  It now raises and resolves to `ASK`.
+- Redaction's environment-assignment rule matched query parameters and greedily consumed the rest
+  of the URL, truncating audit records.
+- Configured protected branches were folded into a module-level regular expression on every call.
+  The pattern grew without bound, and one repository's configuration changed the verdict for the
+  next workspace evaluated in the same process. Per-call facts now travel through a per-call
+  context.
+- Every `--` was stripped from the inspected command rather than only the leading separator, so a
+  command carrying its own `--` was inspected in a form the shell would not run.
+
 ## 0.41.0 - Spend Context On Evidence, Not On Volume
 
 Minor release. Agent Skills already kept its own instructions token-conscious. This release

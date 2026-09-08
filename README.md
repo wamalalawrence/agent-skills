@@ -58,7 +58,7 @@ That is the whole local setup. It installs `agent-skills` on the **machine**, re
 with every supported agent host it finds, and makes the runtime invocable from anywhere:
 
 ```text
-Agent Skills v0.41.0 installed globally.
+Agent Skills v0.42.0 installed globally.
 
 Skills are available to:
   [x] Claude Code (~/.claude/skills)
@@ -76,6 +76,43 @@ External-service access is configured only when a task requires it.
 Then open any repository on the machine — one you already have, or one you clone next year — and
 invoke a skill. There is no per-workspace setup step, no `.skills` symlink, and no sibling
 `agent-skills` checkout.
+
+### Execution Guard (opt-in)
+
+Skills carry a [destructive-action safety policy](docs/destructive-action-safety.md). That policy
+works on the agent's reasoning, which means it holds while the agent is reasoning correctly.
+[Execution Guard](docs/execution-guard.md) is the second layer: a deterministic check that runs
+**before** every shell command and tool call and answers allow, ask, or deny.
+
+```bash
+agent-skills guard install --dry-run   # exactly what would change, nothing written
+agent-skills guard install             # register the pre-execution hooks
+agent-skills guard doctor              # which of your hosts actually enforce
+```
+
+It is not installed automatically, because it edits the host configuration files that decide what
+your agent may do, and that is not a good place for a surprise. Installation preserves every hook
+you already had, is idempotent, and `agent-skills guard uninstall` removes only its own entries.
+
+```text
+Execution Guard
+
+  Claude Code                    ENFORCED     PreToolUse hook
+  Cursor                         ENFORCED     beforeShellExecution + beforeMCPExecution
+  Kiro                           ENFORCED     preToolUse hook
+  Codex                          ENFORCED     PreToolUse hook
+  GitHub Copilot / VS Code       PARTIAL      terminal auto-approval rules
+  JetBrains AI / Junie           ADVISORY     Action Allowlist
+```
+
+`rm -rf ./build` is allowed, `git push origin main` asks, and `rm -rf /` is denied — including
+when it arrives as `true && rm -rf /`, `$(rm -rf /)`, or `bash -c 'rm -rf /'`, and including when
+a hostile file in the repository is what talked the agent into it. `echo "rm -rf /"` is allowed,
+because the guard parses the command rather than matching its text.
+
+Repository configuration can make the guard stricter and can never make it weaker. Neither layer
+makes the machine safe; [what it cannot do](docs/execution-guard.md#known-limitations) is part of
+the documentation, not a footnote.
 
 Setup asks for **no** credentials: no Jira, Confluence, Sonar, GitHub, database, or API token, and
 no list of projects you might work on. When a task actually needs an external service,
@@ -125,7 +162,7 @@ npx skills add wamalalawrence/agent-skills
 
 ## Updating
 
-Releases are git tags (`v0.40.0`, `v0.41.0`, …) on this repo. Two commands cover the common case;
+Releases are git tags (`v0.41.0`, `v0.42.0`, …) on this repo. Two commands cover the common case;
 full details, cloud-agent updates, and drift detection are in
 [docs/updates.md](docs/updates.md).
 
@@ -316,6 +353,11 @@ the per-tier docs: [task blackboard](docs/task-blackboard.md),
   Jira/Confluence walk, kept as an example on top of the generic resolver
 - [GitHub access ladder](docs/github-access.md) — `gh auth status` → account switching →
   HTTPS → SSH; the ladder an agent must walk before declaring "no GitHub access"
+- [Execution Guard](docs/execution-guard.md) — the runtime layer under the destructive-action
+  policy: a deterministic pre-execution check that classifies every shell command and tool call
+  as allow, ask, or deny. The decision model, the hard-deny floor, why the command is parsed
+  rather than pattern-matched, symlink and workspace resolution, the trust levels that stop
+  repository text weakening it, per-host enforcement, redacted auditing, and its limits
 - [MCP](docs/mcp.md) — this repository ships and enables no MCP servers; what it does define is
   the tool-preference order every skill follows, a recommended minimal set, and why the real
   argument for MCP here is OAuth instead of stored tokens
@@ -375,6 +417,9 @@ the per-tier docs: [task blackboard](docs/task-blackboard.md),
   ambiguous or high risk.
 - **Collaborative:** implementation, review, and issue resolution are one engineering loop;
   `software-engineer` auto-iterates with `code-reviewer` until convergence or bounded escalation.
+- **Layered:** prompt-level policy states the contract; [Execution Guard](docs/execution-guard.md)
+  enforces the part of it a runtime can check, deterministically, at the moment of execution.
+  Neither layer is claimed to be sufficient on its own.
 - **Maintainer-realistic:** governance, support, and roadmap promises match a solo-maintainer
   open-source project.
 

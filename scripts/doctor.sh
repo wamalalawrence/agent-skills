@@ -278,6 +278,41 @@ probe_install() {
   fi
 }
 
+# Execution Guard: which hosts on this machine will actually stop a dangerous
+# command before it runs. A user needs to know this per host, because the answer
+# genuinely differs — some hosts can block, some can only be given static rules,
+# and some offer no pre-execution interception point at all.
+probe_execution_guard() {
+  GUARD_STATE="unknown"
+  GUARD_DETAIL="scripts/guard.py not reachable"
+  GUARD_ROWS=""
+  local guard="${REPO_ROOT}/scripts/guard.py"
+  [[ -f "${guard}" ]] || return 0
+  local out=""
+  out="$(${PYTHON3} "${guard}" doctor --format json 2>/dev/null || true)"
+  [[ -n "${out}" ]] || return 0
+  GUARD_ROWS="$(printf '%s' "${out}" | ${PYTHON3} -c '
+import json
+import sys
+
+try:
+    hosts = json.load(sys.stdin)["hosts"]
+except Exception:
+    sys.exit(0)
+for host in hosts:
+    print("%s\t%s" % (host["label"], host["effective"]))
+' 2>/dev/null || true)"
+  local enforced
+  enforced="$(printf '%s' "${GUARD_ROWS}" | grep -c "enforced$" || true)"
+  if [[ "${enforced}" -gt 0 ]]; then
+    GUARD_STATE="yes"
+    GUARD_DETAIL="${enforced} host(s) enforce before execution"
+  else
+    GUARD_STATE="no"
+    GUARD_DETAIL="no host enforces here; run: agent-skills guard install"
+  fi
+}
+
 # Which credential backend would be used. Reports availability only — this must
 # never read or print a secret value.
 probe_secret_backend() {
@@ -307,6 +342,7 @@ probe_secret_backend() {
 run_probes() {
   probe_install
   probe_secret_backend
+  probe_execution_guard
   probe_tools
   probe_build_tool
   probe_docker
@@ -339,6 +375,7 @@ render_brief() {
   printf '    %sdocker           %s\n' "$(mark "${DOCKER_STATE}")" "${DOCKER_DETAIL}"
   printf '    %smcp              %s\n' "$(mark "${MCP_STATE}")" "${MCP_DETAIL}"
   printf '    %srepo knowledge   %s\n' "$(mark "${KNOWLEDGE_STATE}")" "${KNOWLEDGE_DETAIL}"
+  printf '    %sexecution guard  %s\n' "$(mark "${GUARD_STATE}")" "${GUARD_DETAIL}"
   if [[ -n "${TOOLS_MISSING// /}" ]]; then
     printf '    --  not installed: %s\n' "${TOOLS_MISSING% }"
   fi
@@ -372,9 +409,27 @@ render_full() {
   echo "Memory"
   printf '  %srepo knowledge base — %s\n' "$(mark "${KNOWLEDGE_STATE}")" "${KNOWLEDGE_DETAIL}"
   echo ""
+  echo "Execution Guard"
+  if [[ -n "${GUARD_ROWS}" ]]; then
+    printf '%s\n' "${GUARD_ROWS}" | while IFS=$'\t' read -r label level; do
+      [[ -n "${label}" ]] || continue
+      printf '  %-30s %s\n' "${label}" "$(printf '%s' "${level}" | tr '[:lower:]' '[:upper:]')"
+    done
+    echo "  enforced = the host consults the guard before the tool call and honours"
+    echo "  the answer; available = it can, but is not registered here yet; partial ="
+    echo "  static rules only; advisory = no pre-execution hook, wrapper mode only."
+    if [[ "${GUARD_STATE}" != "yes" ]]; then
+      echo "  Register with: agent-skills guard install"
+    fi
+  else
+    printf '  %s%s\n' "$(mark "${GUARD_STATE}")" "${GUARD_DETAIL}"
+  fi
+  echo ""
   echo "Notes"
   echo "  This report says what is possible, not what is permitted. The"
   echo "  destructive-action safety floor still applies to everything marked ok."
+  echo "  Execution Guard enforces part of that floor at the moment of execution;"
+  echo "  it does not replace the policy, and no host makes the machine safe."
   echo "  No secret value is read or printed — only whether one resolves."
   if [[ "${TRACKER_STATE}" != "yes" ]]; then
     echo "  Tracker unavailable: use the user's description as the issue brief"
@@ -404,7 +459,9 @@ render_json() {
   printf '  "github": "%s",\n' "${GITHUB_STATE}"
   printf '  "github_detail": "%s",\n' "$(json_escape "${GITHUB_DETAIL}")"
   printf '  "mcp": "%s",\n' "${MCP_STATE}"
-  printf '  "repo_knowledge": "%s"\n' "${KNOWLEDGE_STATE}"
+  printf '  "repo_knowledge": "%s",\n' "${KNOWLEDGE_STATE}"
+  printf '  "execution_guard": "%s",\n' "${GUARD_STATE}"
+  printf '  "execution_guard_detail": "%s"\n' "$(json_escape "${GUARD_DETAIL}")"
   printf '}\n'
 }
 

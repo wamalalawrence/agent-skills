@@ -43,6 +43,41 @@
 # See docs/configuration.md and docs/execution-modes.md.
 # =============================================================================
 
+# ---------------------------------------------------------------------------
+# EXECUTION GUARD (optional). See docs/execution-guard.md.
+#
+# The guard checks every shell command and tool call before it runs. This block
+# lets a repository make it STRICTER for work done in this repository.
+#
+# It can never make it weaker. This file is committed, so anyone who can open a
+# pull request can edit it, and a file the agent reads must not be able to grant
+# the agent capabilities. Concretely:
+#
+#   * `rules:` may raise a rule (ask -> deny, allow -> ask). A request to lower
+#     one is IGNORED and REPORTED, and appears in `agent-skills guard rules`.
+#   * Hard-floor rules (`rm -rf /`, `DROP TABLE`, `terraform destroy`, and the
+#     rest of docs/destructive-action-safety.md) cannot be lowered by ANY layer,
+#     including the machine-scope one.
+#   * `allow_commands:` is refused from here entirely. Only the user's own
+#     machine policy may add an allow list.
+#   * An invented knob such as `allow_rm_rf: true` is refused by name rather
+#     than ignored silently, because silence looks like acceptance.
+#
+# Relaxation belongs in machine scope: <config-dir>/guard/policy.json.
+# The same block may also live at .agent-skills/guard-policy.json as JSON.
+#
+# guard:
+#   rules:
+#     VCS_PUSH: deny            # this repository is never pushed to from an agent
+#     CLOUD_MUTATE: deny
+#   deny_patterns:
+#     - "^our-deploy-tool "
+#   ask_patterns:
+#     - "^helm "
+#   protected_branches:
+#     - "release-2024"
+# ---------------------------------------------------------------------------
+
 # Only needed for cloud / remote agents. Omit it for local work: the global
 # install is detected automatically.
 mode: in-repo

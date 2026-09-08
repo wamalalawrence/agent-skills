@@ -11,12 +11,14 @@ One command runs the mechanical half of this list, so the evidence recorded in
 bash scripts/test-release-readiness.sh
 ```
 
-It covers the structural validators, syntax across every shipped artifact, all four test suites,
+It covers the structural validators, syntax across every shipped artifact, all six test suites,
 the CLI surface, a clean-`HOME` install with drift and uninstall, an upgrade from the previous
 release tag in both the legacy-workspace and global-install shapes, cloud/in-repo mode, the
 public-safety sweep, README and link integrity, the telemetry report, and version consistency.
-Section 3 runs all five test suites, including
-[`test-context-optimizer.sh`](../scripts/test-context-optimizer.sh) and its five mutation probes.
+Section 3 runs all six test suites, including
+[`test-context-optimizer.sh`](../scripts/test-context-optimizer.sh) and its five mutation probes,
+and [`test-guard.sh`](../scripts/test-guard.sh) with its adversarial corpus, false-positive
+corpus, host-adapter checks, and seven mutation probes.
 Everything is sandboxed under `mktemp`; it never touches your real home directory, host skill
 directories, or credential store. It is not in CI because it builds a
 worktree of the previous tag and performs several full installs.
@@ -32,6 +34,31 @@ worktree of the previous tag and performs several full installs.
       previous release and account for any increase by category.
 - [ ] Confirm GitHub Actions validation passes on the release PR or branch. **Never publish a
       release while CI is failing.**
+
+## Execution Guard
+
+Required whenever this release changes `scripts/guard*.py`, `lib/guard.registry`, the host
+adapters, or any rule the guard enforces.
+
+- [ ] Run `bash scripts/test-guard.sh` and confirm it exits `0`. Record the pass count and the
+      corpus sizes in `eval-runs/<release>/summary.md`.
+- [ ] Confirm every mutation probe reports that the weakened build gives the weaker answer. A
+      probe that passes without the property removed proves nothing; see the probe-discipline
+      note below.
+- [ ] Run `bash scripts/test-guard.sh --bench-only` and record p50/p95/p99. This hook runs before
+      every shell command; a regression here is a correctness problem, not a nicety.
+- [ ] Account for any change in the false-positive corpus. A benign case moving from `ALLOW` to
+      `ASK` is a regression against usability, and an unusable guard gets switched off.
+- [ ] Confirm no rule was added without a safe alternative — `guard rules --format json` carries
+      the field and the suite asserts it.
+- [ ] Re-verify the host contracts against each host's **current** published documentation.
+      Hook schemas change. Never leave a host at `enforced` in `lib/guard.registry` on the
+      strength of an older reading.
+- [ ] Confirm `agent-skills guard install` still preserves unrelated hooks, is idempotent, and
+      that `uninstall` removes only agent-skills-owned entries. The suite covers all three; read
+      the assertions rather than trusting the summary line.
+- [ ] Grep the release diff for any new output path that could carry a raw command line into a
+      log, an error message, or telemetry.
 
 ## Telemetry Review
 
