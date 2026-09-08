@@ -8,6 +8,7 @@ maintainer changed (or chose not to change) as a result.
 
 Eval runs are organized by release. Start with the most recent summary:
 
+- [`v0.38.0/summary.md`](v0.38.0/summary.md)
 - [`v0.37.0/summary.md`](v0.37.0/summary.md)
 - [`v0.36.0/summary.md`](v0.36.0/summary.md)
 - [`v0.11.0/summary.md`](v0.11.0/summary.md)

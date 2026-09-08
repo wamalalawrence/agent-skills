@@ -1,4 +1,4 @@
-# Eval — tech-lead routes by evidence, dispatches, and never does the work itself
+# Eval — Wamala routes by evidence, dispatches, and never does the work itself
 
 Pins the three failures that would make a router worse than no router: routing on the shape of
 a request instead of its evidence, doing a specialist's work itself, and treating a dispatched
@@ -18,7 +18,7 @@ Four requests, presented separately in fresh sessions against `example-api`
 
 ## Skill Under Test
 
-`tech-lead`
+`wamala`
 
 ## Expected Behavior
 
@@ -48,13 +48,13 @@ cites something concrete from the request.
   chosen owner, the one-line reason, the chain, and the dispatch mechanism.
 - `## Steps` with one bullet per dispatched step naming the verifying artifact.
 - `## Blocked` only when something blocked.
-- A lifecycle receipt naming `tech-lead`.
+- A lifecycle receipt naming `wamala`.
 
 ## Must Not Do
 
 - **Implement, review, refine, or test anything itself.** For A, writing the fix instead of
   dispatching is an outright failure, however small the fix looks.
-- **Load an executor skill into its own context.** That makes the chain `tech-lead →
+- **Load an executor skill into its own context.** That makes the chain `wamala →
   software-engineer → code-reviewer`, three deep, breaking the
   [depth cap of two](../docs/review-loops.md#universal-loop-bounds).
 - Route A straight to `software-engineer` because the symptom sounds obvious.
@@ -76,14 +76,14 @@ cites something concrete from the request.
 - [ ] A routed to `issue-investigator` first, with the reason naming the absent root cause.
 - [ ] A's second step dispatched only after root-cause status reached `confirmed`.
 - [ ] A's second handoff passed artifact **paths**, not pasted investigation findings.
-- [ ] B routed to `product-owner`; no acceptance criteria were authored by the lead.
+- [ ] B routed to `product-owner`; no acceptance criteria were authored by Wamala.
 - [ ] C fetched the ticket before classifying, or asked for the summary when no tracker resolved.
 - [ ] D routed as `intent-unclear`, with the missing target named.
 - [ ] Every dispatch names exactly one owner skill.
 - [ ] Every target `SKILL.md` was verified by file read, not by host skill listing.
-- [ ] No executor skill appears in the lead's own context.
+- [ ] No executor skill appears in Wamala's own context.
 - [ ] Each step's outcome cites the artifact that proves it.
-- [ ] The lead's own output fits on one screen: decision, steps, blockers.
+- [ ] Wamala's own output fits on one screen: decision, steps, blockers.
 - [ ] `start-task.sh` and `finish-task.sh` both appear in the lifecycle receipt.
 
 ## Why This Scenario
@@ -94,5 +94,5 @@ own solution, and all three route somewhere else once you ask what evidence exis
 case where the cheap wrong answer — infer from the key — is a documented failure mode.
 
 The dispatch-not-invocation checks matter for a different reason: they are invisible in the
-output. A lead that loads `software-engineer` into its own context produces a plausible-looking
+output. A router that loads `software-engineer` into its own context produces a plausible-looking
 result while silently breaking the review bound that keeps the engineer/reviewer loop honest.

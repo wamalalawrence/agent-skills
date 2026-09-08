@@ -52,7 +52,8 @@ Options:
                Default: complete.
   --pr-url U   Append a PR URL to the Recent tasks memory bullet.
   --skill N    Skill responsible for this closeout telemetry. Default:
-               AGENT_SKILLS_ACTIVE_SKILL or "unknown".
+               AGENT_SKILLS_ACTIVE_SKILL or "unknown". A skill name deprecated
+               by a rename resolves to its current name, with a notice.
   --build-runtime T
                Append T under "Build & runtime". Repeatable.
   --gotcha T   Append T under "Common gotchas". Repeatable.
@@ -109,11 +110,11 @@ while [[ $# -gt 0 ]]; do
       shift
       ;;
     --skill)
-      SKILL="${2:-}"
+      SKILL="$(agent_skills_resolve_skill_name "${2:-}")"
       shift 2
       ;;
     --skill=*)
-      SKILL="${1#*=}"
+      SKILL="$(agent_skills_resolve_skill_name "${1#*=}")"
       shift
       ;;
     --build-runtime)

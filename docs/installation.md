@@ -63,8 +63,8 @@ and rerun `./setup.init` to re-point the install.
 Each host gets one symlink per skill inside its own global skills directory:
 
 ```text
-~/.claude/skills/tech-lead -> ~/.agent-skills/skills/tech-lead
-~/.agents/skills/tech-lead -> ~/.agent-skills/skills/tech-lead
+~/.claude/skills/wamala -> ~/.agent-skills/skills/wamala
+~/.agents/skills/wamala -> ~/.agent-skills/skills/wamala
 ```
 
 Per-skill links rather than a directory replacement is what makes this safe next to skills you

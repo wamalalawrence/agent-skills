@@ -71,6 +71,9 @@ jobs:
           bash scripts/test-global-install.sh
           bash scripts/test-access-resolution.sh
 
+      - name: Front-door skill identity and contract
+        run: bash scripts/test-front-door-skill.sh
+
       - name: Verify the default global install from a clean HOME
         run: |
           set -euo pipefail
@@ -102,15 +105,15 @@ jobs:
           test ! -e "$home/.skills"
           # One canonical source, registered per skill.
           test -f "$home/.agent-skills/install.json"
-          test -L "$home/.agents/skills/tech-lead"
-          test -f "$home/.agents/skills/tech-lead/SKILL.md"
+          test -L "$home/.agents/skills/wamala"
+          test -f "$home/.agents/skills/wamala/SKILL.md"
           test -L "$home/.claude/skills/software-engineer"
           # Unrelated user skills are untouched.
           test -f "$home/.claude/skills/pre-existing-user-skill/SKILL.md"
           test ! -L "$home/.claude/skills/pre-existing-user-skill"
           # Every registration must resolve to the same canonical path.
-          a=$(readlink -f "$home/.claude/skills/tech-lead")
-          b=$(readlink -f "$home/.agents/skills/tech-lead")
+          a=$(readlink -f "$home/.claude/skills/wamala")
+          b=$(readlink -f "$home/.agents/skills/wamala")
           test "$a" = "$b"
           # Idempotency: a rerun adds nothing.
           before=$(ls -1 "$home/.agents/skills" | wc -l)
@@ -139,7 +142,7 @@ jobs:
           # Uninstall removes only what we own.
           run_setup ./setup.init --yes > /dev/null 2>&1
           run_setup bash bin/agent-skills uninstall --yes
-          test ! -e "$home/.agents/skills/tech-lead"
+          test ! -e "$home/.agents/skills/wamala"
           test -f "$home/.claude/skills/pre-existing-user-skill/SKILL.md"
 
       - name: Verify the legacy workspace model still works

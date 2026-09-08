@@ -12,12 +12,12 @@ when required evidence is missing.
 
 ## Start Here If You Do Not Want To Pick A Skill
 
-`tech-lead` is the single entry point. Describe the work and it classifies the request, runs the
-gate, picks the owner, and dispatches a fresh agent — then drives the chain if more than one
-specialist is needed.
+Wamala is the front door. Describe the work and it classifies the request, runs the gate, picks
+the owner, and dispatches a fresh agent — then drives the chain if more than one specialist is
+needed.
 
 ```text
-Use the tech-lead skill.
+Use Wamala.
 
 Request: [describe the work — a bug, a feature, a question, a ticket key, a PR link]
 
@@ -29,11 +29,11 @@ guessing. Stop if any dispatched step comes back blocked.
 Two variants worth knowing:
 
 ```text
-Use the tech-lead skill to decide who should handle [request], then stop before dispatching.
+Use Wamala to decide who should handle [request], then stop before dispatching.
 ```
 
 ```text
-Use the tech-lead skill for [ticket key] and take it as far as it can go without me.
+Use Wamala to take [ticket key] from requirement to delivery.
 ```
 
 Everything below stays first-class. When you already know the owner, invoking it directly is

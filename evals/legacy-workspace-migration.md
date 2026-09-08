@@ -31,7 +31,7 @@ No global install exists yet. `~/.config/agent-skills/` does not exist.
 
 ## Skill Under Test
 
-`tech-lead`
+`wamala`
 
 ## Run script
 
@@ -63,7 +63,7 @@ No global install exists yet. `~/.config/agent-skills/` does not exist.
 - [ ] Agent does **not** claim the unresolved `${JIRA_HOST}` placeholders in `.jira-config.yml` are
   a problem. They are resolved at runtime, and an unresolved placeholder is incomplete
   configuration, not missing auth.
-- [ ] `tech-lead` dispatches or answers directly as appropriate, and does not implement anything
+- [ ] `wamala` dispatches or answers directly as appropriate, and does not implement anything
   itself.
 
 ## Negative variants the agent must also handle

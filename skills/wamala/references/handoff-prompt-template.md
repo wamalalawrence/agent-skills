@@ -1,6 +1,6 @@
 # Handoff-Prompt Template
 
-The binding shape of the brief `tech-lead` hands to each **fresh, empty-context** agent when it
+The binding shape of the brief `wamala` hands to each **fresh, empty-context** agent when it
 dispatches a step. The receiving agent has no conversation history, so this brief has to carry
 everything it needs — and nothing it does not.
 
@@ -37,7 +37,7 @@ Do this:
   skill, stop and say which one — do not do it yourself.
 - Write your result to the artifact your skill's contract names (the evidence
   pack, the refinement output, the test plan, the PR URL). A chat-only summary is
-  NOT a result: the lead verifies from disk and will treat a missing artifact as
+  NOT a result: Wamala verifies from disk and will treat a missing artifact as
   an incomplete step.
 
 Scope boundary: <the one thing this step must produce>
@@ -61,7 +61,7 @@ stopped — the specific missing thing and who should supply it.
 - `<skill-source>` is resolved per
   [skill-source resolution](../../../docs/skill-source-resolution.md), honouring any explicit
   path the user supplied.
-- `<class>` and the confidence verdict are copied from the lead's own step 1 and step 2. Passing
+- `<class>` and the confidence verdict are copied from Wamala's own step 1 and step 2. Passing
   them forward is what stops the fresh agent re-running the gate from scratch.
 - **`Prior steps completed this run`** is one line per step, never a transcript. If the
   refinement produced acceptance criteria, point at the file; do not paste them.

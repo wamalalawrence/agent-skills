@@ -90,6 +90,12 @@ as_run() {
 
 section() { printf '\n== %s ==\n' "$1"; }
 
+# `test -e` follows symlinks, so it calls a dangling link absent — which is
+# exactly the state a botched rename leaves behind. Assert on the entry itself.
+no_entry() {
+  [ ! -e "$1" ] && [ ! -L "$1" ]
+}
+
 # ------------------------------------------------------------------------------
 section "clean first install"
 # ------------------------------------------------------------------------------
@@ -108,8 +114,8 @@ check "install manifest written" test -f "${H1}/.agent-skills/install.json"
 check "canonical skills tree linked" test -L "${H1}/.agent-skills/skills"
 check "canonical scripts tree linked" test -L "${H1}/.agent-skills/scripts"
 check "launcher reachable in the install root" test -x "${H1}/.agent-skills/bin/agent-skills"
-check "standard dir registered" test -L "${H1}/.agents/skills/tech-lead"
-check "registered skill resolves to a SKILL.md" test -f "${H1}/.agents/skills/tech-lead/SKILL.md"
+check "standard dir registered" test -L "${H1}/.agents/skills/wamala"
+check "registered skill resolves to a SKILL.md" test -f "${H1}/.agents/skills/wamala/SKILL.md"
 
 # The binding requirement: first install must not ask for, or store, anything
 # credential-shaped.
@@ -183,8 +189,8 @@ mkdir -p "${H2}/.kiro"
 # Cursor deliberately absent.
 OUT3="$(as_run "${H2}" install --yes 2>&1)"
 
-check "host with an existing skills dir is registered" test -L "${H2}/.claude/skills/tech-lead"
-check "host with only a config dir is registered" test -L "${H2}/.kiro/skills/tech-lead"
+check "host with an existing skills dir is registered" test -L "${H2}/.claude/skills/wamala"
+check "host with only a config dir is registered" test -L "${H2}/.kiro/skills/wamala"
 refute "absent host is not created" test -d "${H2}/.cursor/skills"
 if printf '%s' "${OUT3}" | grep -q 'not detected on this machine, skipped'; then
   ok "absent hosts are reported as skipped, not failed"
@@ -202,16 +208,16 @@ fi
 # A name collision with an unrelated real directory must be left alone, not
 # replaced. Simulate one by pre-creating a directory named like one of ours.
 H3="$(new_home)"
-mkdir -p "${H3}/.claude/skills/tech-lead"
-printf -- '---\nname: tech-lead\ndescription: not ours\n---\n# Not ours\n' \
-  > "${H3}/.claude/skills/tech-lead/SKILL.md"
+mkdir -p "${H3}/.claude/skills/wamala"
+printf -- '---\nname: wamala\ndescription: not ours\n---\n# Not ours\n' \
+  > "${H3}/.claude/skills/wamala/SKILL.md"
 OUT4="$(as_run "${H3}" install --yes 2>&1)"
-if [ -L "${H3}/.claude/skills/tech-lead" ]; then
+if [ -L "${H3}/.claude/skills/wamala" ]; then
   bad "a colliding unrelated skill directory is never replaced"
 else
   ok "a colliding unrelated skill directory is never replaced"
 fi
-if grep -q 'not ours' "${H3}/.claude/skills/tech-lead/SKILL.md" 2>/dev/null; then
+if grep -q 'not ours' "${H3}/.claude/skills/wamala/SKILL.md" 2>/dev/null; then
   ok "the colliding skill's content is untouched"
 else
   bad "the colliding skill's content is untouched"
@@ -239,7 +245,7 @@ dirs = [".claude/skills", ".agents/skills", ".cursor/skills", ".kiro/skills"]
 targets = set()
 present = 0
 for rel in dirs:
-    path = os.path.join(home, rel, "tech-lead")
+    path = os.path.join(home, rel, "wamala")
     if not os.path.exists(path):
         continue
     present += 1
@@ -256,7 +262,7 @@ fi
 
 # --all-hosts must register every linkable host, so the covering set is testable.
 check "--all-hosts registers a host that is absent from the machine" \
-  test -L "${HDUP}/.copilot/skills/tech-lead"
+  test -L "${HDUP}/.copilot/skills/wamala"
 
 # Nested support skills travel inside their parent, so they are reachable
 # without a second top-level registration that would duplicate a name.
@@ -311,7 +317,7 @@ fi
 
 H5="$(new_home)"
 as_run "${H5}" install --yes >/dev/null 2>&1
-rm -f "${H5}/.agents/skills/tech-lead"
+rm -f "${H5}/.agents/skills/wamala"
 VERIFY5="$(as_run "${H5}" verify 2>&1 || true)"
 if printf '%s' "${VERIFY5}" | grep -q 'rerun install'; then
   ok "verify notices a missing host registration and says how to fix it"
@@ -333,7 +339,7 @@ env -i HOME="${H5B}" AGENT_SKILLS_HOME="${H5B}/.agent-skills" \
   AGENT_SKILLS_CONFIG_DIR="${H5B}/.config/agent-skills" \
   PATH="${H5B}/.local/bin:/usr/bin:/bin:/usr/local/bin:/opt/homebrew/bin" TERM=dumb \
   bash "${SRC_COPY}/bin/agent-skills" install --yes >/dev/null 2>&1
-if [ -L "${H5B}/.claude/skills/tech-lead" ]; then
+if [ -L "${H5B}/.claude/skills/wamala" ]; then
   ok "pre-condition: installed from a throwaway source copy"
 else
   bad "pre-condition: installed from a throwaway source copy"
@@ -345,9 +351,121 @@ if printf '%s' "${UNINST}" | grep -q 'removed 8 registration(s)'; then
 else
   bad "uninstall still recognises its registrations after the source tree is deleted" "${UNINST}"
 fi
-refute "the orphaned registration is removed" test -e "${H5B}/.claude/skills/tech-lead"
+refute "the orphaned registration is removed" test -e "${H5B}/.claude/skills/wamala"
 check "the unrelated user skill still survives an orphaned uninstall" \
   test -f "${H5B}/.claude/skills/unrelated-user-skill/SKILL.md"
+
+# ------------------------------------------------------------------------------
+section "skill rename migration (v0.37.0 front door -> wamala)"
+# ------------------------------------------------------------------------------
+# v0.37.0 registered the front door as `tech-lead`. Upgrading must end with one
+# `wamala` registration per host and no agent-skills-owned `tech-lead` left
+# behind, while anything named `tech-lead` that the user owns survives.
+H14="$(new_home)"
+OLD_SRC="${H14}/v0.37.0 source"
+mkdir -p "${OLD_SRC}"
+cp -R "${REPO_ROOT}/." "${OLD_SRC}/" 2>/dev/null || true
+rm -rf "${OLD_SRC}/.git" "${OLD_SRC}/.venv" "${OLD_SRC}/.cache"
+mv "${OLD_SRC}/skills/wamala" "${OLD_SRC}/skills/tech-lead"
+python3 - "${OLD_SRC}/skills/tech-lead/SKILL.md" <<'RENAME_PY'
+import sys
+
+path = sys.argv[1]
+with open(path, encoding="utf-8") as handle:
+    text = handle.read()
+with open(path, "w", encoding="utf-8") as handle:
+    handle.write(text.replace("\nname: wamala\n", "\nname: tech-lead\n", 1))
+RENAME_PY
+
+# Two things of the user's own that share the old name, in two different hosts:
+# a real directory, and a symlink into their own tree. Neither is ours.
+mkdir -p "${H14}/.claude/skills/tech-lead"
+printf -- '---\nname: tech-lead\ndescription: mine\n---\n# My own lead\n' \
+  > "${H14}/.claude/skills/tech-lead/SKILL.md"
+mkdir -p "${H14}/my-skills/tech-lead" "${H14}/.kiro/skills"
+printf -- '---\nname: tech-lead\ndescription: also mine\n---\n# Also mine\n' \
+  > "${H14}/my-skills/tech-lead/SKILL.md"
+ln -s "${H14}/my-skills/tech-lead" "${H14}/.kiro/skills/tech-lead"
+
+env -i HOME="${H14}" AGENT_SKILLS_HOME="${H14}/.agent-skills" \
+  AGENT_SKILLS_CONFIG_DIR="${H14}/.config/agent-skills" \
+  PATH="${H14}/.local/bin:/usr/bin:/bin:/usr/local/bin:/opt/homebrew/bin" TERM=dumb \
+  bash "${OLD_SRC}/bin/agent-skills" install --yes >/dev/null 2>&1
+
+check "pre-upgrade: the old front door is registered" \
+  test -L "${H14}/.agents/skills/tech-lead"
+check "pre-upgrade: the new name is not registered yet" \
+  no_entry "${H14}/.agents/skills/wamala"
+
+# `agent-skills update` changes the CONTENT of the installed clone, not its
+# path, so the upgrade is simulated the same way: same source directory, new
+# release inside it.
+rm -rf "${OLD_SRC}/skills" "${OLD_SRC}/lib" "${OLD_SRC}/bin" "${OLD_SRC}/scripts"
+cp -R "${REPO_ROOT}/skills" "${OLD_SRC}/skills"
+cp -R "${REPO_ROOT}/lib" "${OLD_SRC}/lib"
+cp -R "${REPO_ROOT}/bin" "${OLD_SRC}/bin"
+cp -R "${REPO_ROOT}/scripts" "${OLD_SRC}/scripts"
+cp "${REPO_ROOT}/VERSION" "${OLD_SRC}/VERSION"
+
+OUT14="$(as_run "${H14}" install --yes 2>&1)"
+check "upgrade registers wamala in the standard dir" test -L "${H14}/.agents/skills/wamala"
+check "the wamala registration resolves to a SKILL.md" \
+  test -f "${H14}/.agents/skills/wamala/SKILL.md"
+check "upgrade removes our own tech-lead registration" \
+  no_entry "${H14}/.agents/skills/tech-lead"
+if printf '%s' "${OUT14}" | grep -q 'no longer ships: tech-lead'; then
+  ok "upgrade reports which stale registration it removed"
+else
+  bad "upgrade reports which stale registration it removed" \
+    "$(printf '%s' "${OUT14}" | grep -i 'tech-lead' | head -3)"
+fi
+
+check "a user directory named tech-lead survives the upgrade" \
+  test -f "${H14}/.claude/skills/tech-lead/SKILL.md"
+if [ -L "${H14}/.claude/skills/tech-lead" ]; then
+  bad "the user's tech-lead directory was not replaced by a link"
+else
+  ok "the user's tech-lead directory was not replaced by a link"
+fi
+check "a user symlink named tech-lead survives the upgrade" \
+  test -L "${H14}/.kiro/skills/tech-lead"
+check "that user symlink still points into the user's own tree" \
+  test -f "${H14}/my-skills/tech-lead/SKILL.md"
+
+# Idempotency of the migration itself.
+BEFORE14="$(find "${H14}/.agents/skills" -maxdepth 1 | sort | wc -l | tr -d ' ')"
+OUT14B="$(as_run "${H14}" install --yes 2>&1)"
+AFTER14="$(find "${H14}/.agents/skills" -maxdepth 1 | sort | wc -l | tr -d ' ')"
+if [ "${BEFORE14}" = "${AFTER14}" ]; then
+  ok "re-running the upgrade adds nothing (${BEFORE14} entries before and after)"
+else
+  bad "re-running the upgrade adds nothing" "${BEFORE14} -> ${AFTER14}"
+fi
+WAMALA_COUNT="$(find "${H14}/.agents/skills" -maxdepth 1 -name wamala | wc -l | tr -d ' ')"
+if [ "${WAMALA_COUNT}" = "1" ]; then
+  ok "exactly one wamala registration exists after two upgrades"
+else
+  bad "exactly one wamala registration exists after two upgrades" "found ${WAMALA_COUNT}"
+fi
+if printf '%s' "${OUT14B}" | grep -q 'no longer ships'; then
+  bad "a second upgrade run re-reports a prune it already did"
+else
+  ok "a second upgrade run has nothing left to prune"
+fi
+check "verify passes after the migration" as_run "${H14}" verify
+
+# Verify must also SEE an unmigrated stale registration rather than ignore it.
+ln -s "${H14}/.agent-skills/skills/tech-lead" "${H14}/.agents/skills/tech-lead"
+VERIFY14="$(as_run "${H14}" verify 2>&1 || true)"
+if printf '%s' "${VERIFY14}" | grep -q 'stale registration(s) for renamed or removed skills'; then
+  ok "verify reports a stale registration for a renamed skill"
+else
+  bad "verify reports a stale registration for a renamed skill" \
+    "$(printf '%s' "${VERIFY14}" | tail -6)"
+fi
+as_run "${H14}" install --yes >/dev/null 2>&1
+check "install clears the stale registration verify complained about" \
+  no_entry "${H14}/.agents/skills/tech-lead"
 
 # ------------------------------------------------------------------------------
 section "version drift"
@@ -570,12 +688,12 @@ mkdir -p "${H9}/.claude/skills/keep-me"
 printf -- '---\nname: keep-me\ndescription: keep\n---\n# Keep\n' \
   > "${H9}/.claude/skills/keep-me/SKILL.md"
 as_run "${H9}" install --yes >/dev/null 2>&1
-check "pre-uninstall: our registration exists" test -L "${H9}/.claude/skills/tech-lead"
+check "pre-uninstall: our registration exists" test -L "${H9}/.claude/skills/wamala"
 as_run "${H9}" uninstall --yes >/dev/null 2>&1
-refute "uninstall removes our host registration" test -e "${H9}/.claude/skills/tech-lead"
+refute "uninstall removes our host registration" test -e "${H9}/.claude/skills/wamala"
 check "uninstall keeps an unrelated user skill" test -f "${H9}/.claude/skills/keep-me/SKILL.md"
 refute "uninstall removes the install manifest" test -f "${H9}/.agent-skills/install.json"
-check "uninstall leaves the source clone alone" test -f "${REPO_ROOT}/skills/tech-lead/SKILL.md"
+check "uninstall leaves the source clone alone" test -f "${REPO_ROOT}/skills/wamala/SKILL.md"
 
 # ------------------------------------------------------------------------------
 section "hosts report"
@@ -647,9 +765,9 @@ section "a foreign DANGLING link in a host directory is not adopted"
 # link to an unmounted volume was replaced, then deleted by uninstall.
 H12="$(new_home)"
 mkdir -p "${H12}/.claude/skills"
-ln -s "${H12}/not-mounted-volume/my-skills/tech-lead" "${H12}/.claude/skills/tech-lead"
+ln -s "${H12}/not-mounted-volume/my-skills/wamala" "${H12}/.claude/skills/wamala"
 as_run "${H12}" install --yes >/dev/null 2>&1
-FOREIGN_TARGET="$(readlink "${H12}/.claude/skills/tech-lead" 2>/dev/null || printf '')"
+FOREIGN_TARGET="$(readlink "${H12}/.claude/skills/wamala" 2>/dev/null || printf '')"
 case "${FOREIGN_TARGET}" in
   *not-mounted-volume*) ok "a dangling link we did not write still points where it did" ;;
   *) bad "a dangling link we did not write still points where it did" \
@@ -659,7 +777,7 @@ check "install still registered a skill it does own" \
   test -L "${H12}/.claude/skills/software-engineer"
 as_run "${H12}" uninstall --yes >/dev/null 2>&1
 check "uninstall did not delete the foreign dangling link" \
-  test -L "${H12}/.claude/skills/tech-lead"
+  test -L "${H12}/.claude/skills/wamala"
 
 # ------------------------------------------------------------------------------
 section "verify agrees with install about a name collision"
@@ -668,9 +786,9 @@ section "verify agrees with install about a name collision"
 # that preserved state a FAIL and exit 1, so verify could never go green without
 # deleting the user's own work.
 H13="$(new_home)"
-mkdir -p "${H13}/.claude/skills/tech-lead"
-printf -- '---\nname: tech-lead\n---\nmy own skill\n' \
-  > "${H13}/.claude/skills/tech-lead/SKILL.md"
+mkdir -p "${H13}/.claude/skills/wamala"
+printf -- '---\nname: wamala\n---\nmy own skill\n' \
+  > "${H13}/.claude/skills/wamala/SKILL.md"
 as_run "${H13}" install --yes >/dev/null 2>&1
 V13="$(as_run "${H13}" verify 2>&1)"
 V13_RC=$?
@@ -684,7 +802,7 @@ case "${V13}" in
   *) bad "verify says whose the preserved entry is" "${V13}" ;;
 esac
 check "the user's own skill file was never touched" \
-  test -f "${H13}/.claude/skills/tech-lead/SKILL.md"
+  test -f "${H13}/.claude/skills/wamala/SKILL.md"
 
 # ------------------------------------------------------------------------------
 section "an incomplete source tree fails loudly, not silently"

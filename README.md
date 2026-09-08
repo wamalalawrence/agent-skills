@@ -4,7 +4,7 @@ Reusable [Agent Skills](https://agentskills.io/) for software-engineering work �
 role-shaped workflows your AI assistant can load on demand so the same model produces
 senior-engineer, product-owner, tester, or reviewer output instead of generic answers.
 
-> **Status:** `0.37.0` — pre-1.0. Core skill set is shipped and stable enough for public use;
+> **Status:** `0.38.0` — pre-1.0. Core skill set is shipped and stable enough for public use;
 > interfaces may still evolve.
 
 New here? Start with the [quickstart](docs/quickstart.md), then read [starter
@@ -12,6 +12,27 @@ prompts](docs/starter-prompts.md), [examples](docs/examples/README.md), the
 [requirement-understanding workflow](docs/requirement-understanding.md) every skill runs before
 acting, [validation](docs/validation.md), [known limitations](docs/known-limitations.md), and the
 [versioning policy](docs/versioning.md).
+
+## Wamala
+
+Wamala is the front door to Agent Skills.
+
+Tell Wamala what needs to be done. It classifies the work, determines which specialist owns the
+next step, dispatches fresh-context agents, and keeps multi-step delivery aligned through
+persisted artifacts.
+
+```text
+Use Wamala to investigate why invoice search loses its filter on page 2.
+```
+
+```text
+Use Wamala to take this feature from requirement to delivery.
+```
+
+Wamala coordinates; the specialists do the work, and they keep their role-based names —
+[`software-engineer`][software-engineer], [`product-owner`][product-owner],
+[`manual-tester`][manual-tester], and the rest. Invoking any of them directly stays first-class
+and is faster whenever you already know the owner.
 
 ## Why Skills
 
@@ -37,7 +58,7 @@ That is the whole local setup. It installs `agent-skills` on the **machine**, re
 with every supported agent host it finds, and makes the runtime invocable from anywhere:
 
 ```text
-Agent Skills v0.37.0 installed globally.
+Agent Skills v0.38.0 installed globally.
 
 Skills are available to:
   [x] Claude Code (~/.claude/skills)
@@ -104,7 +125,7 @@ npx skills add wamalalawrence/agent-skills
 
 ## Updating
 
-Releases are git tags (`v0.36.0`, `v0.37.0`, …) on this repo. Two commands cover the common case;
+Releases are git tags (`v0.37.0`, `v0.38.0`, …) on this repo. Two commands cover the common case;
 full details, cloud-agent updates, and drift detection are in
 [docs/updates.md](docs/updates.md).
 
@@ -125,22 +146,22 @@ This repository currently contains **eight top-level skills** and **two nested s
 top-level skills are intended to be invoked directly. The nested support skills are loaded by the
 engineering workflow when investigation or review needs a more specific checklist.
 
-New here, or unsure which skill fits? Invoke [`tech-lead`][tech-lead] and describe the work — it
-picks the owner and dispatches. Direct invocation stays first-class and is faster whenever you
-already know the answer.
+New here, or unsure which skill fits? Invoke [`wamala`][wamala] and describe the work — it picks
+the owner and dispatches. Direct invocation stays first-class and is faster whenever you already
+know the answer.
 
-### [`tech-lead`][tech-lead] (top-level)
+### [`wamala`][wamala] (top-level)
 
 - Key collaborators: every skill below — it dispatches to them and implements nothing itself.
-- Purpose: the **single entry point**. Classifies any request, runs the
-  requirement-understanding gate, picks the one skill that owns the next step, and dispatches a
-  **fresh empty-context agent** to do it. Drives multi-specialist chains (refine, implement,
-  test), verifying each step from persisted artifacts before advancing. Dispatches; never
-  implements, reviews, refines, or tests, so the depth-cap review bound stays intact.
+- Purpose: the **front door**. Classifies any request, runs the requirement-understanding gate,
+  picks the one skill that owns the next step, and dispatches a **fresh empty-context agent** to
+  do it. Drives multi-specialist chains (refine, implement, test), verifying each step from
+  persisted artifacts before advancing. Dispatches; never implements, reviews, refines, or tests,
+  so the depth-cap review bound stays intact.
 - Sample command:
 
   ```text
-  Use the tech-lead skill: invoice search drops the status filter on page 2.
+  Use Wamala to investigate why invoice search drops the status filter on page 2.
   ```
 
 `issue-investigator` and `code-reviewer` are currently nested under `software-engineer` because they
@@ -217,7 +238,7 @@ usage shows they are useful independently.
 - Purpose: reviews diffs against issue context, evidence packs, quality risks, and
   definition of done.
 
-[tech-lead]: skills/tech-lead/
+[wamala]: skills/wamala/
 [delivery-planner]: skills/delivery-planner/
 [delivery-runner]: skills/delivery-runner/
 [software-engineer]: skills/software-engineer/
