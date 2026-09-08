@@ -6,6 +6,191 @@ All notable project changes should be recorded here.
 
 - No unreleased changes.
 
+## 0.37.0 - Install Once, Use Everywhere
+
+Minor release, and the largest structural change since the skills themselves. `agent-skills` stops
+being a thing you configure *around each workspace* and becomes a thing you install *once on a
+machine*. It also closes the three items
+[the v0.36.0 plan](docs/plans/2026-09-learning-voice-and-router.md) deferred pending a decision:
+keychain credentials, the duplicated config surface, and splitting `setup.init`.
+
+Designed in
+[`docs/plans/2026-09-global-install-and-access-resolver.md`](docs/plans/2026-09-global-install-and-access-resolver.md),
+including what was rejected and why.
+
+**The user-facing model:**
+
+```text
+Install once. Use from any local project. Configure external access only when needed.
+```
+
+### Added
+
+- **Machine-global installation.** `./setup.init` now installs to `AGENT_SKILLS_HOME`
+  (default `~/.agent-skills`) and registers the skills with every supported agent host on the
+  machine. Enter any repository — one you already have or one you clone next year — and the skills
+  are there. No per-workspace setup, no `.skills` symlink, no sibling `agent-skills` checkout.
+- **[`bin/agent-skills`](bin/agent-skills) — one stable entry point** resolvable from any directory.
+  `install`, `verify`, `doctor`, `update`, `check-updates`, `uninstall`, `hosts`, `migrate`,
+  `start-task`, `finish-task`, `project`, `access`, plus `memory`, `knowledge`, `blackboard`,
+  `org-memory`, `telemetry`, `plan-next`, `locate-config`, `auth-preflight`, `promote-rules`,
+  `outcome`, and `github-access`. Every helper is reachable through it, so no skill has to guess
+  between `scripts/`, `agent-skills/scripts/`, and `.agent-skills/scripts/` — the v0.36 instruction
+  was to try all three, which only worked when the clone happened to sit beside the current
+  directory.
+- **[`lib/hosts.registry`](lib/hosts.registry) — data-driven host adapters.** Nine hosts, each one
+  row: Claude Code, the vendor-neutral `~/.agents/skills` directory, Codex, Cursor, GitHub Copilot,
+  Kiro, JetBrains AI Assistant, Windsurf, Continue. Adding a host is one line, which matters
+  because Agent Skills support is still moving.
+- **[`scripts/access.py`](scripts/access.py) — one generic access resolver**, documented in
+  [`docs/access-resolution.md`](docs/access-resolution.md). Nothing about Jira, Confluence, Sonar,
+  GitHub, a database, or an internal API is compiled in: the caller supplies the service name and
+  the field names it needs, so a skill can ask for a service that did not exist when the installer
+  ran. Credentials are **identities, not projects** — `work-jira`, `personal-github`,
+  `production-readonly-db` — so several repositories share one and one repository can use several.
+- **OS-native secret storage.** macOS Keychain, Linux Secret Service, then an explicit
+  permission-restricted file fallback that is always reported, never silently substituted for a
+  store that previously worked, and deliberately not encrypted — an encrypted file beside its own
+  key would be theatre.
+- **[`scripts/project-context.py`](scripts/project-context.py) — progressive inference.** Git root,
+  remote, base branch, stack, build system, package manager, commands, and CI, each reported with
+  the source it came from. Anything that could not be established safely lands in
+  `needs_confirmation` rather than being asserted.
+- **`agent-skills migrate`** — read-only guidance off a pre-v0.37.0 workspace, plus an opt-in
+  `--remove-obsolete` that removes only `.skills` and `.agent-skills.lock`.
+- **`agent-skills uninstall`** — removes only paths this project owns. Skills you installed
+  yourself survive, the source clone is untouched, and secrets in an OS keychain are never removed
+  implicitly.
+- **`AGENT_SKILLS_STRICT_BINDING`** — for a machine holding several customers' identities, requires
+  an explicit binding rather than using a lone compatible one.
+- **[`docs/security-review-v0.37.0.md`](docs/security-review-v0.37.0.md)** — a recorded,
+  threat-by-threat review with each item labelled probed, reasoned about, or unproven.
+- **Three new test suites**: [`scripts/test-global-install.sh`](scripts/test-global-install.sh)
+  (78 assertions), [`scripts/test-access-resolution.sh`](scripts/test-access-resolution.sh)
+  (77 assertions), and [`scripts/test-release-readiness.sh`](scripts/test-release-readiness.sh)
+  (59 checks, including a real upgrade from the previous release tag).
+- **Four new evals**: a zero-config repository, an unknown future service, a repository that tries
+  to claim credentials it was not given, and legacy workspace migration.
+
+### Changed
+
+- **Setup asks for nothing.** No Jira, Confluence, Sonar, GitHub, database, cloud, or API
+  credential; no project keys; no organisation; no deployment environments; no list of repositories
+  you might work on. Installation, project configuration, and authentication are three separate
+  concerns, and `setup.init` now owns only the first. CI asserts that a clean install mentions no
+  credential and writes no credential state.
+- **A repository with no configuration is a normal case.** Mode detection used to end in a hard
+  stop when neither `${WORKSPACE_ROOT}/.env` nor a committed `.agent-skills.yml` existed. It now
+  ends in `global` mode with inference only, so planning, engineering, review, and testing all work
+  on a fresh clone. The agent stops only when a specific task needs a specific fact that cannot be
+  inferred safely.
+- **`setup.init` is a thin front-end** over [`lib/install.sh`](lib/install.sh) rather than growing a
+  second large block of logic.
+- **Skill-source resolution order is now total** — see
+  [`docs/skill-source-resolution.md`](docs/skill-source-resolution.md). The old "two sources match
+  and none is configured, stop and ask" rule is **removed**: every rule now has strictly higher
+  precedence than the next, so there is always a first match and nothing to ask about. Keeping a
+  rule that can no longer fire would teach agents to stop when they should proceed. Drift detection,
+  which was always the valuable part, is kept and moved onto the install manifest.
+- **All ten `SKILL.md` preflight blocks** call `agent-skills start-task` / `agent-skills finish-task`.
+- **The cache root anchors at the git root** rather than `$PWD` when there is no legacy workspace, so
+  running a skill from a nested directory no longer scatters `.cache` folders through the tree.
+- **`doctor` reports the global install, execution mode, and credential-store backend** — and still
+  prints no secret value.
+- **Hook templates call the global command**, so there is no clone path to substitute.
+- **`docs/auth-discovery.md` is now framed as a service-specific example** on top of the generic
+  resolver rather than as the architecture. Jira and Confluence remain examples.
+- **VS Code and GitHub Copilot have native skill discovery.** The prior documentation said they did
+  not; that is now obsolete and corrected.
+- **`.env.example` is marked as the legacy workspace template.** It still works and is still
+  discovered; it is no longer the primary configuration surface.
+
+### Security
+
+- **A committed file can never select a credential identity.** `.agent-skills.yml` is checked into a
+  repository, so from the resolver's point of view it is attacker-controlled. It may declare *what*
+  a service is; its `credentials:` block is never read. `.agent-skills.local.yml` is honoured only
+  when **git confirms it is untracked**, verified rather than inferred from the filename. Probed
+  with two identities present so nothing could be auto-selected: the committed request yielded
+  `needs-setup`, and no secret was reached.
+- **Secrets leave plaintext `.env` behind.** A credential that is genuinely needed goes to the OS
+  credential store. Metadata — profile name, service, resource, account, field names, timestamps —
+  lives in user configuration at mode `0600`; values never do.
+- **No secret in any output, in any mode.** Verified with a canary value across `profiles`,
+  `profiles --json`, `backend`, `backend --json`, `check-permissions`, `resolve`, `resolve --json`,
+  and the metadata file.
+- **No secret is ever requested in conversation.** Hidden terminal input, the OS store flow, OAuth
+  or MCP, or a session environment variable. With no terminal the resolver refuses and explains why
+  rather than asking an agent to relay a value.
+- **Resolution is not authorization.** Every result restates it, because finding a credential is
+  exactly the moment the distinction gets lost. The
+  [destructive-action safety policy](docs/destructive-action-safety.md) is unchanged.
+- **The installer never touches what it does not own.** Only symlinks resolving into the install root
+  are created, replaced, or removed. An attacker-planted symlink at a name we register is left
+  pointing where it was and reported; an unmanaged path at a canonical location makes the install
+  refuse rather than replace it.
+- **Names are rejected, not sanitised.** Eight hostile profile and service names were probed and
+  refused, with no injection artifact created. One transformation is applied and now documented
+  precisely: case-folding, so `Work-Jira` and `work-jira` are one identity.
+- **One finding raised during the review and resolved**, plus **one residual risk accepted and
+  documented** with a control. Both are recorded in the security review rather than left implicit.
+
+### Fixed
+
+- **`setup.init` discarded an inherited `WORKSPACE_ROOT`** before mode detection ran, so
+  `WORKSPACE_ROOT=... ./setup.init --update` silently switched a legacy user to a global install and
+  wrote into their real home directory. It also made the credential-preservation regression test
+  pass vacuously, because the managed block was never regenerated.
+- **Ownership of a host registration was decided by fully resolving the symlink**, so once the source
+  clone was moved or deleted, `uninstall` no longer recognised its own links and orphaned them.
+  Ownership now also checks the literal link target, which is what survives a broken chain.
+- **A dangling symlink at a managed path could not be repaired**, because it was treated as a
+  conflict. A dangling link holds no data, so it is now always replaceable.
+
+### Telemetry review
+
+Required by the [release checklist](docs/release-checklist.md#telemetry-review). The report, verbatim:
+
+```json
+{
+  "total_events": 2,
+  "skills": {
+    "software-engineer": { "completed": 1 },
+    "manual-tester": { "completed": 1 }
+  },
+  "unknown_events": {}
+}
+```
+
+**Two events, unchanged from the v0.36.0 baseline of two.** The counters did not move, so **no
+change in this release traces to a telemetry finding.** Stated rather than glossed: an unread
+counter is worse than no counter, because it looks like evidence. The baseline for the next release
+remains 2 events, and the question it answers is whether the lifecycle wrappers are running at all.
+
+### Migration
+
+Existing installs keep working. The resolver still discovers a legacy `.env`, `.env.local`, and
+`.jira-config.yml`; `./setup.init --legacy-workspace` still writes the old layout; and an inherited
+`WORKSPACE_ROOT` pointing at a directory with a `.env` still selects it.
+
+```bash
+cd agent-skills && git pull && ./setup.init
+agent-skills verify
+agent-skills migrate
+```
+
+Nothing is deleted, and no secret moves without an explicit request.
+`agent-skills access import-legacy` is read-only until `--apply`. Full path:
+[installation.md](docs/installation.md#upgrading-from-v036x-workspace-installation).
+
+### Cloud and remote agents
+
+Unchanged, and the distinction is now stated plainly rather than blurred: a cloud agent runs on a
+machine that cannot read your home directory, so the global install does not reach it. Those
+environments continue to use the in-repo mechanism — a committed `.agent-skills.yml` plus vendored or
+referenced skills. Cursor's Cloud Agents are the one partial exception, for `~/.cursor/skills` only,
+with sync explicitly enabled.
+
 ## 0.36.0 - Repo-Resident Knowledge, Human Voice, And A Single Entry Point
 
 Minor release, and the largest since the Company Brain landed. It answers four questions:

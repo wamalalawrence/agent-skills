@@ -16,7 +16,7 @@ compatibility: >-
   .agent-skills.yml). See docs/execution-modes.md.
 metadata:
   author: wamalalawrence
-  version: "0.36.0"
+  version: "0.37.0"
   homepage: "https://github.com/wamalalawrence/agent-skills"
 argument-hint: "<what to validate — a story, a build, or a defect to retest>"
 user-invocable: true

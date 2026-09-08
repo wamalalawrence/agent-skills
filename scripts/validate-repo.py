@@ -189,6 +189,7 @@ REQUIRED_FILES = [
     "eval-runs/v0.33.0/summary.md",
     "eval-runs/v0.33.1/summary.md",
     "eval-runs/v0.36.0/summary.md",
+    "eval-runs/v0.37.0/summary.md",
     "evals/code-reviewer-verdict-gating.md",
     "scripts/test-setup-update-preserves-credentials.sh",
 ]

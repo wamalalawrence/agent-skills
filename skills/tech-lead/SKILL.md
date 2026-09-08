@@ -22,7 +22,7 @@ compatibility: >-
   docs/execution-modes.md.
 metadata:
   author: wamalalawrence
-  version: "0.36.0"
+  version: "0.37.0"
   homepage: "https://github.com/wamalalawrence/agent-skills"
 argument-hint: "<the request — a ticket key, a PR link, a bug report, or plain prose>"
 user-invocable: true

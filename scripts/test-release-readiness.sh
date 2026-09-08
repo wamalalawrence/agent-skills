@@ -320,7 +320,13 @@ import sys
 
 pattern = re.compile(r"(?:/Users/[^\s)\"']+|/home/[a-z][^\s)\"']*)")
 skip_prefixes = ("eval-runs/", ".claude/")
-skip_files = {"CHANGELOG.md", "scripts/validate-repo.py"}
+# Both of these files define the pattern being searched for, so they match
+# themselves. The repo validator allowlists itself for the same reason.
+skip_files = {
+    "CHANGELOG.md",
+    "scripts/validate-repo.py",
+    "scripts/test-release-readiness.sh",
+}
 placeholders = ("you/work", "/Users/you", "/home/you")
 tracked = subprocess.run(
     ["git", "ls-files"], stdout=subprocess.PIPE, text=True, check=True
