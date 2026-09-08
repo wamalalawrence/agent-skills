@@ -47,7 +47,8 @@ for what the feature does.
   shell command.
 - **`ALLOW` / `ASK` / `DENY`**, each carrying a rule id, a risk category, a reason, the resolved
   target, and a **safe alternative**. 50 rules, 30 of them hard floor. `agent-skills guard rules`
-  prints the catalogue with each rule's effective outcome under the current configuration;
+  prints the catalogue with each rule's effective outcome under the current configuration
+  (54 rules, 31 of them hard floor);
   `agent-skills guard explain` answers "why was this blocked?" for a human.
 - **Structural command decomposition** rather than pattern matching. `&&`, `||`, `;`, `&`,
   newline, pipelines, `$( )`, backticks, `<( )`, subshells, brace groups, `VAR=x` prefixes,
@@ -84,8 +85,15 @@ for what the feature does.
   reports `SUSPICIOUS_INSTRUCTION_SHAPED_CONTENT` — evidence for a reviewer — and deliberately
   does not claim to have found an attack.
 - **`agent-skills guard run`**, wrapper mode for hosts with no pre-execution hook.
-- **[`scripts/test-guard.sh`](scripts/test-guard.sh)**: 104 checks over a 220-case corpus, all
+- **[`scripts/test-guard.sh`](scripts/test-guard.sh)**: 108 checks over a 248-case corpus, all
   four host dialects, the trust model, redaction, and seven mutation probes.
+- A **red-team corpus**. After the first four corpora were green, the guard was attacked with 43
+  techniques nobody had written a test for. Thirteen reached `ALLOW` on the first attempt: a
+  program named by a variable or a substitution, a multi-call binary applet, a here-string, a
+  script or SQL statement arriving from a file or a pipe, `find -delete`, `perl -e 'unlink'`,
+  `__import__('shutil').rmtree`, `truncate` over a system file, and a download whose output file
+  is executed by a later segment of the same command line. All thirteen are fixed, four rules
+  were added for them, and all 28 are permanent regression cases.
 
 ### Changed
 

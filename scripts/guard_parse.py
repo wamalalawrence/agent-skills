@@ -91,9 +91,13 @@ PASSTHROUGH_WITH_OPTIONS = {
 # loop stops on it and mistakes the duration for the command.
 PASSTHROUGH_SKIP_POSITIONAL = {"timeout": 1}
 
+# Multi-call binaries: the applet named after them is the real command, so
+# `busybox rm -rf /` is a recursive delete rather than a `busybox` invocation.
+MULTICALL = {"busybox", "toybox"}
+
 # Interpreters that run a shell string given after `-c`. The string is re-parsed
 # as shell, which is what makes `bash -c 'rm -rf /'` visible.
-SHELL_INTERPRETERS = {"sh", "bash", "zsh", "dash", "ksh", "ash", "busybox"}
+SHELL_INTERPRETERS = {"sh", "bash", "zsh", "dash", "ksh", "ash"}
 
 # Interpreters that run code in a non-shell language. The body is NOT parsed as
 # shell; it is handed to the rules as opaque inline source, and the rules match
@@ -129,6 +133,8 @@ class SimpleCommand:
     quoted_argv: list[bool] = field(default_factory=list)
     inline_code: str | None = None
     inline_language: str | None = None
+    unresolved_name: bool = False
+    here_string: str | None = None
 
     @property
     def name(self) -> str:
@@ -352,10 +358,17 @@ def tokenize(text: str) -> list[tuple[str, str, bool]]:
             index += 1
             continue
 
-        two = text[index:index + 2]
-        if two in ("&&", "||", "|&", ">>", "2>", "&>"):
+        three = text[index:index + 3]
+        if three == "<<<":
             flush()
-            kind = "redirect" if two in (">>", "2>", "&>") else "op"
+            tokens.append(("redirect", "<<<", False))
+            index += 3
+            continue
+
+        two = text[index:index + 2]
+        if two in ("&&", "||", "|&", ">>", "2>", "&>", "<<"):
+            flush()
+            kind = "redirect" if two in (">>", "2>", "&>", "<<") else "op"
             tokens.append((kind, two, False))
             index += 2
             continue
@@ -401,6 +414,9 @@ def _strip_wrappers(argv: list[str], quoted: list[bool]) -> tuple[list[str], lis
             index += 1
             continue
         head = token.rsplit("/", 1)[-1]
+        if head in MULTICALL:
+            index += 1
+            continue
         if head in PASSTHROUGH_WITH_OPTIONS:
             index += 1
             flags = PASSTHROUGH_WITH_OPTIONS[head]
@@ -468,6 +484,9 @@ def _split_on_operators(
             continue
         if kind == "subst":
             substitutions.append(text)
+            # Position matters: a substitution in the first slot of a command is
+            # the program name, and the guard cannot see what it will be.
+            current.append(("subst-here", text, quoted))
             continue
         current.append((kind, text, quoted))
 
@@ -481,10 +500,20 @@ def _build_simple_command(
     words: list[str] = []
     quoted: list[bool] = []
     redirects: list[str] = []
+    here_string: str | None = None
+    name_from_substitution = False
     expecting_redirect: str | bool = False
     for kind, text, is_quoted in run:
+        if kind == "subst-here":
+            if not words:
+                name_from_substitution = True
+            continue
         if kind == "redirect":
             expecting_redirect = text
+            continue
+        if expecting_redirect == "<<<":
+            here_string = text
+            expecting_redirect = False
             continue
         if expecting_redirect:
             # The operator is kept with the target: `< input.txt` reads and
@@ -510,6 +539,9 @@ def _build_simple_command(
             argv=[], raw=" ".join(words), env=env, redirects=redirects,
             origin=origin, depth=depth,
         )
+    unresolved = name_from_substitution or (
+        bool(argv) and ("$" in argv[0] or argv[0].startswith("-"))
+    )
     return SimpleCommand(
         argv=argv,
         raw=" ".join(words),
@@ -518,12 +550,16 @@ def _build_simple_command(
         origin=origin,
         depth=depth,
         quoted_argv=quoted,
+        unresolved_name=unresolved,
+        here_string=here_string,
     )
 
 
 def _nested_shell_body(command: SimpleCommand) -> str | None:
     """The shell string a nested interpreter would run, if there is one."""
     name = command.name
+    if name in ("$SHELL", "${SHELL}"):
+        name = "sh"
     if name not in SHELL_INTERPRETERS:
         return None
     args = command.args
@@ -697,6 +733,8 @@ def parse(command: str) -> ParsedCommand:
                 nested = _nested_shell_body(built)
                 if nested is not None:
                     queue.append((nested, "%s -c" % built.name, depth + 1))
+                if built.here_string and built.name in SHELL_INTERPRETERS:
+                    queue.append((built.here_string, "%s here-string" % built.name, depth + 1))
                 remote = _remote_shell_body(built)
                 if remote:
                     queue.append((remote, "ssh remote", depth + 1))

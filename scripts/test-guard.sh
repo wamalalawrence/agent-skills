@@ -114,7 +114,7 @@ workspace = sys.argv[1]
 # machine. It must not exist for the test to mean anything about resolution.
 failures = []
 counts = {}
-for group in ("DANGEROUS", "ASKABLE", "BENIGN", "BYPASS"):
+for group in ("DANGEROUS", "ASKABLE", "BENIGN", "BYPASS", "REDTEAM"):
     cases = getattr(corpus, group)
     counts[group] = len(cases)
     for command, expected, rule, label in cases:

@@ -42,9 +42,9 @@ bash scripts/test-release-readiness.sh
 | `test-release-readiness.sh` overall | pass — 78 checks |
 
 Warning count is unchanged from `v0.41.0`: 71 before, 71 after. One warning appeared during
-development — the validator's ticket-key regex reading the character class `a-zA-Z0-9+.-` inside
-a redaction pattern as a tracker key. It was removed by writing `\d` instead of `0-9`, which is
-clearer anyway. No new warning category, and no warning suppressed.
+development — the validator's ticket-key regex reading a digit range inside a redaction
+pattern's character class as a tracker key. It was removed by writing the range as `\d`,
+which is clearer anyway. No new warning category, and no warning suppressed.
 
 ## Execution Guard corpus
 
@@ -59,9 +59,10 @@ has to be reviewable in a diff.
 | `ASKABLE` | 21 | every case `ASK`, with the named rule | pass |
 | `BENIGN` | 77 | every case `ALLOW` | pass |
 | `BYPASS` | 40 | none reaches `ALLOW`; most reach `DENY` | pass |
-| **total** | **220** | | **0 mismatches** |
+| `REDTEAM` | 28 | none reaches `ALLOW` | pass |
+| **total** | **248** | | **0 mismatches** |
 
-Catalogue: **50 rules, 30 of them hard floor.** Every rule carries a summary, a risk category,
+Catalogue: **54 rules, 31 of them hard floor.** Every rule carries a summary, a risk category,
 and a safe alternative; section 13 asserts all three and fails on an empty catalogue.
 
 ### The false-positive corpus is the load-bearing half
@@ -98,9 +99,32 @@ A textual matcher fails all three, and would fire on this file.
 | SQL | lowercase, mixed case, padded, inside a nested shell |
 | parse failure | unterminated quote around a dangerous command, around a benign one, unterminated substitution |
 
-Known gaps, recorded honestly rather than omitted: aliases and shell functions (not knowable
-from the string), a script that assembles its command at runtime, a binary whose name says
-nothing about what it does, and time-of-check/time-of-use. All four are in
+### Red-team pass
+
+The four corpora above are what the guard was *known* to handle. A separate pass attacked it with
+43 techniques nobody had written a test for. **Thirteen reached `ALLOW` on the first attempt**,
+in five families:
+
+| Family | Examples that got through |
+| --- | --- |
+| the program itself is hidden | `$SHELL -c '…'`, `` `echo rm` -rf / ``, `busybox rm -rf /` |
+| the payload arrives out of band | `bash <<< '…'`, `bash < script.sh`, `psql -f x.sql`, `cat drop.sql \| psql` |
+| deletion by another route | `find / -delete`, `perl -e 'unlink glob "/*"'`, `__import__('shutil').rmtree('/')`, `truncate -s 0 /etc/passwd` |
+| fetch and execution separated | `curl URL -o /tmp/s && sh /tmp/s` |
+| — | (quoting, path spellings, and exfiltration variants were already covered) |
+
+All thirteen are fixed. Four new rules were added — `EXEC_UNRESOLVED_COMMAND`,
+`EXEC_OPAQUE_INPUT`, `DB_OPAQUE_STATEMENT`, and `FETCH_THEN_EXECUTE` — and the parser gained
+here-strings, multi-call binaries, and detection of a command whose program name it cannot read.
+After the fixes, **0 of 43 reach `ALLOW`**, the existing corpora are unchanged, and p95 is
+unmoved at 0.27 ms.
+
+All 28 are now permanent regression cases in the `REDTEAM` corpus. A bypass found once and fixed
+once but never written down comes back at the next refactor.
+
+Known gaps that remain, recorded rather than omitted: aliases and shell functions (not knowable
+from the command string), a script that assembles its command at runtime, a binary whose name
+says nothing about what it does, and time-of-check/time-of-use. All four are in
 [Known limitations](../../docs/execution-guard.md#known-limitations).
 
 ## Mutation probes

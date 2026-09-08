@@ -243,6 +243,10 @@ def evaluate_shell(
                 findings.extend(check(simple, workspace, context))
             findings.extend(gr.check_upload(simple, workspace, context))
 
+    # Checks that need the whole command line rather than one pipeline: a fetch
+    # in one segment whose output another segment executes.
+    findings.extend(gr.check_fetch_then_execute(parsed.commands, workspace, context))
+
     if parsed.unparsed:
         # An unparseable command must never resolve to ALLOW by omission. The
         # crude signature scan can escalate it to DENY; otherwise it is an ASK,

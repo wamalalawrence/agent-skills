@@ -380,6 +380,27 @@ PKG_UNPINNED_REMOTE = _rule(
 )
 
 # --- parse and policy ------------------------------------------------------
+EXEC_UNRESOLVED_COMMAND = _rule(
+    "EXEC_UNRESOLVED_COMMAND", ASK, "parse",
+    "the program being run could not be identified",
+    "Name the program directly rather than through a variable or a substitution.",
+)
+EXEC_OPAQUE_INPUT = _rule(
+    "EXEC_OPAQUE_INPUT", ASK, "remote-execution",
+    "an interpreter or database client is fed from a source this check cannot read",
+    "Read the file first, then run it deliberately — `cat <file>` before `sh <file>`.",
+)
+DB_OPAQUE_STATEMENT = _rule(
+    "DB_OPAQUE_STATEMENT", ASK, "database",
+    "a database client was given statements this check cannot see",
+    "Print the file first, or pass the statement inline so it can be reviewed.",
+)
+FETCH_THEN_EXECUTE = _rule(
+    "FETCH_THEN_EXECUTE", DENY, "remote-execution",
+    "content is downloaded to a file and executed in the same command",
+    "Download, read the file, then run it as a separate deliberate step.",
+    floor=True,
+)
 PARSE_UNRESOLVED = _rule(
     "PARSE_UNRESOLVED", ASK, "parse",
     "the command could not be fully decomposed, so its effect is not known",
@@ -583,6 +604,34 @@ def check_delete(command, workspace, context) -> list[Finding]:
     return findings
 
 
+def check_find_delete(command, workspace, context) -> list[Finding]:
+    """`find / -delete` removes everything it matches without an `-exec`."""
+    if command.name != "find" or not _has_flag(command, "-delete"):
+        return []
+    roots = [arg for arg in _positional(command) if gp.path_like(arg)] or ["."]
+    targets = [gp.classify(root, workspace) for root in roots]
+    worst = gp.worst(targets)
+    if worst is None:
+        return []
+    if worst.classification in (gp.SYSTEM_ROOT, gp.HOME_ROOT):
+        return [Finding(
+            FS_ROOT_RECURSIVE_DELETE, DENY,
+            "find -delete walks %s" % worst.resolved, worst.display,
+        )]
+    if worst.classification == gp.OUTSIDE_WORKSPACE:
+        return [Finding(
+            FS_OUTSIDE_WORKSPACE_DELETE, DENY,
+            "find -delete walks %s, outside the repository" % worst.resolved,
+            worst.display,
+        )]
+    if worst.classification != gp.WORKSPACE_DISPOSABLE:
+        return [Finding(
+            FS_WORKSPACE_RECURSIVE_DELETE, ASK,
+            "find -delete removes every match under %s" % worst.raw, worst.display,
+        )]
+    return []
+
+
 def check_system_write(command, workspace, context) -> list[Finding]:
     findings: list[Finding] = []
     for redirect in command.redirects:
@@ -602,7 +651,7 @@ def check_system_write(command, workspace, context) -> list[Finding]:
                 "redirection writes to %s, a home or credential path" % target.resolved,
                 target.display,
             ))
-    if command.name in ("mv", "cp", "install", "ln", "dd", "tee"):
+    if command.name in ("mv", "cp", "install", "ln", "dd", "tee", "truncate"):
         for target in _targets(command, workspace)[1:] or _targets(command, workspace):
             if target.classification == gp.SYSTEM_ROOT:
                 findings.append(Finding(
@@ -759,7 +808,22 @@ def check_database(command, workspace, context) -> list[Finding]:
                 if re.search(r"\b(?:select|insert|update|delete|drop|truncate)\b", arg, re.I):
                     statement = arg
                     break
+        if command.here_string:
+            statement = statement or command.here_string
         findings.extend(sql_findings(statement, "%s statement" % name))
+        if not statement:
+            # The statements are in a file, on stdin, or arriving through a
+            # pipe. The guard cannot read them, and a database client whose
+            # input it cannot see is not an ALLOW.
+            from_file = _flag_value(command, "-f", "--file") or _has_flag(command, "-f")
+            from_stdin = any(
+                red.startswith("<") for red in command.redirects
+            ) or command.origin == "pipeline-stage"
+            if from_file or from_stdin:
+                findings.append(Finding(
+                    DB_OPAQUE_STATEMENT, ASK,
+                    "%s runs statements this check cannot see" % name,
+                ))
     if name in ("flyway", "liquibase") or (
         name in ("alembic", "rails", "manage.py", "artisan", "sequelize", "knex", "prisma")
         and any("migrat" in arg for arg in command.args)
@@ -1186,11 +1250,11 @@ def check_inline_code(command, workspace, context) -> list[Finding]:
             "%s -c body downloads content and executes it" % language,
         ))
     destructive = re.search(
-        r"(?:shutil\.rmtree|os\.remove|os\.unlink|rmSync|unlinkSync|"
-        r"fs\.rm\b|FileUtils\.rm_rf|File\.delete)",
+        r"(?:\brmtree\b|os\.remove|os\.unlink|\bunlink\b|rmSync|unlinkSync|"
+        r"fs\.rm\b|FileUtils\.rm_rf|File\.delete|\bremove_tree\b)",
         body,
     )
-    if destructive and re.search(r"['\"](?:/|~|\$HOME)", body):
+    if destructive and re.search(r"""['"](?:/|~|\$HOME)""", body):
         findings.append(Finding(
             FS_ROOT_RECURSIVE_DELETE, DENY,
             "%s -c body deletes an absolute path recursively" % language,
@@ -1235,6 +1299,38 @@ def check_package_manager(command, workspace, context) -> list[Finding]:
     return []
 
 
+def check_opaque_input(command, workspace, context) -> list[Finding]:
+    """`bash < script.sh` — the program is known, its input is not."""
+    if command.name not in INTERPRETERS and command.name not in SQL_CLIENTS:
+        return []
+    if command.inline_code:
+        return []
+    reads = [red for red in command.redirects if red.startswith("<")]
+    if not reads:
+        return []
+    source = reads[0].partition(" ")[2] or reads[0]
+    return [Finding(
+        EXEC_OPAQUE_INPUT, ASK,
+        "%s runs whatever %s contains" % (command.name, source), source,
+    )]
+
+
+def check_unresolved_command(command, workspace, context) -> list[Finding]:
+    """A command whose program name the guard could not read.
+
+    `$SHELL -c '…'` and `` `echo rm` -rf / `` both hide the program. The parse
+    produced a command starting with a flag, which matched no rule and therefore
+    read as ALLOW — a silent bypass rather than a visible unknown.
+    """
+    if not command.unresolved_name:
+        return []
+    return [Finding(
+        EXEC_UNRESOLVED_COMMAND, ASK,
+        "the program in %r is named by a variable or a substitution"
+        % (command.raw[:80] or "this command"),
+    )]
+
+
 def check_eval(command, workspace, context) -> list[Finding]:
     if command.name == "eval":
         return [Finding(REMOTE_EXEC_EVAL, ASK, "eval executes a constructed string")]
@@ -1251,6 +1347,9 @@ def check_eval(command, workspace, context) -> list[Finding]:
 
 SINGLE_COMMAND_CHECKS = (
     check_delete,
+    check_find_delete,
+    check_opaque_input,
+    check_unresolved_command,
     check_system_write,
     check_disk,
     check_database,
@@ -1286,6 +1385,9 @@ def _is_decoder(command) -> bool:
 
 
 def _is_interpreter(command) -> bool:
+    if command.name in SQL_CLIENTS and not command.args:
+        # `cat drop.sql | psql` — the client runs the statements it is given.
+        return True
     if command.name in INTERPRETERS:
         # `python -c '...'` in a pipeline is not "run whatever arrives"; the
         # body is what runs, and check_inline_code already judged it.
@@ -1321,6 +1423,12 @@ def check_pipeline(pipeline, workspace, context) -> list[Finding]:
                 REMOTE_EXEC_DECODED, DENY,
                 "literal text is piped into %s" % interpreters[0].name,
             ))
+        else:
+            findings.append(Finding(
+                EXEC_OPAQUE_INPUT, ASK,
+                "%s output is piped into %s, which runs whatever it receives"
+                % (command.name, interpreters[0].name),
+            ))
 
     # Credential exfiltration: a credential read on one side, a network write on
     # the other. Either half alone is ordinary.
@@ -1340,6 +1448,41 @@ def check_pipeline(pipeline, workspace, context) -> list[Finding]:
             "credential material is read into a network command",
         ))
     return findings
+
+
+def check_fetch_then_execute(commands, workspace, context) -> list[Finding]:
+    """A fetch whose output file is executed later in the same command line.
+
+    `curl URL -o /tmp/s | sh` is already caught as a pipeline. `curl URL -o
+    /tmp/s && sh /tmp/s` is the same thing spelled with a file in between, and
+    splitting it across two segments was enough to get past the pipeline rule.
+    """
+    downloaded: dict[str, str] = {}
+    for command in commands:
+        if command.name in NETWORK_FETCHERS:
+            destination = _flag_value(command, "-o", "--output", "-O", "--output-document")
+            url = _first_url(command)
+            if destination and url:
+                resolved = gp.classify(destination, workspace).resolved or destination
+                downloaded[resolved] = url
+            continue
+        if not downloaded:
+            continue
+        runs_file = command.name in INTERPRETERS or command.name in ("source", ".")
+        candidates = _positional(command)
+        if command.name in ("chmod", "install"):
+            candidates = _positional(command)
+            runs_file = False
+        for argument in candidates:
+            resolved = gp.classify(argument, workspace).resolved or argument
+            if resolved in downloaded and runs_file:
+                return [Finding(
+                    FETCH_THEN_EXECUTE, DENY,
+                    "%s was downloaded from %s and is executed by %s in the same command"
+                    % (argument, downloaded[resolved], command.name),
+                    downloaded[resolved],
+                )]
+    return []
 
 
 def _first_url(command) -> str | None:
