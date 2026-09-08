@@ -74,6 +74,7 @@ REQUIRED_FILES = [
     "docs/plans/2026-09-global-install-and-access-resolver.md",
     "scripts/test-global-install.sh",
     "scripts/test-access-resolution.sh",
+    "scripts/test-release-readiness.sh",
     "scripts/project-memory.py",
     "scripts/knowledge.py",
     "scripts/start-task.sh",
