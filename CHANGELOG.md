@@ -96,14 +96,32 @@ manual-tester / product-owner / issue-investigator evidence, and the destructive
 
 ### Changed
 
-- **`scripts/test-front-door-skill.sh` now checks routing rows as a superset, not for equality.**
-  The equality check was written for a rename, where any routing change was a defect. Kept as-is it
-  would have frozen the table: this release adds rows deliberately. The guarantee that mattered is
-  preserved — every routing row from `v0.37.0` and from `v0.38.0` must still be present, verbatim,
-  so a row cannot lose its owner or disappear while something else is being edited. Row numbers are
-  normalised out, because renumbering on insert is not a contract change. Shown failing by deleting
-  a row: both baselines report it. Five assertions pin the new automation rows and their ownership
-  boundaries.
+- **`scripts/test-front-door-skill.sh` now checks routing rows as an ordered subsequence, not for
+  equality.** The equality check was written for a rename, where any routing change was a defect.
+  Kept as-is it would have frozen the table: this release adds rows deliberately. Every routing row
+  from `v0.37.0` and from `v0.38.0` must still be present, verbatim, **and in the same relative
+  order** — the table is first-match-wins, so its order is its semantics. Row numbers are
+  normalised out, because renumbering on insert is not a contract change.
+
+  An intermediate version of this compared the two sets with `comm` on sorted input. Pre-merge
+  review caught that it allowed reordering: moving the automation catch-all row above the three
+  boundary rows inverted exactly the ownership those rows exist to protect, and the suite still
+  passed. Set comparison is the wrong tool for an ordered contract.
+
+  Ordered subsequence still cannot see a row **inserted above** an existing one, which shadows it
+  under first-match-wins while leaving every baseline row present and in order. Five
+  `assert_class_owners` checks close that: for `automation`, `review`, `defect`, `question`, and
+  `validation`, the owners of the rows mentioning that class, in table order, must be exactly the
+  expected sequence. Five mutations were each shown failing and then reverted — deleting a row,
+  changing an owner, reordering two baseline rows, moving the catch-all above the boundary rows,
+  and shadow-inserting a `review` row owned by `software-engineer`.
+- **Release-readiness section 6b is pinned to `v0.37.0`** (`AGENT_SKILLS_RENAME_TAG`), the release
+  the front-door rename came from. It read the previous tag from `git tag --sort=-v:refname`, so
+  the moment `v0.38.0` shipped it started looking for `skills/tech-lead` in a release that no
+  longer had it — two failures, three downstream assertions made vacuous, and a check that had
+  silently stopped testing the migration it was written for. Section 6, the generic previous-tag
+  upgrade, still floats. Both scripts now document their tag environment variables in their usage
+  headers.
 - **The `test-automation-engineer` compatibility field** now describes the three current execution
   modes — `global`, `in-repo`, and the legacy `local-workspace` — and points at the generic access
   resolver. It previously advertised the pre-v0.37.0 `setup.init + .env` model as one of two modes.

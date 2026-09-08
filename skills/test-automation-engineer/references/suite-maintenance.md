@@ -36,19 +36,19 @@ test, because the suite now reports confidence it does not have.
 
 ## Repairs that are actually damage
 
-Each of these makes a suite green while removing the reason it existed. None is forbidden
-absolutely — each has a narrow legitimate case — but every use needs a stated, specific
-justification recorded next to it, and "the suite was red" is not one.
+Each of these makes a suite green while removing the reason it existed. Most have a narrow
+legitimate case, and every use of one needs a stated, specific justification recorded next to it —
+"the suite was red" is not one. Two have no legitimate case at all and are marked `never`.
 
 | Repair | Why it is damage | The narrow legitimate case |
 | --- | --- | --- |
 | Raise every timeout | Converts a product latency regression into a slower green build | One operation whose measured p95 genuinely grew for an accepted reason |
 | `force: true` on interactions | Bypasses the overlay, disabled state, or covering element the user would hit | A known third-party overlay outside the product's control, named in a comment |
-| Catch and swallow failures | The test can no longer fail, so it is no longer a test | Never in an assertion path |
+| Catch and swallow failures | The test can no longer fail, so it is no longer a test | `never` in an assertion path |
 | Delete or weaken assertions | Removes the coverage without removing the runtime | The assertion was verifying implementation trivia, and you say which |
 | Blanket-update snapshots | Approves every unreviewed change, including regressions | A reviewed, intentional visual change, updated with the diff read |
 | Add retries until green | Hides a race that will reach production | A declared suite-wide policy for a known-unstable dependency, not per test |
-| `sleep(5000)` | Makes the test slower and still racy | Never; wait on the observable condition instead |
+| `sleep(5000)` | Makes the test slower and still racy | `never` — wait on the observable condition instead |
 | Mark as skipped | Silent coverage loss | Only as quarantine with the full contract in [failure triage](failure-triage.md) |
 
 ## Test data

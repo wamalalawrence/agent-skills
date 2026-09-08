@@ -73,7 +73,7 @@ Triage decides the owner. It does not license this skill to do the owner's job.
 | Finding | Route to | With |
 | --- | --- | --- |
 | Suspected product defect | [`issue-investigator`](../../software-engineer/skills/issue-investigator/SKILL.md) | Failing test, evidence, the product diff you suspect |
-| Confirmed defect needing a fix | [`software-engineer`](../../software-engineer/SKILL.md) | Root cause and the failing test that pins it |
+| Defect whose root cause an investigation confirmed | [`software-engineer`](../../software-engineer/SKILL.md) | The investigation's result and the failing test that pins it |
 | Intended behaviour unclear | [`product-owner`](../../product-owner/SKILL.md) | The assertion, the new behaviour, the question |
 | Needs exploratory reproduction | [`manual-tester`](../../manual-tester/SKILL.md) | What to try, and what evidence would settle it |
 | Automation defect | This skill | The repair, and what coverage must survive it |

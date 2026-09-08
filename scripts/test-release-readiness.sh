@@ -14,6 +14,10 @@
 #   bash scripts/test-release-readiness.sh
 #   AGENT_SKILLS_PREVIOUS_TAG=v0.36.0 bash scripts/test-release-readiness.sh
 #
+# AGENT_SKILLS_PREVIOUS_TAG floats to the latest tag and drives the generic
+# upgrade in section 6. AGENT_SKILLS_RENAME_TAG (default v0.37.0) is pinned to
+# the release the front-door rename came from and drives section 6b only.
+#
 # Exit 0 when every check passes, 1 otherwise.
 
 set -uo pipefail

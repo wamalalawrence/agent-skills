@@ -44,43 +44,87 @@ prose, rather than by widening the validator's placeholder allowlist to absorb t
 | --- | --- | --- |
 | `scripts/test-global-install.sh` | 119 | pass |
 | `scripts/test-access-resolution.sh` | 100 | pass |
-| `scripts/test-front-door-skill.sh` | 57 | pass |
+| `scripts/test-front-door-skill.sh` | 62 | pass |
 | `scripts/test-setup-update-preserves-credentials.sh` | 10 exact `.env` lines | pass |
 | `scripts/test-release-readiness.sh` | 76 | pass |
 
-`test-front-door-skill.sh` grew from 50 to 57. Nothing else changed count: this release touches no
+`test-front-door-skill.sh` grew from 50 to 62. Nothing else changed count: this release touches no
 installer, resolver, or credential code path.
 
-## The routing contract, as a superset rather than an equality
+## The routing contract, as an ordered subsequence
 
 v0.38.0's front-door test asserted that every routing row was **identical** to `v0.37.0`. That was
 the right test for a rename, where any routing change was a defect. It is the wrong test for a
 release that adds routing on purpose, and keeping it would have frozen the table rather than
 protected it.
 
-The check now asserts a superset: every routing row present at a baseline must still be present,
-verbatim, in the current table. Rows may be added; a row may not lose its owner or disappear.
-Row numbers in `references/routing-table.md` are normalised out, because renumbering on insert is
-not a contract change. Two baselines are checked, not one, so a row cannot be dropped in one
-release and its loss go unnoticed in the next.
+**The first attempt at replacing it was wrong, and pre-merge review caught it.** It compared the
+two row sets with `comm` on sorted input: additions allowed, deletions and owner changes caught.
+But a set comparison cannot see order, and the routing table is first-match-wins — its order *is*
+its semantics. Two mutations passed a full 57-assertion run: moving the automation catch-all row
+above the three boundary rows, which inverts exactly the ownership those rows exist to protect;
+and inserting a second `review` row owned by `software-engineer` directly above the real one,
+which silently changes the owner of every review request. The old equality check would have caught
+both. That is a coverage regression, not a relaxation, and it was fixed before merge.
+
+The check now asserts an **ordered subsequence**: every routing row present at a baseline must
+still be present, verbatim, and in the same relative order. Rows may be added; a row may not
+disappear, lose its owner, or move. Row numbers in `references/routing-table.md` are normalised
+out, because renumbering on insert is not a contract change. Two baselines are checked, not one,
+so a row cannot be dropped in one release and its loss go unnoticed in the next.
 
 | Comparison | Result |
 | --- | --- |
-| `SKILL.md` rows vs `v0.37.0` | all present, 6 added |
-| `references/routing-table.md` rows vs `v0.37.0` | all present, 6 added |
-| `SKILL.md` rows vs `v0.38.0` | all present, 6 added |
-| `references/routing-table.md` rows vs `v0.38.0` | all present, 6 added |
+| `SKILL.md` rows vs `v0.37.0` | all present and in order, 6 added |
+| `references/routing-table.md` rows vs `v0.37.0` | all present and in order, 6 added |
+| `SKILL.md` rows vs `v0.38.0` | all present and in order, 6 added |
+| `references/routing-table.md` rows vs `v0.38.0` | all present and in order, 6 added |
 | `SKILL.md` `##` section structure vs `v0.37.0` | identical |
 
-**Shown failing.** Deleting the `review` row from `references/routing-table.md` makes both
-baseline comparisons fail with the missing row printed; restoring it returns the suite to 57
-passing assertions. A check that cannot fail is not evidence, and this one was re-written this
-release, so it was worth proving rather than asserting.
+Ordered subsequence still cannot see a row **inserted above** an existing one: the shadowing row
+takes over under first-match-wins while every baseline row remains present and in order. Five
+`assert_class_owners` checks close that gap. For `automation`, `review`, `defect`, `question`, and
+`validation`, the owners of the rows mentioning that class, read in table order, must be exactly
+the expected sequence. A shadowing insert changes the sequence; so does a reorder.
 
-Five new assertions pin the automation rows specifically, including the three boundary rows that
-route *away* from `test-automation-engineer`. Those matter more than the destination row: a router
-that sends every red test to the automation engineer quietly makes that skill absorb root-cause
-analysis and product decisions.
+**Shown failing.** Five mutations, each applied, run, and reverted with `git checkout --`:
+
+| Mutation | Caught by | Result |
+| --- | --- | --- |
+| Delete the `review` row | subsequence (both baselines) + class owners | 3 failures |
+| Change row 16's owner to `software-engineer` | subsequence (both baselines) + class owners | 3 failures |
+| Swap baseline rows 5 and 6 | subsequence (both baselines) + class owners | 3 failures |
+| Move the automation catch-all above the boundary rows | class owners | 1 failure |
+| Shadow-insert a `review` row owned by `software-engineer` | class owners | 1 failure |
+
+The last two are the ones the intermediate version passed. Restoring the file returns the suite to
+62 passing assertions. A check that cannot fail is not evidence, and this one was rewritten twice
+this release, so it was worth proving rather than asserting.
+
+The three boundary rows matter more than the destination row: a router that sends every red test
+to the automation engineer quietly makes that skill absorb root-cause analysis and product
+decisions, which is the ownership this release is careful to keep out of it.
+
+## Pre-merge diff review
+
+The release checklist requires the diff to be reviewed by something with no stake in the change
+being correct. That review ran against the full `main...HEAD` diff and raised six findings; all
+six were fixed before merge, and every claimed defect was reproduced first.
+
+| Finding | Severity | Resolution |
+| --- | --- | --- |
+| The replacement routing check was order-blind, and order is the contract | material | Rewritten as an ordered subsequence plus five class-owner sequence assertions; five mutations shown failing |
+| The CHANGELOG did not mention the release-readiness section 6b change | material | Added, with the reason the floating tag stopped testing the rename |
+| `suite-maintenance.md` said "none is forbidden absolutely" above two rows reading "Never" | minor | Two repairs marked `never`; the SKILL.md guardrail and step 4 no longer license them |
+| `framework-evolution` skipped step 9, which claims every task ends with a persisted record | minor | Mode sequence now ends at 9 |
+| Step 5 dropped the reference's qualifiers on `EXPECTED_PRODUCT_CHANGE` and `TEST_DATA_FAILURE` | minor | Qualifiers carried to the point of decision, where the eval-D failure mode lives |
+| A triage routing row implied this skill confirms root causes | cosmetic | Reworded to name the investigation as the source |
+| Both scripts' tag environment variables were undocumented | cosmetic | Added to their usage headers |
+
+One further issue was found and deliberately **not** fixed: the anchor
+`#evidence-packymldelivery_plan-ownership-rule` at
+`skills/software-engineer/references/evidence-pack.md:309` points at a bold paragraph rather than a
+heading, so it has never resolved. It is pre-existing on `main` and unrelated to this change.
 
 ## Section 6b was pinned to the release it tests
 
@@ -193,6 +237,10 @@ into references that are read on demand rather than loaded on every invocation, 
   makes, not measurements this run took.
 - **The stability budget was not exercised.** No repeat-execution run happened; the 20-repeat
   default is a rule the skill states, and nothing here tested a tool's support for it.
-- **Routing quality is unmeasured.** The superset check proves rows exist and none was lost. It
-  says nothing about whether a model classifies "CI has 42 failures" as `automation`.
+- **Routing quality is unmeasured.** The subsequence and class-owner checks prove rows exist, keep
+  their owners, and stay in order. They say nothing about whether a model classifies "CI has 42
+  failures" as `automation`.
+- **The routing check does not cover every shadowing insert.** The class-owner assertions pin five
+  classes. A row inserted above an existing one for a class outside that set would still pass, and
+  the residual gap is stated here rather than left to be discovered.
 - **Telemetry is too sparse to compare.** Two events is not a trend, and it is not treated as one.

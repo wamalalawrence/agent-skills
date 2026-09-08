@@ -240,7 +240,7 @@ first. Triage always precedes modification.
 | `automation-backlog` | "Which of these 80 manual scenarios should we automate?" | 2 → 3 → 9 |
 | `coverage-gap-analysis` | "Our e2e suite takes 70 minutes" / "what is not covered?" | 2 → 3 → 9 |
 | `ci-integration` | "Get this suite running in the pipeline properly" | 2 → 8 → 9 |
-| `framework-evolution` | "Introduce API automation" / "should we move off this tool?" | 2 → 3 → tradeoff record |
+| `framework-evolution` | "Introduce API automation" / "should we move off this tool?" | 2 → 3 → tradeoff record → 9 |
 
 Modes are not labels on an unchanged workflow. Getting this wrong is the expensive mistake:
 treating "42 CI failures" as `suite-maintenance` produces 42 edits to tests that were correct.
@@ -302,9 +302,10 @@ In `suite-maintenance`, this step is repair rather than creation. Work through t
 in [`references/suite-maintenance.md`](./references/suite-maintenance.md): read the failures, read
 the change that caused them, establish what each test protects, repair at the shared layer rather
 than test by test, remove genuinely obsolete assumptions, and keep traceability intact. The
-green-washing repairs in that reference — blanket timeout increases, `force: true`, swallowed
-failures, deleted assertions, blanket snapshot updates, retries until green, fixed sleeps, silent
-skips — each need a specific written justification, and "the suite was red" is not one.
+green-washing repairs in that reference — blanket timeout increases, `force: true`, deleted
+assertions, blanket snapshot updates, retries until green, silent skips — each need a specific
+written justification, and "the suite was red" is not one. Swallowing a failure in an assertion
+path and replacing an observable condition with a fixed sleep have no justified case.
 
 ### 5. Triage failures before changing anything
 
@@ -330,8 +331,11 @@ Binding rules:
 - **Route by class.** `PRODUCT_DEFECT` → `issue-investigator` (then `software-engineer`);
   unclear intended behaviour → `product-owner`; exploratory reproduction → `manual-tester`;
   infrastructure outside automation ownership → the owning team, with evidence. Only
-  `AUTOMATION_DEFECT`, `EXPECTED_PRODUCT_CHANGE`, `FLAKY_TEST`, and `TEST_DATA_FAILURE` are this
-  skill's to repair.
+  `AUTOMATION_DEFECT` and `FLAKY_TEST` are this skill's to repair outright.
+  `EXPECTED_PRODUCT_CHANGE` is repairable **only after product confirms the change was intended** —
+  until then it is indistinguishable from `PRODUCT_DEFECT`, and updating the assertion first is
+  how a regression suite stops being one. `TEST_DATA_FAILURE` is this skill's when the data belongs
+  to the suite, and the data owner's when it does not.
 - **`UNKNOWN` is a valid answer.** Say what evidence would settle it rather than guessing.
 
 For `flake-investigation`, diagnose before repeating: reproduce → isolate → classify cause → fix
@@ -597,9 +601,10 @@ no qualifying insight exists. See
 - Do not modify tests before triage has classified the failures. Editing a correct test to match a
   regression is how a defect reaches production with a green build.
 - Do not make a suite green by weakening it. Blanket timeout increases, `force: true` everywhere,
-  swallowed failures, deleted assertions, blanket snapshot updates, retries until green,
-  `sleep(5000)`, and silent skips each require a specific documented justification for that one
-  case — never as the general repair.
+  deleted assertions, blanket snapshot updates, retries until green, and silent skips each require
+  a specific documented justification for that one case — never as the general repair. Two have no
+  justified case at all: swallowing a failure in an assertion path, and a fixed sleep in place of
+  an observable condition.
 - Do not call a test flaky without evidence, and do not treat repeat-until-green as a diagnosis.
 - Do not quarantine without a reason, an owner, a linked follow-up, a visible status, and a
   removal condition.
