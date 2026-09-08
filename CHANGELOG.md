@@ -66,8 +66,7 @@ are judged, not the order they were written in.
   broken, call-only verification, wrong test level, unnecessarily doubled deterministic
   collaborators, setup that hides the scenario, framework bootstrapping for trivial logic, and
   method-shaped test names. They are shapes, not a list to emit.
-- **Three eval scenarios sets, ten scenarios**, all judged on the decision rather than on
-  vocabulary:
+- **Three eval files, ten scenarios**, all judged on the decision rather than on vocabulary:
   [unit boundary and double selection](evals/developer-testing-unit-boundary-and-doubles.md)
   (over-mocked service, legitimate external boundary, large fixture graph, unit-is-not-a-class),
   [third-party boundaries and test levels](evals/developer-testing-boundaries-and-test-levels.md)
