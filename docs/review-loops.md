@@ -62,8 +62,8 @@ Each entry: producer → reviewer (mode), trigger, exit rule.
   Evidence` with a one-line gap statement. The planner does **not** invoke any other
   skill — phase dispatch is the executor's job — so this loop introduces no new
   cross-skill recursion and respects the depth cap of two skills.
-- **`tech-lead` (dispatcher — outside the review loops).** Like `delivery-runner` below,
-  `tech-lead` is **not** a producer/reviewer pair and adds no loop level. It classifies a
+- **`wamala` (dispatcher — outside the review loops).** Like `delivery-runner` below,
+  `wamala` is **not** a producer/reviewer pair and adds no loop level. It classifies a
   request, picks the one skill that owns the next step, and opens a **fresh, empty-context
   agent** for it. That dispatched agent is the *root* of its own call chain, so the
   depth-cap-of-two applies inside the step (`executor → code-reviewer`) and the lead never

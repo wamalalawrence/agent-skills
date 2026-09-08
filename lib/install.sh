@@ -184,18 +184,101 @@ as_top_level_skills() {
 }
 
 # ------------------------------------------------------------------------------
+# Orphan registrations
+#
+# A registration is an orphan when it is one of ours — a symlink into
+# `<home>/skills/<name>` — but `<name>` is no longer a skill in this release.
+# That happens when a skill is renamed or dropped: `tech-lead` became `wamala`
+# in v0.38.0, and without this the old name stays in every host directory as a
+# dead front door pointing at a path the new release does not create.
+#
+# The predicate is deliberately narrow. It requires BOTH that the entry is a
+# symlink we wrote (`as_is_owned_link`) AND that its literal target's parent is
+# our canonical skills directory. A directory the user created, a link into
+# their own tree, and anything else in the host directory all fail it, so a
+# same-named skill of the user's own is never touched.
+# ------------------------------------------------------------------------------
+as_is_our_skill_registration() {
+  local path="$1"
+  as_is_owned_link "${path}" || return 1
+
+  local home home_real target dir parent
+  home="$(as_home)"
+  home_real="$(as_realpath "${home}" 2>/dev/null || printf '%s' "${home}")"
+  target="$(readlink "${path}" 2>/dev/null || true)"
+  [ -n "${target}" ] || return 1
+  case "${target}" in
+    /*) : ;;
+    *)
+      dir="$(cd -P "$(dirname "${path}")" >/dev/null 2>&1 && pwd)"
+      target="${dir}/${target}"
+      ;;
+  esac
+  parent="$(dirname "${target}")"
+  case "${parent}" in
+    "${home}/skills"|"${home_real}/skills") return 0 ;;
+  esac
+  return 1
+}
+
+# Echo the names of our registrations in `skills_dir` that no longer exist as
+# skills in `source_dir`. Read-only; the caller decides what to do with them.
+as_orphan_registrations() {
+  local source_dir="$1"
+  local skills_dir="$2"
+  [ -d "${skills_dir}" ] || return 0
+
+  local current=""
+  local name
+  while IFS= read -r name; do
+    [ -n "${name}" ] || continue
+    current="${current}${name} "
+  done <<EOF
+$(as_top_level_skills "${source_dir}")
+EOF
+  # An empty skill list means we could not read the source tree. Removing every
+  # registration on that basis would be the worst possible failure mode, so
+  # report nothing instead.
+  [ -n "${current}" ] || return 0
+
+  local entry
+  for entry in "${skills_dir}"/*; do
+    [ -L "${entry}" ] || continue
+    name="$(basename "${entry}")"
+    case " ${current} " in
+      *" ${name} "*) continue ;;
+    esac
+    as_is_our_skill_registration "${entry}" || continue
+    printf '%s\n' "${name}"
+  done
+}
+
+# ------------------------------------------------------------------------------
 # Host registration
 # ------------------------------------------------------------------------------
 # Register every skill into one host directory.
-# Sets AS_REGISTER_CREATED / AS_REGISTER_KEPT / AS_REGISTER_CONFLICTS.
+# Sets AS_REGISTER_CREATED / AS_REGISTER_KEPT / AS_REGISTER_CONFLICTS /
+# AS_REGISTER_PRUNED.
 as_register_host_dir() {
   local source_dir="$1"
   local skills_dir="$2"
   AS_REGISTER_CREATED=0
   AS_REGISTER_KEPT=0
   AS_REGISTER_CONFLICTS=""
+  AS_REGISTER_PRUNED=""
 
   mkdir -p "${skills_dir}" 2>/dev/null || return 1
+
+  # Reconcile before registering, so a renamed skill leaves no second entry
+  # behind. Idempotent: a second run finds nothing left to prune.
+  local orphan
+  while IFS= read -r orphan; do
+    [ -n "${orphan}" ] || continue
+    rm -f "${skills_dir}/${orphan}"
+    AS_REGISTER_PRUNED="${AS_REGISTER_PRUNED}${orphan} "
+  done <<EOF
+$(as_orphan_registrations "${source_dir}" "${skills_dir}")
+EOF
 
   local name status
   while IFS= read -r name; do
@@ -414,6 +497,9 @@ as_install_global() {
       if [ -n "${AS_REGISTER_CONFLICTS}" ]; then
         as_warn "${label}: left existing non-agent-skills entries alone: ${AS_REGISTER_CONFLICTS}"
       fi
+      if [ -n "${AS_REGISTER_PRUNED}" ]; then
+        as_info "${label}: removed registration(s) for skills this release no longer ships: ${AS_REGISTER_PRUNED}"
+      fi
       as_ok "${label}: ~/${global_dir} (${AS_REGISTER_CREATED} linked, ${AS_REGISTER_KEPT} already current)"
       registered="${registered}${id} "
     else
@@ -547,7 +633,7 @@ as_verify_install() {
 
   # Host integrations: every registration must resolve into the canonical tree.
   printf '\nHost integrations\n'
-  local row id label global_dir register skill_count linked stale foreign entry name
+  local row id label global_dir register skill_count linked stale foreign entry name orphans
   local canonical="${home}/skills"
   while IFS= read -r row; do
     [ -n "${row}" ] || continue
@@ -591,6 +677,13 @@ as_verify_install() {
     done <<INNER
 $(as_top_level_skills "${source_dir:-${home}}")
 INNER
+
+    orphans="$(as_orphan_registrations "${source_dir:-${home}}" "${HOME}/${global_dir}" | tr '\n' ' ')"
+    if [ -n "${orphans}" ]; then
+      as_fail "${label}: stale registration(s) for renamed or removed skills: ${orphans}"
+      printf '        Run: agent-skills install   (removes them)\n' >&2
+      errors=$((errors + 1))
+    fi
 
     if [ "${linked}" -eq 0 ] && [ "${stale}" -eq 0 ]; then
       as_info "${label}: no agent-skills registrations in ~/${global_dir}"

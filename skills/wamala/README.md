@@ -1,7 +1,8 @@
-# tech-lead
+# Wamala
 
-Single entry point for engineering work. Describe the task; this skill works out who should do
-it, hands the job to a fresh agent, checks the result on disk, and either advances or stops.
+Wamala is the front door to Agent Skills. Describe what needs to be done; Wamala works out who
+should do it, hands the job to a fresh agent, checks the result on disk, and either advances the
+chain or stops.
 
 - Skill definition: [`SKILL.md`](./SKILL.md)
 - Routing rules: [`references/routing-table.md`](./references/routing-table.md)
@@ -9,12 +10,12 @@ it, hands the job to a fresh agent, checks the result on disk, and either advanc
 
 ## What it is for
 
-The other skills each own one decision surface, and picking the right one is real work. Pick
-wrong and you get the expensive failures: code written against unclear intent, a fix for a root
+The specialist skills each own one decision surface, and picking the right one is real work.
+Pick wrong and you get the expensive failures: code written against unclear intent, a fix for a root
 cause nobody established, automation built on an unstable scenario.
 
 ```text
-Use the tech-lead skill: invoice search drops the status filter on page 2.
+Use Wamala to investigate why invoice search drops the status filter on page 2.
 ```
 
 It classifies that as a defect, runs the requirement-understanding gate, notices no root cause
@@ -28,7 +29,7 @@ skill's only job is choosing the right one and verifying the handoff landed.
 
 It also never becomes mandatory. If you already know you want
 [`software-engineer`](../software-engineer/SKILL.md), invoking it directly is faster and
-better. This is an addition to the catalogue, not a front door you have to walk through.
+better. Wamala is a front door, not one you have to walk through.
 
 ## Dispatch, not invocation
 
@@ -38,7 +39,7 @@ rather than loading the executor into its own context.
 That keeps two properties. Each step gets a small focused context instead of inheriting
 everything before it. And the dispatched agent is the root of its own call chain, so the
 depth-cap-of-two review bound still holds inside the step — the chain is `executor →
-code-reviewer`, and the lead never appears in it.
+code-reviewer`, and Wamala never appears in it.
 
 Loading an executor here instead would make it three deep and quietly break the bound that keeps
 the engineer/reviewer loop honest.

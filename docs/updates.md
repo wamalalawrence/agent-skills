@@ -1,6 +1,6 @@
 # Updates
 
-Releases follow [semver](versioning.md) and ship as git tags (`v0.36.0`, `v0.37.0`, …) with matching
+Releases follow [semver](versioning.md) and ship as git tags (`v0.37.0`, `v0.38.0`, …) with matching
 GitHub releases. This page covers noticing a new release and applying it without losing local state.
 
 ## How an update flows
@@ -72,7 +72,7 @@ This:
 ```bash
 cd /path/to/agent-skills
 git fetch --tags origin
-git checkout v0.37.0
+git checkout v0.38.0
 ./setup.init                 # refresh the install after a manual checkout
 ```
 
@@ -90,7 +90,7 @@ agent-skills verify
 
 Compares the manifest against what is on disk and reports:
 
-- **version drift** — the manifest says `v0.36.0` and the source tree says `v0.37.0`. Expected right
+- **version drift** — the manifest says `v0.37.0` and the source tree says `v0.38.0`. Expected right
   after a manual `git pull`; fixed by `./setup.init`.
 - **a broken canonical link** — the clone was moved or deleted. Reinstall repairs it.
 - **a missing or foreign host registration** — a host directory lost a link, or something else owns

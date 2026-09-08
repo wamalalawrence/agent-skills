@@ -1,12 +1,12 @@
-# Example: tech-lead routing a reported defect
+# Example: Wamala routing a reported defect
 
-A worked run of [`tech-lead`](../../skills/tech-lead/SKILL.md) on a request that sounds like it
+A worked run of [`wamala`](../../skills/wamala/SKILL.md) on a request that sounds like it
 names its own fix, and does not.
 
 ## Prompt
 
 ```text
-Use the tech-lead skill: invoice search drops the status filter when you go to page 2.
+Use Wamala to investigate why invoice search drops the status filter on page 2.
 ```
 
 ## What the skill does
@@ -23,7 +23,7 @@ the mechanism and fixing the guess is the failure this ordering prevents.
 ```markdown
 ## Routing Decision
 
-- Lifecycle: start-task=ran; finish-task=ran; memory=updated; skill=tech-lead@0.36.0
+- Lifecycle: start-task=ran; finish-task=ran; memory=updated; skill=wamala@0.38.0
 - Request: page 2 of invoice search loses the selected status filter
 - Class: defect
 - Understanding confidence: high
@@ -51,7 +51,7 @@ the mechanism and fixing the guess is the failure this ordering prevents.
 ## What to notice
 
 **The route contradicts the obvious reading.** "Drops the status filter" points straight at the
-filter code. The lead routed to investigation anyway, because "specific symptom" and "known
+filter code. Wamala routed to investigation anyway, because "specific symptom" and "known
 cause" are different things. The investigation found the bug in the URL builder, not the filter
 code — so a fix dispatched directly would have been aimed at the wrong file.
 
@@ -66,7 +66,7 @@ definition-of-done file proves the PR exists. Neither is taken from the dispatch
 evidence pack itself. Pasting the investigation into the brief would rebuild exactly the
 accumulated context that fresh-context dispatch exists to avoid.
 
-**The open question is stated, not resolved.** Sort order probably has the same defect. The lead
+**The open question is stated, not resolved.** Sort order probably has the same defect. Wamala
 records it and stops rather than expanding scope, because that is a decision for the person who
 asked.
 
@@ -85,12 +85,12 @@ validate.
 ## When to skip this skill
 
 If you already know the owner, invoke it directly. `Use the issue-investigator skill on ABC-123`
-is faster and better than routing to it. `tech-lead` earns its place when the classification is
+is faster and better than routing to it. Wamala earns its place when the classification is
 genuinely the hard part.
 
 ## Related
 
-- [Routing table](../../skills/tech-lead/references/routing-table.md) — the full mapping,
+- [Routing table](../../skills/wamala/references/routing-table.md) — the full mapping,
   including the ambiguous cases.
 - [Requirement understanding](../requirement-understanding.md) — the gate that reordered this
   decision.

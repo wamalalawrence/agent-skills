@@ -11,15 +11,19 @@ One command runs the mechanical half of this list, so the evidence recorded in
 bash scripts/test-release-readiness.sh
 ```
 
-It covers the structural validators, syntax across every shipped artifact, all three test suites,
+It covers the structural validators, syntax across every shipped artifact, all four test suites,
 the CLI surface, a clean-`HOME` install with drift and uninstall, an upgrade from the previous
-release tag, cloud/in-repo mode, the public-safety sweep, README and link integrity, the telemetry
-report, and version consistency. Everything is sandboxed under `mktemp`; it never touches your real
-home directory, host skill directories, or credential store. It is not in CI because it builds a
+release tag in both the legacy-workspace and global-install shapes, cloud/in-repo mode, the
+public-safety sweep, README and link integrity, the telemetry report, and version consistency.
+Everything is sandboxed under `mktemp`; it never touches your real home directory, host skill
+directories, or credential store. It is not in CI because it builds a
 worktree of the previous tag and performs several full installs.
 
 - [ ] Run `bash scripts/test-release-readiness.sh` and confirm it exits `0`.
 - [ ] Run `python3 scripts/validate-repo.py` from the repository root.
+- [ ] If this release renames or removes a skill, confirm
+      `bash scripts/test-front-door-skill.sh` passes with the routing-equivalence cases running
+      rather than skipped — they need the previous release tag fetched.
 - [ ] Confirm validator line-readability checks pass for Markdown, YAML, and Python source.
 - [ ] Confirm validator file-density and minification checks pass for Markdown, YAML, and Python.
 - [ ] Inspect warnings and decide whether they are acceptable. Compare the count against the
@@ -57,6 +61,13 @@ The counters exist so "the skills are improving" can be checked rather than asse
 - [ ] Confirm examples and eval scenarios still match the current output contracts.
 - [ ] Confirm release-scoped eval runs exist under `eval-runs/<release>/` with a summary file.
 - [ ] Confirm [known limitations](known-limitations.md) still describe what validation cannot prove.
+
+## Deprecations
+
+- [ ] Check the deprecated-name table in [docs/versioning.md](versioning.md). Remove any alias
+      whose removal release is this one, and delete its row.
+- [ ] If this release adds an alias, give it a removal release in that table rather than leaving
+      it open-ended.
 
 ## Release Metadata
 

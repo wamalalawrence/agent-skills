@@ -28,9 +28,7 @@ Then open any repository and describe the work. The skills are already discovera
 your editor, so there is nothing to attach and nothing to configure:
 
 ```text
-Use the tech-lead skill.
-Request: page 2 of invoice search loses the status filter.
-Route it to whichever skill owns the next step.
+Use Wamala to investigate why page 2 of invoice search loses the status filter.
 ```
 
 If you already know the owner, invoke it directly. That is faster and always supported:

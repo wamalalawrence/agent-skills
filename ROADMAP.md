@@ -5,7 +5,7 @@ the project should grow through proven usefulness rather than a large up-front f
 
 ## Current Focus
 
-- Stabilize the nine shipped skills, with [`tech-lead`](./skills/tech-lead/) as the single
+- Stabilize the nine shipped skills, with [`wamala`](./skills/wamala/) as the single
   entry point and [`software-engineer`](./skills/software-engineer/) as the flagship
   engineering skill.
 - Make the [Company Brain](./docs/company-brain.md) loop real rather than documented: the

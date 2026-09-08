@@ -112,7 +112,7 @@ python3 -c 'import yaml; yaml.safe_load(open(".github/workflows/ci.yml"))' 2>/de
 # ------------------------------------------------------------------------------
 sec "3. test suites"
 # ------------------------------------------------------------------------------
-for suite in test-global-install test-access-resolution; do
+for suite in test-global-install test-access-resolution test-front-door-skill; do
   if bash "scripts/$suite.sh" </dev/null >"/tmp/as-rr-$suite.log" 2>&1; then
     good "$suite.sh: $(tail -1 "/tmp/as-rr-$suite.log")"
   else
@@ -213,7 +213,7 @@ esac
 
 run_clean bash bin/agent-skills uninstall --yes >/dev/null 2>&1 \
   && good "uninstall exits 0" || bad "uninstall"
-[ -e "$HOME_DIR/.agents/skills/tech-lead" ] \
+[ -e "$HOME_DIR/.agents/skills/wamala" ] \
   && bad "a registration survived uninstall" || good "uninstall removed our registrations"
 
 # ------------------------------------------------------------------------------
@@ -328,6 +328,92 @@ PY
   git worktree remove --force "$UP/previous" 2>/dev/null || true
 else
   bad "could not create a worktree for $PREVIOUS_TAG"
+fi
+
+# ------------------------------------------------------------------------------
+sec "6b. global-install upgrade from $PREVIOUS_TAG"
+# ------------------------------------------------------------------------------
+# The path a v0.37.0 user actually takes: a global install, then `agent-skills
+# update`, which replaces the contents of the same clone and re-runs install.
+# The front-door rename makes this the release's highest-risk migration.
+GU="$(sandbox)"
+if git worktree add -q --detach "$GU/previous" "$PREVIOUS_TAG" 2>/dev/null; then
+  GU_HOME="$GU/home"
+  GU_SRC="$GU/clone"
+  mkdir -p "$GU_HOME"
+  cp -R "$GU/previous" "$GU_SRC"
+  rm -rf "$GU_SRC/.git"
+
+  run_gu() {
+    env -i HOME="$GU_HOME" \
+      AGENT_SKILLS_HOME="$GU_HOME/.agent-skills" \
+      AGENT_SKILLS_CONFIG_DIR="$GU_HOME/.config/agent-skills" \
+      PATH="$GU_HOME/.local/bin:/usr/bin:/bin:/usr/local/bin:/opt/homebrew/bin" \
+      TERM=dumb "$@"
+  }
+
+  # A skill of the user's own, sharing the name that is about to be retired.
+  mkdir -p "$GU_HOME/.claude/skills/tech-lead"
+  printf -- '---\nname: tech-lead\ndescription: mine\n---\n# Mine\n' \
+    > "$GU_HOME/.claude/skills/tech-lead/SKILL.md"
+
+  run_gu bash "$GU_SRC/bin/agent-skills" install --yes >"$GU/old.log" 2>&1
+  OLD_FRONT_DOOR="$(sed -n 's/^name: //p' "$GU_SRC/skills/tech-lead/SKILL.md" 2>/dev/null | head -1)"
+  if [ "$OLD_FRONT_DOOR" = "tech-lead" ]; then
+    good "$PREVIOUS_TAG really did ship the front door as tech-lead"
+  else
+    bad "$PREVIOUS_TAG front-door name" "got '$OLD_FRONT_DOOR'"
+  fi
+  [ -L "$GU_HOME/.agents/skills/tech-lead" ] \
+    && good "$PREVIOUS_TAG registered tech-lead globally" \
+    || bad "$PREVIOUS_TAG registration" "$(tail -5 "$GU/old.log")"
+
+  # `agent-skills update` swaps the clone's contents in place. Reproduce that
+  # without a network fetch by copying this release over the same directory.
+  rm -rf "$GU_SRC"
+  cp -R "$REPO" "$GU_SRC"
+  rm -rf "$GU_SRC/.git" "$GU_SRC/.venv" "$GU_SRC/.cache"
+  run_gu bash "$GU_SRC/bin/agent-skills" install --yes >"$GU/new.log" 2>&1
+
+  [ -L "$GU_HOME/.agents/skills/wamala" ] \
+    && good "the upgrade registered wamala" || bad "wamala not registered" "$(tail -8 "$GU/new.log")"
+  [ -f "$GU_HOME/.agents/skills/wamala/SKILL.md" ] \
+    && good "the wamala registration resolves to a SKILL.md" || bad "wamala registration dangles"
+  if [ -e "$GU_HOME/.agents/skills/tech-lead" ] || [ -L "$GU_HOME/.agents/skills/tech-lead" ]; then
+    bad "our tech-lead registration survived the upgrade"
+  else
+    good "our tech-lead registration was removed by the upgrade"
+  fi
+  [ -f "$GU_HOME/.claude/skills/tech-lead/SKILL.md" ] \
+    && good "the user's own tech-lead skill survived the upgrade" \
+    || bad "the upgrade deleted a user skill named tech-lead"
+  run_gu bash "$GU_SRC/bin/agent-skills" verify >"$GU/verify.log" 2>&1 \
+    && good "verify passes after the upgrade" || bad "verify after upgrade" "$(tail -8 "$GU/verify.log")"
+  run_gu bash "$GU_SRC/bin/agent-skills" install --yes >/dev/null 2>&1
+  GU_WAMALA="$(find "$GU_HOME/.agents/skills" -maxdepth 1 -name wamala | wc -l | tr -d ' ')"
+  [ "$GU_WAMALA" = "1" ] \
+    && good "a second upgrade run leaves exactly one wamala registration" \
+    || bad "duplicate wamala registrations" "found $GU_WAMALA"
+
+  # The deprecated lifecycle alias, exercised against the shipped CLI.
+  mkdir -p "$GU/repo" && ( cd "$GU/repo" && git init -q )
+  ALIAS_OUT="$(
+    cd "$GU/repo" && env HOME="$GU_HOME" \
+      AGENT_SKILLS_HOME="$GU_HOME/.agent-skills" \
+      AGENT_SKILLS_CONFIG_DIR="$GU_HOME/.config/agent-skills" \
+      AGENT_SKILLS_CACHE_DIR="$GU/cache" \
+      bash "$GU_HOME/.agent-skills/bin/agent-skills" start-task demo demo-1 \
+        --no-org --skill tech-lead 2>&1
+  )"
+  case "$ALIAS_OUT" in
+    *"tech-lead was renamed to wamala; using wamala"*)
+      good "the shipped CLI resolves the deprecated skill name with a notice" ;;
+    *) bad "deprecated alias notice" "$(printf '%s' "$ALIAS_OUT" | head -5)" ;;
+  esac
+
+  git worktree remove --force "$GU/previous" 2>/dev/null || true
+else
+  bad "could not create a worktree for $PREVIOUS_TAG (global-install upgrade)"
 fi
 
 # ------------------------------------------------------------------------------

@@ -6,6 +6,85 @@ All notable project changes should be recorded here.
 
 - No unreleased changes.
 
+## 0.38.0 - Meet Wamala
+
+Minor release. The single front door to Agent Skills has a name: **`tech-lead` is now `wamala`**.
+
+Wamala is the interface to the specialist engineering team. Give it the work, and it determines
+who should own the next step, dispatches fresh-context specialists, and keeps multi-step delivery
+aligned through persisted artifacts. The specialist skills keep their role-based names and stay
+directly invocable — nothing has to come through Wamala.
+
+This is an identity change, not a redesign. The routing table, the requirement-understanding gate,
+fresh-context dispatch, one-owner-per-step, artifact verification, the bounded retry, the depth cap
+of two, the six-dispatch cap, and every stopping condition are unchanged, and a test now proves
+that by diffing this release's routing rows against `v0.37.0`.
+
+```text
+Use Wamala to investigate why invoice search loses its filter on page 2.
+Use Wamala to take this feature from requirement to delivery.
+```
+
+### Changed
+
+- **`skills/tech-lead/` is now [`skills/wamala/`](skills/wamala/SKILL.md)**, declaring
+  `name: wamala` and heading `# Wamala`. There is exactly one skill directory and one discoverable
+  front door; the old directory is not kept as a copy, because two discoverable entry points drift
+  apart silently and the drift is invisible until someone invokes the stale one.
+- **The `wamala` description** now leads with the front-door model — arbitrary software-delivery
+  request in, routing and fresh-context specialist dispatch out — rather than describing a role, so
+  it is discoverable from a natural request.
+- **[`evals/wamala-routing.md`](evals/wamala-routing.md)** and
+  **[`docs/examples/wamala-routing.md`](docs/examples/wamala-routing.md)** renamed from their
+  `tech-lead-` predecessors. The scenarios themselves are unchanged.
+- **The README opens with the entry-point model.** A `## Wamala` section states what it is and
+  shows the two canonical starter prompts before the catalogue.
+- Active references across the README, docs index, starter prompts, quickstart, skill boundaries,
+  review loops, installation, roadmap, examples, evals, CI, and the validator registry now name
+  `wamala`. Historical material — release notes for `v0.36.0` and `v0.37.0`, the `v0.36.0` eval
+  run, the router design plan, and the `v0.37.0` security review — still says `tech-lead`, because
+  it was true when written.
+
+### Added
+
+- **Ownership-aware reconciliation of stale host registrations.** `agent-skills install` now
+  removes registrations it owns whose skill no longer exists in the release being installed, so an
+  upgrade from `v0.37.0` ends with `wamala` and no dead `tech-lead` entry in any host directory.
+  The predicate is narrow by construction: an entry is pruned only when it is a symlink we wrote
+  **and** its literal target's parent is the canonical skills directory. A directory the user
+  created, or a link into their own tree, fails both halves and is left alone. `agent-skills
+  verify` now reports such an entry as a failure with the command that fixes it. The mechanism is
+  generic — nothing in it names `tech-lead` — so the next rename is covered too.
+- **A bounded deprecated-name alias.** `agent-skills start-task --skill tech-lead` and
+  `finish-task --skill tech-lead` resolve to `wamala` and print
+  `tech-lead was renamed to wamala; using wamala` on stderr. It is a lifecycle-CLI alias only: no
+  second skill directory, nothing registered under the old name, and no host discovers it. The
+  table lives in [`scripts/task-context.sh`](scripts/task-context.sh) and its removal release is
+  recorded in [docs/versioning.md](docs/versioning.md) — `v0.41.0`. A new **Deprecations** step in
+  the [release checklist](docs/release-checklist.md) makes retiring it part of that release.
+- **[`scripts/test-front-door-skill.sh`](scripts/test-front-door-skill.sh)** — 50 assertions
+  covering the identity, the absence of a second front door, the specialists keeping their
+  role-based names, routing-contract equivalence against the `v0.37.0` tag (skipped, not silently
+  passed, when the tag is not fetched), the fourteen behavioural clauses, `start-task` and
+  `finish-task` with `--skill wamala`, the deprecated alias end to end, and the rule that active
+  documentation no longer advertises the old name. Wired into CI and release readiness.
+- **Migration coverage in [`scripts/test-global-install.sh`](scripts/test-global-install.sh)** —
+  sixteen assertions upgrading a `v0.37.0`-shaped install in place: `wamala` registered,
+  agent-skills-owned `tech-lead` removed, a user's own `tech-lead` directory and a user symlink of
+  that name both preserved, the prune idempotent across reruns, and `verify` reporting an
+  unmigrated registration. All four of the assertions that depend on the new mechanism were shown
+  failing with it disabled.
+- **Section 6b in [`scripts/test-release-readiness.sh`](scripts/test-release-readiness.sh)** — the
+  same upgrade against a real `v0.37.0` worktree, including the alias through the installed CLI.
+- **A deprecated-skill-names section in [docs/versioning.md](docs/versioning.md)** stating the
+  rename policy: one directory, one discoverable name, a CLI alias with a removal release.
+
+### Fixed
+
+- `agent-skills verify` previously reported nothing about a registration whose skill had been
+  renamed away. It only enumerated the skills the current release ships, so a stale entry in a host
+  directory was invisible to the tool whose job is to find exactly that.
+
 ## 0.37.0 - Install Once, Use Everywhere
 
 Minor release, and the largest structural change since the skills themselves. `agent-skills` stops
@@ -303,7 +382,8 @@ Planned and reviewed in
 - `writing.ai_attribution` (`none` | `trailer` | `footer`) and `writing.voice_reference` in
   `.agent-skills.yml`, plus `WRITING_AI_ATTRIBUTION` / `WRITING_VOICE_REFERENCE` in `.env`.
   Default `none`. Disclosure is an operator policy decision, not a skill default.
-- **New top-level skill [`tech-lead`](skills/tech-lead/SKILL.md)** — the single entry point.
+- **New top-level skill `tech-lead`** — the single entry point. (Renamed to
+  [`wamala`](skills/wamala/SKILL.md) in v0.38.0.)
   Classifies any request, runs the requirement-understanding gate, picks the one skill that owns
   the next step, and **dispatches a fresh empty-context agent**. Drives multi-specialist chains,
   verifying each step from persisted artifacts before advancing. Like `delivery-runner` it
@@ -334,7 +414,8 @@ Planned and reviewed in
   a flag, so the default path produced a task log and called it learning.
 - `start-task.sh` gained `--brief` for ranking the knowledge read.
 - New evals: `tech-lead-routing.md`, `writing-voice-human-tone.md`.
-- New example: [`docs/examples/tech-lead-routing.md`](docs/examples/tech-lead-routing.md).
+- New example: `docs/examples/tech-lead-routing.md` (renamed to
+  [`docs/examples/wamala-routing.md`](docs/examples/wamala-routing.md) in v0.38.0).
 - A telemetry review step in the [release checklist](docs/release-checklist.md#telemetry-review).
 
 ### Changed

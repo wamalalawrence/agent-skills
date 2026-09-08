@@ -1,6 +1,6 @@
 # Routing Table
 
-The full condition-to-owner mapping `tech-lead` applies, with the reasoning behind each row.
+The full condition-to-owner mapping `wamala` applies, with the reasoning behind each row.
 The abbreviated version lives in the skill itself; this file is where the judgement calls are
 written down.
 
@@ -96,7 +96,7 @@ Worth stating, because each is a plausible-looking mistake:
   depth cap.
 - **Never route to `delivery-planner` mid-chain.** If a step turns out to be oversized, the step
   stops and surfaces; the planner re-decomposes on its own next run.
-- **Never route to `tech-lead`.** No skill invokes itself, directly or transitively.
+- **Never route to `wamala`.** No skill invokes itself, directly or transitively.
 - **Never route around a blocker.** A blocked step means stop, not "try a different skill".
 
 ## Recording what the routing got wrong

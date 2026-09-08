@@ -7,6 +7,41 @@ agent_skills_slugify() {
     | sed -E 's/[^a-z0-9._-]+/-/g; s/^-+//; s/-+$//'
 }
 
+# ---------------------------------------------------------------------------
+# Deprecated skill names.
+#
+# `tech-lead` was renamed to `wamala` in v0.38.0. The rename is a rename, not a
+# fork: there is exactly one skill directory on disk and one discoverable skill
+# name. This table exists only so a saved prompt, shell alias, or CI script
+# written against v0.37.0 keeps working through one deprecation window instead
+# of failing with an unrecognised skill name.
+#
+# Deprecation policy: the aliases below are removed in v0.41.0 (three minor
+# releases after the rename). Adding an entry here is a decision to carry it for
+# that long; see docs/versioning.md.
+#
+# Format: one `old=new` pair per line.
+# ---------------------------------------------------------------------------
+AGENT_SKILLS_DEPRECATED_SKILLS="tech-lead=wamala"
+
+# Map a possibly-deprecated skill name to its canonical name, printing a
+# one-line migration notice on stderr so it never contaminates stdout that a
+# caller may be capturing.
+agent_skills_resolve_skill_name() {
+  local requested="$1"
+  local pair old new
+  for pair in ${AGENT_SKILLS_DEPRECATED_SKILLS}; do
+    old="${pair%%=*}"
+    new="${pair#*=}"
+    if [[ "${requested}" == "${old}" ]]; then
+      printf '%s was renamed to %s; using %s\n' "${old}" "${new}" "${new}" >&2
+      printf '%s\n' "${new}"
+      return 0
+    fi
+  done
+  printf '%s\n' "${requested}"
+}
+
 agent_skills_git_root() {
   git rev-parse --show-toplevel 2>/dev/null || pwd
 }

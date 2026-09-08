@@ -35,8 +35,9 @@ source "${SCRIPT_DIR}/task-context.sh"
 # Resolve the cache root (same logic as the Python scripts)
 # ---------------------------------------------------------------------------
 # ---------------------------------------------------------------------------
-# Resolve a `--skill` spec. `name=version` is passed through unchanged; a bare
-# `name` is completed from this repo's VERSION file.
+# Resolve a `--skill` spec. The name is mapped through the deprecated-name table
+# first; an explicit `=version` is then kept as given, and a bare `name` is
+# completed from this repo's VERSION file.
 #
 # Skills pass a bare name so the version is not hardcoded in nine SKILL.md
 # files that then have to be edited on every release. The blackboard still
@@ -44,15 +45,19 @@ source "${SCRIPT_DIR}/task-context.sh"
 # ---------------------------------------------------------------------------
 resolve_skill_version() {
   local spec="$1"
+  local name="${spec%%=*}"
+  # A deprecated name resolves to its canonical one before it is recorded, so
+  # attribution on the blackboard never carries a name that no longer exists.
+  name="$(agent_skills_resolve_skill_name "${name}")"
   if [[ "${spec}" == *"="* ]]; then
-    printf '%s' "${spec}"
+    printf '%s=%s' "${name}" "${spec#*=}"
     return
   fi
   local version=""
   if [[ -f "${REPO_ROOT}/VERSION" ]]; then
     version="$(head -n 1 "${REPO_ROOT}/VERSION" | tr -d '[:space:]')"
   fi
-  printf '%s=%s' "${spec}" "${version:-unknown}"
+  printf '%s=%s' "${name}" "${version:-unknown}"
 }
 
 resolve_cache_root() {

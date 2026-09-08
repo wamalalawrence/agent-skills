@@ -5,7 +5,7 @@ must hand off when the task moves outside that surface.
 
 ## Role Ownership
 
-### `tech-lead`
+### `wamala`
 
 - Owns: classifying an incoming request, running the requirement-understanding gate, choosing
   the single skill that owns the next step, dispatching a fresh-context agent, and verifying
@@ -13,7 +13,7 @@ must hand off when the task moves outside that surface.
 - Does not own: implementation, review, refinement, investigation, testing, automation,
   decomposition, or terminology. It owns the **choice** of owner and nothing the owner does.
 - Typical handoff: exactly one owner per dispatched step, taken from the rows in
-  [`routing-table.md`](../skills/tech-lead/references/routing-table.md). Like
+  [`routing-table.md`](../skills/wamala/references/routing-table.md). Like
   `delivery-runner`, it **dispatches rather than invokes** — it never loads an executor skill
   into its own context, so the depth-cap-of-two bound applies inside each step and the lead
   never appears in that chain.
@@ -94,7 +94,7 @@ must hand off when the task moves outside that surface.
 
 ## Required Handoffs
 
-- `tech-lead` must dispatch to exactly one owner per step and must not perform any owner's
+- `wamala` must dispatch to exactly one owner per step and must not perform any owner's
   work itself. When a request needs several specialists it dispatches them in sequence,
   re-running the requirement-understanding gate against each completed step before dispatching
   the next. When no routing row matches it asks one focused question rather than inventing a
