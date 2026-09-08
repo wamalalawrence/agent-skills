@@ -1,0 +1,220 @@
+#!/usr/bin/env bash
+# agent-skills — one stable entry point, resolvable from any repository.
+#
+# This is the command every globally installed skill invokes. It exists so a
+# skill never has to guess a relative path like `agent-skills/scripts/...`,
+# which only worked when the clone happened to sit next to the current
+# directory. It resolves its own real location through any number of symlinks,
+# then dispatches to the matching helper in the same release.
+#
+# Run `agent-skills help` for the command list.
+
+set -uo pipefail
+
+# Resolve this script's physical directory, following symlinks. The launcher is
+# normally reached through two of them:
+#   ~/.local/bin/agent-skills -> ~/.agent-skills/bin/agent-skills -> <clone>/bin/agent-skills
+AS_SELF="${BASH_SOURCE[0]}"
+while [ -L "${AS_SELF}" ]; do
+  AS_SELF_DIR="$(cd -P "$(dirname "${AS_SELF}")" >/dev/null 2>&1 && pwd)"
+  AS_SELF_LINK="$(readlink "${AS_SELF}")"
+  case "${AS_SELF_LINK}" in
+    /*) AS_SELF="${AS_SELF_LINK}" ;;
+    *) AS_SELF="${AS_SELF_DIR}/${AS_SELF_LINK}" ;;
+  esac
+done
+AS_BIN_DIR="$(cd -P "$(dirname "${AS_SELF}")" >/dev/null 2>&1 && pwd)"
+AS_LIB_DIR="${AS_BIN_DIR}/../lib"
+AS_LIB_DIR="$(cd -P "${AS_LIB_DIR}" >/dev/null 2>&1 && pwd)"
+export AS_LIB_DIR
+
+# shellcheck source=lib/runtime.sh
+. "${AS_LIB_DIR}/runtime.sh"
+
+AS_SOURCE_DIR="$(as_source_dir 2>/dev/null || true)"
+PYTHON3="${PYTHON3:-python3}"
+
+usage() {
+  cat <<'EOF'
+Usage: agent-skills <command> [options]
+
+Installation
+  install               Install or refresh the machine-global installation
+  verify                Check the installation and report problems (no writes)
+  doctor                Report what this environment can actually do
+  update                Fetch the latest release and refresh the installation
+  check-updates         Compare the installed version against the latest release
+  uninstall             Remove agent-skills-owned links and state
+  hosts [--json]        List supported hosts and their global discovery paths
+  migrate               Explain how to move off a pre-0.37 workspace install
+
+Task lifecycle
+  start-task [args]     Mandatory preflight: memory, knowledge, capability report
+  finish-task [args]    Write durable memory, then clean up per-task scratch
+
+Context and access
+  project [--json]      Show the project context inferred from this repository
+  access <subcommand>   Resolve access to an external service (see below)
+
+Other
+  version               Print the installed version
+  help                  Show this message
+
+Access subcommands (see docs/access-resolution.md):
+  access resolve --service NAME [--resource URI] [--require f1,f2] [--secret f]
+  access profiles [--json]        List credential identities (never values)
+  access set --profile NAME --service NAME --field k=v [--secret-field k]
+  access bind --service NAME --profile NAME
+  access unbind --service NAME
+  access forget --profile NAME
+  access backend                  Report the secret-storage backend in use
+  access import-legacy            Offer to move legacy .env credentials in
+
+Installation options:
+  --yes                 Accept safe defaults (non-interactive)
+  --hosts a,b,c         Register only these host ids
+  --all-hosts           Register every linkable host, detected or not
+  --no-path-link        Do not link the launcher into a PATH directory
+  --source DIR          Use this source tree instead of the detected one
+  --purge               With uninstall: also remove credential metadata
+
+Nothing in `install` asks for a credential. External access is resolved when a
+task needs it. See docs/installation.md and docs/access-resolution.md.
+EOF
+}
+
+require_source() {
+  if [ -z "${AS_SOURCE_DIR}" ]; then
+    as_die "cannot locate the agent-skills source tree. Reinstall with: ./setup.init" 2
+  fi
+}
+
+# Delegate to a script inside the resolved release, so the helper and the
+# launcher always come from the same version.
+run_script() {
+  local relative="$1"
+  shift
+  require_source
+  local path="${AS_SOURCE_DIR}/${relative}"
+  if [ ! -f "${path}" ]; then
+    as_die "missing helper: ${path}" 2
+  fi
+  case "${relative}" in
+    *.py) exec "${PYTHON3}" "${path}" "$@" ;;
+    *) exec bash "${path}" "$@" ;;
+  esac
+}
+
+COMMAND="${1:-help}"
+[ "$#" -gt 0 ] && shift
+
+# Installation options shared by install/uninstall.
+AS_OPT_HOSTS=""
+AS_OPT_ALL_HOSTS="false"
+AS_OPT_NO_PATH="false"
+AS_OPT_PURGE="false"
+AS_OPT_YES="false"
+AS_OPT_JSON="false"
+AS_UPDATE_REF=""
+export AS_OPT_HOSTS AS_OPT_ALL_HOSTS AS_OPT_NO_PATH AS_OPT_PURGE
+
+parse_install_options() {
+  while [ "$#" -gt 0 ]; do
+    case "$1" in
+      --yes|-y) AS_OPT_YES="true"; shift ;;
+      --hosts) AS_OPT_HOSTS="${2:-}"; shift 2 ;;
+      --hosts=*) AS_OPT_HOSTS="${1#*=}"; shift ;;
+      --all-hosts) AS_OPT_ALL_HOSTS="true"; shift ;;
+      --no-path-link) AS_OPT_NO_PATH="true"; shift ;;
+      --purge) AS_OPT_PURGE="true"; shift ;;
+      --json) AS_OPT_JSON="true"; shift ;;
+      --source) AGENT_SKILLS_SOURCE="${2:-}"; export AGENT_SKILLS_SOURCE; shift 2 ;;
+      --source=*) AGENT_SKILLS_SOURCE="${1#*=}"; export AGENT_SKILLS_SOURCE; shift ;;
+      --branch) AS_UPDATE_REF="${2:-}"; shift 2 ;;
+      --branch=*) AS_UPDATE_REF="${1#*=}"; shift ;;
+      --help|-h) usage; exit 0 ;;
+      *) as_die "unknown option for '${COMMAND}': $1" 2 ;;
+    esac
+  done
+  export AS_OPT_HOSTS AS_OPT_ALL_HOSTS AS_OPT_NO_PATH AS_OPT_PURGE
+  AS_SOURCE_DIR="$(as_source_dir 2>/dev/null || true)"
+}
+
+case "${COMMAND}" in
+  install)
+    parse_install_options "$@"
+    # shellcheck source=lib/install.sh
+    . "${AS_LIB_DIR}/install.sh"
+    as_install_global
+    ;;
+
+  verify)
+    parse_install_options "$@"
+    . "${AS_LIB_DIR}/install.sh"
+    as_verify_install
+    ;;
+
+  uninstall)
+    parse_install_options "$@"
+    . "${AS_LIB_DIR}/install.sh"
+    if [ "${AS_OPT_YES}" != "true" ] && [ -t 0 ]; then
+      printf 'Remove agent-skills host registrations and install links? [y/N] '
+      read -r reply
+      case "${reply}" in
+        y|Y|yes|YES) : ;;
+        *) printf 'Cancelled.\n'; exit 0 ;;
+      esac
+    fi
+    as_uninstall_global
+    ;;
+
+  hosts)
+    parse_install_options "$@"
+    . "${AS_LIB_DIR}/install.sh"
+    as_list_hosts "${AS_OPT_JSON}"
+    ;;
+
+  update)
+    parse_install_options "$@"
+    require_source
+    args="--update"
+    [ -n "${AS_UPDATE_REF}" ] && args="${args} --branch ${AS_UPDATE_REF}"
+    # setup.init owns the git-side update (dirty-tree guard, tag checkout,
+    # changelog excerpt) and then re-runs the install.
+    # shellcheck disable=SC2086
+    exec bash "${AS_SOURCE_DIR}/setup.init" ${args}
+    ;;
+
+  check-updates)
+    require_source
+    exec bash "${AS_SOURCE_DIR}/setup.init" --check-updates
+    ;;
+
+  migrate)
+    require_source
+    . "${AS_LIB_DIR}/install.sh"
+    exec bash "${AS_SOURCE_DIR}/lib/migrate.sh" "$@"
+    ;;
+
+  start-task) run_script "scripts/start-task.sh" "$@" ;;
+  finish-task) run_script "scripts/finish-task.sh" "$@" ;;
+  doctor) run_script "scripts/doctor.sh" "$@" ;;
+  access) run_script "scripts/access.py" "$@" ;;
+  project) run_script "scripts/project-context.py" "$@" ;;
+
+  version)
+    if as_is_installed; then
+      printf '%s\n' "$(as_installed_version || printf 'unknown')"
+    else
+      printf '%s (not installed)\n' "$(as_source_version || printf 'unknown')"
+    fi
+    ;;
+
+  help|--help|-h) usage ;;
+
+  *)
+    printf 'agent-skills: unknown command %s\n\n' "${COMMAND}" >&2
+    usage >&2
+    exit 2
+    ;;
+esac
