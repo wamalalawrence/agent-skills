@@ -520,16 +520,16 @@ Retention and defaults:
 ## Performance
 
 The hook runs before every shell command, so the budget is the point. Measured on the false-
-positive corpus (77 ordinary development commands, 20 repetitions, 1540 samples) on macOS with
+positive corpus (the 77-command false-positive corpus, 20 repetitions, 1540 samples) on macOS with
 Python 3.9:
 
 | Metric | Value |
 | --- | --- |
-| p50 | 0.09 ms |
-| p95 | 0.26 ms |
-| p99 | 0.39 ms |
-| max | 0.58 ms |
-| cold invocation, process startup included | ~68 ms |
+| p50 | 0.10 ms |
+| p95 | 0.29 ms |
+| p99 | 0.42 ms |
+| max | 0.75 ms |
+| cold invocation, process startup included | ~70 ms |
 
 The in-process decision is dominated by process startup, which a host pays once per call. Two
 choices keep it there: no model is ever consulted, and the repository root is found by walking

@@ -116,8 +116,8 @@ in five families:
 All thirteen are fixed. Four new rules were added — `EXEC_UNRESOLVED_COMMAND`,
 `EXEC_OPAQUE_INPUT`, `DB_OPAQUE_STATEMENT`, and `FETCH_THEN_EXECUTE` — and the parser gained
 here-strings, multi-call binaries, and detection of a command whose program name it cannot read.
-After the fixes, **0 of 43 reach `ALLOW`**, the existing corpora are unchanged, and p95 is
-unmoved at 0.27 ms.
+After the fixes, **0 of 43 reach `ALLOW`**, the existing corpora are unchanged, no benign
+case regressed, and p95 moved from 0.27 ms to 0.29 ms.
 
 All 28 are now permanent regression cases in the `REDTEAM` corpus. A bypass found once and fixed
 once but never written down comes back at the next refactor.
@@ -191,9 +191,9 @@ macOS, Python 3.9.
 
 | Metric | Value |
 | --- | --- |
-| p50 | 0.092 ms |
-| p95 | 0.266 ms |
-| p99 | 0.413 ms |
+| p50 | 0.096 ms |
+| p95 | 0.286 ms |
+| p99 | 0.421 ms |
 | cold invocation (process startup included) | ~70 ms |
 
 The suite fails if p95 exceeds 5 ms. In-process cost is dominated by process startup, which a

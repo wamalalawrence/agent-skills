@@ -267,8 +267,8 @@ hard-to-undo domains are gated. `docker compose down -v` is `ASK` rather than `D
 
 ### T11 — Performance makes the guard a liability
 
-**Status: probed.** 1540 samples over the benign corpus: p50 0.09 ms, p95 0.26 ms, p99 0.39 ms,
-max 0.58 ms in-process; ~68 ms per cold invocation including Python startup. The suite fails if
+**Status: probed.** 1540 samples over the benign corpus: p50 0.10 ms, p95 0.29 ms, p99 0.42 ms,
+max 0.75 ms in-process; ~70 ms per cold invocation including Python startup. The suite fails if
 p95 exceeds 5 ms.
 
 **Design note.** Two choices keep it there: no model is ever consulted, and the repository root
