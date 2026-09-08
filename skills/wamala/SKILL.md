@@ -25,7 +25,7 @@ compatibility: >-
   `local-workspace`. See docs/execution-modes.md.
 metadata:
   author: wamalalawrence
-  version: "0.39.0"
+  version: "0.40.0"
   homepage: "https://github.com/wamalalawrence/agent-skills"
 argument-hint: "<the request — a ticket key, a PR link, a bug report, or plain prose>"
 user-invocable: true
@@ -257,6 +257,7 @@ Take the first row that matches. The full table with rationale is in
 | `automation`, the behaviour to assert is not agreed | `product-owner` | Automation must not freeze an unsettled assumption |
 | `automation`, a failing test points at a product defect | `issue-investigator` | Product root cause is never the suite's to decide |
 | `automation`, scenario too unstable to assert | `manual-tester` | Exploratory scope stays manual |
+| Tests for a code change this session is making or just made | `software-engineer` | Owns the developer tests that ship with its own change |
 | `automation` — new coverage, broken suite, CI triage, flakes, runtime, backlog | `test-automation-engineer` | Owns the suite end to end |
 | `validation`, scenario not yet stable | `manual-tester` | Owns exploratory and manual scope |
 | `validation`, scenario stable and worth automating | `test-automation-engineer` | Owns level choice |

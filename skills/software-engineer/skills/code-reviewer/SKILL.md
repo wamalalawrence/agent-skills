@@ -16,7 +16,7 @@ compatibility: >-
   .agent-skills.yml). See docs/execution-modes.md.
 metadata:
   author: wamalalawrence
-  version: "0.39.0"
+  version: "0.40.0"
   homepage: "https://github.com/wamalalawrence/agent-skills"
 argument-hint: >-
   optional: mode inner|outer, base branch, issue key/URL, PR URL, or task description
@@ -295,10 +295,8 @@ for them.
   - `inner`: staged diff, intended for implementation checkpoint review.
   - `outer`: branch diff against base, intended for pre-PR or final review.
   - `pr`: pull request diff and metadata.
-  - `manual`: user-supplied diff or code excerpt. Use the `test-quality` profile when the diff is
-    test code (e.g., `test-automation-engineer` or `manual-tester` outputs) and focus findings on
-    selector stability, deterministic data, condition-based waits (no fixed sleeps), assertion
-    meaningfulness, and isolation.
+  - `manual`: user-supplied diff or code excerpt. Use the
+    [`test-quality` profile](#the-test-quality-profile) when the diff is test code.
 
 #### Hard handoff contract from the engineer
 
@@ -342,6 +340,60 @@ Surface a `major` finding when any of the following is missing or empty:
 If the evidence pack is missing entirely, the reviewer must not re-derive context silently — it
 surfaces the missing handoff as a `major` finding and asks the engineer to produce it before the
 loop continues.
+
+#### The `test-quality` profile
+
+Applies whenever the diff under review is test code — developer tests written by
+[`software-engineer`](../../SKILL.md), automation from
+[`test-automation-engineer`](../../../test-automation-engineer/SKILL.md), or scenarios from
+[`manual-tester`](../../../manual-tester/SKILL.md). Test code is production code; it is reviewed as
+such. The profile has one shared layer and two specific ones. Apply the shared layer always, then
+whichever specific layer matches the tests in the diff. Do not apply unit-mocking scrutiny to a UI
+automation diff, and do not apply selector-stability scrutiny to a pure unit test.
+
+**Shared fundamentals** — every test, every level:
+
+- The test protects a behaviour someone can name, and that behaviour is worth protecting.
+- Assertions are meaningful. A test that runs code and asserts nothing useful is a finding
+  regardless of what it does for coverage.
+- Determinism: no dependence on wall-clock timing, unseeded randomness, test order, or shared
+  mutable state.
+- Isolation and cleanup: the test can run alone, in parallel, and twice.
+- Readability: the scenario is legible without reverse-engineering the setup.
+- Failure quality: when it fails, the message points at what broke.
+
+**Developer-test concerns** — unit and focused integration tests. Judged against
+[developer testing](../../references/developer-testing.md):
+
+- **Unit boundary.** Is the unit a behavioural boundary or an accidental one class? Several cheap
+  domain objects cooperating inside one test is legitimate, not a defect.
+- **Real vs doubled collaborators.** Are deterministic, cheap, in-process, owned collaborators
+  doubled for no stated reason? Being a constructor dependency is not a reason.
+- **Double type.** Is the least powerful suitable double used, or is a verifying mock standing in
+  for what a stub or a hand-written fake would do with less coupling?
+- **Verification style.** Where an observable output or state proves the behaviour, is that what
+  the test asserts? Where the test asserts interactions instead, is the interaction genuinely the
+  contract?
+- **Refactoring resilience.** Would this test fail after an internal restructuring that preserves
+  the behaviour it protects? If so, is that coupling deliberate?
+- **Adapter boundaries.** Is business logic tested against an owned port, or against a stubbed
+  chain of a third-party SDK's internals? If the latter, is there any coverage that would catch the
+  vendor behaving differently than the stub claims?
+- **Test level.** Would this defect actually be caught here? A serialization or wiring regression
+  cannot be caught by a test that never serializes or wires.
+- **Design feedback.** Does the test's difficulty — many doubles, sprawling setup, private-method
+  access, framework bootstrap for trivial logic — point at a production-design problem worth
+  naming?
+
+**Automation and system-test concerns** — API, UI, e2e, and broader regression automation:
+
+- Selector stability: semantic roles, accessible names, or the repository's existing test-id
+  convention rather than brittle structural paths.
+- Condition-based waits, never fixed sleeps.
+- Deterministic and parallel-safe test data, with named cleanup ownership.
+- Level appropriateness: coverage that belongs lower down, or assertions duplicated across levels.
+- No green-washing: blanket retries, `force: true`, deleted assertions, blanket snapshot updates,
+  or silent skips.
 
 ### 2. Build issue-aware context first
 
@@ -387,6 +439,46 @@ Layer 2 review areas:
 
 Use provided company-specific standards, architecture guidance, or engineering URLs as additional
 context when the user provides them. Do not hard-code private standards into this public skill.
+
+#### Developer-test review (binding when the diff changes tests)
+
+Any diff that adds or changes tests gets the
+[`test-quality` profile](#the-test-quality-profile) applied to those files, whatever the review
+mode. Review the test code with the same seriousness as the production code — the tests are the
+thing that will or will not catch the next regression.
+
+Test findings to raise **when the evidence in the diff supports them**:
+
+- `major` — the test verifies implementation choreography rather than behaviour: it asserts which
+  collaborators were called while the contract is the value returned or the state changed.
+- `major` — third-party SDK internals are stubbed to test business logic, and no adapter or
+  contract coverage exists that would catch the vendor behaving differently.
+- `major` — a regression test can pass while the required observable behaviour is broken, because
+  the stubs supply the answers the assertions then check.
+- `major` — the test only verifies calls and never verifies a meaningful result.
+- `major` — the defect being fixed lives in serialization, persistence, or framework wiring, and
+  the test never exercises that layer, so it cannot detect the regression it exists for.
+- `minor` — a trivial deterministic in-process collaborator is doubled for no stated reason.
+- `minor` — double setup dominates the test and hides the business scenario.
+- `minor` — broad framework bootstrapping is used for logic a focused test could prove cheaply.
+- `minor` — the test name describes the method invoked rather than the behaviour and its outcome.
+
+These are shapes, not a list to emit. Each finding still needs evidence from the diff, an impact,
+and a concrete suggested fix, like every other finding.
+
+Three things the reviewer must not do:
+
+- **Do not treat mocks or `verify(...)` as defects in themselves.** Interaction verification is
+  correct where the interaction is the behaviour: a side effect that must happen once, a call that
+  must not happen, an outbound protocol shape, cache hit versus miss, an audit record, a suppressed
+  duplicate. Raising a finding against one of those is itself wrong.
+- **Do not count doubles.** There is no threshold. A high count is a prompt to check whether the
+  unit boundary and the production design are right; the finding, when there is one, is about the
+  design or the coupling, not the number.
+- **Do not require a testing school.** Neither "use real collaborators everywhere" nor "isolate
+  every class" is this repository's policy, and neither is a valid finding. Nor is the absence of
+  test-first development: judge the tests and the design that resulted, not the order in which they
+  were written.
 
 #### Date-gated / phased-rollout check (binding)
 
@@ -690,6 +782,9 @@ for the per-value semantics.
 - [ ] Any failed targeted test, build, or CI job is surfaced as `major`/`blocker` and forbids
   `PASS` / `PASS_WITH_NOTES` unless dismissed with evidence (parent-commit rerun, known-flaky
   ticket, or clean rerun).
+- [ ] When the diff changes tests, the `test-quality` profile ran on them — shared fundamentals
+  plus the developer-test or automation layer that matches — and any test finding names the
+  behaviour left unprotected rather than the presence of a double.
 - [ ] Findings include severity, evidence, impact, suggested fix, confidence, and blocking/advisory
   decision **as inline content of one bullet, not as a seven-line skeleton**.
 - [ ] Output follows [`docs/output-discipline.md`](../../../../docs/output-discipline.md):
@@ -709,6 +804,8 @@ for the per-value semantics.
 - Review must call out uncertainty instead of inventing missing facts.
 - Review must distinguish blocking risks from advisory improvements.
 - Review must avoid style-only noise that belongs to automated tools.
+- Test findings must name the behaviour that is left unprotected or the coupling that will break
+  under a behaviour-preserving refactor, not the mere presence or count of test doubles.
 - Suggested fixes must be concrete and minimal.
 - Large-diff truncation or skipped files must be disclosed.
 - Final verdict must use only `PASS`, `PASS_WITH_NOTES`, `REQUEST_CHANGES`, `NEEDS_CONTEXT`, or
@@ -724,6 +821,13 @@ for the per-value semantics.
   `blocker` because it prevents focused review and clean rollback.
 - Do not recommend broad rewrites unless the evidence shows the current approach is materially
   unsafe or unmaintainable.
+- Do not raise a finding against a mock, a stub, or an interaction assertion on principle. The
+  finding must be that a behaviour is unprotected, that the test is coupled to implementation the
+  contract does not include, or that the double hides the thing under test. Mock counts, ratios,
+  and thresholds are not findings.
+- Do not require a particular testing school, or test-first authoring, as a condition of approval.
+- Do not accept coverage as evidence of test quality, and do not approve tests added only to raise
+  a coverage number.
 - Do not rewrite the diff during review unless the user explicitly asks for implementation help.
 - Do not store secrets or private customer data in cache or output.
 - Do not claim tests, builds, or issue-system checks were verified unless they were actually run or

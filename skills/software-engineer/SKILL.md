@@ -20,7 +20,7 @@ compatibility: >-
   .agent-skills.yml). See docs/execution-modes.md.
 metadata:
   author: wamalalawrence
-  version: "0.39.0"
+  version: "0.40.0"
   homepage: "https://github.com/wamalalawrence/agent-skills"
 argument-hint: "<the change to make — a ticket key, a bug, or a described feature>"
 user-invocable: true
@@ -584,7 +584,43 @@ patterns](./references/architecture-patterns.md). Key universals:
 - Never overwrite or corrupt binary resource files.
 - Follow existing patterns for new resource files.
 
-### 2.4 Inner-loop code review (call `code-reviewer`)
+### 2.4 Test design (decide before writing the tests)
+
+Tests are part of the change, not a step after it. Before writing them, settle six things — in a
+sentence each for a `tiny` or `small` task, a short paragraph for anything with real regression
+risk. This is a decision, not a document; do not produce a test-plan section for a typo fix.
+
+1. **Behaviour to protect** — the observable thing that must keep working, named without naming a
+   method.
+2. **Test level** — the lowest level that can reliably detect the regression. Serialization,
+   persistence, wiring, and messaging defects do not belong in a pure unit test just because unit
+   tests are cheaper.
+3. **Unit boundary** — which collaborating pieces form the unit. A unit is a behavioural boundary,
+   not automatically one class.
+4. **Real vs doubled collaborators** — real by default for in-process, deterministic, cheap,
+   owned collaborators; doubled where a boundary is external, slow, non-deterministic, or awkward,
+   or where isolation is genuinely worth the coupling.
+5. **Double type** — the least powerful one that answers the question: dummy, stub, fake, spy, or
+   mock.
+6. **Verification style** — observable output or state by default; interaction verification when
+   the interaction itself is the behaviour (an email sent once, a transaction not attempted, an
+   idempotent second call suppressed).
+
+Then cover the edge and error cases that carry actual risk, and ask the seventh question:
+**is this test hard to write because the production design is wrong?** Excessive doubles, sprawling
+setup, private-method access, or a framework bootstrap for trivial logic is design feedback. A small
+production refactor that improves both design and testability is in scope when the task justifies
+it — state it in the plan. Refactoring unrelated architecture to make one test prettier is not.
+
+Full guidance, including the double-selection table, the boundary/adapter rule, refactoring
+resilience, and a worked mock-heavy vs behaviour-oriented example:
+[developer testing](./references/developer-testing.md).
+
+For bug fixes this does not replace [1.5](#15-reproduce-before-fix-gate-bug-fixes-only): the failing
+regression test still comes first and still must fail on the parent commit. These six decisions
+choose *what level and shape* that regression test takes.
+
+### 2.5 Inner-loop code review (call `code-reviewer`)
 
 After the implementation is functional locally and the staged diff is what you intend to commit,
 invoke the [`code-reviewer`](./skills/code-reviewer/SKILL.md) skill in **inner-loop mode**. Pass the
@@ -675,11 +711,15 @@ Quickly verify by category:
 
 ### 3.2 Test coverage
 
+This skill owns the tests that ship with the change: developer unit tests, the focused integration
+tests the change needs, and its regression tests. Do not route ordinary developer testing to another
+skill — writing appropriate tests for your own code does not need a second specialist.
+
 - [ ] For user-facing or workflow-heavy changes, use [`manual-tester`](../manual-tester/SKILL.md) to
   identify manual validation scenarios and regression risk.
-- [ ] For stable, high-value regression scenarios, use
-  [`test-automation-engineer`](../test-automation-engineer/SKILL.md) to choose the right automation
-  level and avoid brittle tests.
+- [ ] For coverage that belongs to the broader automated suite — cross-cutting regression packs,
+  API/system/UI automation, suite strategy, or CI framework work — hand off to
+  [`test-automation-engineer`](../test-automation-engineer/SKILL.md).
 - [ ] New code: target `${COVERAGE_TARGET_PERCENT:-80}` percent at minimum, 100% for safety-critical
   code paths. Verify every branch and path you added. (`${COVERAGE_TARGET_PERCENT}` is an
   *agent-resolved* placeholder; the agent reads the value from the loaded `.env`. When the
@@ -688,10 +728,22 @@ Quickly verify by category:
   `.agent-skills.yml` \u2192 `COVERAGE_TARGET_PERCENT` env var \u2192 literal `80`.)
 - [ ] Tests should be fast; slow or noisy tests are a design smell unless there is a real
   integration reason.
-- [ ] Service / persistence changes require unit tests. API/interface changes require integration
-  tests plus unit tests for underlying layers.
-- [ ] Test naming is consistent with the rest of the project. Long test names may use underscores to
-  separate scenario and expectation when that helps readability.
+- [ ] Every changed behaviour has a test at the level that can actually detect its regression.
+  Logic and rules unit; mapping, serialization, wiring, persistence, and messaging integration;
+  producer/consumer agreements contract. Do not force an integration-level defect into a unit test
+  because unit tests are cheaper, and do not reach for a framework bootstrap to cover logic a
+  focused test can prove.
+- [ ] The six [test-design decisions](#24-test-design-decide-before-writing-the-tests) were made
+  and the tests reflect them: behaviour protected, level, unit boundary, real vs doubled
+  collaborators, double type, verification style.
+- [ ] In-process, deterministic, cheap, owned collaborators — validators, calculators, mappers,
+  policies, value objects — are real unless there is a stated reason to double them. "Injected into
+  the constructor" is not a reason.
+- [ ] Assertions verify observable output or state where that proves the behaviour. Interaction
+  verification is present only where the interaction *is* the behaviour, and the test name says so.
+- [ ] Test names describe the behaviour and its outcome (`rejectsExpiredPaymentMethod`), not the
+  method invoked (`testCalculate`, `shouldCallRepository`). Naming style is consistent with the rest
+  of the project; long names may use underscores to separate scenario and expectation.
 - [ ] Use the project's preferred assertion library (AssertJ for Java, Vitest/Jest for TS, pytest
   for Python). Be consistent.
 - [ ] Keep test data explicit and deterministic; avoid faker/EasyRandom-style generators unless
@@ -702,10 +754,21 @@ Quickly verify by category:
   annotations/setup when justified.
 - [ ] If DB cleanup is needed, do it explicitly in teardown rather than wrapping tests in
   `@Transactional` rollback.
-- [ ] Mock external HTTP services (WireMock / MockServer / msw / responses).
+- [ ] Substitute the external process boundary, not an ordinary collaborator: HTTP and network
+  calls, third-party APIs, email/SMS, brokers, the filesystem, the clock, randomness. Use the
+  project's tooling (WireMock / MockServer / msw / responses) at that boundary.
+- [ ] Business logic is tested against an owned port or interface, not against a stubbed chain of a
+  third-party SDK's internals. Where the owned boundary exists, the adapter behind it carries its
+  own integration or contract coverage; where it does not, say so and name the follow-up rather
+  than deep-stubbing the vendor API.
 - [ ] Use Testcontainers (or equivalent) when an in-memory substitute would not be representative.
+- [ ] Difficult tests were treated as design feedback, not compensated for with more test
+  machinery. Record any production refactor made for testability in the plan.
 - [ ] For multi-variant projects, run the relevant variants' test profile.
-- [ ] Coverage report: open the project's coverage report and verify your changes.
+- [ ] Coverage report: open the project's coverage report and verify your changes. Coverage is
+  evidence about which lines ran, not proof that behaviour is protected — do not add assertion-free
+  tests to move the number. Where a gate is mandatory, meet it honestly and say so if meeting it
+  required tests of low value.
 
 ### 3.3 Build & format
 
@@ -754,7 +817,7 @@ Before moving to Phase 4, invoke the [`code-reviewer`](./skills/code-reviewer/SK
 Pass the same evidence pack plus QA results, commands run, skipped checks, and any waivers from the
 inner-loop review.
 
-Auto-iterate the outer loop the same way as the inner loop. Apply the four-case rule from Phase 2.4
+Auto-iterate the outer loop the same way as the inner loop. Apply the four-case rule from Phase 2.5
 ("Auto-iterate, do not hand each round back to the user") with the outer-loop severity filter
 (`${CODE_REVIEWER_SHOW_SEVERITIES}`, default `blocker,major,minor,nit`). Address blocker and major
 findings in code, fix `minor`/`nit` items only when cheap and on-scope, then re-stage, re-run the
@@ -1098,6 +1161,9 @@ review, or root-cause confirmation unless that work actually happened.
   unless explicitly out of scope with a stated reason.
 - [ ] Plan, implementation, validation, and `code-reviewer` handoff all point at the same intended
   behavior.
+- [ ] Tests name the behaviour they protect, sit at the level that can detect its regression, keep
+  cheap deterministic collaborators real, and verify observable outcomes unless the interaction
+  itself is the behaviour.
 - [ ] Test, build, review, and root-cause claims are backed by commands, outputs, or supplied
   evidence.
 
@@ -1106,6 +1172,8 @@ review, or root-cause confirmation unless that work actually happened.
 - Output must distinguish facts, assumptions, missing evidence, and user decisions.
 - Implementation plans must be small enough for review and tied to observed code or issue evidence.
 - Changes must follow local repository conventions before generic preferences.
+- Tests must protect observable behaviour and survive behaviour-preserving refactoring, except
+  where an interaction is itself the contract being asserted.
 - Bug fixes must flow through investigation and a reproducible failing-regression-test strategy
   unless explicitly out of scope.
 - Review results must use the nested
@@ -1116,6 +1184,11 @@ review, or root-cause confirmation unless that work actually happened.
 
 - Do not invent missing ticket context, expected behavior, root cause, logs, tests, or standards.
 - Do not claim tests were run unless the exact command or manual validation was performed.
+- Do not double a collaborator merely because it is injected, and do not assert on collaborator
+  calls where an observable outcome proves the same behaviour. Both add coupling without confidence.
+- Do not stub the internals of a third-party SDK to test business logic, and do not present that as
+  adapter coverage.
+- Do not add tests whose purpose is to raise a coverage number rather than protect behaviour.
 - Do not hard-code private company assumptions into this public skill.
 - Do not bypass review gates, git hooks, or failing checks without a recorded waiver.
 - Do not treat generated output as complete when required evidence is unavailable.
@@ -1181,6 +1254,9 @@ See [the software-engineer bugfix example](../../docs/examples/software-engineer
 - [Security checklist](./references/security-checklist.md) — OWASP-aligned security review items
 - [SonarQube checklist](./references/sonarqube-checklist.md) — quality gate items to check before
   commit
+- [Developer testing](./references/developer-testing.md) — choosing the unit, real collaborators
+  vs doubles, double types, state vs interaction verification, boundary adapters, refactoring
+  resilience, test-level selection
 - [Architecture patterns](./references/architecture-patterns.md) — module layout, multi-variant
   projects, framework conventions
 - [Destructive action guardrails](./references/destructive-action-guardrails.md) — the full

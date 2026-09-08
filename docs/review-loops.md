@@ -52,9 +52,14 @@ Each entry: producer → reviewer (mode), trigger, exit rule.
   `Defects Found`. Exit: one revision round on the plan; defects that fail the
   investigator handoff become `product question` instead of `defect`.
 - **`test-automation-engineer` → `code-reviewer` (`manual` mode, `test-quality`
-  profile).** Trigger: after step 6 "Review automation value", before merging the new
-  tests. Exit: one revision round on the new test files; surviving findings ship as
-  inline TODOs with linked follow-up issues.
+  profile — shared fundamentals plus the automation and system-test layer).** Trigger:
+  after step 6 "Review automation value", before merging the new tests. Exit: one revision
+  round on the new test files; surviving findings ship as inline TODOs with linked
+  follow-up issues.
+- **Developer tests are reviewed inside the existing engineer↔reviewer loops, not by a
+  separate one.** `code-reviewer` applies the same `test-quality` profile — shared
+  fundamentals plus the developer-test layer — to any inner-, outer-, or PR-mode diff that
+  changes tests. No extra round, no new loop level, no second skill.
 - **`delivery-planner` → self-validation against the
   [plan-quality checklist](../skills/delivery-planner/references/plan-quality-checklist.md).**
   Trigger: before emitting the final `Plan Summary`. Exit: one revision round on the

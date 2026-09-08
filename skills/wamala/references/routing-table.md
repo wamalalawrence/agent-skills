@@ -33,10 +33,11 @@ Rows are evaluated top to bottom, first match wins. The ordering encodes two pri
 | 12 | `automation`, but the behaviour the test should assert is not agreed | `product-owner` | Automation must not freeze an unsettled assumption into CI |
 | 13 | `automation`, but a failing automated test points at a product defect | `issue-investigator` | Product root cause is never the suite's to decide |
 | 14 | `automation`, but the scenario is not stable enough to assert mechanically | `manual-tester` | Exploratory scope stays manual |
-| 15 | `automation` — new coverage, a broken suite, CI triage, flakes, runtime, or a backlog | `test-automation-engineer` | Owns the suite, its failures, and its level choices |
-| 16 | `validation`, scenario not yet stable | `manual-tester` | Owns exploratory and manual scope |
-| 17 | `validation`, scenario stable and worth automating | `test-automation-engineer` | Owns level choice and fixtures |
-| 18 | A term is contested, or a hard-to-reverse decision needs recording | `domain-modeler` | Owns the glossary and ADRs |
+| 15 | Tests for a code change this session is making or just made | `software-engineer` | Owns the developer tests that ship with its own change |
+| 16 | `automation` — new coverage, a broken suite, CI triage, flakes, runtime, or a backlog | `test-automation-engineer` | Owns the suite, its failures, and its level choices |
+| 17 | `validation`, scenario not yet stable | `manual-tester` | Owns exploratory and manual scope |
+| 18 | `validation`, scenario stable and worth automating | `test-automation-engineer` | Owns level choice and fixtures |
+| 19 | A term is contested, or a hard-to-reverse decision needs recording | `domain-modeler` | Owns the glossary and ADRs |
 
 ## Chains
 
@@ -81,6 +82,13 @@ decision belongs to the person who asked.
 **"Review this and fix what you find."** Two owners. Dispatch `code-reviewer` first, return the
 findings, and let the user decide on the fix. Bundling them means the reviewer's independence is
 lost — the same context both writes and judges the change.
+
+**"Write unit tests for the pricing rules I just changed."** `change` →
+`software-engineer`, not `automation`. The tests that ship with a code change — unit, the focused
+integration tests it needs, its regression test — belong to the engineer who wrote the code, and
+the unit-boundary and test-double decisions are part of writing it. Route to
+`test-automation-engineer` when the ask is about the *suite*: broader regression automation,
+API/system/UI coverage, level strategy, CI, or an existing suite's health.
 
 **"The test is flaky."** `automation` → `test-automation-engineer`, which owns diagnosis. It
 becomes `defect` → `issue-investigator` only when the diagnosis finds a real race in production
