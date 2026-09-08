@@ -74,12 +74,16 @@ must hand off when the task moves outside that surface.
 
 ### `test-automation-engineer`
 
-- Owns: automation strategy, test level choice, fixtures, selectors/contracts, CI artifacts, and
-  flakiness risk.
-- Does not own: automating unclear behavior, manual exploration, product intent, or root-cause
-  investigation.
-- Typical handoff: to `manual-tester` for unstable/manual scenarios, to `issue-investigator` for
-  repro evidence, and to `code-reviewer` for test-quality review.
+- Owns: the automated suite end to end — automation strategy, test level choice, framework and
+  convention discovery, fixtures, selectors/contracts, test data and environment lifecycle, CI
+  artifacts, suite maintenance after product change, failure triage, flake diagnosis, backlog
+  prioritisation, suite runtime, and requirement-to-test traceability.
+- Does not own: automating unclear behavior, manual exploration, product intent, root-cause
+  analysis of a product defect, or fixing the product. A failing test that exposes a real bug is
+  routed, not patched.
+- Typical handoff: to `issue-investigator` for a failure triaged `PRODUCT_DEFECT`, to
+  `product-owner` when the behaviour a test should assert was never agreed, to `manual-tester` for
+  unstable or exploratory scenarios, and to `code-reviewer` for test-quality review.
 
 ### `domain-modeler`
 

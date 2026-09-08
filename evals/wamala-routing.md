@@ -6,7 +6,7 @@ agent's chat summary as proof a step completed.
 
 ## Input Context
 
-Four requests, presented separately in fresh sessions against `example-api`
+Six requests, presented separately in fresh sessions against `example-api`
 (`base_branch: main`, tracker configured, host supports sub-agents):
 
 - **A — defect, no root cause.** "Invoice search drops the status filter on page 2." No
@@ -15,10 +15,13 @@ Four requests, presented separately in fresh sessions against `example-api`
 - **C — bare key.** "Handle PROJ-1234." The tracker resolves, but nothing else is supplied.
 - **D — performance complaint with no target.** "The dashboard is slow." No budget, no SLA, no
   prior measurement.
+- **E — a wall of CI test failures.** "CI has 42 failing tests, sort it out." The failures are in
+  the repository's own automated suite. Nothing says whether they are product bugs or broken tests.
+- **F — a slow test suite.** "Our regression suite takes 70 minutes." No budget was ever stated.
 
 ## Skill Under Test
 
-`wamala`
+`wamala`, `test-automation-engineer`
 
 ## Expected Behavior
 
@@ -38,7 +41,18 @@ user for the summary and acceptance criteria instead of guessing from the key or
 **D** classifies as `intent-unclear`, not `defect`. Without a target there is no expected
 behaviour to violate, so it routes to `product-owner` and says why in one line.
 
-Across all four: exactly one owner per dispatch, each target's `SKILL.md` verified by file read
+**E** classifies as `automation` and dispatches `test-automation-engineer` as a single step for
+triage. It does not split 42 failures across owners, does not send the wall to
+`issue-investigator` on the assumption they are product defects, and does not send it to
+`software-engineer` as maintenance. Only after triage classifies a cluster as `PRODUCT_DEFECT`
+does a second step go to `issue-investigator`, carrying that cluster and its evidence.
+
+**F** classifies as `automation`, not `intent-unclear`, and dispatches
+`test-automation-engineer`. The "it's slow needs a target" rule governs *product* performance,
+where the target is a product decision; a test suite's runtime is owned by the engineers who pay
+it, and the trade between runtime and confidence is the automation engineer's call.
+
+Across all six: exactly one owner per dispatch, each target's `SKILL.md` verified by file read
 before dispatch, each step's result verified from a persisted artifact, and a routing reason that
 cites something concrete from the request.
 
@@ -61,6 +75,11 @@ cites something concrete from the request.
 - Route B to `software-engineer` because "add SSO" sounds like a change.
 - Classify C from the ticket key, the branch name, or the project prefix.
 - Route D as a defect without a stated target.
+- Route E to `issue-investigator` or `software-engineer` before anything has triaged the failures.
+- Split E into per-failure dispatches, or exceed the dispatch cap fanning out across 42 failures.
+- Route F to `product-owner` by analogy with D. Suite runtime is not a product target.
+- Let `test-automation-engineer` absorb the root-cause analysis for E's product-defect clusters
+  instead of handing them on.
 - Bundle two owners into one handoff — for example dispatching "fix it and write the regression
   automation" as a single step.
 - Dispatch `code-reviewer` alongside an implementation step. The engineer runs that loop itself.
@@ -79,6 +98,10 @@ cites something concrete from the request.
 - [ ] B routed to `product-owner`; no acceptance criteria were authored by Wamala.
 - [ ] C fetched the ticket before classifying, or asked for the summary when no tracker resolved.
 - [ ] D routed as `intent-unclear`, with the missing target named.
+- [ ] E routed to `test-automation-engineer` as one triage step, not fanned out per failure.
+- [ ] E's second step, if any, went to `issue-investigator` only for clusters already classified
+      `PRODUCT_DEFECT`.
+- [ ] F routed as `automation` to `test-automation-engineer`, not to `product-owner`.
 - [ ] Every dispatch names exactly one owner skill.
 - [ ] Every target `SKILL.md` was verified by file read, not by host skill listing.
 - [ ] No executor skill appears in Wamala's own context.

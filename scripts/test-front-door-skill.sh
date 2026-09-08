@@ -14,6 +14,10 @@
 #
 # Usage: bash scripts/test-front-door-skill.sh [-v]
 #
+# Environment:
+#   AGENT_SKILLS_RENAME_BASELINE_TAG   release the front door was renamed FROM (default v0.37.0)
+#   AGENT_SKILLS_ROUTING_BASELINE_TAG  release the rename landed IN (default v0.38.0)
+#
 # Exit 0 when every case passes, 1 otherwise.
 
 set -uo pipefail
@@ -23,6 +27,8 @@ SKILL_DIR="${REPO_ROOT}/skills/wamala"
 SKILL_MD="${SKILL_DIR}/SKILL.md"
 BASELINE_TAG="${AGENT_SKILLS_RENAME_BASELINE_TAG:-v0.37.0}"
 BASELINE_SKILL="skills/tech-lead"
+RENAMED_TAG="${AGENT_SKILLS_ROUTING_BASELINE_TAG:-v0.38.0}"
+RENAMED_SKILL="skills/wamala"
 VERBOSE="false"
 [ "${1:-}" = "-v" ] && VERBOSE="true"
 
@@ -124,31 +130,117 @@ for nested in issue-investigator code-reviewer; do
 done
 
 # ------------------------------------------------------------------------------
-section "routing contract is unchanged by the rename"
+section "routing contract survives later releases"
 # ------------------------------------------------------------------------------
 # Compare the machine-readable half of the contract — the routing rows and the
-# chains — against the release before the rename, with the identity substituted.
-# A row that gained, lost, or changed an owner shows up as a diff.
+# chains — against every earlier release that shipped it, with the identity
+# substituted.
+#
+# The rule is **ordered subsequence, not equality**. Routing gains rows
+# deliberately: a release that teaches the router a new class adds rows, and
+# forbidding that would freeze the table rather than protect it. What must never
+# happen is a row silently losing its owner, disappearing, or MOVING, because
+# the table is first-match-wins and its order is the semantics. So every
+# baseline row must still be present, verbatim, and in the same relative order.
+# An added row is reported, not failed.
+#
+# An earlier draft of this compared the two sets with `comm` on sorted input.
+# That allowed additions, which was the point, but it also silently allowed
+# reordering — and reordering the catch-all row above the boundary rows inverts
+# exactly the ownership the boundary rows exist to protect. Set comparison is
+# the wrong tool for an ordered contract.
 routing_rows() {
-  # Table rows only, name normalised, whitespace collapsed.
+  # Every table row in the file, name normalised, whitespace collapsed. Scanning
+  # all tables rather than only the routing table is deliberate over-inclusion:
+  # the class table and the chains table are contract too, and a check that
+  # covers more than it must is the safe direction to err in.
   sed -n 's/^|/|/p' \
     | grep -v '^| *---' \
     | sed -e 's/tech-lead/wamala/g' -e 's/[[:space:]]\{1,\}/ /g'
 }
 
+# Rows carry a leading index in references/routing-table.md, and renumbering on
+# insert is not a contract change. Compare on the part that is the contract:
+# the condition, the owner, and the reason. Order is preserved by the caller.
+routing_rows_unindexed() {
+  routing_rows | sed -e 's/^| [0-9]\{1,\} |/|/'
+}
+
+# Print the baseline rows that are absent from the current table, or present but
+# out of order. Exit non-zero when any is. Greedy single pass: for each baseline
+# row in order, advance through the current rows until it is found. A row that
+# moved earlier has already been passed by the time it is looked for, so it
+# reports as missing — which is the intent.
+ordered_subsequence_gaps() {
+  awk 'NR==FNR { cur[++n] = $0; next }
+       { base[++m] = $0 }
+       END {
+         i = 1; gaps = 0
+         for (j = 1; j <= m; j++) {
+           found = 0
+           while (i <= n) {
+             if (cur[i] == base[j]) { found = 1; i++; break }
+             i++
+           }
+           if (!found) { print base[j]; gaps = 1 }
+         }
+         exit gaps
+       }' "$2" "$1"
+}
+
+compare_routing_artifact() {
+  local tag="$1" baseline_skill="$2" artifact="$3" before after missing added
+  before="$(mktemp)"; after="$(mktemp)"
+  git -C "${REPO_ROOT}" show "${tag}:${baseline_skill}/${artifact}" 2>/dev/null \
+    | routing_rows_unindexed > "${before}"
+  routing_rows_unindexed < "${SKILL_DIR}/${artifact}" > "${after}"
+  if [ ! -s "${before}" ]; then
+    bad "baseline ${artifact} at ${tag} has routing rows to compare"
+    rm -f "${before}" "${after}"
+    return
+  fi
+  missing="$(ordered_subsequence_gaps "${before}" "${after}")"
+  added=$(( $(wc -l < "${after}") - $(wc -l < "${before}") ))
+  if [ -z "${missing}" ]; then
+    if [ "${added}" -gt 0 ] && [ "${VERBOSE}" = "true" ]; then
+      printf '       (%s rows added since %s)\n' "${added}" "${tag}"
+    fi
+    ok "${artifact}: every routing row from ${tag} is still present, in order"
+  else
+    bad "${artifact}: routing rows lost or reordered since ${tag}" \
+      "$(printf '%s\n' "${missing}" | head -8)"
+  fi
+  rm -f "${before}" "${after}"
+}
+
+# Ordered subsequence catches deletion, owner changes, and movement. It does not
+# catch a row INSERTED ABOVE an existing one that shadows it — first-match-wins
+# means the new row silently takes over while every baseline row is still
+# present and in order. That is what these assertions are for: for each class,
+# the owners of the rows mentioning it, in table order, must be exactly this.
+# A shadowing insert changes the sequence; so does a reorder.
+routing_table_rows() {
+  # Numbered rows of references/routing-table.md only, so the owner is always
+  # the third cell.
+  sed -n 's/^| [0-9]\{1,\} |/|/p' "${SKILL_DIR}/references/routing-table.md" \
+    | sed -e 's/[[:space:]]\{1,\}/ /g'
+}
+
+assert_class_owners() {
+  local description="$1" token="$2" expected="$3" actual
+  actual="$(routing_table_rows | grep -F -- "${token}" \
+    | awk -F'|' '{ gsub(/^ +| +$/, "", $3); printf "%s ", $3 }' | sed -e 's/ $//')"
+  if [ "${actual}" = "${expected}" ]; then
+    ok "${description}"
+  else
+    bad "${description}" "expected: ${expected}
+       got:      ${actual}"
+  fi
+}
+
 if git -C "${REPO_ROOT}" rev-parse -q --verify "${BASELINE_TAG}^{commit}" >/dev/null 2>&1; then
   for artifact in SKILL.md references/routing-table.md; do
-    BEFORE="$(git -C "${REPO_ROOT}" show "${BASELINE_TAG}:${BASELINE_SKILL}/${artifact}" \
-      2>/dev/null | routing_rows)"
-    AFTER="$(routing_rows < "${SKILL_DIR}/${artifact}")"
-    if [ -z "${BEFORE}" ]; then
-      bad "baseline ${artifact} has routing rows to compare"
-    elif [ "${BEFORE}" = "${AFTER}" ]; then
-      ok "${artifact}: every routing row is identical to ${BASELINE_TAG}"
-    else
-      bad "${artifact}: routing rows changed since ${BASELINE_TAG}" \
-        "$(diff <(printf '%s\n' "${BEFORE}") <(printf '%s\n' "${AFTER}") | head -12)"
-    fi
+    compare_routing_artifact "${BASELINE_TAG}" "${BASELINE_SKILL}" "${artifact}"
   done
 
   # And the prose contract, minus the identity, must not have been rewritten
@@ -166,8 +258,19 @@ if git -C "${REPO_ROOT}" rev-parse -q --verify "${BASELINE_TAG}^{commit}" >/dev/
       "$(diff <(printf '%s\n' "${BEFORE_SECTIONS}") <(printf '%s\n' "${AFTER_SECTIONS}") | head -12)"
   fi
 else
-  skip "routing rows are identical to ${BASELINE_TAG}" "tag not fetched in this clone"
+  skip "routing rows from ${BASELINE_TAG} are still present" "tag not fetched in this clone"
   skip "section structure is identical to ${BASELINE_TAG}" "tag not fetched in this clone"
+fi
+
+# The release that renamed the front door is a second baseline. Checking both
+# means a row cannot be dropped in one release and its loss go unnoticed in the
+# next, which comparing only against the immediately previous tag would allow.
+if git -C "${REPO_ROOT}" rev-parse -q --verify "${RENAMED_TAG}^{commit}" >/dev/null 2>&1; then
+  for artifact in SKILL.md references/routing-table.md; do
+    compare_routing_artifact "${RENAMED_TAG}" "${RENAMED_SKILL}" "${artifact}"
+  done
+else
+  skip "routing rows from ${RENAMED_TAG} are still present" "tag not fetched in this clone"
 fi
 
 # The bounds that make the router safe. Each is a distinct guarantee, so each is
@@ -209,6 +312,36 @@ assert_contract "routing is still capability-aware" \
   "capability report"
 assert_contract "stopping conditions are still enumerated" \
   "^## Stopping Conditions"
+
+# Automation routing, added in v0.39.0. The ownership boundaries matter more than
+# the destination row: a router that sends every red test to the automation
+# engineer makes that skill absorb root-cause analysis and product decisions,
+# which is the failure this class was added to avoid.
+assert_contract "the automation class exists" \
+  '^| `automation` | the automated test suite itself is the subject'
+assert_contract "automation work routes to test-automation-engineer" \
+  'runtime, backlog | `test-automation-engineer`'
+assert_contract "an automation request with unagreed behaviour routes to product-owner" \
+  'the behaviour to assert is not agreed | `product-owner`'
+assert_contract "a failing test pointing at a product defect routes to issue-investigator" \
+  'points at a product defect | `issue-investigator`'
+assert_contract "an unstable scenario still routes to manual-tester" \
+  'too unstable to assert | `manual-tester`'
+
+# First-match-wins ordering, pinned per class. A row inserted above an existing
+# one shadows it without removing it, so neither the subsequence check nor a
+# substring grep can see it — only the ordered owner sequence can.
+assert_class_owners "automation rows route boundaries first, catch-all last" \
+  '`automation`' \
+  '`product-owner` `issue-investigator` `manual-tester` `test-automation-engineer`'
+assert_class_owners "no row shadows the review row" \
+  '`review`' '`code-reviewer`'
+assert_class_owners "defect rows still order investigation before implementation" \
+  '`defect`' '`issue-investigator` `software-engineer`'
+assert_class_owners "question rows still order behaviour before product intent" \
+  '`question`' '`issue-investigator` `product-owner`'
+assert_class_owners "validation rows still order manual before automated" \
+  '`validation`' '`manual-tester` `test-automation-engineer`'
 
 # ------------------------------------------------------------------------------
 section "lifecycle CLI accepts the skill"

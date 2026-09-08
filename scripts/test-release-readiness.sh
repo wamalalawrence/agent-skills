@@ -14,6 +14,10 @@
 #   bash scripts/test-release-readiness.sh
 #   AGENT_SKILLS_PREVIOUS_TAG=v0.36.0 bash scripts/test-release-readiness.sh
 #
+# AGENT_SKILLS_PREVIOUS_TAG floats to the latest tag and drives the generic
+# upgrade in section 6. AGENT_SKILLS_RENAME_TAG (default v0.37.0) is pinned to
+# the release the front-door rename came from and drives section 6b only.
+#
 # Exit 0 when every check passes, 1 otherwise.
 
 set -uo pipefail
@@ -27,6 +31,11 @@ if [ -z "$PREVIOUS_TAG" ]; then
   PREVIOUS_TAG="$(git tag --list 'v*' --sort=-v:refname | sed -n 1p)"
 fi
 [ -n "$PREVIOUS_TAG" ] || PREVIOUS_TAG="HEAD"
+# Section 6b upgrades across the front-door rename, which happened at one fixed
+# point in history. Pinning it there keeps the check meaningful as releases move
+# on; floating it to "the previous tag" quietly stopped testing the rename the
+# moment v0.38.0 shipped.
+RENAME_TAG="${AGENT_SKILLS_RENAME_TAG:-v0.37.0}"
 
 PASS=0
 FAIL=0
@@ -331,13 +340,15 @@ else
 fi
 
 # ------------------------------------------------------------------------------
-sec "6b. global-install upgrade from $PREVIOUS_TAG"
+sec "6b. global-install upgrade across the rename ($RENAME_TAG)"
 # ------------------------------------------------------------------------------
-# The path a v0.37.0 user actually takes: a global install, then `agent-skills
-# update`, which replaces the contents of the same clone and re-runs install.
-# The front-door rename makes this the release's highest-risk migration.
+# The path a pre-rename user actually takes: a global install, then
+# `agent-skills update`, which replaces the contents of the same clone and
+# re-runs install. Upgrading across the front-door rename is the migration most
+# likely to leave a dead registration behind, so it stays pinned to the release
+# the rename came from rather than to whatever tag happens to be latest.
 GU="$(sandbox)"
-if git worktree add -q --detach "$GU/previous" "$PREVIOUS_TAG" 2>/dev/null; then
+if git worktree add -q --detach "$GU/previous" "$RENAME_TAG" 2>/dev/null; then
   GU_HOME="$GU/home"
   GU_SRC="$GU/clone"
   mkdir -p "$GU_HOME"
@@ -360,13 +371,13 @@ if git worktree add -q --detach "$GU/previous" "$PREVIOUS_TAG" 2>/dev/null; then
   run_gu bash "$GU_SRC/bin/agent-skills" install --yes >"$GU/old.log" 2>&1
   OLD_FRONT_DOOR="$(sed -n 's/^name: //p' "$GU_SRC/skills/tech-lead/SKILL.md" 2>/dev/null | head -1)"
   if [ "$OLD_FRONT_DOOR" = "tech-lead" ]; then
-    good "$PREVIOUS_TAG really did ship the front door as tech-lead"
+    good "$RENAME_TAG really did ship the front door as tech-lead"
   else
-    bad "$PREVIOUS_TAG front-door name" "got '$OLD_FRONT_DOOR'"
+    bad "$RENAME_TAG front-door name" "got '$OLD_FRONT_DOOR'"
   fi
   [ -L "$GU_HOME/.agents/skills/tech-lead" ] \
-    && good "$PREVIOUS_TAG registered tech-lead globally" \
-    || bad "$PREVIOUS_TAG registration" "$(tail -5 "$GU/old.log")"
+    && good "$RENAME_TAG registered tech-lead globally" \
+    || bad "$RENAME_TAG registration" "$(tail -5 "$GU/old.log")"
 
   # `agent-skills update` swaps the clone's contents in place. Reproduce that
   # without a network fetch by copying this release over the same directory.
@@ -413,7 +424,7 @@ if git worktree add -q --detach "$GU/previous" "$PREVIOUS_TAG" 2>/dev/null; then
 
   git worktree remove --force "$GU/previous" 2>/dev/null || true
 else
-  bad "could not create a worktree for $PREVIOUS_TAG (global-install upgrade)"
+  bad "could not create a worktree for $RENAME_TAG (global-install upgrade)"
 fi
 
 # ------------------------------------------------------------------------------

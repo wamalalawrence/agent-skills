@@ -106,6 +106,47 @@ review:
       major_count: 4
       verdict: REQUEST_CHANGES
 
+# Automation state (owned by test-automation-engineer). Present only for tasks
+# that touched automation. It exists so a fresh agent can answer: what was
+# being automated, why, what changed, what failed, how the failures were
+# classified, what stays manual, what validation ran, and what happens next.
+automation:
+  mode: new-automation # new-automation | suite-maintenance | failure-triage | flake-investigation |
+                       # automation-strategy | automation-backlog | coverage-gap-analysis |
+                       # ci-integration | framework-evolution
+  stack: # what discovery found; recorded so the next agent does not repeat the sweep
+    frameworks: ["playwright", "vitest"]
+    runner_command: "npm run test:e2e"
+    ci_command: "npm run test:e2e -- --shard=$SHARD"
+    conventions: "page objects under tests/pages; data-testid selectors; fixtures per worker"
+  coverage_map: # one row per behaviour, so 'what breaks if we delete this' is answerable
+    - behaviour: "Expired card is declined at checkout with a retry prompt"
+      source: "PROJ-1234, acceptance criterion 3"
+      level: api # unit | integration | api | contract | ui | e2e | manual
+      check: "tests/api/checkout/expired-card.spec.ts::declines and prompts retry"
+      state: automated # automated | manual | planned | removed
+  triage: # present for failure-triage, suite-maintenance, flake-investigation
+    - cluster: "auth fixture returns 401"
+      failure_count: 50
+      classification: TEST_DATA_FAILURE # see references/failure-triage.md for the taxonomy
+      evidence: "all 50 fail in beforeAll; token endpoint returns 401; seed job last ran 3d ago"
+      owner: test-automation-engineer
+      action: "re-seed the service account and assert token validity in the fixture"
+  backlog: # present for automation-backlog / coverage-gap-analysis
+    - scenario: "Invoice PDF layout"
+      disposition: KEEP_MANUAL # see references/automation-backlog.md
+      reason: "subjective layout judgement; no stable assertion"
+  stability:
+    target_repeats: 20
+    repeats_run: 20
+    passes: 20
+    ci_equivalent_verified: true
+    note: "" # say plainly when repeat execution was unavailable
+  manual_coverage: # what deliberately stays manual, and why
+    - "Invoice PDF layout — subjective"
+  quarantined: [] # each entry carries reason, owner, follow_up, visible_in, removal_condition
+  next_action: "Move the password-rule e2e checks down to unit level (tracked in PROJ-1290)."
+
 # Phased delivery tracking. The planner writes the plan shape. The executing
 # skill writes phase-state and continuity checkpoints. See the delivery_plan
 # ownership rule and phase-continuity checkpoint below.
@@ -186,6 +227,22 @@ only after re-reading the file it wrote. If reconstruction is not possible, stop
 `BLOCKED: phase continuity evidence-pack missing` and list the expected path. Do not mark the phase
 done in chat only.
 
+### The automation block
+
+`test-automation-engineer` is the sole writer of `automation:`, and it is the reason that skill
+needs no artifact formats of its own. Everything an automation task produces that another agent
+would otherwise have to re-derive — the operating mode, the discovered stack, the coverage map,
+the failure triage, the backlog dispositions, the stability result, what deliberately stays
+manual, and the next action — lives in one block on the file every skill already reads.
+
+Two rules keep it small. Write only the sub-keys the task actually produced: a triage-only run
+has `mode`, `stack`, and `triage`, and nothing else. And keep `coverage_map` to behaviours worth
+protecting rather than one row per test file; it is a map, not an inventory.
+
+The test that it is doing its job: hand `evidence-pack.yml` alone to a fresh agent and it can say
+what was being automated, why, what changed, what failed, how the failures were classified, what
+remains manual, what validation ran, how stable the result is, and what happens next.
+
 ---
 
 ## 2. `repro-recipe.yml`
@@ -239,7 +296,7 @@ reproduce is forbidden without explicit user approval and a written rollback pla
 | `software-engineer` †      | both files                         | `evidence-pack.yml.plan`, `related_work`, phase checkpoint; regression test commit referenced from recipe |
 | `code-reviewer`            | both files                         | `evidence-pack.yml.review` (sole owner — see ownership rule below)           |
 | `manual-tester` †          | `evidence-pack.yml`                | `repro-recipe.yml` (when manual repro produces one); defect rows; phase checkpoint |
-| `test-automation-engineer` † | `repro-recipe.yml`              | regression test files; references the recipe in test docstring; phase checkpoint |
+| `test-automation-engineer` † | `repro-recipe.yml`, `evidence-pack.yml` | `evidence-pack.yml.automation` (sole owner); regression test files; recipe referenced in test docstring; phase checkpoint |
 | `product-owner` †          | `evidence-pack.yml.investigation`  | `evidence-pack.yml.acceptance_criteria`; phase checkpoint                    |
 | `delivery-planner`         | env, prior `delivery_plan` block   | `evidence-pack.yml` creation, `delivery_plan` structure; plan files on disk  |
 
