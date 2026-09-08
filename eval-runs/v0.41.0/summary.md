@@ -24,12 +24,13 @@ bash scripts/test-release-readiness.sh
 | `run-evals.py --strict-sections` | pass |
 | `bash -n` across `setup.init`, `lib`, `bin`, `scripts`, `hooks` | pass |
 | `ast.parse` across every `scripts/*.py` | pass |
-| `test-global-install.sh` | pass |
-| `test-access-resolution.sh` | pass |
+| `test-global-install.sh` | pass — 119 assertions |
+| `test-access-resolution.sh` | pass — 100 assertions |
 | `test-front-door-skill.sh` | pass — 63 assertions |
 | `test-context-optimizer.sh` | pass — 105 assertions |
 | `test-setup-update-preserves-credentials.sh` | pass |
 | Version consistency (11 `SKILL.md` vs `VERSION`) | pass — all `0.41.0` |
+| `test-release-readiness.sh` overall | pass — 77 checks |
 
 Warning count is unchanged from `v0.40.0`: 71 before, 71 after. Three warnings appeared during
 development, all of them the validator's ticket-key regex reading a hyphenated standard name as a
