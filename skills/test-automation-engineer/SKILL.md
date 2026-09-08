@@ -139,6 +139,21 @@ Skipping the wrappers is the #1 failure mode and task size does not waive them.
 Automation reinforces the delivery workflow. It does not duplicate product definition, manual
 exploration, root-cause analysis, or production code engineering standards owned elsewhere.
 
+### Large inputs
+
+Before loading an input past the large-input threshold, use **Context Optimizer** to inspect it
+and produce a bounded context pack instead of reading it whole. Most often a CI log or a failure
+wall, where separating the first real failure from its cascade is the whole triage question.
+
+```bash
+agent-skills context check <path>                 # exit 10 means: past the threshold
+agent-skills context pack <path> --brief "<the engineering question>"
+```
+
+Call the runtime directly — do not dispatch an agent to shrink a file. The rule, the threshold,
+the per-type strategies, and the untrusted-input contract are in
+[docs/context-optimizer.md](../../docs/context-optimizer.md).
+
 ## Required Inputs
 
 What is required depends on the mode. Ask for what is missing for **this** mode rather than

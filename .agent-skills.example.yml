@@ -100,6 +100,44 @@ confluence:
 cache_dir: ""
 
 # -----------------------------------------------------------------------------
+# Context Optimizer. See docs/context-optimizer.md.
+# -----------------------------------------------------------------------------
+# Past the threshold below, a skill builds a bounded context pack instead of
+# reading a file whole. The defaults were measured against a real repository,
+# not picked for roundness, but a codebase of 300-line services and a monorepo
+# of generated clients will reasonably disagree — so they are configurable.
+#
+# All keys are OPTIONAL. Nothing here is a credential, and nothing here is read
+# from the content of the files being packed.
+context_optimizer:
+  # Inputs larger than this many characters get a pack rather than a full read.
+  # DEFAULT: "65536" (64 KiB, roughly 16k tokens at four chars per token).
+  # Lower it on a codebase of small files; raise it if ordinary source files
+  # are being optimised for no benefit.
+  threshold_chars: "65536"
+
+  # Inputs longer than this many lines get a pack rather than a full read,
+  # whichever limit trips first. DEFAULT: "2000" — the de-facto file-read cap
+  # in several hosts, past which a whole-file read is already truncated.
+  threshold_lines: "2000"
+
+  # Default character budget for a pack when the caller does not pass
+  # --budget-chars. Bounds the WHOLE rendered pack, provenance included.
+  # DEFAULT: "10000". Common ladder: 4000 | 10000 | 25000. Floor is 1000.
+  budget_chars: "10000"
+
+  # How far to follow structural relationships — foreign keys in a schema, for
+  # example. DEFAULT: "1". Use "2" for join paths across an intermediate table.
+  # Depth 3 or more usually reaches the whole schema again.
+  relation_depth: "1"
+
+  # Whole-file read cap for the strategies that need the text to find structure
+  # (sql, structured, source, diff). Logs stream and ignore this.
+  # DEFAULT: "67108864" (64 MiB). Past the cap the runtime refuses with a clear
+  # message rather than being killed by the kernel.
+  max_read_bytes: "67108864"
+
+# -----------------------------------------------------------------------------
 # Writing voice. See docs/writing-voice.md.
 # -----------------------------------------------------------------------------
 # Everything a skill writes for a human reader should read as though a careful

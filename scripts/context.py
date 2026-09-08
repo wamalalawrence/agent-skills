@@ -82,9 +82,14 @@ DEFAULT_THRESHOLD_LINES = 2000
 
 DEFAULT_BUDGET_CHARS = 10000
 MIN_BUDGET_CHARS = 1000
-# Below this much free space, trimming a fragment in produces a stub too short
-# to be evidence. Report it as omitted and point at `context expand` instead.
-MIN_TRIM_ROOM = 600
+# Below this much free space, trimming a fragment in alongside others produces a
+# stub too short to add anything. Report it as omitted and point at
+# `context expand` instead.
+MIN_TRIM_ROOM = 500
+# ...unless nothing was selected at all. A pack whose entire content is a footer
+# explaining why it has no evidence is worse than a truncated best fragment plus
+# that footer, so the floor for the first fragment is much lower.
+MIN_FRAGMENT_CHARS = 200
 
 # Structured, source, and diff strategies need the whole text to find structure.
 # Logs do not, and logs are the format that actually reaches gigabytes, so they
@@ -114,6 +119,122 @@ STRATEGIES = ("auto", "log", "ci", "sql", "structured", "source", "diff", "text"
 
 class UsageError(Exception):
     """Raised for bad arguments or an unusable input."""
+
+
+# ---------------------------------------------------------------------------
+# Resolved limits
+#
+# Every number here is a resource bound, and every one is configurable, because
+# a repository of 300-line services and a monorepo of generated clients will
+# reasonably disagree about what "large" means.
+#
+# Precedence: CLI flag > environment variable > committed `.agent-skills.yml`
+# > the measured default. Deliberately narrow scope: a committed file may adjust
+# a bound, and that is all. It cannot name a path, a credential, a strategy, or
+# a tool policy — a committed file is editable by anyone who can open a pull
+# request, so the same rule as `docs/access-resolution.md` applies.
+# ---------------------------------------------------------------------------
+LIMITS = {
+    "threshold_chars": DEFAULT_THRESHOLD_CHARS,
+    "threshold_lines": DEFAULT_THRESHOLD_LINES,
+    "budget_chars": DEFAULT_BUDGET_CHARS,
+    "relation_depth": DEFAULT_RELATION_DEPTH,
+    "max_read_bytes": DEFAULT_MAX_READ_BYTES,
+}
+
+# Clamps, so a typo or a hostile pull request cannot turn a bound into a denial
+# of service or into a pack that cannot honour its own budget.
+LIMIT_BOUNDS = {
+    "threshold_chars": (1, 1024 * 1024 * 1024),
+    "threshold_lines": (1, 100_000_000),
+    "budget_chars": (MIN_BUDGET_CHARS, 10_000_000),
+    "relation_depth": (0, 6),
+    "max_read_bytes": (4096, 8 * 1024 * 1024 * 1024),
+}
+
+CONFIG_BLOCK = "context_optimizer"
+
+
+def find_config_file(start: Path) -> Path | None:
+    """Locate `.agent-skills.yml` at the git root, else by walking up."""
+    try:
+        result = subprocess.run(
+            ["git", "-C", str(start), "rev-parse", "--show-toplevel"],
+            capture_output=True,
+            text=True,
+            timeout=10,
+            check=False,
+        )
+        if result.returncode == 0 and result.stdout.strip():
+            candidate = Path(result.stdout.strip()) / ".agent-skills.yml"
+            if candidate.is_file():
+                return candidate
+    except (OSError, subprocess.SubprocessError):
+        pass
+    current = start.resolve()
+    for directory in [current, *current.parents]:
+        candidate = directory / ".agent-skills.yml"
+        if candidate.is_file():
+            return candidate
+    return None
+
+
+def read_config_block(path: Path) -> dict[str, str]:
+    """Read the one-level `context_optimizer:` block.
+
+    Hand-rolled for the same reason the rest of this repository's scripts are:
+    they run on a bare Python 3 with no PyYAML, and the block is flat scalars.
+    """
+    values: dict[str, str] = {}
+    try:
+        lines = path.read_text(encoding="utf-8", errors="replace").splitlines()
+    except OSError:
+        return values
+    inside = False
+    for raw in lines:
+        stripped = raw.strip()
+        if not stripped or stripped.startswith("#"):
+            continue
+        if not raw.startswith((" ", "\t")):
+            inside = stripped.rstrip(":") == CONFIG_BLOCK and stripped.endswith(":")
+            continue
+        if not inside or ":" not in stripped:
+            continue
+        key, _, value = stripped.partition(":")
+        value = value.split("#", 1)[0].strip().strip("\"'")
+        if value:
+            values[key.strip()] = value
+    return values
+
+
+def resolve_limits(cwd: Path | None = None) -> list[str]:
+    """Populate ``LIMITS``. Returns one note per value that was overridden."""
+    notes: list[str] = []
+    config_path = find_config_file(cwd or Path.cwd())
+    from_file = read_config_block(config_path) if config_path is not None else {}
+
+    for key in list(LIMITS):
+        raw = from_file.get(key)
+        origin = f"{config_path.name}" if raw is not None else ""
+        environment = os.environ.get(f"AGENT_SKILLS_CONTEXT_{key.upper()}")
+        if environment is not None:
+            raw = environment
+            origin = f"AGENT_SKILLS_CONTEXT_{key.upper()}"
+        if raw is None:
+            continue
+        try:
+            value = int(str(raw).strip())
+        except ValueError:
+            notes.append(f"{origin} set {key} to {raw!r}, which is not an integer; using default")
+            continue
+        low, high = LIMIT_BOUNDS[key]
+        clamped = max(low, min(high, value))
+        if clamped != value:
+            notes.append(f"{origin} set {key} to {value}; clamped to {clamped}")
+        LIMITS[key] = clamped
+        if clamped == value:
+            notes.append(f"{origin} set {key} to {clamped}")
+    return notes
 
 
 def now_iso() -> str:
@@ -463,9 +584,12 @@ class SignatureGroup:
 class SourceInput:
     """A single input file, plus the metadata every strategy starts from."""
 
-    def __init__(self, path: Path, max_read_bytes: int = DEFAULT_MAX_READ_BYTES) -> None:
+    def __init__(self, path: Path, max_read_bytes: int | None = None) -> None:
         self.path = path
-        self.max_read_bytes = max_read_bytes
+        # Resolved at call time: LIMITS is populated from configuration before
+        # any command runs, and a default argument would capture the value
+        # this module was imported with instead.
+        self.max_read_bytes = max_read_bytes or LIMITS["max_read_bytes"]
         try:
             stat = path.stat()
         except OSError as error:
@@ -543,8 +667,8 @@ class SourceInput:
     @property
     def over_threshold(self) -> bool:
         return (
-            self.char_count > DEFAULT_THRESHOLD_CHARS
-            or self.line_count > DEFAULT_THRESHOLD_LINES
+            self.char_count > LIMITS["threshold_chars"]
+            or self.line_count > LIMITS["threshold_lines"]
         )
 
     # -- full text ---------------------------------------------------------
@@ -1200,7 +1324,13 @@ def parse_sql(lines: list[str]) -> list[SqlStatement]:
     buffer: list[str] = []
     start = 0
     for number, line in enumerate(lines, start=1):
-        if not buffer and not line.strip():
+        stripped = line.strip()
+        # A statement never starts on a blank line or a leading comment. Letting a
+        # comment open the buffer merged the file's header comment with the first
+        # `CREATE TABLE`, which then failed to classify and disappeared from both
+        # the object count and the omission count — an invisible loss, which is
+        # the one kind this runtime must not produce.
+        if not buffer and (not stripped or stripped.startswith("--") or stripped.startswith("/*")):
             continue
         if not buffer:
             start = number
@@ -1744,6 +1874,23 @@ def select_structured(source: SourceInput, terms: list[Term], options: PackOptio
         selection.notes.append(f"no {flavour} structure was recognised; nothing to map")
         return selection
 
+    # How often does each term match at all? A term matching every node in a
+    # homogeneous array is not a relevance signal, it is the array's schema.
+    frequency: dict[str, int] = {}
+    for node in nodes:
+        haystack = f"{node.key} {node.preview}".lower()
+        for term in terms:
+            if term.lowered in haystack:
+                frequency[term.lowered] = frequency.get(term.lowered, 0) + 1
+    discounts = term_discounts(terms, frequency)
+    ignored = [
+        f"{term.text} ({thousands(frequency.get(term.lowered, 0))} nodes)"
+        for term in terms
+        if discounts.get(term.lowered, 4) == 0
+    ]
+    if ignored:
+        selection.map_rows.append(("non-selective", ", ".join(ignored[:6])))
+
     # Top-level shape. The reading order is metadata, then map, then fragments,
     # so the shape must be cheap and always present.
     top = [node for node in nodes if node.depth <= 1 and node.kind != "scalar"]
@@ -1771,23 +1918,6 @@ def select_structured(source: SourceInput, terms: list[Term], options: PackOptio
         selection.map_rows.append(
             (f"array {node.path}", f"{thousands(node.child_count)} elements")
         )
-
-    # How often does each term match at all? A term matching every node in a
-    # homogeneous array is not a relevance signal, it is the array's schema.
-    frequency: dict[str, int] = {}
-    for node in nodes:
-        haystack = f"{node.key} {node.preview}".lower()
-        for term in terms:
-            if term.lowered in haystack:
-                frequency[term.lowered] = frequency.get(term.lowered, 0) + 1
-    discounts = term_discounts(terms, frequency)
-    ignored = [
-        f"{term.text} ({thousands(frequency.get(term.lowered, 0))} nodes)"
-        for term in terms
-        if discounts.get(term.lowered, 4) == 0
-    ]
-    if ignored:
-        selection.map_rows.append(("non-selective", ", ".join(ignored[:6])))
 
     # Candidate selection: the node's own key, or its scalar value. Matching
     # against the whole path would make every element of `$.orders` a hit purely
@@ -2757,12 +2887,17 @@ def fill_budget(pack: Pack, candidates: list[Fragment]) -> None:
                 still_skipped.append(fragment)
         skipped = still_skipped
 
-    # Pass three: if meaningful room is still free and the best remaining
-    # candidate simply does not fit, trim it in rather than reporting nothing.
-    # A truncated fragment that says it is truncated beats a silent absence.
-    if skipped and (available - spent) >= MIN_TRIM_ROOM:
+    # Pass three: if the best remaining candidate simply does not fit, trim it in
+    # rather than reporting nothing. A truncated fragment that says it is
+    # truncated beats a silent absence — and a pack of pure footer, explaining at
+    # length why it contains no evidence, is the worst of the three outcomes.
+    #
+    # The floor is unconditional when nothing was kept: at a tight budget on a
+    # dense input every window can be wider than the whole remaining space, and
+    # returning zero fragments there was a real defect rather than a trade-off.
+    room = available - spent - 120
+    if skipped and (room >= MIN_TRIM_ROOM or (not kept and room >= MIN_FRAGMENT_CHARS)):
         best = min(skipped, key=lambda item: (-item.score, item.start_line))
-        room = available - spent - 120
         best.text = (
             best.text[:room].rstrip()
             + "\n-- fragment trimmed to fit the budget; widen it with `context expand`"
@@ -2863,8 +2998,8 @@ def render_pack(
         # The map is the cheap orientation the whole reading order depends on, so
         # it is bounded rather than dropped: a proportional number of rows, each
         # at a proportional width, and a count of what did not fit.
-        row_limit = len(pack.map_rows) if all_omissions else max(4, pack.budget_chars // 500)
-        width = max(80, pack.budget_chars // 10)
+        row_limit = len(pack.map_rows) if all_omissions else max(3, pack.budget_chars // 900)
+        width = max(70, pack.budget_chars // 12)
         rendered: list[str] = []
         for label, value in pack.map_rows[:row_limit]:
             shown = value if len(value) <= width else value[: width - 3].rstrip() + "..."
@@ -2897,7 +3032,7 @@ def render_pack(
         # The footer is bounded too. An unbounded omission list on a small budget
         # would crowd out the evidence it is describing, which is the same
         # mistake in a different place.
-        limit = len(pack.omissions) if all_omissions else max(3, pack.budget_chars // 800)
+        limit = len(pack.omissions) if all_omissions else max(1, pack.budget_chars // 1500)
         ranked = sorted(pack.omissions, key=lambda item: OMISSION_PRIORITY.get(item.kind, 5))
         lines: list[str] = []
         for omission in ranked[:limit]:
@@ -3275,8 +3410,8 @@ def inspect_payload(source: SourceInput, strategy: str, options: PackOptions) ->
         "binary": source.is_binary,
         "sha256": source.sha256,
         "modified_at": source.modified_at,
-        "threshold_chars": DEFAULT_THRESHOLD_CHARS,
-        "threshold_lines": DEFAULT_THRESHOLD_LINES,
+        "threshold_chars": LIMITS["threshold_chars"],
+        "threshold_lines": LIMITS["threshold_lines"],
         "over_threshold": source.over_threshold,
         "structure": [],
     }
@@ -3381,7 +3516,7 @@ def render_inspect(payload: dict) -> str:
 def cmd_inspect(args: argparse.Namespace) -> int:
     source = resolve_input(args.path, args.max_read_bytes)
     options = PackOptions(
-        budget_chars=DEFAULT_BUDGET_CHARS,
+        budget_chars=LIMITS["budget_chars"],
         relation_depth=args.relation_depth,
         max_read_bytes=args.max_read_bytes,
     )
@@ -3405,8 +3540,8 @@ def cmd_check(args: argparse.Namespace) -> int:
             "size_chars": source.char_count,
             "lines": source.line_count,
             "over_threshold": source.over_threshold,
-            "threshold_chars": DEFAULT_THRESHOLD_CHARS,
-            "threshold_lines": DEFAULT_THRESHOLD_LINES,
+            "threshold_chars": LIMITS["threshold_chars"],
+            "threshold_lines": LIMITS["threshold_lines"],
         }
         results.append(entry)
         over = over or source.over_threshold
@@ -3422,8 +3557,8 @@ def cmd_check(args: argparse.Namespace) -> int:
         if over:
             print(
                 f"-- at least one input is past the "
-                f"{thousands(DEFAULT_THRESHOLD_CHARS)}-char / "
-                f"{thousands(DEFAULT_THRESHOLD_LINES)}-line threshold. "
+                f"{thousands(LIMITS['threshold_chars'])}-char / "
+                f"{thousands(LIMITS['threshold_lines'])}-line threshold. "
                 f"Build a pack instead of reading it whole."
             )
         else:
@@ -3673,13 +3808,13 @@ def add_shared(parser: argparse.ArgumentParser) -> None:
     parser.add_argument(
         "--relation-depth",
         type=int,
-        default=DEFAULT_RELATION_DEPTH,
+        default=LIMITS["relation_depth"],
         help="How far to follow structural relationships, e.g. foreign keys (default: 1).",
     )
     parser.add_argument(
         "--max-read-bytes",
         type=int,
-        default=DEFAULT_MAX_READ_BYTES,
+        default=LIMITS["max_read_bytes"],
         help="Whole-file read cap for structure-bearing formats (default: 64 MiB).",
     )
 
@@ -3710,7 +3845,7 @@ def build_parser() -> argparse.ArgumentParser:
     )
     check.add_argument("paths", nargs="+")
     check.add_argument("--json", action="store_true")
-    check.add_argument("--max-read-bytes", type=int, default=DEFAULT_MAX_READ_BYTES)
+    check.add_argument("--max-read-bytes", type=int, default=LIMITS["max_read_bytes"])
     check.set_defaults(func=cmd_check)
 
     pack = sub.add_parser("pack", help="Build a bounded, task-aware context pack.")
@@ -3720,7 +3855,7 @@ def build_parser() -> argparse.ArgumentParser:
         required=True,
         help="The engineering question this pack must answer. Drives every selection.",
     )
-    pack.add_argument("--budget-chars", type=int, default=DEFAULT_BUDGET_CHARS)
+    pack.add_argument("--budget-chars", type=int, default=LIMITS["budget_chars"])
     pack.add_argument("--window-before", type=int, default=DEFAULT_WINDOW_BEFORE)
     pack.add_argument("--window-after", type=int, default=DEFAULT_WINDOW_AFTER)
     pack.add_argument("--format", default="text", choices=("text", "yaml", "json"))
@@ -3738,7 +3873,7 @@ def build_parser() -> argparse.ArgumentParser:
     explain.add_argument("pack", help="A pack id or a path to a pack file.")
     explain.add_argument("--json", action="store_true")
     explain.add_argument("--format", default="text", choices=("text", "yaml"))
-    explain.add_argument("--max-read-bytes", type=int, default=DEFAULT_MAX_READ_BYTES)
+    explain.add_argument("--max-read-bytes", type=int, default=LIMITS["max_read_bytes"])
     explain.set_defaults(func=cmd_explain)
 
     expand = sub.add_parser("expand", help="Widen one region of an existing pack.")
@@ -3747,8 +3882,8 @@ def build_parser() -> argparse.ArgumentParser:
     expand.add_argument("--lines", default=None, help="Explicit range, e.g. 1832-1887.")
     expand.add_argument("--before", type=int, default=40)
     expand.add_argument("--after", type=int, default=80)
-    expand.add_argument("--budget-chars", type=int, default=DEFAULT_BUDGET_CHARS)
-    expand.add_argument("--max-read-bytes", type=int, default=DEFAULT_MAX_READ_BYTES)
+    expand.add_argument("--budget-chars", type=int, default=LIMITS["budget_chars"])
+    expand.add_argument("--max-read-bytes", type=int, default=LIMITS["max_read_bytes"])
     expand.set_defaults(func=cmd_expand)
 
     cache = sub.add_parser("cache", help="Manage the deterministic pack cache.")
@@ -3759,7 +3894,12 @@ def build_parser() -> argparse.ArgumentParser:
 
 
 def main(argv: list[str] | None = None) -> int:
+    # Limits are resolved before the parser is built, so `--help` shows the
+    # values this repository will actually use rather than the shipped defaults.
+    notes = resolve_limits()
     args = build_parser().parse_args(argv)
+    for note in notes:
+        print(f"-- limit: {note}", file=sys.stderr)
     try:
         return int(args.func(args))
     except UsageError as error:

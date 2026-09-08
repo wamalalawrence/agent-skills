@@ -111,6 +111,22 @@ Skipping the wrappers is the #1 failure mode and task size does not waive them.
 Code review does not rewrite code directly unless the user explicitly asks for implementation
 changes. It identifies risks and recommends fixes.
 
+### Large inputs
+
+Before loading an input past the large-input threshold, use **Context Optimizer** to inspect it
+and produce a bounded context pack instead of reading it whole. Most often an oversized diff. A
+diff pack always states how much of the diff it covers, and it is evidence for where to start
+reviewing — never a substitute for the review.
+
+```bash
+agent-skills context check <path>                 # exit 10 means: past the threshold
+agent-skills context pack <path> --brief "<the engineering question>"
+```
+
+Call the runtime directly — do not dispatch an agent to shrink a file. The rule, the threshold,
+the per-type strategies, and the untrusted-input contract are in
+[docs/context-optimizer.md](../../../../docs/context-optimizer.md).
+
 ## Required Inputs
 
 Accept any of these review targets:

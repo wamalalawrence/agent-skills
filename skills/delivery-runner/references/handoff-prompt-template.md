@@ -9,6 +9,11 @@ Fill every `<...>` placeholder from the plan artifacts. Use repo-relative paths.
 Do not paste large file contents; pass pointers and let the fresh agent read
 them. Do not add work beyond the single dispatched phase.
 
+When a pointer names an input past the large-input threshold, pass a Context
+Optimizer pack id instead of the raw path where one already exists — a pack is
+deterministic and cached, so the next phase reuses it rather than recompressing
+the same file. See [docs/context-optimizer.md](../../../docs/context-optimizer.md).
+
 ## Template
 
 ```text

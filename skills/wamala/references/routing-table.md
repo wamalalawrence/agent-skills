@@ -9,16 +9,25 @@ implements those rules — when the two disagree, skill boundaries wins and this
 
 ## Order matters
 
-Rows are evaluated top to bottom, first match wins. The ordering encodes two priorities:
+Rows are evaluated top to bottom, first match wins. The ordering encodes three priorities:
 
-1. **Size before class.** Oversized work is decomposed before anyone asks what kind of work it
+1. **Evidence before everything.** When the request is "make this enormous input readable", no
+   other route can proceed — the owner it would dispatch to cannot fit the input either.
+2. **Size before class.** Oversized work is decomposed before anyone asks what kind of work it
    is, because every other route assumes one focused session.
-2. **Confidence before class.** A request with unclear intent routes for clarification even when
+3. **Confidence before class.** A request with unclear intent routes for clarification even when
    its class looks obvious. This is the rule that prevents the most expensive failure in the
    whole system: a confident implementation of a misunderstood requirement.
 
+Row 0 is narrow on purpose. It fires when **reducing the input is the request**, not whenever a
+large file is mentioned. A defect report that happens to attach a 200 MB log is still `defect` →
+`issue-investigator`; that skill calls the Context Optimizer runtime itself, because dispatching a
+second agent purely to shrink a file adds a whole agent's context to save some. See
+[the ambiguous case below](#is-this-oversized-input-or-just-a-big-file).
+
 | Row | Condition | Owner | Reason |
 | --- | --- | --- | --- |
+| 0 | Reducing an input too large to read **is** the request | `context-optimizer` | Owns bounded, traceable extraction; nothing else can start until the evidence fits |
 | 1 | Spans more than one focused session, several PRs, or several surfaces | `delivery-planner` | Decompose first; every other route assumes one session |
 | 2 | A phased plan already exists on disk | `delivery-runner` | The plan's own dispatcher; re-planning is planner-only |
 | 3 | Confidence `unknown`/`low`, product intent missing | `product-owner` | Intent is never invented |
@@ -118,6 +127,29 @@ some are duplicates. A router that promises 80 automated tests has already made 
 including when it means introducing a level the repository does not test at yet. Adding a harness
 inside the existing framework is automation work; replacing the framework is a decision that
 needs a named human owner, and the automation engineer stops and says so.
+
+### Is this `oversized-input` or just a big file?
+
+The distinction is what the user asked for, not how big the attachment is.
+
+**"Extract what matters from this 150 MB log for the payment failure."** `oversized-input` →
+`context-optimizer`. Reducing the evidence is the deliverable.
+
+**"Payments are failing, here is the log."** `defect` → `issue-investigator`. The deliverable is a
+root cause. That skill calls `agent-skills context pack` itself as its first step; routing to
+Context Optimizer first would add a dispatch, a fresh agent's context, and a handoff to save one
+command.
+
+**"This diff is 40,000 lines, find the security-relevant changes before I review it."** Judgement
+call, and either answer is defensible. `context-optimizer` when the ask is genuinely "make this
+reviewable"; `code-reviewer` when a verdict is wanted, since it packs the diff itself. Prefer
+`code-reviewer` — it owns the verdict, and a pack without one is half an answer.
+
+**"Our regression suite log is 2 GB and CI has 42 failures."** `automation` →
+`test-automation-engineer`. Triage owns this, and it packs the log as part of triage.
+
+The rule of thumb: route to `context-optimizer` when the **pack** is the deliverable. Route
+elsewhere when the pack is a step toward one.
 
 **A bare ticket key with nothing else.** Do not classify from the key. Fetch the ticket if the
 capability report says a tracker resolves; if it does not, ask the user for the summary and
