@@ -139,9 +139,9 @@ jobs:
             printf '    at com.example.Job.run(Job.java:19)\n'
           } > "$BOX/hostile.log"
           OUT="$(python3 scripts/context.py --cache-root "$BOX/cache" pack \
-            "$BOX/hostile.log" --brief "why did task 77 fail" --budget-chars 1800)"
+            "$BOX/hostile.log" --brief "why did task 77 fail" --budget-chars 2000)"
           LEN=${#OUT}
-          if [ "$LEN" -gt 1800 ]; then
+          if [ "$LEN" -gt 2000 ]; then
             echo "ERROR: the source changed the budget (rendered $LEN chars)"
             exit 1
           fi
