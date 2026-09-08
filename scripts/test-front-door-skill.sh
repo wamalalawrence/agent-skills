@@ -23,6 +23,8 @@ SKILL_DIR="${REPO_ROOT}/skills/wamala"
 SKILL_MD="${SKILL_DIR}/SKILL.md"
 BASELINE_TAG="${AGENT_SKILLS_RENAME_BASELINE_TAG:-v0.37.0}"
 BASELINE_SKILL="skills/tech-lead"
+RENAMED_TAG="${AGENT_SKILLS_ROUTING_BASELINE_TAG:-v0.38.0}"
+RENAMED_SKILL="skills/wamala"
 VERBOSE="false"
 [ "${1:-}" = "-v" ] && VERBOSE="true"
 
@@ -124,11 +126,19 @@ for nested in issue-investigator code-reviewer; do
 done
 
 # ------------------------------------------------------------------------------
-section "routing contract is unchanged by the rename"
+section "routing contract survives later releases"
 # ------------------------------------------------------------------------------
 # Compare the machine-readable half of the contract — the routing rows and the
-# chains — against the release before the rename, with the identity substituted.
-# A row that gained, lost, or changed an owner shows up as a diff.
+# chains — against every earlier release that shipped it, with the identity
+# substituted.
+#
+# The rule is **superset, not equality**. Routing gains rows deliberately: a
+# release that teaches the router a new class adds rows, and forbidding that
+# would freeze the table rather than protect it. What must never happen is a row
+# silently losing its owner or disappearing while something else is being
+# edited, which is exactly what the rename release was written to catch. So each
+# baseline row must still be present, verbatim, in the current table. An added
+# row is reported, not failed.
 routing_rows() {
   # Table rows only, name normalised, whitespace collapsed.
   sed -n 's/^|/|/p' \
@@ -136,19 +146,41 @@ routing_rows() {
     | sed -e 's/tech-lead/wamala/g' -e 's/[[:space:]]\{1,\}/ /g'
 }
 
+# Rows carry a leading index in references/routing-table.md, and renumbering on
+# insert is not a contract change. Compare on the part that is the contract:
+# the condition, the owner, and the reason.
+routing_rows_unindexed() {
+  routing_rows | sed -e 's/^| [0-9]\{1,\} |/|/'
+}
+
+compare_routing_artifact() {
+  local tag="$1" baseline_skill="$2" artifact="$3" before after missing added
+  before="$(git -C "${REPO_ROOT}" show "${tag}:${baseline_skill}/${artifact}" \
+    2>/dev/null | routing_rows_unindexed)"
+  after="$(routing_rows_unindexed < "${SKILL_DIR}/${artifact}")"
+  if [ -z "${before}" ]; then
+    bad "baseline ${artifact} at ${tag} has routing rows to compare"
+    return
+  fi
+  missing="$(comm -23 <(printf '%s\n' "${before}" | sort -u) \
+    <(printf '%s\n' "${after}" | sort -u))"
+  added="$(comm -13 <(printf '%s\n' "${before}" | sort -u) \
+    <(printf '%s\n' "${after}" | sort -u))"
+  if [ -z "${missing}" ]; then
+    if [ -n "${added}" ] && [ "${VERBOSE}" = "true" ]; then
+      printf '       (%s rows added since %s)\n' \
+        "$(printf '%s\n' "${added}" | grep -c .)" "${tag}"
+    fi
+    ok "${artifact}: every routing row from ${tag} is still present"
+  else
+    bad "${artifact}: routing rows lost since ${tag}" \
+      "$(printf '%s\n' "${missing}" | head -8)"
+  fi
+}
+
 if git -C "${REPO_ROOT}" rev-parse -q --verify "${BASELINE_TAG}^{commit}" >/dev/null 2>&1; then
   for artifact in SKILL.md references/routing-table.md; do
-    BEFORE="$(git -C "${REPO_ROOT}" show "${BASELINE_TAG}:${BASELINE_SKILL}/${artifact}" \
-      2>/dev/null | routing_rows)"
-    AFTER="$(routing_rows < "${SKILL_DIR}/${artifact}")"
-    if [ -z "${BEFORE}" ]; then
-      bad "baseline ${artifact} has routing rows to compare"
-    elif [ "${BEFORE}" = "${AFTER}" ]; then
-      ok "${artifact}: every routing row is identical to ${BASELINE_TAG}"
-    else
-      bad "${artifact}: routing rows changed since ${BASELINE_TAG}" \
-        "$(diff <(printf '%s\n' "${BEFORE}") <(printf '%s\n' "${AFTER}") | head -12)"
-    fi
+    compare_routing_artifact "${BASELINE_TAG}" "${BASELINE_SKILL}" "${artifact}"
   done
 
   # And the prose contract, minus the identity, must not have been rewritten
@@ -166,8 +198,19 @@ if git -C "${REPO_ROOT}" rev-parse -q --verify "${BASELINE_TAG}^{commit}" >/dev/
       "$(diff <(printf '%s\n' "${BEFORE_SECTIONS}") <(printf '%s\n' "${AFTER_SECTIONS}") | head -12)"
   fi
 else
-  skip "routing rows are identical to ${BASELINE_TAG}" "tag not fetched in this clone"
+  skip "routing rows from ${BASELINE_TAG} are still present" "tag not fetched in this clone"
   skip "section structure is identical to ${BASELINE_TAG}" "tag not fetched in this clone"
+fi
+
+# The release that renamed the front door is a second baseline. Checking both
+# means a row cannot be dropped in one release and its loss go unnoticed in the
+# next, which comparing only against the immediately previous tag would allow.
+if git -C "${REPO_ROOT}" rev-parse -q --verify "${RENAMED_TAG}^{commit}" >/dev/null 2>&1; then
+  for artifact in SKILL.md references/routing-table.md; do
+    compare_routing_artifact "${RENAMED_TAG}" "${RENAMED_SKILL}" "${artifact}"
+  done
+else
+  skip "routing rows from ${RENAMED_TAG} are still present" "tag not fetched in this clone"
 fi
 
 # The bounds that make the router safe. Each is a distinct guarantee, so each is
@@ -209,6 +252,21 @@ assert_contract "routing is still capability-aware" \
   "capability report"
 assert_contract "stopping conditions are still enumerated" \
   "^## Stopping Conditions"
+
+# Automation routing, added in v0.39.0. The ownership boundaries matter more than
+# the destination row: a router that sends every red test to the automation
+# engineer makes that skill absorb root-cause analysis and product decisions,
+# which is the failure this class was added to avoid.
+assert_contract "the automation class exists" \
+  '^| `automation` | the automated test suite itself is the subject'
+assert_contract "automation work routes to test-automation-engineer" \
+  'runtime, backlog | `test-automation-engineer`'
+assert_contract "an automation request with unagreed behaviour routes to product-owner" \
+  'the behaviour to assert is not agreed | `product-owner`'
+assert_contract "a failing test pointing at a product defect routes to issue-investigator" \
+  'points at a product defect | `issue-investigator`'
+assert_contract "an unstable scenario still routes to manual-tester" \
+  'too unstable to assert | `manual-tester`'
 
 # ------------------------------------------------------------------------------
 section "lifecycle CLI accepts the skill"

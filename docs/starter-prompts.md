@@ -120,6 +120,52 @@ Decide what to automate, what not to automate, the right test levels, fixtures, 
 assertions, CI integration, flakiness risks, debug artifacts, and remaining manual coverage.
 ```
 
+### Maintain, Triage, Or Rethink An Existing Suite
+
+The same skill owns the suite after it exists. Each of these runs a different workflow, so say
+which job it is rather than describing them all as "the tests":
+
+```text
+Use the test-automation-engineer skill.
+
+Fix the failing Playwright suite after this UI redesign. The behaviour under test has not
+changed; the DOM has. Repair at the shared layer and keep every assertion.
+```
+
+```text
+Use the test-automation-engineer skill.
+
+Triage these CI test failures and separate product defects from automation problems.
+Cluster them before proposing any fix, and name the evidence behind each classification.
+```
+
+```text
+Use the test-automation-engineer skill.
+
+Review our regression suite and decide what should be automated now, automated later, kept
+manual, moved to a lower test level, refactored, or removed. Give one reason per decision.
+```
+
+```text
+Use the test-automation-engineer skill.
+
+Our e2e suite takes 70 minutes. Find the coverage that can move to a lower level, say what
+confidence we give up, and leave the checks whose failure mode is genuinely the integration.
+```
+
+```text
+Use the test-automation-engineer skill.
+
+Reduce flakiness in this suite without weakening the assertions. Diagnose each flake to a
+cause before changing anything; do not add retries or raise timeouts to get it green.
+```
+
+```text
+Use the test-automation-engineer skill.
+
+Introduce API regression coverage for this service using the repository's existing framework.
+```
+
 ## Multi-Skill Workflow Prompts
 
 ### Product To Delivery

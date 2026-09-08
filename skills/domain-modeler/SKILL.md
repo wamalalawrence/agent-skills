@@ -18,7 +18,7 @@ compatibility: >-
   .agent-skills.yml). See docs/execution-modes.md.
 metadata:
   author: wamalalawrence
-  version: "0.38.0"
+  version: "0.39.0"
   homepage: "https://github.com/wamalalawrence/agent-skills"
 argument-hint: "<the term to define, or the decision to record as an ADR>"
 user-invocable: true

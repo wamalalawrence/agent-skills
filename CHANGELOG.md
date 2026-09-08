@@ -6,6 +6,123 @@ All notable project changes should be recorded here.
 
 - No unreleased changes.
 
+## 0.39.0 - Test Automation Is A Full Engineering Workflow
+
+Minor release. [`test-automation-engineer`](skills/test-automation-engineer/SKILL.md) stops being
+a skill that writes new tests and becomes one that owns an automated suite.
+
+It can now maintain an existing suite through product change, triage a wall of CI failures into
+product defects versus automation problems, investigate flakiness to a cause, prioritise an
+automation backlog, move coverage to the level where it belongs, preserve requirement-to-test
+traceability, and integrate stable coverage into CI — while routing product defects, unclear
+behaviour, and exploratory work to the specialists that own them.
+
+```text
+Use Wamala to triage these 37 CI test failures and separate product defects from automation problems.
+Use Wamala to fix the failing Playwright suite after this UI redesign.
+Use Wamala to decide what of our regression pack should be automated, kept manual, or moved lower.
+```
+
+The strengths the skill already had are unchanged: the requirement-understanding gate before any
+automation, lowest-appropriate test level, the unit/integration/API/contract/UI distinction, stable
+fixtures and selectors, observable waits instead of sleeps, deterministic data, CI integration and
+artifacts, the bounded `code-reviewer` `test-quality` loop, flake budgets, consumption of
+manual-tester / product-owner / issue-investigator evidence, and the destructive-action floor.
+
+### Added
+
+- **Nine explicit task modes**, named before anything else runs and each mapped to the steps it
+  actually needs: `new-automation`, `suite-maintenance`, `failure-triage`, `flake-investigation`,
+  `automation-strategy`, `automation-backlog`, `coverage-gap-analysis`, `ci-integration`,
+  `framework-evolution`. The mode is not decoration — it decides the workflow. Running the
+  new-coverage workflow on "CI has 42 failures" produces 42 edits to tests that were correct, and
+  that is the failure the modes exist to prevent.
+- **Mandatory framework and repository discovery** whenever automation code will be read, changed,
+  or added. Eighteen dimensions — runtime, frameworks, runner, assertions, fixtures, page objects,
+  API clients, data builders, mocks, container dependencies, reporting, coverage, the CI command,
+  tags, retry and quarantine config, parallelism, selectors, conventions — in
+  [`references/framework-discovery.md`](skills/test-automation-engineer/references/framework-discovery.md).
+  The binding rule is that the repository's stack wins unless there is evidence it is inadequate;
+  a new framework needs a written tradeoff record and a named human owner before any migration.
+  Common ecosystems are recognised on sight, and none is hardcoded into the workflow.
+- **A failure taxonomy.** Every failure — or, correctly, every failure *cluster* — is classified as
+  `PRODUCT_DEFECT`, `AUTOMATION_DEFECT`, `EXPECTED_PRODUCT_CHANGE`, `FLAKY_TEST`,
+  `TEST_DATA_FAILURE`, `ENVIRONMENT_FAILURE`, `DEPENDENCY_FAILURE`, `CONFIGURATION_FAILURE`, or
+  `UNKNOWN`, from named evidence, with a routing table per class. A red test is not evidence the
+  test is wrong. Fifty failures behind one broken authentication fixture are one incident with one
+  fix, not fifty test edits.
+- **Flake diagnosis before repetition** — reproduce, isolate, classify, fix the cause, stability
+  run, CI-equivalent run — with a cause list covering timing, data, isolation, surface, and
+  environment, and a quarantine contract requiring reason, owner, linked follow-up, visible CI
+  status, and a removal condition. Silent quarantine is forbidden.
+  [`references/failure-triage.md`](skills/test-automation-engineer/references/failure-triage.md).
+- **Backlog dispositions** — `AUTOMATE_NOW`, `AUTOMATE_LATER`, `KEEP_MANUAL`,
+  `MOVE_TO_LOWER_LEVEL`, `REFACTOR_EXISTING`, `REMOVE_DUPLICATE`, `OBSOLETE`,
+  `NEEDS_CLARIFICATION` — decided on ordinal evidence rather than an invented numeric score, plus
+  active test-level optimisation for suites that have grown expensive.
+  [`references/automation-backlog.md`](skills/test-automation-engineer/references/automation-backlog.md).
+- **A suite-maintenance playbook** with the repairs that are actually damage — blanket timeout
+  increases, `force: true`, swallowed failures, deleted assertions, blanket snapshot updates,
+  retries until green, `sleep(5000)`, silent skips — each needing a specific written justification
+  rather than "the suite was red". Test-data kinds and their guarantees, cleanup ownership, and
+  parallel-safe identities are in the same reference.
+  [`references/suite-maintenance.md`](skills/test-automation-engineer/references/suite-maintenance.md).
+- **Requirement → scenario → automated check → CI evidence traceability**, persisted as a coverage
+  map rather than scattered through test code as ticket comments. It exists to answer one
+  question: why does this test exist, and what stops being protected if it is removed?
+- **An `automation:` block in the shared
+  [evidence pack](skills/software-engineer/references/evidence-pack.md#the-automation-block)** —
+  one block on a file every skill already reads, rather than five new artifact formats. It carries
+  the mode, the discovered stack, the coverage map, the triage result, the backlog dispositions,
+  the stability result, what stays manual, and the next action, so a fresh agent can resume the
+  work from disk. `test-automation-engineer` is its sole writer.
+- **An `automation` class in [`wamala`](skills/wamala/SKILL.md) routing**, with four ordered rows
+  that keep the ownership boundaries intact: unagreed behaviour goes to `product-owner`, a failing
+  test that points at a product defect goes to `issue-investigator`, a scenario too unstable to
+  assert goes to `manual-tester`, and everything else about the suite goes to
+  `test-automation-engineer`. Two new chains cover a wall of CI failures and a suite broken by a
+  product change. The routing table gains the judgement calls: why "the regression suite takes 70
+  minutes" is automation work while "the dashboard is slow" is a product target, and why a wall of
+  failures is always one triage step rather than a fan-out.
+- **Three behavioural evals** —
+  [modes and discovery](evals/test-automation-engineer-modes-and-discovery.md),
+  [failure triage](evals/test-automation-engineer-failure-triage.md), and
+  [flake, ambiguity, and safety](evals/test-automation-engineer-flake-ambiguity-and-safety.md) —
+  covering twelve scenarios: new UI automation, API-level choice, a suite broken by a UI refactor,
+  product defect versus automation defect, an asynchronous flake, fifty failures with one cause, a
+  backlog decision, an expensive e2e suite, ambiguous behaviour, an unsafe environment, an unknown
+  framework, and an authenticated sandbox resource. They test decisions rather than the presence of
+  wording. [`evals/wamala-routing.md`](evals/wamala-routing.md) gains two automation requests.
+
+### Changed
+
+- **`scripts/test-front-door-skill.sh` now checks routing rows as a superset, not for equality.**
+  The equality check was written for a rename, where any routing change was a defect. Kept as-is it
+  would have frozen the table: this release adds rows deliberately. The guarantee that mattered is
+  preserved — every routing row from `v0.37.0` and from `v0.38.0` must still be present, verbatim,
+  so a row cannot lose its owner or disappear while something else is being edited. Row numbers are
+  normalised out, because renumbering on insert is not a contract change. Shown failing by deleting
+  a row: both baselines report it. Five assertions pin the new automation rows and their ownership
+  boundaries.
+- **The `test-automation-engineer` compatibility field** now describes the three current execution
+  modes — `global`, `in-repo`, and the legacy `local-workspace` — and points at the generic access
+  resolver. It previously advertised the pre-v0.37.0 `setup.init + .env` model as one of two modes.
+  Its pre-flight no longer tells the agent to look for `.env` in a parent workspace folder; it
+  resolves access on demand with `agent-skills access resolve`, and never asks for a secret in
+  conversation. The same correction was applied to `wamala`, whose compatibility field carried the
+  older two-mode wording.
+- **The output contract is keyed by mode.** `## Automation Backlog`, `## Failure Triage`, and
+  `## Validation Run` join the menu; a triage run has no `## Test Design` and a backlog run has no
+  `## Implementation Plan`. `## Validation Run` distinguishes what was actually run, the observed
+  stability, and whether a CI-equivalent command was verified — a run that did not happen is never
+  reported as one.
+- **[docs/skill-boundaries.md](docs/skill-boundaries.md)** states the widened ownership and, more
+  importantly, what stays outside it: root-cause analysis, product intent, exploratory testing, and
+  fixing the product. A failing test that exposes a real bug is routed, not patched.
+- The README skill entry, [starter prompts](docs/starter-prompts.md), and the
+  [regression-plan example](docs/examples/test-automation-engineer-regression-plan.md) now cover
+  maintenance, triage, flake work, backlog decisions, and suite runtime alongside new coverage.
+
 ## 0.38.0 - Meet Wamala
 
 Minor release. The single front door to Agent Skills has a name: **`tech-lead` is now `wamala`**.

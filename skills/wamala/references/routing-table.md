@@ -30,9 +30,13 @@ Rows are evaluated top to bottom, first match wins. The ordering encodes two pri
 | 9 | `question` about behaviour, cause, or history | `issue-investigator` | Read-only by construction |
 | 10 | `question` about product intent or priority | `product-owner` | Owns the answer |
 | 11 | `review` of an existing diff, branch, or PR | `code-reviewer` | Owns severity and the verdict |
-| 12 | `validation`, scenario not yet stable | `manual-tester` | Owns exploratory and manual scope |
-| 13 | `validation`, scenario stable and worth automating | `test-automation-engineer` | Owns level choice and fixtures |
-| 14 | A term is contested, or a hard-to-reverse decision needs recording | `domain-modeler` | Owns the glossary and ADRs |
+| 12 | `automation`, but the behaviour the test should assert is not agreed | `product-owner` | Automation must not freeze an unsettled assumption into CI |
+| 13 | `automation`, but a failing automated test points at a product defect | `issue-investigator` | Product root cause is never the suite's to decide |
+| 14 | `automation`, but the scenario is not stable enough to assert mechanically | `manual-tester` | Exploratory scope stays manual |
+| 15 | `automation` — new coverage, a broken suite, CI triage, flakes, runtime, or a backlog | `test-automation-engineer` | Owns the suite, its failures, and its level choices |
+| 16 | `validation`, scenario not yet stable | `manual-tester` | Owns exploratory and manual scope |
+| 17 | `validation`, scenario stable and worth automating | `test-automation-engineer` | Owns level choice and fixtures |
+| 18 | A term is contested, or a hard-to-reverse decision needs recording | `domain-modeler` | Owns the glossary and ADRs |
 
 ## Chains
 
@@ -45,6 +49,8 @@ step is re-gated before the next is dispatched.
 | Reported defect | `issue-investigator` → `software-engineer` | Root-cause status must be `confirmed`, or `suspected` with a discriminating experiment |
 | Defect worth pinning | `issue-investigator` → `software-engineer` → `test-automation-engineer` | The scenario must be deterministic before automation |
 | Manual defect found during testing | `manual-tester` → `issue-investigator` | The defect must carry environment, build SHA, expected vs actual, steps, evidence |
+| Wall of CI failures | `test-automation-engineer` → `issue-investigator` | Only the clusters triage classified `PRODUCT_DEFECT` are handed on, with the evidence that classified them |
+| Suite broke after a product change | `test-automation-engineer` | One step, unless triage finds a product defect — then it fans out as above |
 | Oversized anything | `delivery-planner` → `delivery-runner` | Readiness must be `READY_FOR_DISPATCH` |
 
 A chain stops the moment a step returns `blocked` or `needs-context`. Chains are convenience,
@@ -76,9 +82,34 @@ decision belongs to the person who asked.
 findings, and let the user decide on the fix. Bundling them means the reviewer's independence is
 lost — the same context both writes and judges the change.
 
-**"The test is flaky."** `validation` → `test-automation-engineer`, which owns flakiness risk.
-It becomes `defect` → `issue-investigator` only when the flake turns out to be a real race in
-production code rather than in the test.
+**"The test is flaky."** `automation` → `test-automation-engineer`, which owns diagnosis. It
+becomes `defect` → `issue-investigator` only when the diagnosis finds a real race in production
+code rather than in the test — and that finding is the automation engineer's to make, not the
+router's to assume from the word "flaky".
+
+**"Fifteen tests broke after the UI refactor."** `automation` → `test-automation-engineer`. Do
+not route this to `software-engineer` as a refactor follow-up: whether those tests were wrong or
+the refactor broke behaviour is a triage question, and triage is the automation engineer's step.
+
+**"CI has 42 failures."** `automation` → `test-automation-engineer` for triage, always as one
+step. Routing the wall to `issue-investigator` assumes 42 product defects; routing it as
+maintenance assumes 42 broken tests. Both are guesses the triage step exists to replace, and it
+routinely finds that 42 failures are three causes.
+
+**"Our regression suite takes 70 minutes."** `automation` → `test-automation-engineer`, not
+`intent-unclear`. This looks like the "it's slow" case above and is not: a test suite's runtime
+budget is owned by the engineers who pay it, and the trade — which coverage moves to a lower
+level, and what confidence that gives up — is exactly the automation engineer's call. The "it's
+slow" rule applies to *product* performance, where the target is a product decision.
+
+**"Automate these 80 manual scenarios."** `automation` → `test-automation-engineer`, and the
+step is a backlog decision, not 80 tests. Some are `KEEP_MANUAL`, some belong at a lower level,
+some are duplicates. A router that promises 80 automated tests has already made the wrong call.
+
+**"Add API regression coverage for this service."** `automation` → `test-automation-engineer`,
+including when it means introducing a level the repository does not test at yet. Adding a harness
+inside the existing framework is automation work; replacing the framework is a decision that
+needs a named human owner, and the automation engineer stops and says so.
 
 **A bare ticket key with nothing else.** Do not classify from the key. Fetch the ticket if the
 capability report says a tracker resolves; if it does not, ask the user for the summary and

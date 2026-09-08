@@ -20,11 +20,12 @@ compatibility: >-
   Cursor, Windsurf, Continue, GitHub Copilot Chat, ChatGPT, etc.) AND can open a
   fresh-context agent per step — a sub-agent / Task tool (preferred), an external
   CLI re-invocation, or a human pasting the prepared handoff into a new chat.
-  Two execution modes — `local-workspace` and `in-repo`. See
-  docs/execution-modes.md.
+  Three execution modes — `global` (one local install, the default since
+  v0.37.0), `in-repo` (cloud and remote agents), and the legacy
+  `local-workspace`. See docs/execution-modes.md.
 metadata:
   author: wamalalawrence
-  version: "0.38.0"
+  version: "0.39.0"
   homepage: "https://github.com/wamalalawrence/agent-skills"
 argument-hint: "<the request — a ticket key, a PR link, a bug report, or plain prose>"
 user-invocable: true
@@ -100,6 +101,8 @@ Skipping the wrappers is the #1 failure mode and task size does not waive them.
 - You are unsure whether something is a bug, a feature, or a question — that classification is
   the first thing this skill does.
 - A ticket key or PR link is all you have, and what to do next depends on what is in it.
+- The automated test suite is the subject — coverage to add, a suite that broke, a wall of CI
+  failures, a flake, or a decision about what to automate at all.
 
 ## When Not To Use
 
@@ -213,6 +216,7 @@ work as exactly one of:
 | `question` | an answer is wanted, not a change |
 | `review` | a diff, branch, or PR exists and a verdict is wanted |
 | `validation` | behaviour exists and needs testing, manually or automated |
+| `automation` | the automated test suite itself is the subject — coverage to add, a suite that broke, CI failures, flakes, runtime, or what to automate |
 | `terminology` | a term or a hard-to-reverse decision needs recording |
 | `oversized` | more than one focused session, whatever the class |
 
@@ -250,6 +254,10 @@ Take the first row that matches. The full table with rationale is in
 | `question` about behaviour or cause | `issue-investigator` | Read-only by construction |
 | `question` about product intent | `product-owner` | Owns the answer |
 | `review` | `code-reviewer` | Owns the verdict |
+| `automation`, the behaviour to assert is not agreed | `product-owner` | Automation must not freeze an unsettled assumption |
+| `automation`, a failing test points at a product defect | `issue-investigator` | Product root cause is never the suite's to decide |
+| `automation`, scenario too unstable to assert | `manual-tester` | Exploratory scope stays manual |
+| `automation` — new coverage, broken suite, CI triage, flakes, runtime, backlog | `test-automation-engineer` | Owns the suite end to end |
 | `validation`, scenario not yet stable | `manual-tester` | Owns exploratory and manual scope |
 | `validation`, scenario stable and worth automating | `test-automation-engineer` | Owns level choice |
 | `terminology` or an ADR-worthy decision | `domain-modeler` | Owns glossary and ADRs |
@@ -299,6 +307,7 @@ Some requests need one step; the common multi-specialist chains are:
 | Feature with unclear scope | `product-owner` → `software-engineer` → `manual-tester` |
 | Reported defect | `issue-investigator` → `software-engineer` |
 | Defect worth a regression test | `issue-investigator` → `software-engineer` → `test-automation-engineer` |
+| Wall of CI failures | `test-automation-engineer` → `issue-investigator` for the clusters it classifies as product defects |
 | Oversized anything | `delivery-planner` → `delivery-runner` |
 
 Re-run the gate against each completed step's output before dispatching the next: a refinement
@@ -353,7 +362,8 @@ memory=<updated|blocked>; skill=wamala@<version>`. Do not claim a wrapper ran un
 
 - Lifecycle:
 - Request: <one line, as understood>
-- Class: defect | change | intent-unclear | question | review | validation | terminology | oversized
+- Class: defect | change | intent-unclear | question | review | validation | automation |
+  terminology | oversized
 - Understanding confidence: unknown | low | medium | high
 - Routed to: <skill> — <one-line reason>
 - Chain: <skill> -> <skill> (or "single step")
