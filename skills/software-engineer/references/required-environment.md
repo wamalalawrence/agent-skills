@@ -81,18 +81,18 @@ silently falls back to "no tracker access" is a workflow failure, not a setup fa
 **Locate config files before claiming any are missing.** `.env` and `.jira-config.yml` (or
 equivalent tracker config) are
 written by `setup.init` to the **parent workspace folder**, not the repo cwd. Run
-`python3 scripts/locate-config.py` (see [`docs/auth-discovery.md` § Where the files
+`agent-skills locate-config` (see [`docs/auth-discovery.md` § Where the files
 live](../../../docs/auth-discovery.md#where-the-files-live)). The script walks the cwd, every
 parent directory, the `WORKSPACE_ROOT` env var, and the directory holding the `.skills`
 symlink. "Not in cwd" is **not** the same as "not in the workspace"; reporting the former as
 the latter is a workflow failure.
 
 **Project memory: read on start, write on finish.** Before context discovery, run
-`python3 scripts/project-memory.py read <project>`. If no memory exists yet, run
-`python3 scripts/project-memory.py init <project> --repo <owner/repo>` to create the skeleton.
+`agent-skills memory read <project>`. If no memory exists yet, run
+`agent-skills memory init <project> --repo <owner/repo>` to create the skeleton.
 Treat the contents as starting context (build commands, runtime version, common gotchas, recent
 tasks) — not as gospel; correct it when this run disproves a fact. Append durable facts as
-they are verified with `python3 scripts/project-memory.py note <project> --section <S> --text
+they are verified with `agent-skills memory note <project> --section <S> --text
 <T>`. See [`docs/project-memory.md`](../../../docs/project-memory.md) for what belongs there and
 the post-completion cleanup contract that preserves project memory while removing per-task
 scratch.

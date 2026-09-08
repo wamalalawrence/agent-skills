@@ -65,7 +65,84 @@ jobs:
             exit 1
           fi
 
-      - name: Verify setup.init non-interactively
+      - name: Global install and access-resolution test suites
+        run: |
+          set -euo pipefail
+          bash scripts/test-global-install.sh
+          bash scripts/test-access-resolution.sh
+
+      - name: Verify the default global install from a clean HOME
+        run: |
+          set -euo pipefail
+          # A throwaway HOME with a space in the path, so quoting regressions
+          # fail here rather than on a user's machine.
+          tmp=$(mktemp -d)
+          home="$tmp/clean home"
+          mkdir -p "$home/.claude/skills/pre-existing-user-skill"
+          printf -- '---\nname: pre-existing-user-skill\ndescription: not ours\n---\n# Mine\n' \
+            > "$home/.claude/skills/pre-existing-user-skill/SKILL.md"
+          run_setup() {
+            env HOME="$home" \
+              AGENT_SKILLS_HOME="$home/.agent-skills" \
+              AGENT_SKILLS_CONFIG_DIR="$home/.config/agent-skills" \
+              PATH="$home/.local/bin:$PATH" \
+              "$@"
+          }
+          run_setup ./setup.init --yes > "$tmp/install.log" 2>&1 || {
+            cat "$tmp/install.log"; exit 1;
+          }
+          cat "$tmp/install.log"
+          # The binding requirement: no credential is requested or stored.
+          if grep -Eiq 'JIRA_|CONFLUENCE_|SONAR_|paste|api token' "$tmp/install.log"; then
+            echo "ERROR: the global install mentioned a credential" >&2
+            exit 1
+          fi
+          test ! -f "$home/.config/agent-skills/credentials.json"
+          test ! -f "$home/.env"
+          test ! -e "$home/.skills"
+          # One canonical source, registered per skill.
+          test -f "$home/.agent-skills/install.json"
+          test -L "$home/.agents/skills/tech-lead"
+          test -f "$home/.agents/skills/tech-lead/SKILL.md"
+          test -L "$home/.claude/skills/software-engineer"
+          # Unrelated user skills are untouched.
+          test -f "$home/.claude/skills/pre-existing-user-skill/SKILL.md"
+          test ! -L "$home/.claude/skills/pre-existing-user-skill"
+          # Every registration must resolve to the same canonical path.
+          a=$(readlink -f "$home/.claude/skills/tech-lead")
+          b=$(readlink -f "$home/.agents/skills/tech-lead")
+          test "$a" = "$b"
+          # Idempotency: a rerun adds nothing.
+          before=$(ls -1 "$home/.agents/skills" | wc -l)
+          run_setup ./setup.init --yes > /dev/null 2>&1
+          after=$(ls -1 "$home/.agents/skills" | wc -l)
+          test "$before" = "$after"
+          run_setup ./setup.init --verify
+          # The runtime must resolve from an unrelated repository, several
+          # directories deep, which is the whole point of the release.
+          mkdir -p "$tmp/elsewhere/service/src/main/java/deep"
+          (cd "$tmp/elsewhere/service" && git init -q)
+          expected=$(cat VERSION)
+          got=$(cd "$tmp/elsewhere/service/src/main/java/deep" \
+            && env HOME="$home" AGENT_SKILLS_HOME="$home/.agent-skills" \
+                 PATH="$home/.local/bin:$PATH" agent-skills version)
+          test "$got" = "$expected"
+          # Access resolution must report needs-setup, not crash, and must not
+          # print anything secret-shaped.
+          out=$(cd "$tmp/elsewhere/service" \
+            && env HOME="$home" AGENT_SKILLS_CONFIG_DIR="$home/.config/agent-skills" \
+                 python3 "$GITHUB_WORKSPACE/scripts/access.py" resolve \
+                 --service some-future-service --require host,token \
+                 --secret token --no-capability 2>&1 || true)
+          printf '%s\n' "$out" | grep -q 'status: needs-setup'
+          printf '%s\n' "$out" | grep -q 'does not authorize destructive action'
+          # Uninstall removes only what we own.
+          run_setup ./setup.init --yes > /dev/null 2>&1
+          run_setup bash bin/agent-skills uninstall --yes
+          test ! -e "$home/.agents/skills/tech-lead"
+          test -f "$home/.claude/skills/pre-existing-user-skill/SKILL.md"
+
+      - name: Verify the legacy workspace model still works
         run: |
           set -euo pipefail
           tmp=$(mktemp -d)
@@ -89,6 +166,13 @@ jobs:
           test "$(grep -c '>>> agent-skills setup.init' "$tmp/work/.gitignore")" = "1"
           # Marker block in .env must appear exactly once.
           test "$(grep -c '^# >>> agent-skills setup\.init$' "$tmp/work/.env")" = "1"
+          # A legacy workspace must still be recognised and explained, not broken.
+          # Capture both streams. The report writes findings to stdout, but an
+          # assertion about a command's output should not be the thing that
+          # silently changes meaning if a line moves between streams.
+          (cd "$tmp/work/agent-skills" \
+            && bash lib/migrate.sh --workspace-root "$tmp/work" 2>&1) \
+            | grep -q '\.skills is obsolete'
           # No setup-managed key may appear outside the marker block.
           MANAGED='ORG_NAME|ORG_DOMAIN|WORKSPACE_ROOT|GITHUB_ORG'
           MANAGED="$MANAGED|GITHUB_DEFAULT_BRANCH|PROJECTS_JSON"

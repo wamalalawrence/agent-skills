@@ -1,23 +1,50 @@
 # =============================================================================
-# agent-skills — in-repo configuration template
+# agent-skills — committed project configuration template
 #
-# Use this file when the AI agent runs INSIDE a single target repository and
-# cannot rely on a separate workspace root with a `.env` file. Typical hosts:
-# GitHub Copilot coding agent (github.com), Cursor cloud / background agents,
-# Devin, Codex, Codespaces, Gitpod, Claude.ai web with the repo attached.
+# OPTIONAL for local work. On a machine with the global install, project context
+# is inferred from the repository itself (git root, remote, base branch, stack,
+# build system, package manager, commands, CI). Check what is already known
+# before adding anything here:
+#
+#   agent-skills project
+#
+# Add this file when inference is not good enough — an unusual build command, a
+# non-conventional base branch, a coverage target — or when the repository runs
+# in a CLOUD agent, which cannot see your machine and therefore needs the
+# in-repo mode below.
+#
+# REQUIRED for cloud / in-repo hosts: GitHub Copilot coding agent (github.com),
+# Cursor cloud / background agents, Devin, Codespaces, Gitpod, Claude.ai web
+# with the repo attached.
 #
 # How to use:
 #   1. Copy this file to `.agent-skills.yml` at the repository root.
-#   2. Fill in the project block to match this repo.
-#   3. Commit `.agent-skills.yml` (it contains NO secrets).
+#   2. Keep ONLY the keys you actually need. Delete the rest.
+#   3. Commit it. It contains NO secrets, and it must never name a credential
+#      identity either — see the security note below.
 #   4. Add `.cache/` to `.gitignore`.
-#   5. Inject secrets (JIRA_API_TOKEN, GITHUB_TOKEN, etc.) via the host
-#      platform's environment-variable mechanism. Never put them in this file.
+#   5. Inject any secrets via the host platform's own mechanism, or let
+#      `agent-skills access resolve` handle them locally.
 #
-# For multi-repo / local-workspace setups use `setup.init` and `.env` instead.
-# See docs/execution-modes.md for the full comparison.
+# ---------------------------------------------------------------------------
+# SECURITY: this file is committed, so anyone who can open a pull request can
+# edit it. Two rules follow, and both are enforced rather than advisory:
+#
+#   * No credential VALUES here. Ever.
+#   * No credential PROFILE NAMES here. This file may declare WHAT a service is
+#     (a name, a host); it may not choose WHICH identity to unlock. A
+#     `credentials:` block in a committed file is ignored.
+#
+# Profile selection comes from the user-global binding registry
+# (`agent-skills access bind`) or from an untracked `.agent-skills.local.yml`,
+# whose untrackedness is verified with git. See docs/access-resolution.md.
+# ---------------------------------------------------------------------------
+#
+# See docs/configuration.md and docs/execution-modes.md.
 # =============================================================================
 
+# Only needed for cloud / remote agents. Omit it for local work: the global
+# install is detected automatically.
 mode: in-repo
 
 # Display name used in summaries and stakeholder-ready output.
@@ -44,11 +71,14 @@ project:
   coverage_target: "" # optional, percentage as a string, e.g. "80"
   notes: "" # optional free-text reminders
 
-# Optional issue-system context. Credentials still come from env vars
-# (JIRA_API_TOKEN, GITHUB_TOKEN). Only host/project metadata goes here.
-# Auth discovery in in-repo mode walks: process env (host-injected secrets) →
-# this file → ask the user. There is no `.env` to read, and `.jira-config.yml`
-# is not used. See `docs/auth-discovery.md`.
+# Optional issue-system context. HOST METADATA ONLY — never a credential value
+# and never a credential profile name.
+#
+# Locally, `agent-skills access resolve --service jira ...` establishes access
+# on demand and stores any secret in the OS credential store. In a cloud agent
+# there is no local store, so the platform injects secrets as environment
+# variables and the resolver picks them up at step 2.
+# See docs/access-resolution.md.
 jira:
   host: "" # e.g. "https://acme.atlassian.net" — full URL, NO credentials
   default_project_key: "" # e.g. "ABC". Project key prefix from ticket IDs
@@ -103,11 +133,12 @@ writing:
 # most users do not need to change anything.
 skills:
   # Directory the agent must treat as the canonical skill source. Resolved
-  # relative to this YAML file. Set this to remove all ambiguity.
+  # relative to this YAML file. Leave blank unless you need to override the
+  # resolution order; the global install already gives one canonical answer.
   # COMMON VALUES:
-  #   .skills                   (local-workspace mode, the default symlink)
   #   .agent-skills/skills      (in-repo mode, vendored copy)
-  #   agent-skills/skills       (when this YAML lives in a parent workspace)
+  #   skills                    (working on the agent-skills repo itself)
+  #   .skills                   (legacy workspace symlink, pre-v0.37.0)
   canonical_dir: ""
 
   # What to do when a skill name appears under multiple discovered directories.

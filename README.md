@@ -4,7 +4,7 @@ Reusable [Agent Skills](https://agentskills.io/) for software-engineering work �
 role-shaped workflows your AI assistant can load on demand so the same model produces
 senior-engineer, product-owner, tester, or reviewer output instead of generic answers.
 
-> **Status:** `0.36.0` — pre-1.0. Core skill set is shipped and stable enough for public use;
+> **Status:** `0.37.0` — pre-1.0. Core skill set is shipped and stable enough for public use;
 > interfaces may still evolve.
 
 New here? Start with the [quickstart](docs/quickstart.md), then read [starter
@@ -25,13 +25,7 @@ checklist, and the right stopping conditions.
 
 ## Install
 
-`agent-skills` runs in two execution modes — pick the one that matches **where the agent actually
-runs**. Full comparison in [docs/execution-modes.md](docs/execution-modes.md).
-
-### Local workspace (your laptop, multiple repos)
-
-For Claude Code, Cursor, Windsurf, Continue, GitHub Copilot Chat in VS Code/JetBrains, or any local
-assistant working across several sibling repos:
+Install once. Use from any local project. Configure external access only when needed.
 
 ```bash
 git clone https://github.com/wamalalawrence/agent-skills.git
@@ -39,28 +33,68 @@ cd agent-skills
 ./setup.init
 ```
 
-`setup.init` writes `.env`, optional `.jira-config.yml` (or equivalent tracker config), a `.skills` symlink, and a `.gitignore`
-block into the parent workspace folder. See [docs/installation.md](docs/installation.md) for the
-workspace layout, all flags, and manual setup.
+That is the whole local setup. It installs `agent-skills` on the **machine**, registers the skills
+with every supported agent host it finds, and makes the runtime invocable from anywhere:
 
-### In-repo (online / cloud agents, single repository)
+```text
+Agent Skills v0.37.0 installed globally.
 
-For GitHub Copilot coding agent (github.com), Cursor cloud / background agents, Devin, Codex, GitHub
-Codespaces, Gitpod, or ChatGPT/Claude on the web with the repo attached — anywhere there is no local
-workspace folder:
+Skills are available to:
+  [x] Claude Code (~/.claude/skills)
+  [x] Agent Skills standard dir (~/.agents/skills)
+  [x] Codex (~/.codex/skills)
+  [x] Cursor (~/.cursor/skills)
+  [x] GitHub Copilot (~/.copilot/skills)
+  [x] Kiro (~/.kiro/skills)
+  [ ] JetBrains AI Assistant — one settings action, see docs/assistants.md
 
-1. Copy [`.agent-skills.example.yml`](.agent-skills.example.yml) to `.agent-skills.yml` at the
-  **target repository's** root and fill in the `project:` block. No secrets in this file.
-2. Vendor the `skills/` folder and `scripts/` lifecycle helpers you want to use into the target
-  repo (copy or `git submodule add`), or reference specific `SKILL.md` files and the
-  `start-task.sh` / `finish-task.sh` commands from your agent's instruction surface
-  (`.github/copilot-instructions.md`, `.cursor/rules/`, project-attached files, etc.).
-3. Add `.cache/` to the target repo's `.gitignore`.
-4. Inject any required secrets (`JIRA_API_TOKEN`, `GITHUB_TOKEN`, …) via the host platform's secret
-  mechanism.
+No credentials were requested or stored.
+External-service access is configured only when a task requires it.
+```
 
-See [docs/installation.md](docs/installation.md) and [docs/assistants.md](docs/assistants.md) for
-per-platform details.
+Then open any repository on the machine — one you already have, or one you clone next year — and
+invoke a skill. There is no per-workspace setup step, no `.skills` symlink, and no sibling
+`agent-skills` checkout.
+
+Setup asks for **no** credentials: no Jira, Confluence, Sonar, GitHub, database, or API token, and
+no list of projects you might work on. When a task actually needs an external service,
+`agent-skills` resolves access on demand — preferring an already-authenticated tool or session,
+then project configuration, then a reusable user-level identity. See
+[docs/access-resolution.md](docs/access-resolution.md).
+
+Everything after the install is one command:
+
+```bash
+agent-skills doctor     # what can this environment actually do?
+agent-skills verify     # is the installation healthy?
+agent-skills hosts      # which agents see the skills, and where from
+agent-skills update     # apply a new release
+```
+
+Full details, flags, and the supported-host table: [docs/installation.md](docs/installation.md).
+
+### Cloud and remote agents
+
+A cloud agent cannot read files on your laptop, so the global install does not reach it. Those
+environments use an **in-repo** mechanism instead — commit `.agent-skills.yml` and vendor or
+reference the skills inside the target repository. That covers GitHub Copilot coding agent, Cursor
+cloud/background agents, Codespaces, Gitpod, Devin, and web chats with a repo attached. See
+[docs/execution-modes.md](docs/execution-modes.md).
+
+### Upgrading from v0.36.x
+
+Your existing workspace keeps working — the resolver still reads a legacy `.env`, and
+`./setup.init --legacy-workspace` still writes the old layout. To move:
+
+```bash
+cd agent-skills
+git pull
+./setup.init                          # install globally
+agent-skills migrate                  # what changed, and what is now obsolete
+```
+
+Nothing is deleted and no secret is copied without you asking. See
+[docs/installation.md](docs/installation.md#upgrading-from-v036x-workspace-installation).
 
 ### Or — install just the skills via the [Agent Skills](https://skills.sh) ecosystem
 
@@ -70,26 +104,20 @@ npx skills add wamalalawrence/agent-skills
 
 ## Updating
 
-Releases are git tags (`v0.23.1`, `v0.24.0`, …) on this repo. Two commands cover the common
-case; full details, in-repo (cloud-agent) updates, and drift detection are in
+Releases are git tags (`v0.36.0`, `v0.37.0`, …) on this repo. Two commands cover the common case;
+full details, cloud-agent updates, and drift detection are in
 [docs/updates.md](docs/updates.md).
 
 ```bash
-cd agent-skills
-./setup.init --check-updates   # read-only; exit 0 up-to-date, 10 update available
-./setup.init --update          # fetch tags, check out latest release, refresh workspace
+agent-skills check-updates   # read-only; exit 0 up-to-date, 10 update available
+agent-skills update          # fetch tags, check out the latest release, refresh the install
 ```
 
-`--update` preserves your existing `.env` values, rewrites `<workspace>/.agent-skills.lock`,
-and prints the new release's `CHANGELOG.md` excerpt so you can see what changed before your
-next task. It never auto-runs and never pushes anything.
+`update` moves one canonical source, keeps every host adapter pointing at it, and leaves your
+credentials and project bindings alone. It never auto-runs and never pushes anything.
 
-After updating, the next task that loads any `SKILL.md` will surface a one-line **`update
-available`** / **`skill drift`** notice if the loaded skill version, the lock file, and the
-source repo disagree — so a stale vendored copy in another workspace cannot silently keep
-running the old behavior. If you see a stale `Status:` pin in a vendored README, that
-workspace was not refreshed; rerun `./setup.init --update` there or rerun your in-repo
-vendor script (see [docs/updates.md](docs/updates.md#in-repo-cloud--online-agent-updates)).
+`agent-skills verify` reports version drift when the installed manifest and the source tree
+disagree — for example after a manual `git pull` without a reinstall.
 
 ## Skills
 
@@ -236,9 +264,12 @@ the per-tier docs: [task blackboard](docs/task-blackboard.md),
 - [Docs index](docs/README.md)
 - [First-time user quickstart](docs/quickstart.md)
 - [Installation & `setup.init`](docs/installation.md)
-- [Configuration & multi-project workspaces](docs/configuration.md)
-- [Issue tracker / Document store auth discovery](docs/auth-discovery.md) — discovery order, placeholder
-  resolution, and the auth preflight that validates without exposing secrets
+- [Configuration](docs/configuration.md) — project configuration, which never holds a secret
+- [Access resolution](docs/access-resolution.md) — the one generic mechanism for reaching any
+  external service: the deterministic precedence order, credential identities, OS-native secret
+  storage, and the rule that a committed file can never select an identity
+- [Issue tracker / Document store auth discovery](docs/auth-discovery.md) — the service-specific
+  Jira/Confluence walk, kept as an example on top of the generic resolver
 - [GitHub access ladder](docs/github-access.md) — `gh auth status` → account switching →
   HTTPS → SSH; the ladder an agent must walk before declaring "no GitHub access"
 - [MCP](docs/mcp.md) — this repository ships and enables no MCP servers; what it does define is

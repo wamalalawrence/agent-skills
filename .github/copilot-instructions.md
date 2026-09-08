@@ -5,6 +5,11 @@ non-negotiable Company Brain contract from `agent-skills` so every Copilot sessi
 on this workspace respects the memory lifecycle without needing to read 400+ line
 SKILL.md files to find it.
 
+`agent-skills` is the globally installed command. It resolves from any repository
+on the machine, so there is no relative path to get right. If it is not on PATH,
+use `"${AGENT_SKILLS_HOME:-$HOME/.agent-skills}/bin/agent-skills"` instead, and see
+[installation](../docs/installation.md) if neither resolves.
+
 ## MANDATORY: Before ANY code change, investigation, review, or testing
 
 Run this ONE command first — it detects the project/task id, loads project
@@ -12,13 +17,13 @@ memory, loads org memory, records the skill version, and initialises the
 per-task blackboard:
 
 ```bash
-bash agent-skills/scripts/start-task.sh --skill <skill-name>=<skill-version>
+agent-skills start-task --skill <skill-name>=<skill-version>
 ```
 
 If the detected project or task id is wrong, rerun with explicit values:
 
 ```bash
-bash agent-skills/scripts/start-task.sh <project> <issue-key> --skill <skill-name>=<skill-version>
+agent-skills start-task <project> <issue-key> --skill <skill-name>=<skill-version>
 ```
 
 **The output of this command IS your starting context.** Do not re-discover facts
@@ -29,7 +34,7 @@ constraint; every `Build & runtime` bullet is the authoritative build command.
 
 1. **Run the finish wrapper FIRST so durable memory is written before cleanup:**
    ```bash
-   bash agent-skills/scripts/finish-task.sh <project> <issue-key> \
+   agent-skills finish-task <project> <issue-key> \
      --skill <skill-name> --summary "<one sentence outcome>"
    ```
    Add `--status blocked` or `--status needs-context` when the task cannot
@@ -37,7 +42,7 @@ constraint; every `Build & runtime` bullet is the authoritative build command.
 
 2. **Append extra durable facts when the task discovered them:**
    ```bash
-   bash agent-skills/scripts/finish-task.sh <project> <issue-key> \
+   agent-skills finish-task <project> <issue-key> \
      --skill <skill-name> --summary "<one sentence outcome>" \
      --build-runtime "<verified build/runtime fact>" \
      --gotcha "<gotcha that surprised you>"

@@ -242,7 +242,71 @@ probe_memory() {
   fi
 }
 
+# Where the skills came from and which model is in force. A skill that knows
+# this can name the right remediation instead of guessing at a layout.
+probe_install() {
+  INSTALL_STATE="no"
+  INSTALL_DETAIL="no global installation; run ./setup.init"
+  INSTALL_VERSION=""
+  if [[ -f "${AS_LIB_DIR:-${REPO_ROOT}/lib}/runtime.sh" ]]; then
+    # shellcheck source=lib/runtime.sh
+    AS_LIB_DIR="${AS_LIB_DIR:-${REPO_ROOT}/lib}" . "${AS_LIB_DIR:-${REPO_ROOT}/lib}/runtime.sh"
+    if as_is_installed; then
+      INSTALL_VERSION="$(as_installed_version 2>/dev/null || printf 'unknown')"
+      INSTALL_STATE="yes"
+      INSTALL_DETAIL="v${INSTALL_VERSION} at $(as_home)"
+      local source_version
+      source_version="$(as_source_version 2>/dev/null || true)"
+      if [[ -n "${source_version}" && "${source_version}" != "${INSTALL_VERSION}" ]]; then
+        INSTALL_DETAIL="${INSTALL_DETAIL} (drift: source is v${source_version})"
+      fi
+    fi
+  else
+    INSTALL_DETAIL="lib/runtime.sh not reachable; this clone looks incomplete"
+  fi
+
+  MODE_STATE="unknown"
+  MODE_DETAIL="could not determine the execution mode"
+  local ctx="${REPO_ROOT}/scripts/project-context.py"
+  if [[ -f "${ctx}" ]]; then
+    local mode=""
+    mode="$(${PYTHON3} "${ctx}" --field mode 2>/dev/null || true)"
+    if [[ -n "${mode}" ]]; then
+      MODE_STATE="yes"
+      MODE_DETAIL="${mode}"
+    fi
+  fi
+}
+
+# Which credential backend would be used. Reports availability only — this must
+# never read or print a secret value.
+probe_secret_backend() {
+  SECRET_BACKEND_STATE="unknown"
+  SECRET_BACKEND_DETAIL="scripts/access.py not reachable"
+  local access="${REPO_ROOT}/scripts/access.py"
+  [[ -f "${access}" ]] || return 0
+  local out=""
+  out="$(${PYTHON3} "${access}" backend --json 2>/dev/null || true)"
+  [[ -n "${out}" ]] || return 0
+  local name secure
+  name="$(printf '%s' "${out}" | ${PYTHON3} -c \
+    'import json,sys; print(json.load(sys.stdin).get("active_label",""))' 2>/dev/null || true)"
+  secure="$(printf '%s' "${out}" | ${PYTHON3} -c \
+    'import json,sys; print("yes" if json.load(sys.stdin).get("secure") else "no")' \
+    2>/dev/null || true)"
+  [[ -n "${name}" ]] || return 0
+  if [[ "${secure}" == "yes" ]]; then
+    SECRET_BACKEND_STATE="yes"
+    SECRET_BACKEND_DETAIL="${name}"
+  else
+    SECRET_BACKEND_STATE="no"
+    SECRET_BACKEND_DETAIL="${name} — no OS credential store available here"
+  fi
+}
+
 run_probes() {
+  probe_install
+  probe_secret_backend
   probe_tools
   probe_build_tool
   probe_docker
@@ -265,6 +329,9 @@ mark() {
 
 render_brief() {
   echo "  capability report:"
+  printf '    %sinstall          %s\n' "$(mark "${INSTALL_STATE}")" "${INSTALL_DETAIL}"
+  printf '    %smode             %s\n' "$(mark "${MODE_STATE}")" "${MODE_DETAIL}"
+  printf '    %ssecret store     %s\n' "$(mark "${SECRET_BACKEND_STATE}")" "${SECRET_BACKEND_DETAIL}"
   printf '    %stracker config   %s\n' "$(mark "${TRACKER_STATE}")" "${TRACKER_DETAIL}"
   printf '    %sgithub access    %s\n' "$(mark "${GITHUB_STATE}")" "${GITHUB_DETAIL}"
   printf '    %sbuild tool       %s (%s)\n' "$(mark "$([[ "${BUILD_TOOL}" == "unknown" ]] && echo no || echo yes)")" \
@@ -282,6 +349,11 @@ render_full() {
   echo "== agent-skills doctor =="
   echo "  repo root:  $(git rev-parse --show-toplevel 2>/dev/null || pwd)"
   echo "  skills src: ${REPO_ROOT}/skills"
+  echo ""
+  echo "Installation"
+  printf '  %sglobal install — %s\n' "$(mark "${INSTALL_STATE}")" "${INSTALL_DETAIL}"
+  printf '  %sexecution mode — %s\n' "$(mark "${MODE_STATE}")" "${MODE_DETAIL}"
+  printf '  %ssecret storage — %s\n' "$(mark "${SECRET_BACKEND_STATE}")" "${SECRET_BACKEND_DETAIL}"
   echo ""
   echo "Tools"
   echo "  present: ${TOOLS_PRESENT:-none}"
@@ -316,6 +388,12 @@ json_escape() {
 
 render_json() {
   printf '{\n'
+  printf '  "install": "%s",\n' "${INSTALL_STATE}"
+  printf '  "install_detail": "%s",\n' "$(json_escape "${INSTALL_DETAIL}")"
+  printf '  "installed_version": "%s",\n' "$(json_escape "${INSTALL_VERSION}")"
+  printf '  "mode": "%s",\n' "$(json_escape "${MODE_DETAIL}")"
+  printf '  "secret_backend": "%s",\n' "${SECRET_BACKEND_STATE}"
+  printf '  "secret_backend_detail": "%s",\n' "$(json_escape "${SECRET_BACKEND_DETAIL}")"
   printf '  "tools_present": "%s",\n' "$(json_escape "${TOOLS_PRESENT% }")"
   printf '  "tools_missing": "%s",\n' "$(json_escape "${TOOLS_MISSING% }")"
   printf '  "build_tool": "%s",\n' "$(json_escape "${BUILD_TOOL}")"

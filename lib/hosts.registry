@@ -1,0 +1,50 @@
+# agent-skills host adapter registry
+#
+# One row per agent host that discovers Agent Skills from a machine-global
+# directory. This is data, not logic: `lib/install.sh` reads it and needs no
+# per-host branching, so supporting a new host is one line here plus a row in
+# docs/assistants.md.
+#
+# Format (pipe-separated, 6 fields, no pipes inside a field):
+#
+#   id | label | global_dir | register | sync_to_cloud | notes
+#
+#   id             stable identifier used by `agent-skills hosts` and the
+#                  install manifest. Lowercase, hyphens.
+#   label          human name printed in reports.
+#   global_dir     machine-global skills directory, relative to $HOME.
+#                  `-` means the host has no filesystem convention we can
+#                  write to (see `register=manual`).
+#   register       link        -> create one symlink per skill inside
+#                                 global_dir, but only when the host is
+#                                 detected on this machine.
+#                  link-always -> register even when the host is not detected.
+#                                 Reserved for the vendor-neutral standard
+#                                 directory, which future hosts will read.
+#                  manual      -> cannot be automated; the host needs one
+#                                 action from the user. Never claimed as
+#                                 automatic.
+#   sync_to_cloud  yes | no | opt-in. Whether skills in this directory reach
+#                  the vendor's remote/cloud agents. `no` is the honest answer
+#                  for almost everything: a cloud agent cannot read your home
+#                  directory. See docs/execution-modes.md.
+#   notes          short factual note. Duplicate-scan behaviour goes here.
+#
+# Ordering matters only for report readability.
+#
+# On duplicate discovery: several hosts deliberately scan other hosts'
+# directories, so one host can list the same skill more than once. Every
+# registration created from this file is a symlink into the single canonical
+# tree under AGENT_SKILLS_HOME, so a duplicate listing is the same file at the
+# same version. `agent-skills verify` asserts that realpath identity instead of
+# asserting a uniqueness the hosts do not offer.
+
+claude-code|Claude Code|.claude/skills|link|no|Personal skills dir. Also scanned by Cursor and VS Code Copilot for compatibility, and offered for import by JetBrains AI Assistant.
+agents-standard|Agent Skills standard dir|.agents/skills|link-always|no|Cross-host convention. Read by Codex (user scope), GitHub Copilot CLI and cloud agent, VS Code Copilot, and Cursor.
+codex|Codex|.codex/skills|link|no|Codex also reads the standard dir above. Registered separately because Codex builds have shipped with only one of the two enabled. Also scanned by Cursor.
+cursor|Cursor|.cursor/skills|link|opt-in|The only Cursor dir that can sync to Cloud Agents, and only when Settings then Agents then Sync Skills for Cloud Agents is enabled. Cursor walks this root recursively.
+copilot|GitHub Copilot|.copilot/skills|link|no|Personal skills dir shared by VS Code, Visual Studio, and the Copilot CLI.
+kiro|Kiro|.kiro/skills|link|no|Global skills dir for the Kiro IDE and CLI. Honours KIRO_HOME. A workspace skill of the same name wins over a global one.
+jetbrains|JetBrains AI Assistant|-|manual|no|Global skill directories are IDE settings state, not a filesystem convention. Add the canonical dir once under Settings then Skills then Manage Skill Directories then Global. The IDE also detects and offers to import from the Claude Code and Codex dirs above.
+windsurf|Windsurf|.windsurf/skills|link|no|Registered when the directory exists or the host is detected. Windsurf skill discovery is less documented than the hosts above; verify with the host UI.
+continue|Continue|.continue/skills|link|no|Registered when the directory exists or the host is detected. Continue also accepts skills referenced from its rules files.

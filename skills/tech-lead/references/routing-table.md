@@ -105,7 +105,7 @@ A misclassified request shape is a durable lesson about this project, which is e
 [repo knowledge base](../../../docs/repo-knowledge.md) is for:
 
 ```bash
-python3 scripts/knowledge.py lesson add \
+agent-skills knowledge lesson add \
   --id perf-requests-need-a-target \
   --trigger "when a request says something is slow" \
   --action "ask for the target or SLA first; without one there is no defect to investigate" \

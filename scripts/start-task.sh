@@ -64,6 +64,15 @@ resolve_cache_root() {
     echo "${WORKSPACE_ROOT}/.cache/agent-skills"
     return
   fi
+  # Global install, no legacy workspace: the cache belongs to the repository
+  # being worked on. Anchor it at the git root rather than $PWD so running this
+  # from a nested directory does not scatter .cache folders through the tree.
+  local git_root=""
+  git_root="$(git rev-parse --show-toplevel 2>/dev/null || true)"
+  if [[ -n "${git_root}" ]]; then
+    echo "${git_root}/.cache/agent-skills"
+    return
+  fi
   echo "${PWD}/.cache/agent-skills"
 }
 
@@ -246,6 +255,7 @@ fi
 print_separator
 
 mkdir -p "${CACHE_ROOT}"
+agent_skills_ensure_cache_ignored "${CACHE_ROOT}"
 {
   printf 'project=%s\n' "${PROJECT}"
   printf 'issue_key=%s\n' "${ISSUE_KEY}"

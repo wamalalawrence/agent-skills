@@ -50,7 +50,7 @@ only when at least one of these is true:
 Promotion is explicit:
 
 ```bash
-python3 scripts/org-memory.py promote \
+agent-skills org-memory promote \
   --from <source-project> \
   --section "Common gotchas" \
   --text "Migrations that touch tenancy must run through ${SHARED_LIBRARY_NAMES} review"
@@ -80,14 +80,14 @@ This is what makes the `software-engineer` "cross-project impact" step real
 instead of wishful. Update it whenever a project's shared-library set changes:
 
 ```bash
-python3 scripts/org-memory.py index-update acme-checkout \
+agent-skills org-memory index-update acme-checkout \
   --shared-lib auth-core --shared-lib tenant-context
 ```
 
 Query it from any skill before approving a change to a shared module:
 
 ```bash
-python3 scripts/org-memory.py index-show --shared-lib auth-core
+agent-skills org-memory index-show --shared-lib auth-core
 ```
 
 ## When skills must read org memory
@@ -96,7 +96,7 @@ Every skill MUST, before any context discovery and before reading project
 memory:
 
 ```bash
-python3 scripts/org-memory.py read || true
+agent-skills org-memory read || true
 ```
 
 A non-zero exit means org memory has not been created yet — proceed. If the

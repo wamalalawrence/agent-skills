@@ -6,10 +6,10 @@ lifecycle to run deterministically instead of depending on the model following a
 
 ## The problem they solve
 
-Every skill opens with a `PREFLIGHT` block telling the agent to run `start-task.sh` before doing
-anything, and `finish-task.sh` at the end. That instruction is markdown, which means compliance
-is probabilistic. A skipped `start-task.sh` means the agent re-discovers facts it already had; a
-skipped `finish-task.sh` means everything the session learned is lost.
+Every skill opens with a `PREFLIGHT` block telling the agent to run `agent-skills start-task` before doing
+anything, and `agent-skills finish-task` at the end. That instruction is markdown, which means compliance
+is probabilistic. A skipped `agent-skills start-task` means the agent re-discovers facts it already had; a
+skipped `agent-skills finish-task` means everything the session learned is lost.
 
 A hook fires every time, because the host runs it rather than the model choosing to.
 
@@ -39,10 +39,10 @@ So the templates live here, unwired, and you copy the one that matches your host
 Two things worth knowing, because both have bitten people:
 
 - **Do not install a hook twice.** If your host already auto-loads a plugin's hooks, adding the
-  same command to a settings file as well makes it fire twice. Two `start-task.sh` runs are
-  harmless but noisy; two `finish-task.sh` runs write the same memory bullet twice.
+  same command to a settings file as well makes it fire twice. Two `agent-skills start-task` runs are
+  harmless but noisy; two `agent-skills finish-task` runs write the same memory bullet twice.
 - **Hooks run shell commands.** Read a template before installing it. Every command in these
-  templates is read-mostly — `start-task.sh` only reads memory, `doctor.sh` only probes — but
+  templates is read-mostly — `agent-skills start-task` only reads memory, `agent-skills doctor` only probes — but
   the general rule holds: treat hook configuration as executable code, because it is.
 
 ## What the templates do
@@ -50,7 +50,7 @@ Two things worth knowing, because both have bitten people:
 On session start:
 
 ```bash
-bash scripts/start-task.sh --skill "${AGENT_SKILLS_ACTIVE_SKILL:-unknown}"
+agent-skills start-task --skill "${AGENT_SKILLS_ACTIVE_SKILL:-unknown}"
 ```
 
 Loads org memory, project memory, the repo knowledge base, and the capability report. Read-only
@@ -59,13 +59,13 @@ with respect to knowledge; it never writes a fact.
 On session stop:
 
 ```bash
-bash scripts/finish-task.sh --skill "${AGENT_SKILLS_ACTIVE_SKILL:-unknown}" \
+agent-skills finish-task --skill "${AGENT_SKILLS_ACTIVE_SKILL:-unknown}" \
   --summary "session ended" --status needs-context --no-cleanup
 ```
 
 Deliberately conservative. A hook cannot know whether the work actually finished, so it records
 `needs-context`, which **preserves** the per-task scratch and the working branch. The agent's own
-`finish-task.sh` call, with a real summary and a real status, is still the one that matters — this
+`agent-skills finish-task` call, with a real summary and a real status, is still the one that matters — this
 is a floor that stops a crashed or abandoned session losing everything, not a replacement.
 
 Set `AGENT_SKILLS_ACTIVE_SKILL` in your environment if you want honest per-skill attribution in
@@ -74,8 +74,8 @@ telemetry rather than `unknown`.
 ## Verifying a hook actually fires
 
 ```bash
-bash scripts/doctor.sh --brief          # should appear in your session-start output
-python3 scripts/telemetry.py report --all
+agent-skills doctor --brief          # should appear in your session-start output
+agent-skills telemetry report --all
 ```
 
 If the telemetry report shows no `completed` or `stopped` events after a few sessions, the hook
@@ -84,5 +84,5 @@ is not firing. Check for a duplicate registration first; that is the most common
 ## Related
 
 - [Lifecycle preflight](../docs/lifecycle-preflight.md) — what the two commands do in full.
-- [Repo knowledge](../docs/repo-knowledge.md) — the tier a skipped `finish-task.sh` loses.
+- [Repo knowledge](../docs/repo-knowledge.md) — the tier a skipped `agent-skills finish-task` loses.
 - [Telemetry](../docs/telemetry.md) — how to tell whether any of this is running.

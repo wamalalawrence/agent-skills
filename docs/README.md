@@ -3,17 +3,24 @@
 Start here when reading the repository outside GitHub's main README.
 
 - [Quickstart](quickstart.md) - first practical path through setup and skill use.
-- [Installation](installation.md) - local-workspace and in-repo setup.
-- [Configuration](configuration.md) - environment and project metadata.
-- [Execution modes](execution-modes.md) - how skills choose local-workspace vs in-repo mode.
-- [Issue tracker / Document store auth discovery](auth-discovery.md) - the order skills must walk before
-  declaring auth unavailable, how `${VAR}` placeholders are resolved, the auth preflight
-  script, and the troubleshooting table for common failures.
+- [Installation](installation.md) - the machine-global install, the supported-host table, the
+  flags, uninstall, and migration off a pre-v0.37.0 workspace.
+- [Configuration](configuration.md) - what is inferred with no configuration at all, and when a
+  committed `.agent-skills.yml` is worth adding. Never holds a secret.
+- [Access resolution](access-resolution.md) - the one generic mechanism for reaching any external
+  service: the deterministic precedence order, credential identities, OS-native secret storage, the
+  rule that a committed file can never select an identity, and the separation between
+  authentication and authorization.
+- [Execution modes](execution-modes.md) - global on your machine, in-repo for cloud agents, and the
+  legacy workspace model; plus why a local install cannot reach a remote runner.
+- [Issue tracker / Document store auth discovery](auth-discovery.md) - the Jira and Confluence
+  example on top of the generic resolver: `${VAR}` placeholder resolution, the legacy file layout,
+  and the troubleshooting table.
 - [Skill-source resolution](skill-source-resolution.md) - which directory the agent must
   treat as the canonical skill source when more than one is present on disk, and how the
-  workspace lock file is consulted.
+  install manifest is consulted for drift.
 - [Updates](updates.md) - how a user notices a new release and applies it without losing
-  local config (`./setup.init --check-updates`, `./setup.init --update`, `git pull`).
+  credentials or bindings (`agent-skills check-updates`, `agent-skills update`, `git pull`).
 - [Lifecycle preflight](lifecycle-preflight.md) - the full contract behind the two commands
   every skill runs (`start-task.sh` / `finish-task.sh`): fallbacks, statuses, durable-fact
   flags, the capability report, and why task size never waives them.
@@ -48,6 +55,8 @@ Start here when reading the repository outside GitHub's main README.
 - [Plans](plans/2026-09-learning-voice-and-router.md) - the reviewed plan behind
   `v0.36.0`, kept as written next to its implementation status and the three items
   deferred pending a decision.
+- [Plan: global install and access resolution](plans/2026-09-global-install-and-access-resolver.md) -
+  the design record behind `v0.37.0`, including what was rejected and why.
 - [Skill boundaries](skill-boundaries.md) - ownership, handoffs, and nested-skill rationale.
 - [Skill review loops](review-loops.md) - how producer skills hand off to reviewer skills
   with **bounded** revision rounds so the agent never spins forever.
@@ -58,3 +67,6 @@ Start here when reading the repository outside GitHub's main README.
 - [Destructive-action safety policy](destructive-action-safety.md) - the safety floor every
   skill in this repository inherits; what an agent must never do autonomously, what counts as
   a discovered credential, and how human-controlled execution must work.
+- [Security review v0.37.0](security-review-v0.37.0.md) - the recorded threat-by-threat review of
+  the global installer and the access resolver, the one finding it raised, the residual risk it
+  accepted, and what it does not establish.

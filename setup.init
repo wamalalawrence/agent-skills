@@ -1,19 +1,40 @@
 #!/usr/bin/env bash
-# agent-skills first-run setup.
+# agent-skills setup.
 #
-# Creates or refreshes the workspace-local files agent-skills needs:
+# Since v0.37.0 the default is a MACHINE-GLOBAL install. It delegates to
+# `lib/install.sh` and does exactly this:
+#
+#   - establishes one canonical installation under AGENT_SKILLS_HOME
+#     (default ~/.agent-skills) pointing at this source tree;
+#   - registers the skills with every supported agent host found on the machine;
+#   - makes the `agent-skills` runtime invocable from any repository;
+#   - creates non-secret state directories and update/version metadata;
+#   - runs verification.
+#
+# It asks for NO credentials. Not Jira, not Confluence, not Sonar, not GitHub,
+# not a database, not an internal API. External access is resolved on demand by
+# `scripts/access.py` when a task actually needs it. Installation, project
+# configuration, and authentication are three separate concerns, and this
+# script owns only the first.
+#
+# The pre-v0.37.0 workspace model is still supported for existing users, and is
+# selected by `--legacy-workspace` or by passing `--workspace-root`. In that mode
+# this script behaves exactly as it did in v0.36.x, writing:
 #   - <workspace>/.env                 (managed marker block: org, projects,
 #                                       Jira, Confluence)
 #   - <workspace>/.jira-config.yml     (only with --with-jira or interactive yes)
 #   - <workspace>/.skills              (symlink to agent-skills/skills)
 #   - <workspace>/.gitignore           (idempotent agent-skills block)
 #
+# Run `agent-skills migrate` for guidance on moving off that layout.
+#
 # Tested on macOS and Linux with bash 3.2+. Windows users should run via WSL or
 # Git Bash; native PowerShell is not supported.
 #
 # Security:
-#   - Secrets (Jira / Confluence tokens) are read silently and NEVER echoed.
-#   - Generated `.env` and `.jira-config.yml` are added to `.gitignore`.
+#   - The global path stores no secret, because it requests none.
+#   - In legacy mode, secrets are read silently and NEVER echoed, and the
+#     generated `.env` / `.jira-config.yml` are added to `.gitignore`.
 #   - The script never logs token values.
 
 set -euo pipefail
@@ -61,20 +82,46 @@ UPDATE_MODE="false"
 UPDATE_REF=""
 CHECK_CONNECTIVITY="true"
 CHECK_CREDENTIAL_PROBE="true"
+# An inherited WORKSPACE_ROOT is how pre-v0.37.0 callers (and existing shell
+# profiles) point at a legacy workspace. Capture it before the local default
+# clears it: without this, `WORKSPACE_ROOT=... ./setup.init --update` would fall
+# through to the global installer and silently change which model the user is on.
+INHERITED_WORKSPACE_ROOT="${WORKSPACE_ROOT:-}"
 WORKSPACE_ROOT=""
 WORKSPACE_ROOT_EXPLICIT="false"
+# auto | global | legacy. `auto` resolves in resolve_install_mode below.
+INSTALL_MODE="auto"
+GLOBAL_HOSTS=""
+GLOBAL_ALL_HOSTS="false"
+GLOBAL_NO_PATH="false"
 
 usage() {
   cat <<'EOF'
 Usage: ./setup.init [options]
 
-Create or update the workspace-local files agent-skills needs for a first run,
-or verify an existing setup.
+Install agent-skills globally on this machine, or verify an existing install.
 
-Options:
-  --workspace-root PATH    Workspace root where .env, .jira-config.yml, and
-                           .skills live
+The default install is machine-global: it makes the skills available to every
+supported agent host on this computer, from any repository, now and in future.
+It asks for NO credentials. External-service access is resolved on demand,
+when a task actually needs it (see docs/access-resolution.md).
+
+Global installation options:
   --yes                    Accept safe defaults for all prompts
+  --hosts a,b,c            Register only these host ids (see: agent-skills hosts)
+  --all-hosts              Register every supported host, detected or not
+  --no-path-link           Do not link the launcher into a PATH directory
+  --verify                 Check the installation and report problems (no writes)
+  --check-updates          Compare local VERSION against the latest release
+                           tag on origin and exit. No writes.
+  --update                 Apply the latest release and refresh the install
+
+Legacy workspace options (pre-v0.37.0 layout, still supported):
+  --legacy-workspace       Use the workspace-local model instead of the global
+                           install. Writes .env, .jira-config.yml, .skills, and
+                           a .gitignore block into a workspace folder.
+  --workspace-root PATH    Workspace root where .env, .jira-config.yml, and
+                           .skills live. Implies --legacy-workspace.
   --with-jira              Create/update .jira-config.yml and Jira env values
   --no-jira                Skip Jira setup
   --with-confluence        Prompt for Confluence host/login/token
@@ -107,28 +154,52 @@ Options:
   --help                   Show this help
 
 Typical use:
+  git clone https://github.com/wamalalawrence/agent-skills.git
   cd agent-skills
-  ./setup.init                        # interactive first run
-  ./setup.init --verify               # check an existing setup
+  ./setup.init                        # install globally, no credentials asked
+  ./setup.init --verify               # check the installation
 
-Non-interactive bootstrap:
-  ./setup.init --yes --no-jira --no-confluence \
-      --workspace-root /path/to/workspace
+After that, open any repository on this machine and invoke a skill. There is
+no per-workspace setup step.
+
+Everything below the install is available through one command:
+  agent-skills doctor | verify | update | hosts | migrate | uninstall
+  agent-skills access resolve --service <name>
 EOF
+}
+
+# Guard every flag whose value is a separate argument. `shift 2` shifts nothing
+# when the flag is the last argument left; under `set -e` that aborts the script
+# with no explanation, and without it the parse loop spins forever.
+require_option_value() {
+  if [[ $# -lt 2 ]]; then
+    echo "Option $1 requires a value." >&2
+    usage >&2
+    exit 2
+  fi
 }
 
 while [[ $# -gt 0 ]]; do
   case "$1" in
     --workspace-root)
-      WORKSPACE_ROOT="${2:-}"
+      require_option_value "$@"
+      WORKSPACE_ROOT="$2"
       WORKSPACE_ROOT_EXPLICIT="true"
+      INSTALL_MODE="legacy"
       shift 2
       ;;
     --workspace-root=*)
       WORKSPACE_ROOT="${1#*=}"
       WORKSPACE_ROOT_EXPLICIT="true"
+      INSTALL_MODE="legacy"
       shift
       ;;
+    --legacy-workspace) INSTALL_MODE="legacy"; shift ;;
+    --global) INSTALL_MODE="global"; shift ;;
+    --hosts) require_option_value "$@"; GLOBAL_HOSTS="$2"; shift 2 ;;
+    --hosts=*) GLOBAL_HOSTS="${1#*=}"; shift ;;
+    --all-hosts) GLOBAL_ALL_HOSTS="true"; shift ;;
+    --no-path-link) GLOBAL_NO_PATH="true"; shift ;;
     --yes) ASSUME_YES="true"; shift ;;
     --with-jira) JIRA_MODE="yes"; shift ;;
     --no-jira) JIRA_MODE="no"; shift ;;
@@ -145,7 +216,7 @@ while [[ $# -gt 0 ]]; do
     --check-updates) CHECK_UPDATES_MODE="true"; shift ;;
     --update) UPDATE_MODE="true"; shift ;;
     --branch)
-      UPDATE_REF="${2:-}"; shift 2 ;;
+      require_option_value "$@"; UPDATE_REF="$2"; shift 2 ;;
     --branch=*)
       UPDATE_REF="${1#*=}"; shift ;;
     --help|-h) usage; exit 0 ;;
@@ -1450,7 +1521,11 @@ run_self_update() {
   fi
 
   echo ""
-  echo "Re-running setup.init non-interactively to refresh workspace metadata..."
+  if [[ "${INSTALL_MODE:-legacy}" == "global" ]]; then
+    echo "Source tree updated."
+  else
+    echo "Re-running setup.init non-interactively to refresh workspace metadata..."
+  fi
   ASSUME_YES="true"
   CHECK_CONNECTIVITY="false"
   CHECK_CREDENTIAL_PROBE="false"
@@ -1460,8 +1535,15 @@ run_self_update() {
   # marker block. We source the existing .env (if present), then default each
   # mode to "yes" when the corresponding required value is non-empty so the
   # rerun re-emits the same value instead of clearing it.
+  #
+  # Legacy mode only. Sourcing that file with `set -a` executes shell code the
+  # global model does not own and exports every assignment in it, so under a
+  # global install an `AGENT_SKILLS_HOME`, `AGENT_SKILLS_CONFIG_DIR`,
+  # `AGENT_SKILLS_SOURCE` or `PATH` line in a stale workspace `.env` would
+  # redirect where the install lands. Global mode rewrites no `.env`, so it has
+  # nothing to preserve.
   local existing_env="${workspace_root}/.env"
-  if [[ -f "${existing_env}" ]]; then
+  if [[ "${INSTALL_MODE:-legacy}" != "global" && -f "${existing_env}" ]]; then
     set -a
     # shellcheck disable=SC1090
     source "${existing_env}" 2>/dev/null || true
@@ -1470,29 +1552,53 @@ run_self_update() {
   else
     UPDATE_PRESERVE_EXISTING="false"
   fi
-  if [[ -n "${JIRA_HOST:-}" || -n "${JIRA_API_TOKEN:-}" || -n "${JIRA_LOGIN:-}" ]]; then
-    JIRA_MODE="yes"
-  else
-    JIRA_MODE="no"
-  fi
-  if [[ -n "${CONFLUENCE_HOST:-}" || -n "${CONFLUENCE_API_TOKEN:-}" ]]; then
-    CONFLUENCE_MODE="yes"
-  else
-    CONFLUENCE_MODE="no"
-  fi
-  if [[ -n "${SONAR_HOST_URL:-}" || -n "${SONAR_TOKEN:-}" ]]; then
-    SONAR_MODE="yes"
-  else
-    SONAR_MODE="no"
-  fi
-  if [[ -n "${ENVIRONMENTS_JSON:-}" && "${ENVIRONMENTS_JSON:-}" != "[]" ]]; then
-    ENVIRONMENTS_MODE="yes"
-  else
-    ENVIRONMENTS_MODE="no"
-  fi
+  preserve_populated_service_modes false
   UPDATE_MODE="false"
   CHECK_UPDATES_MODE="false"
   return 0
+}
+
+# Opt each already-populated service back in before the managed block is rewritten.
+#
+# This is not a convenience, it prevents data loss. The managed-block writer emits
+# hardcoded empty strings whenever a service's mode resolves to "no", so "no" does
+# not mean "leave it alone", it means "erase it". Any non-interactive rerun over an
+# existing `.env` therefore has to re-assert every service that already has values,
+# or it silently wipes credentials the user never asked it to touch.
+#
+# `respect_explicit=true` leaves a mode the user set on the command line alone, so
+# `--no-jira` still removes Jira. The `--update` path passes false, because there
+# the whole point is to preserve whatever is already configured.
+preserve_populated_service_modes() {
+  local respect_explicit="${1:-false}"
+  if [[ -n "${JIRA_HOST:-}" || -n "${JIRA_API_TOKEN:-}" || -n "${JIRA_LOGIN:-}" ]]; then
+    if [[ "${respect_explicit}" != "true" || "${JIRA_MODE}" == "ask" ]]; then
+      JIRA_MODE="yes"
+    fi
+  elif [[ "${respect_explicit}" != "true" ]]; then
+    JIRA_MODE="no"
+  fi
+  if [[ -n "${CONFLUENCE_HOST:-}" || -n "${CONFLUENCE_API_TOKEN:-}" ]]; then
+    if [[ "${respect_explicit}" != "true" || "${CONFLUENCE_MODE}" == "ask" ]]; then
+      CONFLUENCE_MODE="yes"
+    fi
+  elif [[ "${respect_explicit}" != "true" ]]; then
+    CONFLUENCE_MODE="no"
+  fi
+  if [[ -n "${SONAR_HOST_URL:-}" || -n "${SONAR_TOKEN:-}" ]]; then
+    if [[ "${respect_explicit}" != "true" || "${SONAR_MODE}" == "ask" ]]; then
+      SONAR_MODE="yes"
+    fi
+  elif [[ "${respect_explicit}" != "true" ]]; then
+    SONAR_MODE="no"
+  fi
+  if [[ -n "${ENVIRONMENTS_JSON:-}" && "${ENVIRONMENTS_JSON:-}" != "[]" ]]; then
+    if [[ "${respect_explicit}" != "true" || "${ENVIRONMENTS_MODE}" == "ask" ]]; then
+      ENVIRONMENTS_MODE="yes"
+    fi
+  elif [[ "${respect_explicit}" != "true" ]]; then
+    ENVIRONMENTS_MODE="no"
+  fi
 }
 
 # ------------------------------------------------------------------------------
@@ -1695,14 +1801,127 @@ print("\n".join(missing))
 }
 
 # ==============================================================================
+# Install-mode routing (v0.37.0)
+#
+# `global` is the default and the documented path. `legacy` reproduces the
+# pre-v0.37.0 workspace behaviour byte for byte, so an existing install keeps
+# working and the credential-preservation regression test keeps its meaning.
+# ==============================================================================
+
+# Load the shared runtime and installer. Both live next to this script, so this
+# works from a fresh clone with nothing installed yet.
+AS_LIB_DIR="${SCRIPT_DIR}/lib"
+export AS_LIB_DIR
+if [[ -f "${AS_LIB_DIR}/runtime.sh" ]]; then
+  # shellcheck source=lib/runtime.sh
+  source "${AS_LIB_DIR}/runtime.sh"
+else
+  echo "FAIL: ${AS_LIB_DIR}/runtime.sh is missing; this clone is incomplete." >&2
+  exit 2
+fi
+
+# Decide which model this invocation targets.
+#
+# Anything that only exists in the legacy model selects it, so a user who types
+# a v0.36-era command gets v0.36-era behaviour instead of a surprise.
+resolve_install_mode() {
+  if [[ "${INSTALL_MODE}" != "auto" ]]; then
+    return 0
+  fi
+
+  # Legacy-only flags were passed explicitly.
+  if [[ "${JIRA_MODE}" != "ask" || "${CONFLUENCE_MODE}" != "ask" \
+    || "${SONAR_MODE}" != "ask" || "${ENVIRONMENTS_MODE}" != "ask" \
+    || "${SYMLINK_MODE}" != "ask" ]]; then
+    INSTALL_MODE="legacy"
+    return 0
+  fi
+
+  # An existing legacy workspace, identified by the file that model depends on.
+  if [[ -n "${WORKSPACE_ROOT:-}" && -f "${WORKSPACE_ROOT}/.env" ]]; then
+    INSTALL_MODE="legacy"
+    return 0
+  fi
+  # A WORKSPACE_ROOT inherited from the environment means the caller is already
+  # operating the legacy model. Honour it rather than migrating them silently.
+  if [[ -n "${INHERITED_WORKSPACE_ROOT}" && -f "${INHERITED_WORKSPACE_ROOT}/.env" ]]; then
+    WORKSPACE_ROOT="${INHERITED_WORKSPACE_ROOT}"
+    INSTALL_MODE="legacy"
+    return 0
+  fi
+  # A legacy workspace beside this clone, on a machine with no global install.
+  #
+  # This is checked for every command, not just --verify. Restricting it to
+  # --verify made the same machine answer "legacy" for `./setup.init --verify`
+  # and "global" for a bare run or `--update`, which meant an existing user
+  # typing the v0.36-documented `./setup.init --update` was silently converted
+  # to a global install — different layout, registrations in every detected
+  # host, a launcher on PATH, and `.skills` / PROJECTS_JSON left unmanaged.
+  # Migrating is opt-in: `./setup.init --global`.
+  if [[ -f "${DEFAULT_WORKSPACE_ROOT}/.env" ]] && ! as_is_installed; then
+    INSTALL_MODE="legacy"
+    return 0
+  fi
+
+  INSTALL_MODE="global"
+}
+
+run_global_install() {
+  # shellcheck source=lib/install.sh
+  source "${AS_LIB_DIR}/install.sh"
+  AS_OPT_HOSTS="${GLOBAL_HOSTS}"
+  AS_OPT_ALL_HOSTS="${GLOBAL_ALL_HOSTS}"
+  AS_OPT_NO_PATH="${GLOBAL_NO_PATH}"
+  export AS_OPT_HOSTS AS_OPT_ALL_HOSTS AS_OPT_NO_PATH
+  as_install_global
+}
+
+run_global_verify() {
+  # shellcheck source=lib/install.sh
+  source "${AS_LIB_DIR}/install.sh"
+  as_verify_install
+}
+
+# The git side of an update is identical in both models: fetch tags, check out
+# the release, refuse on a dirty tree. Only what happens afterwards differs.
+run_global_update() {
+  run_self_update "${DEFAULT_WORKSPACE_ROOT}" || return $?
+  echo ""
+  echo "Refreshing the global installation..."
+  run_global_install
+}
+
+# ==============================================================================
 # Main
 # ==============================================================================
 
-# --check-updates is workspace-independent. Handle it before any prompting.
+# --check-updates is install-independent. Handle it before any prompting.
 if [[ "${CHECK_UPDATES_MODE}" == "true" ]]; then
   run_check_updates
   exit $?
 fi
+
+resolve_install_mode
+
+if [[ "${INSTALL_MODE}" == "global" ]]; then
+  if [[ "${VERIFY_MODE}" == "true" ]]; then
+    run_global_verify
+    exit $?
+  fi
+  if [[ "${UPDATE_MODE}" == "true" ]]; then
+    run_global_update
+    exit $?
+  fi
+  run_global_install
+  exit $?
+fi
+
+# ------------------------------------------------------------------------------
+# Legacy workspace model (pre-v0.37.0). Unchanged behaviour.
+# ------------------------------------------------------------------------------
+echo "Using the legacy workspace model. The global install is now the default;"
+echo "run 'agent-skills migrate' to see what changes."
+echo ""
 
 # --update first switches the source clone to the latest tag, then falls
 # through into a normal non-interactive setup run that refreshes .skills and
@@ -1754,6 +1973,15 @@ if [[ "${ASSUME_YES}" == "true" && -f "${ENV_FILE}" && -z "${UPDATE_PRESERVE_EXI
   # shellcheck disable=SC1090
   source "${ENV_FILE}" 2>/dev/null || true
   set +a
+  # Sourcing alone is not enough. Reading the old values back into the shell does
+  # not stop the writer erasing them: a service whose mode resolves to "no" is
+  # written as empty strings regardless of what was just read. So opt each
+  # populated service back in, while still honouring an explicit --no-jira.
+  #
+  # Without this, `./setup.init --yes` on an existing workspace cleared JIRA_HOST,
+  # JIRA_LOGIN, and JIRA_API_TOKEN from inside the managed block. `--update` was
+  # unaffected because run_self_update already did this.
+  preserve_populated_service_modes true
 fi
 
 # Pre-detect GitHub org so we can offer a richer ORG_NAME default.
@@ -2225,6 +2453,13 @@ Next steps:
 1. Open ${ENV_FILE} once and confirm build/format/Jira values look correct.
 2. Tell your AI assistant where the skills live (see README "Using With Your AI Assistant").
 3. Try a starter prompt from ${SCRIPT_DIR}/README.md.
-4. To re-check this setup later, run: ./setup.init --verify
+4. To re-check this setup later, run: ./setup.init --verify --workspace-root "${WORKSPACE_ROOT}"
 5. To check for new releases later, run: ./setup.init --check-updates
+
+This is the legacy workspace layout. The machine-global install replaced it in
+v0.37.0: one install, every local repository, and no credential prompts. See
+what changes before you switch:
+
+  agent-skills migrate     # or: bash ${SCRIPT_DIR}/lib/migrate.sh
+  ./setup.init             # installs globally (the new default)
 EOF

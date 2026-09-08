@@ -16,36 +16,7 @@ Use this repo when you want portable, evidence-first workflows for:
 
 ## Fastest path
 
-1. Open the `SKILL.md` for the role you need.
-2. Make sure the assistant can run [`../scripts/start-task.sh`](../scripts/start-task.sh) and
-   [`../scripts/finish-task.sh`](../scripts/finish-task.sh), either from this checkout or a
-   vendored copy in the target repo.
-3. Attach or paste the skill into your assistant.
-4. Ask the assistant to follow that workflow for one task.
-5. Provide the repository, issue, acceptance criteria, logs, or test evidence the workflow asks for.
-
-Example:
-
-```text
-Use the software-engineer skill from skills/software-engineer/SKILL.md.
-First run scripts/start-task.sh, and before final status run scripts/finish-task.sh.
-Work on this repository. First gather the smallest useful context, then propose a short plan before
-changing files.
-```
-
-If you do not want to choose a skill, use the entry point instead and describe the work. It
-classifies the request, picks the owner, and dispatches:
-
-```text
-Use the tech-lead skill from skills/tech-lead/SKILL.md.
-Request: page 2 of invoice search loses the status filter.
-Route it to whichever skill owns the next step.
-```
-
-## Local-workspace mode
-
-Use local-workspace mode when the agent runs on your laptop and can see several sibling
-repositories.
+Install once on the machine:
 
 ```bash
 git clone https://github.com/wamalalawrence/agent-skills.git
@@ -53,35 +24,78 @@ cd agent-skills
 ./setup.init
 ```
 
-Here, the workspace root is the parent folder that contains the `agent-skills` clone plus any
-sibling repos you want the assistant to work across. You are not expected to copy `agent-skills`
-into another folder after cloning it.
+Then open any repository and describe the work. The skills are already discoverable to the agent in
+your editor, so there is nothing to attach and nothing to configure:
 
-`setup.init` asks a short set of questions, infers safe defaults from your tracker host / GitHub org /
-sibling repos where possible, and writes everything to a managed marker block in
-`<workspace-root>/.env`. Linked document-store configuration is optional and offered after the
-tracker. Re-run
-`./setup.init --verify` at any time. Run `./setup.init --check-updates` to see if a newer
-release is available, and `./setup.init --update` to apply it. See
-[updates.md](updates.md) for details.
+```text
+Use the tech-lead skill.
+Request: page 2 of invoice search loses the status filter.
+Route it to whichever skill owns the next step.
+```
 
-## In-repo / cloud-agent mode
+If you already know the owner, invoke it directly. That is faster and always supported:
 
-Use in-repo mode when the agent runs inside one repository, such as GitHub Copilot coding agent,
-Cursor cloud/background agents, Codex, Codespaces, Gitpod, Devin, or a web chat with the repository
-attached.
+```text
+Use the software-engineer skill for this repository. Inspect the issue and the codebase, identify
+the smallest safe implementation plan, ask if required context is missing, then implement and
+validate the change.
+```
+
+Setup asks for no credentials and needs no list of your projects. When a task actually needs an
+external service, access is resolved on demand — see [access resolution](access-resolution.md).
+
+Useful once installed:
+
+```bash
+agent-skills verify     # is the installation healthy, and which hosts see the skills
+agent-skills doctor     # what can this environment actually do right now
+agent-skills project    # what was inferred about the repository you are in
+```
+
+## Zero-config repositories are normal
+
+A repository with no `.env`, no `.skills`, no sibling `agent-skills` clone, and no
+`.agent-skills.yml` is a supported case, not a degraded one. Project context is derived from the
+repository itself: git root, remote, base branch, stack, build system, package manager, commands,
+and CI.
+
+```bash
+cd ~/code/some-new-project
+agent-skills project
+```
+
+Anything that could not be established safely is listed under `confirm before relying on` rather
+than asserted, so the agent knows which facts to establish before they matter.
+
+Add a committed [`.agent-skills.yml`](../.agent-skills.example.yml) only when inference is not good
+enough — an unusual build command, a non-conventional base branch, a coverage target. It contains no
+secrets, ever. See [configuration](configuration.md).
+
+## Cloud and remote agents
+
+A cloud agent runs on a machine that cannot see your home directory, so the global install does not
+reach it. Use the in-repo mechanism instead:
 
 1. Copy [`.agent-skills.example.yml`](../.agent-skills.example.yml) to `.agent-skills.yml` in the
-  target repository.
-2. Fill in the `project:` block. Optionally fill in `jira:` and `confluence:` (or equivalent
-   tracker / document-store) host metadata.
-3. Vendor the skills you need into the repository, or reference the relevant `SKILL.md` files from
+  target repository and fill in the `project:` block.
+2. Vendor the skills you need into the repository, or reference the relevant `SKILL.md` files from
   the agent's instruction surface.
-4. Put secrets (`JIRA_API_TOKEN`, `GITHUB_TOKEN`, etc.) in the host platform's
-  secret mechanism, not in `.agent-skills.yml`.
-5. Add `.cache/` to the target repository's `.gitignore`.
+3. Put secrets in the host platform's secret mechanism, not in `.agent-skills.yml`.
+4. Add `.cache/` to the repository's `.gitignore`.
 
-See [execution modes](execution-modes.md) for the full mode comparison.
+See [execution modes](execution-modes.md) for the full comparison.
+
+## Upgrading from v0.36.x
+
+Your existing workspace keeps working. To move:
+
+```bash
+cd agent-skills && git pull && ./setup.init
+agent-skills migrate
+```
+
+Nothing is deleted and no secret is copied without an explicit request. Details in
+[installation](installation.md#upgrading-from-v036x-workspace-installation).
 
 ## Starter prompts
 
@@ -117,15 +131,22 @@ Use the test-automation-engineer skill to decide what should be automated for th
 the right test level, avoid brittle checks, and describe the validation command.
 ```
 
-## Issue tracker / Document store auth at a glance
+## External access at a glance
 
-Skills follow a documented [auth discovery order](auth-discovery.md) before reporting that
-The issue tracker or linked document store is inaccessible: `.agent-skills.yml` →
-`.jira-config.yml` (or equivalent tracker config) → `.env` /
-`.env.local` → process environment → `python3 scripts/auth-preflight.py`. Unresolved
-`${JIRA_HOST}` placeholders in `.jira-config.yml` mean **incomplete configuration**, not
-"no auth"; load `.env` first or run the preflight to validate. The preflight never prints
-secret values.
+Nothing is requested at install time. When a task needs an external service, one generic mechanism
+resolves it:
+
+```bash
+agent-skills access resolve --service jira --require host,login,token --secret token
+```
+
+The order is fixed and documented: an already-authenticated tool or session first (a logged-in
+`gh`, an MCP server the host already has), then the process environment, then project-local
+configuration including a legacy `.env`, then a named user-level identity, and only then lazy setup.
+
+Credentials belong to accounts, not projects, so two repositories can share one work account
+without re-entering a token. Secrets go to the OS credential store, never to a repository and never
+into the conversation. Full contract: [access resolution](access-resolution.md).
 
 ## What not to expect
 
