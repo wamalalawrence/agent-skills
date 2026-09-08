@@ -102,26 +102,36 @@ printf 'Legacy workspace: %s\n\n' "${LEGACY_ROOT}"
 FOUND_ANY="false"
 FOUND_CREDS="false"
 
+# This command is a report, so its findings go to stdout, not stderr.
+#
+# `as_warn` writes to stderr, which is right for install and verify — there the
+# warnings are asides to an operation. Here the findings *are* the output, and a
+# reader piping `agent-skills migrate` into grep or a file should get them. Using
+# as_warn meant `agent-skills migrate | grep obsolete` silently found nothing.
+as_report_warn() { printf '  WARN  %s\n' "$1"; }
+as_report_info() { printf '  info  %s\n' "$1"; }
+as_report_ok() { printf '  ok    %s\n' "$1"; }
+
 printf 'Obsolete artifacts (safe to remove)\n'
 for artifact in .skills .agent-skills.lock; do
   if [ -e "${LEGACY_ROOT}/${artifact}" ]; then
     FOUND_ANY="true"
-    as_warn "${artifact} is obsolete under the global install"
+    as_report_warn "${artifact} is obsolete under the global install"
   fi
 done
 if [ "${FOUND_ANY}" = "false" ]; then
-  as_ok "none found"
+  as_report_ok "none found"
 fi
 
 printf '\nConfiguration still read for backwards compatibility\n'
 for artifact in .env .env.local .jira-config.yml .agent-skills.yml; do
   if [ -f "${LEGACY_ROOT}/${artifact}" ]; then
     FOUND_CREDS="true"
-    as_info "${artifact} is still discovered and used by the access resolver"
+    as_report_info "${artifact} is still discovered and used by the access resolver"
   fi
 done
 if [ "${FOUND_CREDS}" = "false" ]; then
-  as_ok "none found"
+  as_report_ok "none found"
 fi
 
 printf '\nWhat changed\n'

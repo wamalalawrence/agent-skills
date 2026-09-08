@@ -167,7 +167,11 @@ jobs:
           # Marker block in .env must appear exactly once.
           test "$(grep -c '^# >>> agent-skills setup\.init$' "$tmp/work/.env")" = "1"
           # A legacy workspace must still be recognised and explained, not broken.
-          (cd "$tmp/work/agent-skills" && bash lib/migrate.sh --workspace-root "$tmp/work") \
+          # Capture both streams. The report writes findings to stdout, but an
+          # assertion about a command's output should not be the thing that
+          # silently changes meaning if a line moves between streams.
+          (cd "$tmp/work/agent-skills" \
+            && bash lib/migrate.sh --workspace-root "$tmp/work" 2>&1) \
             | grep -q '\.skills is obsolete'
           # No setup-managed key may appear outside the marker block.
           MANAGED='ORG_NAME|ORG_DOMAIN|WORKSPACE_ROOT|GITHUB_ORG'
