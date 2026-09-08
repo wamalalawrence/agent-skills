@@ -233,8 +233,12 @@ never say "paste your production API token here".
 ### Names are rejected, not sanitised
 
 Profile, service, and field names are validated against a strict pattern. A name containing a path
-separator or a shell metacharacter is refused. Transforming a bad name into a different valid one
-is how you end up writing to the wrong place.
+separator, a shell metacharacter, whitespace, or `..` is refused. Transforming a bad name into a
+different valid one is how you end up writing to the wrong place.
+
+One transformation is applied, and only one: names are **case-folded to lowercase** before
+validation, so `Work-Jira` and `work-jira` are the same identity rather than two. Case-folding
+cannot introduce a separator or a metacharacter, so it does not widen what the pattern allows.
 
 ### Strict binding, for machines holding several customers' credentials
 

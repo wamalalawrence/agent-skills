@@ -67,3 +67,6 @@ Start here when reading the repository outside GitHub's main README.
 - [Destructive-action safety policy](destructive-action-safety.md) - the safety floor every
   skill in this repository inherits; what an agent must never do autonomously, what counts as
   a discovered credential, and how human-controlled execution must work.
+- [Security review v0.37.0](security-review-v0.37.0.md) - the recorded threat-by-threat review of
+  the global installer and the access resolver, the one finding it raised, the residual risk it
+  accepted, and what it does not establish.

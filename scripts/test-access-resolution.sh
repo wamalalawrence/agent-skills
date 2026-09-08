@@ -509,6 +509,29 @@ if run_access "${BOX}" set --profile "../../etc/passwd" --service jira \
 else
   ok "a path-traversal profile name is rejected"
 fi
+if run_access "${BOX}" set --profile "a/b" --service jira --field host=x >/dev/null 2>&1; then
+  bad "a profile name containing a path separator is rejected"
+else
+  ok "a profile name containing a path separator is rejected"
+fi
+if run_access "${BOX}" set --profile 'x$(id)' --service jira --field host=x >/dev/null 2>&1; then
+  bad "a command-substitution profile name is rejected"
+else
+  ok "a command-substitution profile name is rejected"
+fi
+# Case-folding is the ONE transformation applied, and it is applied before
+# validation so `Work-Jira` and `work-jira` are one identity rather than two.
+# It cannot introduce a separator or a metacharacter, so it does not widen the
+# charset. Pinned here so the behaviour cannot drift away from the documentation.
+AS_EXTRA_ENV="AGENT_SKILLS_SECRET_VALUE_TOKEN=case-fold-token" \
+  run_access "${BOX}" set --profile "Mixed-Case" --service demo-fold \
+  --field host=https://demo.example.com --secret-field token >/dev/null 2>&1
+if run_access "${BOX}" profiles --json 2>/dev/null | grep -q '"mixed-case"'; then
+  ok "a mixed-case profile name is case-folded to one lowercase identity"
+else
+  bad "a mixed-case profile name is case-folded to one lowercase identity" \
+    "$(run_access "${BOX}" profiles --json 2>&1 | head -20)"
+fi
 if run_access "${BOX}" set --profile "ok-name" --service "jira; rm -rf /" \
   --field host=x >/dev/null 2>&1; then
   bad "a shell-metacharacter service name is rejected"

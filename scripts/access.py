@@ -59,8 +59,14 @@ SCHEMA_PROFILES = "agent-skills.credentials/v1"
 SCHEMA_BINDINGS = "agent-skills.bindings/v1"
 
 # A profile name is an identifier the user chose. It ends up in a keychain
-# service string and a filename, so it is constrained rather than sanitised:
-# rejecting a bad name is safer than transforming it into a different one.
+# service string and a filename, so it is constrained.
+#
+# The only transformation applied is case-folding to lowercase, which is done
+# before validation so `Work-Jira` and `work-jira` are the same identity rather
+# than two. Case-folding cannot introduce a path separator or a shell
+# metacharacter, so it does not widen the charset. Everything else is rejected
+# rather than rewritten: turning a bad name into a different valid one is how
+# you end up writing to the wrong place.
 PROFILE_NAME_RE = re.compile(r"^[a-z0-9]([a-z0-9._-]{0,62}[a-z0-9])?$")
 SERVICE_NAME_RE = re.compile(r"^[a-z0-9]([a-z0-9._-]{0,62}[a-z0-9])?$")
 FIELD_NAME_RE = re.compile(r"^[a-z][a-z0-9_]{0,39}$")

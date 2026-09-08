@@ -48,6 +48,7 @@ REQUIRED_FILES = [
     "docs/requirement-understanding-scorecard.md",
     "docs/auth-discovery.md",
     "docs/access-resolution.md",
+    "docs/security-review-v0.37.0.md",
     "docs/github-access.md",
     "docs/project-memory.md",
     "docs/repo-knowledge.md",
