@@ -252,7 +252,7 @@ probe_memory() {
 # this can name the right remediation instead of guessing at a layout.
 probe_install() {
   INSTALL_STATE="no"
-  INSTALL_DETAIL="not installed; run: npx @wamala/agent-skills install"
+  INSTALL_DETAIL="not installed; run: npx @wamalalawrence/agent-skills install"
   INSTALL_VERSION=""
   INSTALL_ROOT=""
   INSTALL_MODE=""

@@ -19,7 +19,7 @@ Use this repo when you want portable, evidence-first workflows for:
 Install once on the machine:
 
 ```bash
-npx @wamala/agent-skills install
+npx @wamalalawrence/agent-skills install
 ```
 
 Then open any repository and describe the work. The skills are already discoverable to the agent in

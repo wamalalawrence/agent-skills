@@ -5,7 +5,7 @@
 # owned by the first-party CLI, and the supported way to get it onto a machine
 # is:
 #
-#     npx @wamala/agent-skills install
+#     npx @wamalalawrence/agent-skills install
 #
 # after which everything runs through the durable `agent-skills` command.
 #
@@ -41,7 +41,7 @@ Usage: ./setup.init [options]
 Install this source checkout as a development release. For a normal
 installation use the CLI instead:
 
-    npx @wamala/agent-skills install
+    npx @wamalalawrence/agent-skills install
 
 Options:
   --verify              Check the installation and report problems (no writes)
@@ -101,7 +101,7 @@ done
 cat <<BANNER
 ./setup.init is a development helper. The supported installation is:
 
-    npx @wamala/agent-skills install
+    npx @wamalalawrence/agent-skills install
 
 Installing this checkout (${SCRIPT_DIR}) as a development release.
 

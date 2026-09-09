@@ -75,6 +75,25 @@ There is deliberately no environment variable or config file that loads a provid
 repository the user has merely opened must not be able to point the global installer at code, or at
 credentials, of its choosing.
 
+## The package name
+
+`@wamalalawrence/agent-skills`, published publicly.
+
+`@wamala/agent-skills` was the first choice and the registry reported the *name* as free, which is
+not the same question as whether the *scope* is writable — and that second question cannot be
+answered without authenticating. It was not: an authenticated publish, with two-factor
+authentication satisfied, returned `404` on the `PUT`, which is how npm reports "you may not create
+a package in this scope" without disclosing whether the scope exists.
+
+`@wamalalawrence` is the publishing account's own user scope, so it is writable by definition and
+matches the GitHub handle the repository already lives under. The lesson worth keeping is that
+`npm view <name>` and `npm org ls <scope>` both answer a weaker question than they appear to —
+`npm org ls` echoes the scope name back as "owner" for any scope, including ones you do not own.
+The only real test of a scope is a publish.
+
+The name is a single constant. It appears in `npm/package.json`, and everywhere else it is
+documentation.
+
 ## Distribution access is not project access
 
 Reading the release source may require authentication. That is **distribution access**: proof that

@@ -11,11 +11,8 @@ senior-engineer, product-owner, tester, or reviewer output instead of generic an
 ## Start here
 
 ```bash
-npx @wamala/agent-skills install
+npx @wamalalawrence/agent-skills install
 ```
-
-> The npm package is not published yet. Until it is, install from source — same installer, same
-> result: `git clone https://github.com/wamalalawrence/agent-skills.git && cd agent-skills && ./setup.init`
 
 Then open any repository on your machine and ask:
 
@@ -81,7 +78,7 @@ checklist, and the right stopping conditions.
 Install once, per machine. Use from any local project. Configure external access only when needed.
 
 ```bash
-npx @wamala/agent-skills install
+npx @wamalalawrence/agent-skills install
 ```
 
 **Everyday commands** — the durable command is `agent-skills`; npm is not needed again.
@@ -198,7 +195,7 @@ Run the installer. It recognises an existing installation, moves it onto the ver
 keeps your credential identities, project bindings, and unrelated skills exactly where they are.
 
 ```bash
-npx @wamala/agent-skills install
+npx @wamalalawrence/agent-skills install
 ```
 
 If you are coming from the pre-v0.37 workspace layout — a `.env`, `.jira-config.yml`, and `.skills`

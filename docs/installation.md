@@ -8,7 +8,7 @@ Requires Python 3.8 or newer, `bash`, and `git`.
 ## Install once, per machine
 
 ```bash
-npx @wamala/agent-skills install
+npx @wamalalawrence/agent-skills install
 ```
 
 That is the entire local installation. No clone, no `cd`. You do not run it again per workspace, per
@@ -266,7 +266,7 @@ metadata and bindings, and is the only thing that does.
 ## Upgrading from an earlier release
 
 ```bash
-npx @wamala/agent-skills install
+npx @wamalalawrence/agent-skills install
 ```
 
 The installer recognises an existing installation, moves it onto the versioned layout, and leaves
@@ -274,7 +274,7 @@ everything you own alone. Nothing is deleted and no secret is copied without you
 
 | Before v0.43.0 | v0.43.0 |
 | --- | --- |
-| Clone the repository, run `./setup.init` | `npx @wamala/agent-skills install` |
+| Clone the repository, run `./setup.init` | `npx @wamalalawrence/agent-skills install` |
 | Install trees linked into a clone you maintain | Releases copied into `~/.agent-skills/versions/` |
 | `agent-skills update` was `git pull` in that clone | A staged, verified, transactional update |
 | A failed update left the clone in whatever state it reached | A failed update leaves the previous release running |
