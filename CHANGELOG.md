@@ -6,6 +6,68 @@ All notable project changes should be recorded here.
 
 - No unreleased changes.
 
+## 0.43.1 - Private-Source Validation
+
+Patch release. Confirms the v0.43.0 installation and distribution contract against the source
+repository's transition from public to private, and corrects the published package identity.
+
+### Package identity corrected
+
+`v0.43.0` was tagged naming `@wamala/agent-skills` as the npm package. That scope was never
+publishable: an authenticated publish, two-factor authentication satisfied, returned `404` on the
+registry `PUT` — npm's way of reporting "you may not create a package in this scope," which reads
+as a missing package rather than a permission failure. `npm view` and `npm org ls` had both
+appeared to say otherwise; neither actually answers the question a publish does.
+
+The package is `@wamalalawrence/agent-skills`, the publishing account's own scope, published
+publicly and verified with `npx @wamalalawrence/agent-skills install` against the live registry —
+not only the packed tarball. See
+[docs/release-providers.md](docs/release-providers.md#the-package-name).
+
+### Stage B — private-source acceptance
+
+The repository was made private. `scripts/test-private-source.sh` was run against the real remote,
+from a genuinely clean sandbox — never the source checkout, never an existing installation:
+
+```text
+PRIVATE_REPOSITORY_ACCESS       PASS      HOST_REGISTRATION               PASS
+CLEAN_PRIVATE_INSTALL           PASS      EXECUTION_GUARD_COHERENCE       PASS
+AGENT_SKILLS_DOCTOR             PASS      EXISTING_STATE_ISOLATION        PASS
+AGENT_SKILLS_VERIFY             PASS      AUTHENTICATION_REQUIRED_BEHAVIOR PASS
+PRIVATE_UPDATE_PATH             PASS      RELEASE_PROVIDER                git
+
+PRIVATE_SOURCE_DISTRIBUTION_READY: YES
+```
+
+Authenticated install, `doctor`, `verify`, `update`, host registration into every supported host
+directory, and Execution Guard resolving through the release fetched from the private source, all
+pass. The unauthenticated case exits `3` with `AUTHENTICATION_REQUIRED`, leads with that
+classification rather than a raw git error, never reports the repository as "not found," never
+hangs, and leaks no token. The installation already on this machine was hashed before and after:
+unchanged.
+
+Full evidence: [`eval-runs/v0.43.0/summary.md`](eval-runs/v0.43.0/summary.md#stage-b--private-source-acceptance).
+Both prior gaps closed: [`docs/security-review-v0.43.0.md`](docs/security-review-v0.43.0.md#what-was-not-proven-at-release-time-and-what-has-since-been-resolved).
+
+### Two fixes, neither in product code
+
+**The test harness's own isolation was incomplete on macOS.** `gh`'s token is commonly stored in
+the login Keychain; Keychain Services resolves its default search list through
+`~/Library/Preferences`, keyed to `$HOME`. A throwaway sandbox `$HOME` — needed so the acceptance
+suite never registers skills into the machine's real host directories — has no matching preference
+file, so `security`/`gh` silently saw no login keychain at all. Confirmed directly with `security
+list-keychains` under a real vs. substituted `$HOME`. Not a product defect: a real user's shell
+always matches their own Keychain. Fixed by grafting in exactly `~/Library/Preferences` and
+`~/Library/Keychains` as read-only symlinks — nothing else, nothing under them ever written.
+
+**CI's link checker started failing on the repository's own homepage link.** GitHub answers an
+unauthenticated request for a private repository with `404` on every path, including the bare
+homepage every `SKILL.md` and `npm/README.md` link to. One narrow ignore pattern added, matching
+the style of the exemption already there for issues/pull/releases/compare/commit sub-paths.
+
+`lib/asrelease/`, `scripts/install.py`, `bin/agent-skills`, and every host/guard registry are
+unchanged in this release.
+
 ## 0.43.0 - One Command, One Installer
 
 Minor release, and a pre-1.0 architecture change. Installing Agent Skills stops being an act of

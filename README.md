@@ -4,9 +4,10 @@ Reusable [Agent Skills](https://agentskills.io/) for software-engineering work �
 role-shaped workflows your AI assistant can load on demand so the same model produces
 senior-engineer, product-owner, tester, or reviewer output instead of generic answers.
 
-> **Status:** `0.43.0` — pre-1.0. Core skill set is shipped and stable enough for public use;
+> **Status:** `0.43.1` — pre-1.0. Core skill set is shipped and stable enough for public use;
 > interfaces may still evolve. v0.43.0 froze the installation and distribution contract ahead of
-> `1.0.0-rc.1`.
+> `1.0.0-rc.1`; v0.43.1 validates that contract against the now-private source and corrects the
+> published package scope.
 
 ## Start here
 
@@ -99,18 +100,18 @@ Requirements: Python 3.8+, bash, and git. macOS or Linux; on Windows use WSL or 
 with every supported agent host it finds, and makes the runtime invocable from anywhere:
 
 ```text
-  resolve    0.43.0 (stable, via git)
+  resolve    0.43.1 (stable, via git)
   download   164 files staged
   verify     payload hash and version agree
   self-test  staged runtime answers correctly
-  activate   current -> versions/0.43.0
+  activate   current -> versions/0.43.1
   hosts      claude-code, agents-standard, cursor, codex
   verified   installation is consistent
 
-Agent Skills 0.43.0 is installed.
+Agent Skills 0.43.1 is installed.
 
   install root : ~/.agent-skills
-  active release: ~/.agent-skills/versions/0.43.0
+  active release: ~/.agent-skills/versions/0.43.1
   hosts        : claude-code, agents-standard, cursor, codex
   command      : ~/.local/bin/agent-skills
 
