@@ -1,0 +1,41 @@
+{
+  "schema": "agent-skills.tool-definition/v1",
+  "id": "pagerduty",
+  "class": "REMOTE_SERVICE",
+  "category": "incident-management",
+  "summary": "Incident and timeline retrieval. Read-first.",
+  "capabilities": [
+    "incident.read",
+    "incident.timeline.read"
+  ],
+  "transports": [
+    {
+      "kind": "mcp",
+      "hint": "pagerduty"
+    },
+    {
+      "kind": "cli",
+      "command": "pd",
+      "probe": [
+        "--version"
+      ]
+    },
+    {
+      "kind": "api",
+      "auth_service": "pagerduty",
+      "require": [
+        "token"
+      ],
+      "secret": [
+        "token"
+      ]
+    }
+  ],
+  "auth_service": "pagerduty",
+  "docs": "docs/engineering-tools.md",
+  "bounded_capabilities": [
+    "incident.timeline.read"
+  ],
+  "reference_status": "validated",
+  "notes": "incident.write (ack / note) is in the vocabulary but not in this tool's set for the release. Timelines are bounded (per-incident, time-ordered)."
+}

@@ -86,3 +86,17 @@ for three minor releases; removing one on schedule is part of that release's che
 
 Until `v1.0.0`, pin the repository version or tag when you need repeatable behavior across teams or
 automation.
+
+## Contracts under consideration for a 1.0 freeze
+
+These are stable-in-practice now and are the review targets before `1.0.0`. After the freeze,
+adding to them is a minor change; renaming or reclassifying is a major change.
+
+- **The engineering tool capability vocabulary** — the family prefixes and capability names in
+  [`lib/tools/capabilities.json`](../lib/tools/capabilities.json), and each capability's action
+  class. See [engineering-tool-capabilities.md](engineering-tool-capabilities.md).
+- **The tool-definition contract** — `agent-skills.tool-definition/v1`, the shape read from
+  [`lib/tools/registry.d/`](../lib/tools/registry.d). Adding a transport `kind` is additive;
+  changing the meaning of `class`, `capabilities`, or `transports` is not.
+- **The `agent-skills tools` CLI surface and its exit codes** (`0` ok/resolved, `1` unresolved
+  or doctor problem, `2` usage / unknown tool / unknown capability / blocked action class).

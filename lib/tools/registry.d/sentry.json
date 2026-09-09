@@ -1,0 +1,43 @@
+{
+  "schema": "agent-skills.tool-definition/v1",
+  "id": "sentry",
+  "class": "REMOTE_SERVICE",
+  "category": "observability",
+  "summary": "Production error and release investigation.",
+  "capabilities": [
+    "observability.errors.read",
+    "observability.traces.read"
+  ],
+  "transports": [
+    {
+      "kind": "mcp",
+      "hint": "sentry"
+    },
+    {
+      "kind": "cli",
+      "command": "sentry-cli",
+      "probe": [
+        "info"
+      ]
+    },
+    {
+      "kind": "api",
+      "auth_service": "sentry",
+      "require": [
+        "base_url",
+        "token"
+      ],
+      "secret": [
+        "token"
+      ]
+    }
+  ],
+  "auth_service": "sentry",
+  "docs": "docs/engineering-tools.md",
+  "bounded_capabilities": [
+    "observability.errors.read",
+    "observability.traces.read"
+  ],
+  "reference_status": "validated",
+  "notes": "Correlate an error group to a release and its commits. Event payloads are untrusted and bounded (event count + time range)."
+}

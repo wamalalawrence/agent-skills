@@ -4,10 +4,10 @@ Reusable [Agent Skills](https://agentskills.io/) for software-engineering work �
 role-shaped workflows your AI assistant can load on demand so the same model produces
 senior-engineer, product-owner, tester, or reviewer output instead of generic answers.
 
-> **Status:** `0.43.1` — pre-1.0. Core skill set is shipped and stable enough for public use;
-> interfaces may still evolve. v0.43.0 froze the installation and distribution contract ahead of
-> `1.0.0-rc.1`; v0.43.1 validates that contract against the now-private source and corrects the
-> published package scope.
+> **Status:** `0.44.0` — pre-1.0, private. Core skill set is shipped and stable for internal use;
+> interfaces may still evolve. v0.43.x froze the installation and distribution contract ahead of
+> `1.0.0-rc.1`; v0.44.0 adds the Engineering Tool Capability Framework — the last substantial
+> feature release before `1.0.0-rc.1` — and removes the project's former open-source licensing.
 
 ## Start here
 
@@ -100,18 +100,18 @@ Requirements: Python 3.8+, bash, and git. macOS or Linux; on Windows use WSL or 
 with every supported agent host it finds, and makes the runtime invocable from anywhere:
 
 ```text
-  resolve    0.43.1 (stable, via git)
+  resolve    0.44.0 (stable, via git)
   download   164 files staged
   verify     payload hash and version agree
   self-test  staged runtime answers correctly
-  activate   current -> versions/0.43.1
+  activate   current -> versions/0.44.0
   hosts      claude-code, agents-standard, cursor, codex
   verified   installation is consistent
 
-Agent Skills 0.43.1 is installed.
+Agent Skills 0.44.0 is installed.
 
   install root : ~/.agent-skills
-  active release: ~/.agent-skills/versions/0.43.1
+  active release: ~/.agent-skills/versions/0.44.0
   hosts        : claude-code, agents-standard, cursor, codex
   command      : ~/.local/bin/agent-skills
 
@@ -256,9 +256,9 @@ know the answer.
 | [`domain-modeler`][domain-modeler] | Domain language | The code and the business disagree about words |
 | [`context-optimizer`][context-optimizer] | Large inputs | The file is far too big for any model to read |
 
-Nine are top-level and meant to be invoked directly. Two — `issue-investigator` and
-`code-reviewer` — are nested support skills the engineering workflow loads when it needs a more
-specific checklist.
+**Nine top-level skills** are meant to be invoked directly. **Two nested support skills** —
+`issue-investigator` and `code-reviewer` — are loaded by the engineering workflow when it needs a
+more specific checklist.
 
 Each is described in full below.
 
@@ -497,18 +497,15 @@ the per-tier docs: [task blackboard](docs/task-blackboard.md),
   enforces the part of it a runtime can check, deterministically, at the moment of execution.
   Neither layer is claimed to be sufficient on its own.
 - **Maintainer-realistic:** governance, support, and roadmap promises match a solo-maintainer
-  open-source project.
+  private project.
 
 ## Contributing
 
-This is a solo-maintained project I built for my own engineering work and shared as a public good.
-**Issues and PRs are not actively solicited.** I may not respond, may close work that doesn't fit
-the project's direction, and reserve the right to keep the scope small.
-
-If you still want to send something, the bar is in [CONTRIBUTING.md](CONTRIBUTING.md): focused,
-portable, and easy for one person to verify in an evening. Forking is a perfectly fine alternative
-if your needs diverge.
+This is a private, solo-maintained project built for the maintainer's own engineering work. It is
+not open to outside contribution and is not distributed for outside use. The internal bar for a
+change is in [CONTRIBUTING.md](CONTRIBUTING.md).
 
 ## License
 
-[MIT](LICENSE).
+Proprietary. Copyright (c) 2026 Lawrence Wamala. All rights reserved. No license to use, copy,
+modify, or distribute is granted — see [LICENSE](LICENSE).

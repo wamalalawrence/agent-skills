@@ -521,6 +521,7 @@ render_full() {
   echo "Tools"
   echo "  present: ${TOOLS_PRESENT:-none}"
   echo "  missing: ${TOOLS_MISSING:-none}"
+  echo "  capability view: agent-skills tools status  (per engineering tool, no secrets)"
   echo ""
   echo "Build"
   printf '  %s%s — %s\n' "$(mark "$([[ "${BUILD_TOOL}" == "unknown" ]] && echo no || echo yes)")" \

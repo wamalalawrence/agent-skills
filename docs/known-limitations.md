@@ -143,6 +143,23 @@ overstated:
 - **There is a time-of-check/time-of-use gap.** The decision is made against the command as
   written, immediately before execution. A target that changes in that interval is not covered.
 
+## Engineering Tool Capability Framework
+
+See [engineering-tools.md](engineering-tools.md#known-limitations) for the full treatment.
+
+- **The framework resolves transports; it does not authenticate or enforce.** A resolved
+  transport means a request can be constructed, not that the far side will accept it, and not
+  that the action is permitted — [Execution Guard](execution-guard.md) still gates the command.
+- **The `host` transport is not probeable from a script.** Whether the agent host exposes a
+  first-class tool is something only the host knows. It is reported as a step to check.
+- **MCP detection is presence, not capability.** `tools status` reports that a host MCP config
+  mentions a service, the same way access resolution step 1 does. It does not call the server.
+- **`reference_status: validated` means the framework path was exercised**, not that every
+  capability was integration-tested against a live instance. Tools present only as fixtures
+  (`gitlab`, `gcp`, `mysql`, `newrelic`) are labelled and are never counted as supported.
+- **Action classification is per capability, not per invocation.** A skill that hand-builds a
+  mutating command under a READ capability has misused the framework; the guard is the backstop.
+
 ## Evidence and caches
 
 - **Evidence-pack and cache flows depend on the execution environment.** Global, in-repo, ephemeral

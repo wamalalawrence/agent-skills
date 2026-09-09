@@ -14,7 +14,7 @@ description: >-
   Collaborates with issue-investigator and software-engineer on failure
   evidence, with code-reviewer on oversized diffs, and with
   test-automation-engineer on CI logs.
-license: MIT
+license: PROPRIETARY
 compatibility: >-
   Works with any agent that supports the Agent Skills format (Claude Code,
   Cursor, Windsurf, Continue, GitHub Copilot Chat, ChatGPT, etc.) AND can run
@@ -23,7 +23,7 @@ compatibility: >-
   legacy `local-workspace`. See docs/execution-modes.md.
 metadata:
   author: wamalalawrence
-  version: "0.43.1"
+  version: "0.44.0"
   homepage: "https://github.com/wamalalawrence/agent-skills"
 argument-hint: "<path to the large input> and the question it must answer"
 user-invocable: true

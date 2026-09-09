@@ -12,7 +12,7 @@ description: >-
   end-to-end without babysitting each handoff. It dispatches fresh agents; it
   does NOT implement phases itself and does NOT load executor skills into its own
   context, so the depth-cap-of-two review bound stays intact inside each phase.
-license: MIT
+license: PROPRIETARY
 compatibility: >-
   Works with any agent that supports the Agent Skills format (Claude Code,
   Cursor, Windsurf, Continue, GitHub Copilot Chat, ChatGPT, etc.) AND can open a
@@ -22,7 +22,7 @@ compatibility: >-
   docs/execution-modes.md.
 metadata:
   author: wamalalawrence
-  version: "0.43.1"
+  version: "0.44.0"
   homepage: "https://github.com/wamalalawrence/agent-skills"
 argument-hint: "<the work key or plan cache dir to execute end to end>"
 user-invocable: true

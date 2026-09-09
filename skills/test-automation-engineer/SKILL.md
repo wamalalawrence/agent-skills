@@ -9,7 +9,7 @@ description: >-
   independent — it discovers and follows the repository's own automation stack. Collaborates
   with software-engineer for code quality, manual-tester for scenarios and exploratory
   evidence, product-owner for intended behaviour, and issue-investigator for root cause.
-license: MIT
+license: PROPRIETARY
 compatibility: >-
   Works with any agent that supports the Agent Skills format (Claude Code, Cursor,
   Windsurf, Continue, GitHub Copilot Chat, ChatGPT, etc.). Three execution modes —
@@ -19,7 +19,7 @@ compatibility: >-
   and docs/access-resolution.md.
 metadata:
   author: wamalalawrence
-  version: "0.43.1"
+  version: "0.44.0"
   homepage: "https://github.com/wamalalawrence/agent-skills"
 argument-hint: "<the automation work — a scenario, a broken suite, a CI failure list, or a flaky test>"
 user-invocable: true

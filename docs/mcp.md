@@ -160,6 +160,7 @@ above sends the agent to MCP on its own. There is nothing to blank out.
 ## Related
 
 - [Lifecycle preflight](lifecycle-preflight.md) — where the capability report appears.
+- [Engineering Tool Capability Framework](engineering-tools.md) — this tool-preference order, applied to named capabilities across the engineering toolchain.
 - [Auth discovery](auth-discovery.md) — the non-MCP configuration path.
 - [GitHub access ladder](github-access.md) — what the GitHub server would replace.
 - [Destructive-action safety](destructive-action-safety.md) — the trust boundary in full.

@@ -1,0 +1,43 @@
+{
+  "schema": "agent-skills.tool-definition/v1",
+  "id": "confluence",
+  "class": "REMOTE_SERVICE",
+  "category": "planning",
+  "summary": "Confluence engineering knowledge: search and document retrieval.",
+  "capabilities": [
+    "knowledge.search",
+    "knowledge.document.read"
+  ],
+  "transports": [
+    {
+      "kind": "mcp",
+      "hint": "atlassian"
+    },
+    {
+      "kind": "cli",
+      "command": "confluence",
+      "probe": [
+        "--version"
+      ]
+    },
+    {
+      "kind": "api",
+      "auth_service": "confluence",
+      "require": [
+        "host",
+        "login",
+        "token"
+      ],
+      "secret": [
+        "token"
+      ]
+    }
+  ],
+  "auth_service": "confluence",
+  "docs": "docs/auth-discovery.md",
+  "bounded_capabilities": [
+    "knowledge.document.read"
+  ],
+  "reference_status": "validated",
+  "notes": "Read-only in this release. Shares the Atlassian MCP transport with jira. knowledge.document.write is defined in the vocabulary but not enabled here."
+}

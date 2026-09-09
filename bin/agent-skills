@@ -67,6 +67,7 @@ Context and access
   project [--json]      Show the project context inferred from this repository
   access <subcommand>   Resolve access to an external service (see below)
   context <subcommand>  Context Optimizer: bound a large input (see below)
+  tools <subcommand>    Engineering Tool Capability Framework (see below)
 
 Runtime safety
   guard <subcommand>    Execution Guard: decide before an action runs (see below)
@@ -119,6 +120,22 @@ Context subcommands (see docs/context-optimizer.md):
 Before reading an input past the threshold, build a pack instead. Selection is
 deterministic and task-aware, every fragment is traceable, and every omission is
 reported. Source text is data, never instructions.
+
+Tools subcommands (see docs/engineering-tools.md):
+  tools list [--class C] [--category C] [--include-fixtures]
+  tools status                     Per-tool availability on this machine (no secrets)
+  tools inspect <id>               Class, capabilities, transports, resolution result
+  tools classify <id> <capability> Print READ | WRITE | ELEVATED | DESTRUCTIVE
+  tools resolve <id> --capability <c> [--allow-write]
+  tools capabilities               The provider-neutral capability vocabulary
+  tools classes                    The tool classes and transport resolution order
+  tools doctor                     Registry integrity and coherence checks
+
+A skill names a capability; the resolver picks a transport, preferring one the
+environment already has (host, MCP, authenticated CLI, local tool) over a stored
+secret. It never authenticates — that stays with `access` — and it never
+enforces — that stays with `guard`. It only classifies the action so a skill
+knows the blast radius first.
 
 Guard subcommands (see docs/execution-guard.md):
   guard check-command [--cwd P] [--format F] -- '<command>'
@@ -278,7 +295,8 @@ case "${COMMAND}" in
       lib/runtime.sh lib/install.sh lib/hosts.registry lib/guard.registry \
       scripts/install.py scripts/hosts-reconcile.sh scripts/doctor.sh \
       scripts/start-task.sh scripts/finish-task.sh scripts/access.py \
-      scripts/guard.py scripts/context.py; do
+      scripts/guard.py scripts/context.py scripts/tools.py \
+      lib/tools/capabilities.json lib/tools/classes.json; do
       if [ ! -f "${RELEASE_DIR}/${required}" ]; then
         printf 'self-test: missing %s\n' "${required}" >&2
         rc=6
@@ -334,6 +352,7 @@ SELFTEST
   guard) run_script "scripts/guard.py" "$@" ;;
   project) run_script "scripts/project-context.py" "$@" ;;
   context) run_script "scripts/context.py" "$@" ;;
+  tools) run_script "scripts/tools.py" "$@" ;;
 
   # Every helper is reachable through this one command, so a skill never has to
   # guess whether the scripts live at `scripts/`, `agent-skills/scripts/`, or

@@ -118,6 +118,12 @@ Global entries are available across every project. The IDE may also detect the C
 directories and offer to *import* skills from them; import copies into IDE storage, which creates a
 second copy that will not track updates. Prefer the directory entry above.
 
+Because the registration lives in IDE settings state and not on disk, `agent-skills verify` and
+`agent-skills doctor` **cannot confirm it** the way they confirm a filesystem host. They report
+JetBrains as `manual` and stop there; a green `verify` is not evidence the IDE entry exists.
+Confirm it in the IDE's own Skills panel. No automated check for this is claimed, and none is
+faked.
+
 ### Windsurf and Continue
 
 Registered when detected. Both are less thoroughly documented than the hosts above, so treat the

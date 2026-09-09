@@ -6,6 +6,120 @@ All notable project changes should be recorded here.
 
 - No unreleased changes.
 
+## 0.44.0 - Engineering Tool Capability Framework
+
+The last substantial feature release before `1.0.0-rc.1`. Agent Skills can now use the
+engineering tools a developer touches in normal delivery work — source control, a tracker, a
+knowledge base, chat, a cluster, a cloud, CI, a database, a broker, a package registry — without
+a bespoke adapter per vendor and without widening the Access Resolver into a product switch.
+
+This release also removes the project's former open-source licensing. The repository is private;
+see [Licensing](#licensing-changed) below.
+
+### The framework
+
+Infrastructure, not a skill — like the Access Resolver and Execution Guard, nothing routes work
+to it. A skill names a **capability**; the resolver decides **how** it can be provided.
+
+```text
+skill -> required capability -> Engineering Tool Resolver
+   host -> mcp -> authenticated CLI -> local/native client -> profile -> API -> unresolved
+        (needs auth?) -> Access Resolver        (dangerous?) -> Execution Guard
+```
+
+- **Tool classes.** `AGENT_HOST`, `LOCAL_TOOL`, `REMOTE_SERVICE`, `RUNTIME_RESOURCE`,
+  `DATA_RESOURCE`. VS Code / IntelliJ stay Agent Skills *hosts*, not tools the resolver reaches.
+- **Capability vocabulary.** 72 provider-neutral capabilities across 18 families (`scm.*`,
+  `tracker.*`, `knowledge.*`, `communication.*`, `runtime.*`, `infrastructure.*`, `cloud.*`,
+  `api.*`, `ci.*`, `quality.*`, `observability.*`, `incident.*`, `messaging.*`, `database.*`,
+  `data_pipeline.*`, `package.*`, `design.*`, `security.*`) in
+  [`lib/tools/capabilities.json`](lib/tools/capabilities.json). A 1.0-freeze candidate — see
+  [docs/engineering-tool-capabilities.md](docs/engineering-tool-capabilities.md).
+- **Action classes.** Every capability is fixed as `READ`, `WRITE`, `ELEVATED`, or
+  `DESTRUCTIVE`, mapped onto the existing Execution Guard rules — no second safety engine.
+  `tools resolve` refuses `WRITE`/`ELEVATED` without `--allow-write` and never resolves
+  `DESTRUCTIVE`. *READ cannot silently become WRITE.*
+- **Tool definitions.** One small `agent-skills.tool-definition/v1` JSON file per tool in
+  [`lib/tools/registry.d/`](lib/tools/registry.d). Not a DSL; `scripts/tools.py` reads it with no
+  per-tool branching.
+- **CLI.** `agent-skills tools list | status | inspect | classify | resolve | capabilities |
+  classes | doctor`. `status` reads like the `doctor` capability report; no command configures a
+  tool, and no secret value is ever printed.
+
+### Reference tools
+
+Validated across the engineering lifecycle: `github` (SCM + issues + PRs + Actions, reusing the
+GitHub access ladder), `github-actions`, `jenkins`, `jira` (reusing tracker auth discovery),
+`confluence`, `slack` (read-only), `aws`, `kubernetes`, `terraform`, `postman`, `sonarqube`,
+`sentry`, `pagerduty`, `kafka`, `postgresql`, `npm`. Four definitions — `gitlab`, `gcp`, `mysql`,
+`newrelic` — ship in [`lib/tools/fixtures/`](lib/tools/fixtures) as **extensibility fixtures
+only**; they are not claimed as supported, and `scripts/test-tools.sh` asserts they fit with no
+core change.
+
+### Integration
+
+- Wamala still routes by engineering **ownership**, never by which tool is involved. The
+  specialist requests capabilities after routing.
+- Large tool output — CI logs, CloudWatch / Kubernetes logs, Sentry events, Slack threads, Kafka
+  samples, wide query results — is marked `bounded` and must be read with an explicit bound and
+  passed through Context Optimizer. `tools doctor` and `validate-repo.py` enforce the marking.
+- New docs: [docs/engineering-tools.md](docs/engineering-tools.md),
+  [docs/engineering-tool-capabilities.md](docs/engineering-tool-capabilities.md). Cross-links
+  added to `mcp.md`, `access-resolution.md`, `execution-guard.md`, `context-optimizer.md`,
+  `known-limitations.md`, `versioning.md`, `release-checklist.md`.
+
+### Tests
+
+`scripts/test-tools.sh` — 41 assertions covering discovery, the local-tool / remote-service
+split, an authenticated capability beating a stored credential, GitHub/Jira still resolving,
+AWS/Kubernetes/Terraform action classification, a bounded read-only PostgreSQL path, Context
+Optimizer on large tool output, untrusted external text staying inert, provider-failure
+isolation, no cross-service identity bleed, READ not escalating to WRITE, a destructive operation
+still denied by the Execution Guard, an unknown future tool added with only a definition file,
+and the four fixtures fitting with no special core branch. `validate-repo.py` gained a
+`check_engineering_tools` gate that runs `tools doctor`. New eval:
+[`evals/engineering-tools-capability-resolution.md`](evals/engineering-tools-capability-resolution.md).
+
+### JetBrains
+
+The known limitation is documented precisely: JetBrains AI Assistant registration is a manual IDE
+action and **cannot be verified from the filesystem**, so `verify` / `doctor` report it as
+`manual` and a green `verify` is not evidence the IDE entry exists. No automated check is claimed
+or faked. See [docs/assistants.md](docs/assistants.md#jetbrains-ai-assistant).
+
+### Licensing changed
+
+The repository is private. The former MIT license is removed and replaced with an all-rights-
+reserved proprietary notice in [LICENSE](LICENSE) — no invented terms, just the absence of a
+grant. `license:` in every `SKILL.md` is now `PROPRIETARY`; `npm/package.json` is `UNLICENSED`.
+Public-project framing is gone from `README.md`, `CONTRIBUTING.md`, `SUPPORT.md`, and
+`GOVERNANCE.md`. Historical CHANGELOG and eval-run entries are left as written.
+
+- **npm publication is deferred.** The `@wamalalawrence/agent-skills` bootstrap on the public
+  registry still points at `0.43.1`. Whether a private, proprietary project should keep publishing
+  a public bootstrap is an owner decision recorded in
+  [docs/security-review-v0.44.0.md](docs/security-review-v0.44.0.md); this release is distributed
+  through the git provider (tag + GitHub release) only.
+
+### Security review
+
+[docs/security-review-v0.44.0.md](docs/security-review-v0.44.0.md) — threat-by-threat, covering
+READ→WRITE escalation, resolution-is-not-authorization, destructive actions on the Guard floor,
+bounded production reads, no-secret-in-output, provider-failure isolation, repository config not
+steering machine credentials, and untrusted tool content.
+
+### Release-harness fixes (pre-existing)
+
+`scripts/test-release-readiness.sh` had three bugs that predate this release and reproduce on
+`main`: (1) the upgrade-from-previous-tag section ran the old installer with an `install --yes`
+flag no `install` subcommand has ever accepted; (2) with that fixed, the baseline install then
+re-fetched the now-private repository anonymously from a throwaway `$HOME` — section 6 is about
+upgrade mechanics and state preservation, not distribution access, so it now installs the
+previous tag from its own on-disk tree with `--provider local`; (3) the README section required
+bold skill-count prose (`**N top-level skills**`) the README had dropped in favour of "the
+eleven skills". All fixed; the upgrade path is now actually exercised, and `README.md` carries
+the count prose that `validate-repo.py` also verifies against the skills on disk.
+
 ## 0.43.1 - Private-Source Validation
 
 Patch release. Confirms the v0.43.0 installation and distribution contract against the source

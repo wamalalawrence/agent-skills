@@ -14,7 +14,7 @@ description: >-
   when you already know the owner. Wamala dispatches; it does NOT implement,
   review, refine, or test anything itself, so the depth-cap-of-two review bound
   stays intact inside each dispatched step.
-license: MIT
+license: PROPRIETARY
 compatibility: >-
   Works with any agent that supports the Agent Skills format (Claude Code,
   Cursor, Windsurf, Continue, GitHub Copilot Chat, ChatGPT, etc.) AND can open a
@@ -25,7 +25,7 @@ compatibility: >-
   `local-workspace`. See docs/execution-modes.md.
 metadata:
   author: wamalalawrence
-  version: "0.43.1"
+  version: "0.44.0"
   homepage: "https://github.com/wamalalawrence/agent-skills"
 argument-hint: "<the request — a ticket key, a PR link, a bug report, or plain prose>"
 user-invocable: true

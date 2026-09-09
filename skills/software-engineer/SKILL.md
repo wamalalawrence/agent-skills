@@ -12,7 +12,7 @@ description: >-
   `${CODE_REVIEWER_MAX_ROUNDS}`) instead of bouncing each round back to the user.
   Reuses issue-investigator when issue context, root cause, or expected behavior needs
   deeper evidence.
-license: MIT
+license: PROPRIETARY
 compatibility: >-
   Works with any agent that supports the Agent Skills format (Claude Code, Cursor,
   Windsurf, Continue, GitHub Copilot Chat, ChatGPT, etc.). Two execution modes —
@@ -20,7 +20,7 @@ compatibility: >-
   .agent-skills.yml). See docs/execution-modes.md.
 metadata:
   author: wamalalawrence
-  version: "0.43.1"
+  version: "0.44.0"
   homepage: "https://github.com/wamalalawrence/agent-skills"
 argument-hint: "<the change to make — a ticket key, a bug, or a described feature>"
 user-invocable: true
@@ -334,6 +334,15 @@ handles as few secrets as possible.
 The capability report from `start-task.sh` step 4 already says which of these are available. Do not
 propose a path it reports as unavailable, and do not ask the operator to install an MCP server
 mid-task.
+
+For an engineering tool beyond the tracker and GitHub — CI, a cluster, a cloud, a database, an
+error tracker — name the capability and let the
+[Engineering Tool Capability Framework](../../docs/engineering-tools.md) pick the transport:
+`agent-skills tools resolve <tool> --capability <c>`. Check the action class first
+(`agent-skills tools classify <tool> <c>`): a `READ` is safe to run, `WRITE`/`ELEVATED` needs a
+human answer, `DESTRUCTIVE` is refused here and routes nowhere. Read any large tool output
+(`*.logs.read`, `*.query.read`, samples) with an explicit bound and through
+[`agent-skills context pack`](../../docs/context-optimizer.md).
 
 - `jira` CLI is preferred for tickets, comments, linked issues, subtasks. Config:
   `${JIRA_CONFIG_FILE}` plus env vars.

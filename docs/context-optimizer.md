@@ -500,6 +500,15 @@ Exit codes: `0` ok, `1` nothing selected, `2` usage or setup error, `10` over th
   format will pass through.
 - **No claim of exact API-cost reduction** without provider-specific measurement.
 
+## Large tool output
+
+Output from an engineering tool — a CI log, a CloudWatch or Kubernetes log, a Sentry event, a
+Slack thread, a Kafka sample, a wide query result — is exactly the large, untrusted evidence
+this capability exists for. The [Engineering Tool Capability Framework](engineering-tools.md)
+marks every such capability `bounded`, and the consuming skill reads it with an explicit bound
+(a time range, a row limit, a message count, a log budget) and routes it through
+`agent-skills context pack` before it reaches model context. Never "fetch everything".
+
 ## The optimizer and the installed release
 
 The `context-optimizer` skill and the runtime it calls travel inside the same release directory and

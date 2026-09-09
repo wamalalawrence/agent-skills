@@ -1,0 +1,39 @@
+{
+  "schema": "agent-skills.tool-definition/v1",
+  "id": "postman",
+  "class": "LOCAL_TOOL",
+  "category": "api-development",
+  "summary": "API collection, request, and contract-test awareness.",
+  "capabilities": [
+    "api.collection.read",
+    "api.request.read",
+    "api.test.run"
+  ],
+  "transports": [
+    {
+      "kind": "native-client",
+      "command": "newman",
+      "probe": [
+        "--version"
+      ]
+    },
+    {
+      "kind": "mcp",
+      "hint": "postman"
+    },
+    {
+      "kind": "api",
+      "auth_service": "postman",
+      "require": [
+        "api_key"
+      ],
+      "secret": [
+        "api_key"
+      ]
+    }
+  ],
+  "auth_service": "postman",
+  "docs": "docs/engineering-tools.md",
+  "reference_status": "validated",
+  "notes": "Prefer local `newman` against an exported collection file \u2014 no credential needed. The Postman API transport is for fetching collections that only live in the cloud workspace. api.test.run side effects depend on the target the collection points at."
+}

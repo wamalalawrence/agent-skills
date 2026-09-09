@@ -1,17 +1,10 @@
 # Governance
 
-`agent-skills` is a solo-maintained project. There are no committees, working groups, formal voting
-processes, or shared maintainer roles at this time.
+`agent-skills` is a private, solo-maintained project. There are no committees, working groups, or
+shared maintainer roles.
 
-The maintainer decides direction, release timing, scope boundaries, what gets merged, and what does
-not. This keeps the project small enough for one person to maintain alongside other
-responsibilities.
+The maintainer holds final authority over direction, release timing, scope, and what lands. The
+repository is private and is not open to outside contribution; access is granted individually and
+carries no decision-making role.
 
-Issues and PRs are not actively solicited, and opening one does not create an expectation of review,
-merge, roadmap discussion, or support. Forking is an acceptable and expected option when your needs
-do not match the maintainer's direction.
-
-If multiple people eventually do sustained, high-quality work on the project over time, this file
-may be revisited. Until then, the maintainer retains final decision-making authority.
-
-For expectations on contributions, see [CONTRIBUTING.md](./CONTRIBUTING.md).
+For the internal bar on a change, see [CONTRIBUTING.md](./CONTRIBUTING.md).

@@ -1,0 +1,25 @@
+{
+  "schema": "agent-skills.tool-definition/v1",
+  "id": "terraform",
+  "class": "LOCAL_TOOL",
+  "category": "infrastructure",
+  "summary": "Infrastructure inspection and plan semantics.",
+  "capabilities": [
+    "infrastructure.state.read",
+    "infrastructure.plan",
+    "infrastructure.apply",
+    "infrastructure.destroy"
+  ],
+  "transports": [
+    {
+      "kind": "native-client",
+      "command": "terraform",
+      "probe": [
+        "version"
+      ]
+    }
+  ],
+  "docs": "docs/engineering-tools.md",
+  "reference_status": "validated",
+  "notes": "plan and show are READ. apply is ELEVATED. destroy and `state rm` are DESTRUCTIVE and blocked by the Guard floor. The framework never auto-applies."
+}

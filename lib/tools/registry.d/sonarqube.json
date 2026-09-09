@@ -1,0 +1,43 @@
+{
+  "schema": "agent-skills.tool-definition/v1",
+  "id": "sonarqube",
+  "class": "REMOTE_SERVICE",
+  "category": "code-quality",
+  "summary": "Quality findings and quality-gate evidence.",
+  "capabilities": [
+    "quality.finding.read",
+    "quality.gate.read",
+    "quality.coverage.read"
+  ],
+  "transports": [
+    {
+      "kind": "mcp",
+      "hint": "sonar"
+    },
+    {
+      "kind": "cli",
+      "command": "sonar-scanner",
+      "probe": [
+        "--version"
+      ]
+    },
+    {
+      "kind": "api",
+      "auth_service": "sonarqube",
+      "require": [
+        "base_url",
+        "token"
+      ],
+      "secret": [
+        "token"
+      ]
+    }
+  ],
+  "auth_service": "sonarqube",
+  "docs": "docs/engineering-tools.md",
+  "bounded_capabilities": [
+    "quality.finding.read"
+  ],
+  "reference_status": "validated",
+  "notes": "Read-only. The finding is retrieved as evidence; the fix routes to software-engineer. Findings list is bounded (page + severity filter)."
+}

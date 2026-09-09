@@ -60,6 +60,29 @@ adapters, or any rule the guard enforces.
 - [ ] Grep the release diff for any new output path that could carry a raw command line into a
       log, an error message, or telemetry.
 
+## Engineering Tool Capability Framework
+
+Required whenever this release changes `scripts/tools.py`, `lib/tools/`, or the capability /
+tool-definition contract.
+
+- [ ] Run `bash scripts/test-tools.sh` and confirm it exits `0`. Record the pass count in
+      `eval-runs/<release>/summary.md`.
+- [ ] Run `agent-skills tools --include-fixtures doctor` and confirm it reports no integrity
+      problems. `python3 scripts/validate-repo.py` runs the same check.
+- [ ] Confirm every capability that reads large external output (`logs.read`, `query.read`,
+      `message.sample`, `thread.read`, `document.read`, `errors.read`, `finding.read`,
+      `timeline.read`, `traces.read`) is listed under `bounded_capabilities` on every tool that
+      owns it.
+- [ ] Confirm no reference or fixture tool id appears as a literal in `scripts/tools.py` —
+      resolution stays data-driven.
+- [ ] Confirm `tools status` and `tools resolve` print no secret value in any mode, only field
+      names.
+- [ ] If the capability vocabulary or the tool-definition contract changed, say so in the
+      changelog and re-check [versioning.md](versioning.md#contracts-under-consideration-for-a-10-freeze).
+- [ ] Confirm every tool marked `reference_status: validated` was actually exercised through the
+      framework this release; anything only represented by a fixture stays labelled a fixture and
+      is not described as supported.
+
 ## Distribution and Packaging
 
 Required whenever a release changes `lib/asrelease/`, `scripts/install.py`, `bin/agent-skills`,

@@ -1,0 +1,44 @@
+{
+  "schema": "agent-skills.tool-definition/v1",
+  "id": "jira",
+  "class": "REMOTE_SERVICE",
+  "category": "planning",
+  "summary": "Jira issues and project context.",
+  "capabilities": [
+    "tracker.issue.read",
+    "tracker.issue.write",
+    "tracker.project.read"
+  ],
+  "transports": [
+    {
+      "kind": "host"
+    },
+    {
+      "kind": "mcp",
+      "hint": "atlassian"
+    },
+    {
+      "kind": "cli",
+      "command": "jira",
+      "probe": [
+        "me"
+      ]
+    },
+    {
+      "kind": "api",
+      "auth_service": "jira",
+      "require": [
+        "host",
+        "login",
+        "token"
+      ],
+      "secret": [
+        "token"
+      ]
+    }
+  ],
+  "auth_service": "jira",
+  "docs": "docs/auth-discovery.md",
+  "reference_status": "validated",
+  "notes": "Reuses the existing tracker auth discovery. The Atlassian remote MCP server (OAuth) is preferred over a stored token where the deployment is Cloud."
+}
