@@ -365,6 +365,83 @@ def _(box):
     assert os.path.isfile(os.path.join(layout.home, "skills", "wamala", "SKILL.md"))
 
 
+@check("transaction: the running release is never deleted, only moved aside")
+def _(box):
+    """Re-installing the active version must move it aside, never remove it.
+
+    Asserting on the end state proves nothing here: delete-then-rename and
+    rename-then-rename leave identical directories behind, and the difference
+    is only visible in the moment between the two calls. So this observes the
+    call itself — no path inside the running release may ever be passed to
+    rmtree.
+
+    The distinction matters because the two paths being compared are built
+    differently: one from strings, one by resolving symlinks. Where the install
+    root sits behind a link — /tmp on macOS is the everyday case — a literal
+    comparison answers "not the active one", the running release is deleted
+    outright, and a crash before the rename leaves the machine with no active
+    release at all.
+    """
+    import asrelease.transaction as transaction_module
+
+    register_provider(
+        "fake-registry", lambda **kw: FakeRegistryProvider(source_release=REPO_ROOT, **kw)
+    )
+    # A home reached through a symlink, so the constructed and resolved forms of
+    # the same directory genuinely differ.
+    os.makedirs(os.path.join(box, "real", "home"))
+    linked_home = os.path.join(box, "linked-home")
+    os.symlink(os.path.join(box, "real", "home"), linked_home)
+    home = os.path.join(linked_home, ".agent-skills")
+    config = os.path.join(box, "cfg")
+
+    saved_home = os.environ.get("HOME")
+    saved_rmtree = transaction_module.shutil.rmtree
+    removed = []
+
+    def recording_rmtree(path, *args, **kwargs):
+        removed.append(str(path))
+        return saved_rmtree(path, *args, **kwargs)
+
+    os.environ["HOME"] = linked_home
+    os.environ["AGENT_SKILLS_HOME"] = home
+    os.environ["AGENT_SKILLS_CONFIG_DIR"] = config
+    os.environ.pop("AGENT_SKILLS_SOURCE", None)
+    try:
+        layout = Layout(home=home, config_dir=config)
+        InstallTransaction(
+            layout, build_provider("fake-registry"), reporter=Reporter(quiet=True)
+        ).run(channel="stable")
+
+        active_root = layout.active_root()
+        assert active_root, "nothing was activated"
+        del removed[:]
+        transaction_module.shutil.rmtree = recording_rmtree
+        InstallTransaction(
+            Layout(home=home, config_dir=config),
+            build_provider("fake-registry"),
+            reporter=Reporter(quiet=True),
+        ).run(channel="stable")
+    finally:
+        transaction_module.shutil.rmtree = saved_rmtree
+        if saved_home is not None:
+            os.environ["HOME"] = saved_home
+        os.environ.pop("AGENT_SKILLS_HOME", None)
+        os.environ.pop("AGENT_SKILLS_CONFIG_DIR", None)
+
+    for path in removed:
+        resolved = os.path.realpath(path)
+        if resolved == active_root:
+            raise AssertionError(
+                "the running release was deleted rather than moved aside: %s" % path
+            )
+
+    layout = Layout(home=home, config_dir=config)
+    assert layout.active_version() == "0.43.0", layout.active_version()
+    assert os.path.isfile(os.path.join(layout.home, "bin", "agent-skills"))
+    assert os.path.isfile(os.path.join(layout.home, "skills", "wamala", "SKILL.md"))
+
+
 @check("providers: an unentitled registry reports authentication, not a crash")
 def _(box):
     provider = FakeRegistryProvider(source_release=REPO_ROOT, entitled=False)

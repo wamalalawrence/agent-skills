@@ -177,8 +177,9 @@ network, because "am I offline" is one of the questions people run it to answer.
   payload, a release that fails its self-test, an interrupted update, an unrequested downgrade, a
   source that cannot be read, migration from a pre-CLI installation, and installation from the
   packed npm artifact over a real git remote with no clone anywhere in the flow.
-- `scripts/test-release-engine.py` — 20 checks covering hostile tar archives, payload integrity,
-  version ordering, redaction, exit-code stability, and provider independence.
+- `scripts/test-release-engine.py` — 21 checks covering hostile tar archives, payload integrity,
+  version ordering, redaction, exit-code stability, provider independence, and the one move in the
+  transaction that cannot be undone.
 - `scripts/test-global-install.sh` — retargeted at the new engine and trimmed of the legacy-workspace
   cases; still 112 assertions on host adapters and ownership.
 - `scripts/audit-npm-package.sh` — the package-content gate, in CI and in the release checklist.

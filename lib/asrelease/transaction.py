@@ -138,11 +138,25 @@ class InstallTransaction:
             pending = target + ".incoming"
             shutil.rmtree(pending, ignore_errors=True)
             shutil.move(staged.root, pending)
-            if os.path.isdir(target) and target != layout.active_root():
+
+            # Is the directory we are about to replace the one currently running?
+            #
+            # Both sides are resolved before comparing. `version_path` builds a
+            # path from strings while `active_root` resolves symlinks, so on any
+            # system where the install root sits behind a link — /tmp on macOS,
+            # a home directory on a mounted volume — the two spell the same
+            # directory differently. Comparing them literally would take the
+            # branch below that deletes the running release outright, and a crash
+            # in the moment between that delete and the rename would leave the
+            # machine with no active release at all. That is the one
+            # unrecoverable move in this whole file.
+            active_root = layout.active_root()
+            replacing_active = bool(active_root) and os.path.realpath(target) == active_root
+            if os.path.isdir(target) and not replacing_active:
                 shutil.rmtree(target, ignore_errors=True)
             elif os.path.isdir(target):
-                # Replacing the running version in place would be the one
-                # unrecoverable move. Stage beside it and swap `current`.
+                # Never in place. Move the running release aside, put the new one
+                # where it was, and let the `current` swap below do the switching.
                 shutil.rmtree(target + ".replaced", ignore_errors=True)
                 os.rename(target, target + ".replaced")
             os.rename(pending, target)

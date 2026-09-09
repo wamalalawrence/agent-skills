@@ -31,7 +31,7 @@ bash scripts/test-release-readiness.sh
 | `bash -n` across `setup.init`, `lib`, `bin`, `scripts`, `hooks` | pass |
 | `ast.parse` across every `scripts/*.py` and `lib/asrelease/*.py` | pass |
 | `test-cli-install.sh` | pass — 104 assertions |
-| `test-release-engine.py` | pass — 20 checks |
+| `test-release-engine.py` | pass — 21 checks |
 | `test-global-install.sh` | pass — 112 assertions |
 | `test-access-resolution.sh` | pass — 100 assertions |
 | `test-front-door-skill.sh` | pass — 63 assertions |
@@ -46,7 +46,7 @@ bash scripts/test-release-readiness.sh
 | README and documentation integrity | pass |
 | version consistency | pass |
 
-Total: 612 assertions across seven suites, plus the release-readiness gates.
+Total: 613 assertions across seven suites, plus the release-readiness gates.
 
 ## The installation contract, as exercised
 
@@ -92,6 +92,7 @@ the benign one is accepted.
 | git stderr carrying a token | redacted before it can be printed or logged |
 | unknown provider name (`../../etc/evil`) | usage error; no path is ever loaded |
 | exit-code table | unchanged |
+| re-installing the active release | moved aside, never deleted in place |
 
 ## Provider independence
 

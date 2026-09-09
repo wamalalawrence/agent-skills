@@ -281,6 +281,20 @@ Probed by the content audit, which is a required release gate and runs in CI.
    runtime that no longer existed. Fixed: uninstall removes owned guard entries first, while the
    release that owns them is still reachable. Found by the acceptance suite.
 
+6. **Re-installing the active release could delete it in place.** The stage step decides whether the
+   directory it is about to replace is the one currently running. It compared a path built from
+   strings against one produced by resolving symlinks, so wherever the install root sits behind a
+   link — `/tmp` on macOS is the everyday case — the answer was "not the active one" and the running
+   release was removed outright. A crash in the moment between that delete and the rename would have
+   left the machine with no active release at all: the single unrecoverable move in the transaction.
+   Found by reading the diff after every gate was green, which is the reason that step exists.
+
+   The first regression test written for it asserted the end state and **passed with the fix
+   reverted** — delete-then-rename and rename-then-rename leave identical directories behind. It was
+   replaced with one that observes the call itself: no path inside the running release may be passed
+   to `rmtree`. That version fails against the pre-fix code, which is the only thing that makes it
+   evidence.
+
 5. **A test fixture manufactured a false integrity failure.** Two fixture releases shared a scratch
    directory, so the second inherited the first's `release.json` and failed verification for a reason
    that had nothing to do with the property under test. Fixed in the fixture. Recorded because it is
