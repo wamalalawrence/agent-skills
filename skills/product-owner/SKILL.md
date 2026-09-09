@@ -8,7 +8,7 @@ description: >-
   stories or tasks, or handing work to engineering and testing. Collaborates
   with software-engineer for feasibility and tradeoffs, manual-tester for scenario
   coverage, and test-automation-engineer for automation-friendly acceptance criteria.
-license: MIT
+license: PROPRIETARY
 compatibility: >-
   Works with any agent that supports the Agent Skills format (Claude Code, Cursor,
   Windsurf, Continue, GitHub Copilot Chat, ChatGPT, etc.). Two execution modes —
@@ -16,7 +16,7 @@ compatibility: >-
   .agent-skills.yml). See docs/execution-modes.md.
 metadata:
   author: wamalalawrence
-  version: "0.43.1"
+  version: "0.44.0"
   homepage: "https://github.com/wamalalawrence/agent-skills"
 argument-hint: "<the goal or request to refine into scope and acceptance criteria>"
 user-invocable: true

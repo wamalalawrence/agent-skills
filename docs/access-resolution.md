@@ -373,6 +373,7 @@ still valid on the far side.
 - [Configuration](configuration.md) — project configuration, which holds no secrets.
 - [Execution modes](execution-modes.md) — global, in-repo, and the legacy workspace model.
 - [MCP](mcp.md) — the tool-preference order, and why OAuth beats a stored token.
+- [Engineering Tool Capability Framework](engineering-tools.md) — the caller: it resolves a transport for a capability and only invokes this resolver when that transport needs a credential.
 - [GitHub access ladder](github-access.md) — the service-specific walk for GitHub.
 - [Destructive-action safety](destructive-action-safety.md) — the authorization question this
   document deliberately does not answer.

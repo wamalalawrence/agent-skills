@@ -1,0 +1,47 @@
+{
+  "schema": "agent-skills.tool-definition/v1",
+  "id": "gitlab",
+  "class": "REMOTE_SERVICE",
+  "category": "source-control",
+  "summary": "FIXTURE ONLY \u2014 proves a second SCM provider fits with no core change.",
+  "capabilities": [
+    "scm.repository.read",
+    "scm.pull_request.read",
+    "scm.pull_request.write",
+    "scm.issue.read",
+    "scm.issue.write",
+    "ci.run.read",
+    "ci.logs.read"
+  ],
+  "transports": [
+    {
+      "kind": "mcp",
+      "hint": "gitlab"
+    },
+    {
+      "kind": "cli",
+      "command": "glab",
+      "probe": [
+        "auth",
+        "status"
+      ]
+    },
+    {
+      "kind": "api",
+      "auth_service": "gitlab",
+      "require": [
+        "token"
+      ],
+      "secret": [
+        "token"
+      ]
+    }
+  ],
+  "auth_service": "gitlab",
+  "docs": "docs/engineering-tools.md",
+  "bounded_capabilities": [
+    "ci.logs.read"
+  ],
+  "reference_status": "fixture",
+  "notes": "Not claimed as supported. Present to prove the extensibility contract: a new SCM provider is one file, no change to Wamala, any specialist, the Access Resolver core, or the Execution Guard core."
+}

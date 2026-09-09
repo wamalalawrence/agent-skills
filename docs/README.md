@@ -32,6 +32,13 @@ Start here when reading the repository outside GitHub's main README.
 - [MCP](mcp.md) - why this repository ships no MCP servers, the binding tool-preference order
   every skill follows, the recommended minimal set, and why the strongest case for MCP here is
   authentication rather than capability.
+- [Engineering Tool Capability Framework](engineering-tools.md) - how a skill names a capability
+  and the resolver picks a transport (host, MCP, authenticated CLI, local tool, profile, API),
+  the five tool classes, the READ/WRITE/ELEVATED/DESTRUCTIVE action classes and how they map onto
+  Execution Guard, the reference tools, and the one-file-per-provider extensibility contract.
+- [Engineering tool capability vocabulary](engineering-tool-capabilities.md) - the full
+  provider-neutral capability list with each capability's action class; a candidate for freezing
+  at 1.0.
 - [Output discipline](output-discipline.md) - the canonical conciseness rules every skill
   inherits in its Expected Output Contract; what "menu, not checklist" means in practice.
 - [Writing voice](writing-voice.md) - how everything a skill writes for a human reader
@@ -86,3 +93,7 @@ Start here when reading the repository outside GitHub's main README.
 - [Security review v0.37.0](security-review-v0.37.0.md) - the recorded threat-by-threat review of
   the global installer and the access resolver, the one finding it raised, the residual risk it
   accepted, and what it does not establish.
+- [Security review v0.44.0](security-review-v0.44.0.md) - the threat-by-threat review of the
+  Engineering Tool Capability Framework: READ→WRITE escalation, resolution-is-not-authorization,
+  bounded production reads, no-secret-in-output, provider-failure isolation, and repository data
+  that cannot steer a machine credential.

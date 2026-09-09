@@ -1,0 +1,42 @@
+{
+  "schema": "agent-skills.tool-definition/v1",
+  "id": "slack",
+  "class": "REMOTE_SERVICE",
+  "category": "communication",
+  "summary": "Engineering discussion: search and read threads. Read-only.",
+  "capabilities": [
+    "communication.search",
+    "communication.thread.read"
+  ],
+  "transports": [
+    {
+      "kind": "mcp",
+      "hint": "slack"
+    },
+    {
+      "kind": "cli",
+      "command": "slack",
+      "probe": [
+        "auth",
+        "test"
+      ]
+    },
+    {
+      "kind": "api",
+      "auth_service": "slack",
+      "require": [
+        "token"
+      ],
+      "secret": [
+        "token"
+      ]
+    }
+  ],
+  "auth_service": "slack",
+  "docs": "docs/engineering-tools.md",
+  "bounded_capabilities": [
+    "communication.thread.read"
+  ],
+  "reference_status": "validated",
+  "notes": "communication.message.write is deliberately not in this tool's capability set: autonomous posting is out of scope before 1.0."
+}

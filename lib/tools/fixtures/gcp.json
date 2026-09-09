@@ -1,0 +1,42 @@
+{
+  "schema": "agent-skills.tool-definition/v1",
+  "id": "gcp",
+  "class": "REMOTE_SERVICE",
+  "category": "cloud",
+  "summary": "FIXTURE ONLY \u2014 proves a second cloud provider fits with no core change.",
+  "capabilities": [
+    "cloud.resource.read",
+    "cloud.logs.read",
+    "cloud.metrics.read",
+    "cloud.resource.write",
+    "cloud.resource.delete"
+  ],
+  "transports": [
+    {
+      "kind": "cli",
+      "command": "gcloud",
+      "probe": [
+        "auth",
+        "list"
+      ]
+    },
+    {
+      "kind": "api",
+      "auth_service": "gcp",
+      "require": [
+        "project",
+        "credentials_json"
+      ],
+      "secret": [
+        "credentials_json"
+      ]
+    }
+  ],
+  "auth_service": "gcp",
+  "docs": "docs/engineering-tools.md",
+  "bounded_capabilities": [
+    "cloud.logs.read"
+  ],
+  "reference_status": "fixture",
+  "notes": "Not claimed as supported. Extensibility fixture only. Delete/terminate stays on the Execution Guard hard-deny floor."
+}

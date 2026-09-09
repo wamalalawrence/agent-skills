@@ -280,7 +280,13 @@ if git worktree add -q --detach "$UP/previous" "$PREVIOUS_TAG" 2>/dev/null; then
       TERM=dumb "$@"
   }
 
-  run_upgraded bash "$UP_OLD/bin/agent-skills" install --yes >"$UP/old.log" 2>&1
+  # Install the previous release from its own on-disk tree, not by re-fetching
+  # it. Since the repository went private (v0.43.1) an anonymous git-provider
+  # fetch from a throwaway $HOME cannot authenticate, and this section is about
+  # upgrade mechanics and state preservation, not distribution access — that is
+  # scripts/test-private-source.sh. The tree is already at $UP_OLD.
+  run_upgraded bash "$UP_OLD/bin/agent-skills" install \
+    --provider local --source "$UP_OLD" >"$UP/old.log" 2>&1
   [ -f "$UP_HOME/.agent-skills/install.json" ] \
     && good "$PREVIOUS_TAG produced its own global install" \
     || bad "$PREVIOUS_TAG install" "$(tail -5 "$UP/old.log")"
@@ -377,7 +383,7 @@ if git worktree add -q --detach "$GU/previous" "$RENAME_TAG" 2>/dev/null; then
   printf -- '---\nname: tech-lead\ndescription: mine\n---\n# Mine\n' \
     > "$GU_HOME/.claude/skills/tech-lead/SKILL.md"
 
-  run_gu bash "$GU_SRC/bin/agent-skills" install --yes >"$GU/old.log" 2>&1
+  run_gu bash "$GU_SRC/bin/agent-skills" install >"$GU/old.log" 2>&1
   OLD_FRONT_DOOR="$(sed -n 's/^name: //p' "$GU_SRC/skills/tech-lead/SKILL.md" 2>/dev/null | head -1)"
   if [ "$OLD_FRONT_DOOR" = "tech-lead" ]; then
     good "$RENAME_TAG really did ship the front door as tech-lead"

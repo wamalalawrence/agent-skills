@@ -1,0 +1,101 @@
+{
+  "schema": "agent-skills.tool-capabilities/v1",
+  "note": "Provider-neutral vocabulary for the engineering work a skill needs done. Data, not logic: scripts/tools.py reads it and needs no per-capability branching. Every capability maps to exactly one action class. This contract is a candidate for freezing at 1.0 — see docs/engineering-tool-capabilities.md. Adding a capability is additive; renaming or reclassifying one is a breaking change.",
+  "action_classes": {
+    "READ": "Observes state. No mutation. Safe to run without confirmation; still subject to bounded-output rules for anything large.",
+    "WRITE": "Mutates state in a recoverable, normally-scoped way — a comment, an issue, a branch, a single row with a predicate, a local install.",
+    "ELEVATED": "Mutates shared or production-shaped state where a human answer is the right control — an infra apply, a deploy, a package publish, a pipeline trigger.",
+    "DESTRUCTIVE": "Removes or overwrites state that is hard or impossible to recover — a destroy, a drop, a truncate, a force-delete. Governed by the Execution Guard hard-deny floor."
+  },
+  "capabilities": {
+    "scm.repository.read":        {"action": "READ",        "summary": "Read repository metadata, branches, files, commits."},
+    "scm.pull_request.read":      {"action": "READ",        "summary": "Read pull/merge request state, diffs, reviews, checks."},
+    "scm.pull_request.write":     {"action": "WRITE",       "summary": "Open, comment on, or update a pull/merge request."},
+    "scm.issue.read":             {"action": "READ",        "summary": "Read issues and their comments."},
+    "scm.issue.write":            {"action": "WRITE",       "summary": "Open, comment on, or transition an issue."},
+    "scm.branch.write":           {"action": "WRITE",       "summary": "Create or update a branch or ref."},
+    "scm.release.read":           {"action": "READ",        "summary": "Read releases and tags."},
+
+    "tracker.issue.read":         {"action": "READ",        "summary": "Read a tracker ticket: summary, description, status, links."},
+    "tracker.issue.write":        {"action": "WRITE",       "summary": "Create, comment on, or transition a tracker ticket."},
+    "tracker.project.read":       {"action": "READ",        "summary": "Read project, board, backlog, and sprint context."},
+
+    "knowledge.search":           {"action": "READ",        "summary": "Search an engineering knowledge base."},
+    "knowledge.document.read":    {"action": "READ",        "summary": "Read a knowledge document or page."},
+    "knowledge.document.write":   {"action": "WRITE",       "summary": "Create or update a knowledge document."},
+
+    "communication.search":       {"action": "READ",        "summary": "Search messages across channels."},
+    "communication.thread.read":  {"action": "READ",        "summary": "Read a message thread."},
+    "communication.message.write":{"action": "WRITE",       "summary": "Post a message. Not enabled for any reference tool in this release."},
+
+    "runtime.workload.read":      {"action": "READ",        "summary": "Read workload / container / pod state."},
+    "runtime.container.read":     {"action": "READ",        "summary": "List and inspect containers."},
+    "runtime.logs.read":          {"action": "READ",        "summary": "Read runtime logs. Bounded output."},
+    "runtime.events.read":        {"action": "READ",        "summary": "Read runtime events."},
+    "runtime.exec":               {"action": "WRITE",       "summary": "Execute a command inside a running workload."},
+    "runtime.container.write":    {"action": "WRITE",       "summary": "Start, stop, or update a container."},
+    "runtime.deploy":             {"action": "ELEVATED",    "summary": "Apply a workload change / roll out a deployment."},
+    "runtime.workload.delete":    {"action": "DESTRUCTIVE", "summary": "Delete a workload, namespace, or node."},
+
+    "infrastructure.state.read":  {"action": "READ",        "summary": "Read infrastructure state and outputs."},
+    "infrastructure.plan":        {"action": "READ",        "summary": "Produce a plan / preview of an infrastructure change. Does not mutate."},
+    "infrastructure.apply":       {"action": "ELEVATED",    "summary": "Apply an infrastructure change."},
+    "infrastructure.destroy":     {"action": "DESTRUCTIVE", "summary": "Destroy infrastructure or remove resources from state."},
+
+    "cloud.resource.read":        {"action": "READ",        "summary": "Describe cloud resources."},
+    "cloud.logs.read":            {"action": "READ",        "summary": "Read cloud logs. Bounded output."},
+    "cloud.metrics.read":         {"action": "READ",        "summary": "Read cloud metrics."},
+    "cloud.resource.write":       {"action": "ELEVATED",    "summary": "Create or update a cloud resource."},
+    "cloud.resource.delete":      {"action": "DESTRUCTIVE", "summary": "Delete or terminate a cloud resource."},
+
+    "api.collection.read":        {"action": "READ",        "summary": "Read an API collection and its requests."},
+    "api.request.read":           {"action": "READ",        "summary": "Read a single API request definition."},
+    "api.test.run":               {"action": "WRITE",       "summary": "Run an API collection / contract test. Side effects depend on the target."},
+
+    "ci.run.read":                {"action": "READ",        "summary": "Read CI run status and history."},
+    "ci.logs.read":               {"action": "READ",        "summary": "Read CI job logs. Bounded output."},
+    "ci.artifact.read":           {"action": "READ",        "summary": "Read CI build artifacts and reports."},
+    "ci.run.trigger":             {"action": "ELEVATED",    "summary": "Trigger or re-run a pipeline."},
+
+    "quality.finding.read":       {"action": "READ",        "summary": "Read static-analysis findings / issues."},
+    "quality.gate.read":          {"action": "READ",        "summary": "Read quality-gate status for a project or branch."},
+    "quality.coverage.read":      {"action": "READ",        "summary": "Read coverage metrics."},
+
+    "observability.logs.read":    {"action": "READ",        "summary": "Query logs. Bounded output."},
+    "observability.metrics.read": {"action": "READ",        "summary": "Query metrics / time series."},
+    "observability.traces.read":  {"action": "READ",        "summary": "Read distributed traces."},
+    "observability.errors.read":  {"action": "READ",        "summary": "Read error / exception groups and their releases."},
+    "observability.dashboard.read":{"action": "READ",       "summary": "Read a dashboard definition."},
+
+    "incident.read":              {"action": "READ",        "summary": "Read incident state and metadata."},
+    "incident.timeline.read":     {"action": "READ",        "summary": "Read an incident timeline / log of events."},
+    "incident.write":             {"action": "WRITE",       "summary": "Acknowledge, note, or update an incident."},
+
+    "messaging.metadata.read":    {"action": "READ",        "summary": "Read topic / queue / partition metadata."},
+    "messaging.consumer_lag.read":{"action": "READ",        "summary": "Read consumer-group lag."},
+    "messaging.message.sample":   {"action": "READ",        "summary": "Read a bounded sample of messages. Bounded output; never a full drain."},
+
+    "database.schema.read":       {"action": "READ",        "summary": "Read schema: tables, columns, indexes, constraints."},
+    "database.metadata.read":     {"action": "READ",        "summary": "Read catalog metadata, sizes, row estimates, activity."},
+    "database.query.read":        {"action": "READ",        "summary": "Run a bounded read-only query (SELECT). Row-limited."},
+    "database.explain":           {"action": "READ",        "summary": "Run EXPLAIN / EXPLAIN ANALYZE without side effects."},
+    "database.write":             {"action": "WRITE",       "summary": "Run a mutating statement with a predicate. DROP / TRUNCATE / unqualified DELETE remain on the Guard hard-deny floor."},
+
+    "data_pipeline.run.read":     {"action": "READ",        "summary": "Read pipeline / DAG / sync run status."},
+    "data_pipeline.logs.read":    {"action": "READ",        "summary": "Read pipeline run logs. Bounded output."},
+    "data_pipeline.model.read":   {"action": "READ",        "summary": "Read model / transformation definitions and lineage."},
+    "data_pipeline.trigger":      {"action": "ELEVATED",    "summary": "Trigger a pipeline / sync / DAG run."},
+
+    "package.metadata.read":      {"action": "READ",        "summary": "Read package metadata, versions, dependents."},
+    "package.audit":              {"action": "READ",        "summary": "Run a dependency vulnerability audit."},
+    "package.install":            {"action": "WRITE",       "summary": "Install dependencies into the local project."},
+    "package.publish":            {"action": "ELEVATED",    "summary": "Publish a package to a registry."},
+
+    "design.read":                {"action": "READ",        "summary": "Read a design file / frame as engineering evidence."},
+    "design.component.read":      {"action": "READ",        "summary": "Read component / token specs from a design source."},
+
+    "security.secret.read":       {"action": "READ",        "summary": "Resolve a secret reference through a broker. The value never enters agent context — see the Access Resolver."},
+    "security.identity.read":     {"action": "READ",        "summary": "Read identity / group / assignment metadata."},
+    "security.policy.read":       {"action": "READ",        "summary": "Read access policies and their bindings."}
+  }
+}

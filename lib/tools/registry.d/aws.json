@@ -1,0 +1,42 @@
+{
+  "schema": "agent-skills.tool-definition/v1",
+  "id": "aws",
+  "class": "REMOTE_SERVICE",
+  "category": "cloud",
+  "summary": "AWS cloud resource, log, and metric investigation.",
+  "capabilities": [
+    "cloud.resource.read",
+    "cloud.logs.read",
+    "cloud.metrics.read",
+    "cloud.resource.write",
+    "cloud.resource.delete"
+  ],
+  "transports": [
+    {
+      "kind": "cli",
+      "command": "aws",
+      "probe": [
+        "sts",
+        "get-caller-identity"
+      ]
+    },
+    {
+      "kind": "api",
+      "auth_service": "aws",
+      "require": [
+        "access_key_id",
+        "secret_access_key"
+      ],
+      "secret": [
+        "secret_access_key"
+      ]
+    }
+  ],
+  "auth_service": "aws",
+  "docs": "docs/engineering-tools.md",
+  "bounded_capabilities": [
+    "cloud.logs.read"
+  ],
+  "reference_status": "validated",
+  "notes": "Prefer the authenticated `aws` CLI; the API transport exists only for environments without it. CloudWatch reads are bounded (time range + limit). Delete/terminate is DESTRUCTIVE and stays on the Guard hard-deny floor."
+}

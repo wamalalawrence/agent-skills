@@ -1,0 +1,32 @@
+{
+  "schema": "agent-skills.tool-definition/v1",
+  "id": "kubernetes",
+  "class": "RUNTIME_RESOURCE",
+  "category": "runtime",
+  "summary": "Runtime inspection: workloads, events, logs.",
+  "capabilities": [
+    "runtime.workload.read",
+    "runtime.logs.read",
+    "runtime.events.read",
+    "runtime.exec",
+    "runtime.deploy",
+    "runtime.workload.delete"
+  ],
+  "transports": [
+    {
+      "kind": "cli",
+      "command": "kubectl",
+      "probe": [
+        "config",
+        "current-context"
+      ]
+    }
+  ],
+  "auth_service": "kubernetes",
+  "docs": "docs/engineering-tools.md",
+  "bounded_capabilities": [
+    "runtime.logs.read"
+  ],
+  "reference_status": "validated",
+  "notes": "Prefer `kubectl` with an already-configured context. `kubectl logs` is bounded (--since / --tail). apply is ELEVATED; delete / drain against a non-ephemeral context is DESTRUCTIVE per the Guard floor."
+}

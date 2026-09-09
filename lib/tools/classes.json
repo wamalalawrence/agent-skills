@@ -1,0 +1,48 @@
+{
+  "schema": "agent-skills.tool-classes/v1",
+  "note": "The five classes an engineering tool can belong to, and the fixed order in which a transport is resolved. Data, not logic. scripts/tools.py reads this; adding a class or a transport kind is done here plus, only if the kind needs runtime probing, one helper in tools.py.",
+  "classes": {
+    "AGENT_HOST": {
+      "summary": "An IDE or agent runtime the skills run inside. Not a provider the framework resolves — it is where resolution happens. Listed for completeness and kept out of `tools status`.",
+      "examples": ["VS Code", "IntelliJ IDEA", "Claude Code", "Codex", "Kiro", "Cursor"],
+      "resolved_by": "host registration (lib/hosts.registry), not the engineering tool resolver"
+    },
+    "LOCAL_TOOL": {
+      "summary": "A program the agent runs in a shell on this machine. No network identity of its own; auth, when needed, is the local daemon's or the user's ambient login.",
+      "examples": ["Docker", "Terraform", "Maven", "npm", "kubectl"],
+      "typical_transports": ["cli", "native-client"]
+    },
+    "REMOTE_SERVICE": {
+      "summary": "A hosted service reached over the network. Needs an identity: an already-authenticated CLI or host MCP server first, a stored credential only as a last resort.",
+      "examples": ["GitHub", "Jira", "Confluence", "Slack", "Datadog", "Sentry", "PagerDuty", "SonarQube"],
+      "typical_transports": ["host", "mcp", "cli", "api"]
+    },
+    "RUNTIME_RESOURCE": {
+      "summary": "A live system whose current state is the evidence — a cluster, a broker. Reached through a client that already holds a context/config; reads are bounded because the state is large and moving.",
+      "examples": ["Kubernetes", "Apache Kafka"],
+      "typical_transports": ["cli", "native-client"]
+    },
+    "DATA_RESOURCE": {
+      "summary": "A datastore. Schema and bounded read-only queries are in scope; administration is not. Connects through a native client and a named connection profile.",
+      "examples": ["PostgreSQL", "Redis", "MongoDB", "MySQL", "Snowflake"],
+      "typical_transports": ["native-client", "profile"]
+    }
+  },
+  "resolution_order": [
+    {"rank": 1, "transport": "host",          "summary": "A capability the agent host already exposes as a first-class tool. Nothing to install or authenticate."},
+    {"rank": 2, "transport": "mcp",           "summary": "An MCP server the host already has configured. Zero marginal context cost; never ask the operator to add one mid-task."},
+    {"rank": 3, "transport": "cli",           "summary": "An already-authenticated official CLI (gh, glab, aws, gcloud, az, kubectl, jira, ...). It holds its own credential, so the agent never handles a secret."},
+    {"rank": 4, "transport": "native-client", "summary": "A local/native tool or protocol client on PATH (docker, terraform, psql, kafka tooling, npm, mvn)."},
+    {"rank": 5, "transport": "profile",       "summary": "A named connection profile resolved through the Access Resolver — used for data resources and internal services with no CLI/MCP."},
+    {"rank": 6, "transport": "api",           "summary": "A direct API adapter, configured through the Access Resolver. The fallback, never the first choice."},
+    {"rank": 7, "transport": "unresolved",    "summary": "Nothing above worked. Report the missing capability and safe setup guidance. Never invent a credential prompt."}
+  ],
+  "transport_needs_auth": {
+    "host": false,
+    "mcp": false,
+    "cli": false,
+    "native-client": false,
+    "profile": true,
+    "api": true
+  }
+}

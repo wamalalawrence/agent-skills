@@ -1,0 +1,39 @@
+{
+  "schema": "agent-skills.tool-definition/v1",
+  "id": "newrelic",
+  "class": "REMOTE_SERVICE",
+  "category": "observability",
+  "summary": "FIXTURE ONLY \u2014 proves a second observability provider fits with no core change.",
+  "capabilities": [
+    "observability.logs.read",
+    "observability.metrics.read",
+    "observability.traces.read",
+    "observability.errors.read"
+  ],
+  "transports": [
+    {
+      "kind": "mcp",
+      "hint": "newrelic"
+    },
+    {
+      "kind": "api",
+      "auth_service": "newrelic",
+      "require": [
+        "account_id",
+        "api_key"
+      ],
+      "secret": [
+        "api_key"
+      ]
+    }
+  ],
+  "auth_service": "newrelic",
+  "docs": "docs/engineering-tools.md",
+  "bounded_capabilities": [
+    "observability.logs.read",
+    "observability.traces.read",
+    "observability.errors.read"
+  ],
+  "reference_status": "fixture",
+  "notes": "Not claimed as supported. Extensibility fixture only."
+}

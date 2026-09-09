@@ -1,6 +1,6 @@
 {
   "name": "@wamalalawrence/agent-skills",
-  "version": "0.43.1",
+  "version": "0.44.0",
   "description": "Installer for Agent Skills: a versioned, transactional agent runtime for your local repositories.",
   "keywords": [
     "agent",
@@ -11,7 +11,7 @@
     "copilot",
     "installer"
   ],
-  "license": "MIT",
+  "license": "UNLICENSED",
   "author": "Lawrence Wamala",
   "homepage": "https://github.com/wamalalawrence/agent-skills",
   "repository": {

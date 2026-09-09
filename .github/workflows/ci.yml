@@ -82,6 +82,14 @@ jobs:
       - name: Front-door skill identity and contract
         run: bash scripts/test-front-door-skill.sh
 
+      # The Engineering Tool Capability Framework: discovery, the local-tool vs
+      # remote-service split, an authenticated capability beating a stored
+      # credential, action-class gating (READ cannot become WRITE), bounded
+      # production reads, provider-failure isolation, and a new provider added
+      # with only a definition file. Fast and deterministic; no installs.
+      - name: Engineering tool capability framework
+        run: bash scripts/test-tools.sh
+
       # Ten generated fixtures plus five mutation probes. The fixtures are large
       # by definition and are built here rather than committed. The probes delete
       # one guarantee each from a sandboxed copy of the runtime and assert the

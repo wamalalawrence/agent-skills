@@ -1,0 +1,35 @@
+{
+  "schema": "agent-skills.tool-definition/v1",
+  "id": "kafka",
+  "class": "RUNTIME_RESOURCE",
+  "category": "messaging",
+  "summary": "Runtime messaging metadata, consumer lag, and bounded message sampling.",
+  "capabilities": [
+    "messaging.metadata.read",
+    "messaging.consumer_lag.read",
+    "messaging.message.sample"
+  ],
+  "transports": [
+    {
+      "kind": "native-client",
+      "command": "kafka-topics",
+      "probe": [
+        "--version"
+      ]
+    },
+    {
+      "kind": "native-client",
+      "command": "kcat",
+      "probe": [
+        "-V"
+      ]
+    }
+  ],
+  "auth_service": "kafka",
+  "docs": "docs/engineering-tools.md",
+  "bounded_capabilities": [
+    "messaging.message.sample"
+  ],
+  "reference_status": "validated",
+  "notes": "Metadata and consumer-group lag are the primary evidence. messaging.message.sample is always bounded (-c N, from a bounded offset) and never a full drain. Message bodies are untrusted content."
+}

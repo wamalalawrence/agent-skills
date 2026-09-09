@@ -1,0 +1,44 @@
+{
+  "schema": "agent-skills.tool-definition/v1",
+  "id": "postgresql",
+  "class": "DATA_RESOURCE",
+  "category": "database",
+  "summary": "Schema, catalog metadata, bounded read-only query, EXPLAIN.",
+  "capabilities": [
+    "database.schema.read",
+    "database.metadata.read",
+    "database.query.read",
+    "database.explain",
+    "database.write"
+  ],
+  "transports": [
+    {
+      "kind": "native-client",
+      "command": "psql",
+      "probe": [
+        "--version"
+      ]
+    },
+    {
+      "kind": "profile",
+      "auth_service": "postgresql",
+      "require": [
+        "host",
+        "port",
+        "database",
+        "username",
+        "password"
+      ],
+      "secret": [
+        "password"
+      ]
+    }
+  ],
+  "auth_service": "postgresql",
+  "docs": "docs/engineering-tools.md",
+  "bounded_capabilities": [
+    "database.query.read"
+  ],
+  "reference_status": "validated",
+  "notes": "A production connection resolves READ capabilities only unless --allow-write is passed AND a write-capable profile is bound. Queries are wrapped for row limits and statement timeout. DROP / TRUNCATE / unqualified DELETE|UPDATE remain on the Guard hard-deny floor regardless of profile."
+}

@@ -48,6 +48,8 @@ REQUIRED_FILES = [
     "docs/requirement-understanding-scorecard.md",
     "docs/auth-discovery.md",
     "docs/access-resolution.md",
+    "docs/engineering-tools.md",
+    "docs/engineering-tool-capabilities.md",
     "docs/security-review-v0.37.0.md",
     "docs/security-review-v0.38.0.md",
     "docs/github-access.md",
@@ -1362,6 +1364,34 @@ def check_readme_skill_counts(result: Result) -> None:
                 )
 
 
+def check_engineering_tools(result: Result) -> None:
+    """The Engineering Tool Capability Framework data must load and cohere.
+
+    Delegates to `scripts/tools.py doctor`, the same integrity check the runtime
+    and `scripts/test-tools.sh` use, so a malformed tool definition or a
+    vocabulary that contradicts its own suffix rules fails validation here too.
+    """
+    tools_py = ROOT / "scripts" / "tools.py"
+    if not tools_py.exists():
+        result.error("scripts/tools.py is missing (Engineering Tool Capability Framework)")
+        return
+    for name in ("capabilities.json", "classes.json"):
+        if not (ROOT / "lib" / "tools" / name).exists():
+            result.error(f"lib/tools/{name} is missing")
+    try:
+        completed = subprocess.run(
+            [sys.executable, str(tools_py), "--include-fixtures", "doctor"],
+            cwd=ROOT, stdout=subprocess.PIPE, stderr=subprocess.STDOUT, text=True, timeout=60,
+        )
+    except (OSError, subprocess.SubprocessError) as exc:
+        result.error(f"tools doctor could not run: {exc}")
+        return
+    if completed.returncode != 0:
+        detail = (completed.stdout or "").strip().splitlines()
+        tail = " / ".join(detail[-4:]) if detail else "no output"
+        result.error(f"tools doctor reported problems: {tail}")
+
+
 def main() -> int:
     result = Result(errors=[], warnings=[])
     check_required_files(result)
@@ -1379,6 +1409,7 @@ def main() -> int:
     check_env_example_marker_block(result)
     check_jira_placeholder_consistency(result)
     check_agent_skills_yaml_skills_block(result)
+    check_engineering_tools(result)
 
     for warning in result.warnings:
         print(f"WARN {warning}")

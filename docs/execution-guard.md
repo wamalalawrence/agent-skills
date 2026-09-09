@@ -649,6 +649,7 @@ Read these as part of the feature, not as a disclaimer.
 - [Assistant setup](assistants.md) — per-host discovery and enforcement.
 - [Installation](installation.md) — the global install this plugs into.
 - [Access resolution](access-resolution.md) — the same trust rule, applied to credentials.
+- [Engineering Tool Capability Framework](engineering-tools.md) — maps each capability's action class (READ / WRITE / ELEVATED / DESTRUCTIVE) onto the rules here; it classifies, the guard enforces.
 - [Repo knowledge](repo-knowledge.md) — the untrusted committed tier and its own doctor.
 
 ## The guard and the installed release
