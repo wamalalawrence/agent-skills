@@ -4,10 +4,12 @@ Reusable [Agent Skills](https://agentskills.io/) for software-engineering work �
 role-shaped workflows your AI assistant can load on demand so the same model produces
 senior-engineer, product-owner, tester, or reviewer output instead of generic answers.
 
-> **Status:** `0.44.0` — pre-1.0, private. Core skill set is shipped and stable for internal use;
-> interfaces may still evolve. v0.43.x froze the installation and distribution contract ahead of
-> `1.0.0-rc.1`; v0.44.0 adds the Engineering Tool Capability Framework — the last substantial
-> feature release before `1.0.0-rc.1` — and removes the project's former open-source licensing.
+> **Status:** `1.0.0-rc.1` — release candidate, private. The feature set is complete; v0.44.0 was
+> the last substantial feature. This candidate freezes the [1.0 contracts](docs/one-point-oh.md)
+> — CLI names and exit codes, the install layout, the release-provider interface, the skill
+> names, and the Engineering Tool Capability Framework — and certifies clean private
+> installation, upgrade/rollback, and the security boundaries. `stable` machines are not offered
+> a release candidate; `agent-skills update --channel rc` opts in.
 
 ## Start here
 
@@ -100,18 +102,18 @@ Requirements: Python 3.8+, bash, and git. macOS or Linux; on Windows use WSL or 
 with every supported agent host it finds, and makes the runtime invocable from anywhere:
 
 ```text
-  resolve    0.44.0 (stable, via git)
+  resolve    1.0.0-rc.1 (rc, via git)
   download   164 files staged
   verify     payload hash and version agree
   self-test  staged runtime answers correctly
-  activate   current -> versions/0.44.0
+  activate   current -> versions/1.0.0-rc.1
   hosts      claude-code, agents-standard, cursor, codex
   verified   installation is consistent
 
-Agent Skills 0.44.0 is installed.
+Agent Skills 1.0.0-rc.1 is installed.
 
   install root : ~/.agent-skills
-  active release: ~/.agent-skills/versions/0.44.0
+  active release: ~/.agent-skills/versions/1.0.0-rc.1
   hosts        : claude-code, agents-standard, cursor, codex
   command      : ~/.local/bin/agent-skills
 

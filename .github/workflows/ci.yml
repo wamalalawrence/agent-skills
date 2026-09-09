@@ -187,7 +187,7 @@ jobs:
               PATH="$home/.local/bin:$PATH" \
               bash bin/agent-skills "$@"
           }
-          run_cli install --provider local --source "$PWD" > "$tmp/install.log" 2>&1 || {
+          run_cli install --provider local --source "$PWD" --channel any > "$tmp/install.log" 2>&1 || {
             cat "$tmp/install.log"; exit 1;
           }
           cat "$tmp/install.log"
@@ -215,7 +215,7 @@ jobs:
           test "$a" = "$b"
           # Idempotency: a rerun adds nothing.
           before=$(ls -1 "$home/.agents/skills" | wc -l)
-          run_cli install --provider local --source "$PWD" > /dev/null 2>&1
+          run_cli install --provider local --source "$PWD" --channel any > /dev/null 2>&1
           after=$(ls -1 "$home/.agents/skills" | wc -l)
           test "$before" = "$after"
           run_cli verify
@@ -270,6 +270,9 @@ jobs:
           boot="$tmp/npmroot/node_modules/.bin/agent-skills-bootstrap"
           test -x "$boot"
           version=$(cat VERSION)
+          # The fixture tag is v$version; when that is a pre-release the install
+          # must ask for the rc channel or resolve_latest("stable") skips it.
+          case "$version" in *-*) channel=rc ;; *) channel=stable ;; esac
           git init -q --bare "$tmp/remote.git"
           for entry in VERSION bin lib scripts skills docs hooks README.md LICENSE; do
             [ -e "$entry" ] && cp -R "$entry" "$tmp/work/$entry"
@@ -285,7 +288,7 @@ jobs:
             AGENT_SKILLS_HOME="$home/.agent-skills" \
             AGENT_SKILLS_CONFIG_DIR="$home/.config/agent-skills" \
             PATH="$home/.local/bin:$PATH" \
-            "$boot" install --repo "$tmp/remote.git"
+            "$boot" install --repo "$tmp/remote.git" --channel "$channel"
           got=$(env HOME="$home" AGENT_SKILLS_HOME="$home/.agent-skills" \
             bash "$home/.agent-skills/bin/agent-skills" version)
           test "$got" = "$version"

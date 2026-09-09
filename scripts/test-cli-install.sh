@@ -112,7 +112,9 @@ installed_cli() {
 install_from_source() {
   local box="$1"
   shift
-  cli "${box}" install --provider local --source "${REPO_ROOT}" "$@"
+  # --channel any: the repo VERSION may be a pre-release (RC); these tests
+  # install exactly the tree they point at, regardless of its channel.
+  cli "${box}" install --provider local --source "${REPO_ROOT}" --channel any "$@"
 }
 
 # A source tree whose VERSION has been bumped, so update and rollback have two
@@ -193,6 +195,28 @@ if case_start "clean-install"; then
   install_from_source "${BOX}" > /dev/null 2>&1
   AFTER="$(ls -1 "${BOX}/home/.agents/skills" | wc -l | tr -d ' ')"
   assert_eq "${AFTER}" "${BEFORE}" "a second install adds no second registration"
+
+  # Channel resolution for a local-source install of the tree under test:
+  #   --dev            -> "any"    (a development install is not a channel choice)
+  #   plain, no flag   -> "stable" (refuses a pre-release checkout, on purpose)
+  #   explicit         -> honoured
+  DEVBOX="$(new_sandbox)"
+  in_box "${DEVBOX}" python3 "${REPO_ROOT}/scripts/install.py" install \
+    --provider local --source "${REPO_ROOT}" --dev \
+    --home "${DEVBOX}/home/.agent-skills" > "${DEVBOX}/dev.log" 2>&1
+  assert_eq "$?" "0" "a --dev local install of the tree under test succeeds on any channel"
+  PLAINBOX="$(new_sandbox)"
+  in_box "${PLAINBOX}" python3 "${REPO_ROOT}/scripts/install.py" install \
+    --provider local --source "${REPO_ROOT}" \
+    --home "${PLAINBOX}/home/.agent-skills" > "${PLAINBOX}/plain.log" 2>&1
+  PLAIN_RC=$?
+  case "$(cat "${REPO_ROOT}/VERSION")" in
+    *-*) assert "[ '${PLAIN_RC}' != '0' ]" \
+           "a plain local install still refuses a pre-release checkout without --channel"
+         assert "grep -q 'not a stable one' '${PLAINBOX}/plain.log'" \
+           "the refusal names the channel mismatch" ;;
+    *)   assert_eq "${PLAIN_RC}" "0" "a plain local install of a stable checkout succeeds" ;;
+  esac
 fi
 
 # ==============================================================================
@@ -326,13 +350,13 @@ if case_start "downgrade"; then
   NEXT="$(make_next_release "${BOX}" 99.0.0)"
   cli "${BOX}" update --provider local --source "${NEXT}" > /dev/null 2>&1
 
-  cli "${BOX}" update --provider local --source "${REPO_ROOT}" > "${BOX}/down.log" 2>&1
+  cli "${BOX}" update --provider local --source "${REPO_ROOT}" --channel any > "${BOX}/down.log" 2>&1
   assert_eq "$?" "2" "an unrequested downgrade is refused"
   assert "grep -qi 'older' '${BOX}/down.log'" "the refusal explains what it refused"
   assert "grep -q 'rollback' '${BOX}/down.log'" "the refusal names the supported way back"
   assert_eq "$(installed_cli "${BOX}" version)" "99.0.0" "the newer release is still active"
 
-  cli "${BOX}" update --provider local --source "${REPO_ROOT}" --allow-downgrade > /dev/null 2>&1
+  cli "${BOX}" update --provider local --source "${REPO_ROOT}" --channel any --allow-downgrade > /dev/null 2>&1
   assert_eq "$(installed_cli "${BOX}" version)" "${VERSION}" "an explicit downgrade is honoured"
 fi
 
@@ -605,7 +629,7 @@ if case_start "npm"; then
         && gitfx push -q box HEAD:refs/heads/as-fixture --tags) > "${BOX}/fixture.log" 2>&1
       assert_eq "$?" "0" "the git release fixture publishes a tagged release"
 
-      in_box "${BOX}" "${BOOT}" install --repo "${REMOTE}" > "${BOX}/npm-install.log" 2>&1
+      in_box "${BOX}" "${BOOT}" install --repo "${REMOTE}" --channel rc > "${BOX}/npm-install.log" 2>&1
       RC=$?
       [ "${RC}" -eq 0 ] || tail -20 "${BOX}/npm-install.log" >&2
       assert_eq "${RC}" "0" "install from the packed artifact over a git remote succeeds"
@@ -621,10 +645,10 @@ if case_start "npm"; then
         && gitfx commit -qm "release 99.0.0" \
         && gitfx tag -a "v99.0.0" -m "v99.0.0" \
         && gitfx push -q box HEAD:refs/heads/as-fixture --tags) > /dev/null 2>&1
-      installed_cli "${BOX}" update --repo "${REMOTE}" > "${BOX}/npm-update.log" 2>&1
+      installed_cli "${BOX}" update --repo "${REMOTE}" --channel rc > "${BOX}/npm-update.log" 2>&1
       assert_eq "$?" "0" "update over a git remote succeeds"
       assert_eq "$(installed_cli "${BOX}" version)" "99.0.0" "the newer release is active"
-      installed_cli "${BOX}" check-updates --repo "${REMOTE}" > /dev/null 2>&1
+      installed_cli "${BOX}" check-updates --repo "${REMOTE}" --channel rc > /dev/null 2>&1
       assert_eq "$?" "0" "check-updates reports up to date"
     fi
   else

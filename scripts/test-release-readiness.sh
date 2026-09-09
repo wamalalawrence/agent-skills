@@ -165,7 +165,7 @@ run_clean() {
 }
 as_cli() { run_clean bash bin/agent-skills "$@"; }
 
-if as_cli install --provider local --source "$PWD" >"$BOX/install.log" 2>&1; then
+if as_cli install --provider local --source "$PWD" --channel any >"$BOX/install.log" 2>&1; then
   good "install from a clean HOME exits 0"
 else
   bad "clean install" "$(tail -5 "$BOX/install.log")"
@@ -221,7 +221,7 @@ case "$DRIFT" in
   *"version drift"*) good "verify detects version drift" ;;
   *) bad "drift detection" "$(printf '%s' "$DRIFT" | head -6)" ;;
 esac
-as_cli install --provider local --source "$PWD" >/dev/null 2>&1
+as_cli install --provider local --source "$PWD" --channel any >/dev/null 2>&1
 DRIFT_AFTER="$(as_cli verify 2>&1 || true)"
 case "$DRIFT_AFTER" in
   *"version drift"*) bad "reinstall did not clear drift" ;;
@@ -306,7 +306,7 @@ JIRA_API_TOKEN="legacy-token-value-1234"
 LEGACYENV
 
   run_upgraded bash "$REPO/bin/agent-skills" install \
-    --provider local --source "$REPO" >"$UP/new.log" 2>&1 \
+    --provider local --source "$REPO" --channel any >"$UP/new.log" 2>&1 \
     && good "the v0.43.0 installer upgrades a pre-CLI installation" \
     || bad "upgrade from $PREVIOUS_TAG" "$(tail -8 "$UP/new.log")"
   [ "$(run_upgraded bash "$UP_HOME/.agent-skills/bin/agent-skills" version)" = "$(cat VERSION)" ] \
@@ -400,7 +400,7 @@ if git worktree add -q --detach "$GU/previous" "$RENAME_TAG" 2>/dev/null; then
   cp -R "$REPO" "$GU_SRC"
   rm -rf "$GU_SRC/.git" "$GU_SRC/.venv" "$GU_SRC/.cache"
   run_gu bash "$GU_SRC/bin/agent-skills" install \
-    --provider local --source "$GU_SRC" >"$GU/new.log" 2>&1
+    --provider local --source "$GU_SRC" --channel any >"$GU/new.log" 2>&1
 
   [ -L "$GU_HOME/.agents/skills/wamala" ] \
     && good "the upgrade registered wamala" || bad "wamala not registered" "$(tail -8 "$GU/new.log")"
@@ -417,7 +417,7 @@ if git worktree add -q --detach "$GU/previous" "$RENAME_TAG" 2>/dev/null; then
   run_gu bash "$GU_SRC/bin/agent-skills" verify >"$GU/verify.log" 2>&1 \
     && good "verify passes after the upgrade" || bad "verify after upgrade" "$(tail -8 "$GU/verify.log")"
   run_gu bash "$GU_SRC/bin/agent-skills" install \
-    --provider local --source "$GU_SRC" >/dev/null 2>&1
+    --provider local --source "$GU_SRC" --channel any >/dev/null 2>&1
   GU_WAMALA="$(find "$GU_HOME/.agents/skills" -maxdepth 1 -name wamala | wc -l | tr -d ' ')"
   [ "$GU_WAMALA" = "1" ] \
     && good "a second upgrade run leaves exactly one wamala registration" \

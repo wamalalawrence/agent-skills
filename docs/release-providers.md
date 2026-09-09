@@ -139,7 +139,7 @@ Every release carries a manifest, `release.json`, written when the payload is as
   "channel": "stable",
   "provider": "git",
   "source": { "repo": "...", "ref": "refs/tags/v0.43.0", "commit": "..." },
-  "payload": { "tree_sha256": "...", "file_count": 164, "algorithm": "sha256-tree/v1" },
+  "payload": { "tree_sha256": "...", "file_count": <n>, "algorithm": "sha256-tree/v1" },
   "signature": null
 }
 ```

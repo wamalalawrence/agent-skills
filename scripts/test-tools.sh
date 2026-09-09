@@ -208,6 +208,17 @@ t doctor --json | jq_py 'assert d["problems"]==[]' \
   && ok "doctor: every logs/query/sample/thread read is marked bounded" \
   || bad "doctor bounded-read coherence" "$(t doctor 2>&1 | tail)"
 
+# resolving a bounded capability carries the Context-Optimizer instruction inline,
+# at the decision point — not only in the docs.
+out="$({ t resolve postgresql --capability database.query.read --json 2>/dev/null || true; })"
+printf '%s' "${out}" | jq_py 'assert d["bounded"] is True; assert "context pack" in d["bounded_note"]' \
+  && ok "resolve emits the bounded-read / context-pack instruction for a bounded capability" \
+  || bad "resolve bounded-read instruction" "${out}"
+out="$({ t resolve github --capability scm.pull_request.read --json 2>/dev/null || true; })"
+printf '%s' "${out}" | jq_py 'assert d.get("bounded") in (False, None); assert "bounded_note" not in d' \
+  && ok "resolve does not add a bounded note to an unbounded capability" \
+  || bad "resolve bounded note is capability-specific" "${out}"
+
 # ---------------------------------------------------------------------------
 section "7. Context Optimizer bounds large external output"
 # ---------------------------------------------------------------------------

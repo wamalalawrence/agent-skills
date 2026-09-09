@@ -221,8 +221,13 @@ else
   assert_not "[ -e '${BOX}/home/.agent-skills' ]" \
     "the sandbox starts with no Agent Skills installation of its own"
 
+  # `--channel rc` when the repo VERSION is a pre-release, so `resolve_latest`
+  # will consider the release-candidate tag. `rc` is a superset of `stable`, so
+  # this is also correct once a stable release supersedes the candidate.
+  PS_CHANNEL=stable
+  case "${VERSION}" in *-*) PS_CHANNEL=rc ;; esac
   in_box_auth "${BOX}" "${BOOTSTRAP}" install --repo "${REMOTE}" --all-hosts \
-    > "${BOX}/install.log" 2>&1
+    --channel "${PS_CHANNEL}" > "${BOX}/install.log" 2>&1
   RC=$?
   [ "${RC}" -eq 0 ] || tail -30 "${BOX}/install.log" >&2
   assert_eq "${RC}" "0" "PRIVATE_AUTHENTICATED_INSTALL"
@@ -261,7 +266,7 @@ else
     in_box_auth "${BOX}" bash "${CLI}" versions --json > "${BOX}/versions.json" 2>&1
     assert_eq "$?" "0" "version resolution over the authenticated remote"
 
-    in_box_auth "${BOX}" bash "${CLI}" check-updates --repo "${REMOTE}" \
+    in_box_auth "${BOX}" bash "${CLI}" check-updates --repo "${REMOTE}" --channel "${PS_CHANNEL}" \
       > "${BOX}/check.log" 2>&1
     CU=$?
     assert "[ '${CU}' = '0' ] || [ '${CU}' = '10' ]" \
@@ -269,7 +274,7 @@ else
 
     # `update` against the same remote. Up to date is a pass: the point is that
     # the update path reaches the private source and resolves a version.
-    in_box_auth "${BOX}" bash "${CLI}" update --repo "${REMOTE}" \
+    in_box_auth "${BOX}" bash "${CLI}" update --repo "${REMOTE}" --channel "${PS_CHANNEL}" \
       > "${BOX}/update.log" 2>&1
     UP=$?
     assert "[ '${UP}' = '0' ]" "PRIVATE_UPDATE_PATH"

@@ -44,7 +44,11 @@ def add_common(parser: argparse.ArgumentParser) -> None:
 
 def add_install_options(parser: argparse.ArgumentParser) -> None:
     parser.add_argument("--version", default="", help="install this exact version")
-    parser.add_argument("--channel", default="stable", choices=list(CHANNELS) + ["any"])
+    # Default is resolved in resolve_channel(): an explicit value always wins; a
+    # --dev install of a working tree is not a release-channel decision, so it
+    # falls back to "any" rather than "stable" (which would refuse a pre-release
+    # checkout). Everything else falls back to "stable".
+    parser.add_argument("--channel", default=None, choices=list(CHANNELS) + ["any"])
     parser.add_argument("--hosts", default="", help="comma-separated host ids to register")
     parser.add_argument("--all-hosts", action="store_true")
     parser.add_argument("--no-path-link", action="store_true")
@@ -83,7 +87,21 @@ def make_transaction(args, layout, provider) -> InstallTransaction:
 # ------------------------------------------------------------------------------
 # Commands
 # ------------------------------------------------------------------------------
+def resolve_channel(args) -> str:
+    """The effective release channel.
+
+    An explicit ``--channel`` always wins. Otherwise a ``--dev`` install of a
+    working tree falls back to ``any`` — a development install is not a
+    release-channel choice and must not be refused just because the checkout is
+    a pre-release. Every other install falls back to ``stable``.
+    """
+    if getattr(args, "channel", None):
+        return args.channel
+    return "any" if getattr(args, "dev", False) else "stable"
+
+
 def cmd_install(args) -> int:
+    args.channel = resolve_channel(args)
     layout = make_layout(args)
     provider = make_provider(args)
     transaction = make_transaction(args, layout, provider)
@@ -99,6 +117,7 @@ def cmd_install(args) -> int:
 
 
 def cmd_update(args) -> int:
+    args.channel = resolve_channel(args)
     layout = make_layout(args)
     active = layout.active_version()
     if not active:
