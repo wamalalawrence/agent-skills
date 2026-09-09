@@ -311,16 +311,34 @@ Probed by the content audit, which is a required release gate and runs in CI.
 | PATH shadowing by an existing local attacker | None | The machine is already compromised at that point |
 | Windows | Not supported natively; WSL or Git Bash | Untested, and claiming support without testing is worse than declining it |
 
-## What has not been proven
+## What was not proven at release time, and what has since been resolved
 
-**Private-source installation.** The repository was public for the whole of this work. The
-authentication-required path was probed against an unreadable remote, and the authenticated fetch
-path against a local git remote, but installing from an authenticated **private GitHub** repository
-has not been run. That is Stage B, it requires the repository visibility change first, and it is a
-precondition for `1.0.0-rc.1` — not for this release.
+This section recorded two gaps when `v0.43.0` shipped. Both are now closed; the original text is
+kept below each update for the historical record.
 
-**Registry publication.** Nothing was published. Installation was tested from the packed tarball,
-which exercises the real package layout and the `files` list, but not a registry round trip.
+**Private-source installation — resolved 2026-09-09.** The repository was made private, and Stage B
+(`scripts/test-private-source.sh`) was run from a genuinely clean sandbox against the real remote:
+authenticated install, `doctor`, `verify`, `update`, host registration, and Execution Guard
+coherence all pass, the unauthenticated case exits `3` with `AUTHENTICATION_REQUIRED` and no token
+leakage, and the real installation already on this machine was hashed before and after and found
+unchanged. `PRIVATE_SOURCE_DISTRIBUTION_READY: YES`. Full evidence, and a macOS-specific finding in
+the test harness itself (Keychain Services resolves its default search list through `$HOME`, so a
+throwaway sandbox needs a narrow, read-only graft to prove authentication the way a real machine
+would experience it): [`eval-runs/v0.43.0/summary.md`](../eval-runs/v0.43.0/summary.md#stage-b--private-source-acceptance).
+
+> Original text: The repository was public for the whole of this work. The authentication-required
+> path was probed against an unreadable remote, and the authenticated fetch path against a local
+> git remote, but installing from an authenticated private GitHub repository has not been run. That
+> is Stage B, it requires the repository visibility change first, and it is a precondition for
+> `1.0.0-rc.1` — not for this release.
+
+**Registry publication — resolved.** `@wamalalawrence/agent-skills@0.43.0` is published publicly
+(not `@wamala`; see [release-providers.md](release-providers.md#the-package-name) for why).
+`npx @wamalalawrence/agent-skills install` was verified against the live registry, not only the
+packed tarball. See [`eval-runs/v0.43.0/summary.md`](../eval-runs/v0.43.0/summary.md#registry-publication).
+
+> Original text: Nothing was published. Installation was tested from the packed tarball, which
+> exercises the real package layout and the `files` list, but not a registry round trip.
 
 ## See also
 

@@ -169,6 +169,80 @@ PRIVATE_TRANSITION_READY:      YES
 
 Stage B is `scripts/test-private-source.sh`. It refuses to run while the repository is public.
 
+## Stage B — private-source acceptance
+
+Run after the repository was made private (2026-09-09), against the **real remote**, from a
+genuinely clean sandbox HOME — never the source checkout, never the existing installation already
+on this machine.
+
+```bash
+bash scripts/test-private-source.sh
+```
+
+41 assertions, 0 failures, across two independent runs.
+
+```text
+PRIVATE_REPOSITORY_ACCESS       PASS
+CLEAN_PRIVATE_INSTALL           PASS
+INSTALLED_VERSION               0.43.0 (expected 0.43.0)
+AGENT_SKILLS_DOCTOR             PASS
+AGENT_SKILLS_VERIFY             PASS
+PRIVATE_UPDATE_PATH             PASS
+RELEASE_PROVIDER                git (expected git)
+HOST_REGISTRATION               PASS
+EXECUTION_GUARD_COHERENCE       PASS
+EXISTING_STATE_ISOLATION        PASS
+
+PRIVATE_AUTHENTICATED_INSTALL: PASS
+PRIVATE_UPDATE: PASS
+AUTHENTICATION_REQUIRED_BEHAVIOR: PASS
+PRIVATE_SOURCE_DISTRIBUTION_READY: YES
+```
+
+- **Authenticated case** — packed npm bootstrap, `install --all-hosts` against the private remote,
+  `doctor`, `verify`, `versions --json`, `check-updates`, `update`, host registration into every
+  supported host directory, and Execution Guard installed and confirmed to resolve through the
+  release fetched from the private source. No token-shaped string in any log or written to disk.
+- **Unauthenticated case** — every credential path removed (no git config, no gh config, no SSH
+  agent, no Keychain access; a synthetic, invalid `GH_TOKEN` present throughout). Exits `3`,
+  reports `AUTHENTICATION_REQUIRED`, leads with the classification rather than a raw git error,
+  never reports the repository as "not found", never hangs (1–2s), installs nothing, and leaves no
+  activation pointer or host registration behind.
+- **Existing-state isolation** — the real installation already on this machine
+  (`~/.agent-skills`, version `0.43.0`) was hashed before and after: manifest and active release
+  identical. Every sandbox lived under a throwaway temp directory; none was cleaned up by touching
+  real state, only its own.
+
+### A macOS-specific finding, in the test harness only
+
+The first run of the authenticated case failed — not because distribution access was actually
+broken, but because the harness's own isolation was incomplete. `gh`'s token is commonly stored in
+the macOS login Keychain, and Keychain Services resolves the *default keychain search list* through
+`~/Library/Preferences`, keyed to `$HOME`. A throwaway sandbox `$HOME` (the isolation this suite
+needs, so it never registers skills into the real host directories on this machine) has no matching
+preference file, so `security`/`gh` silently saw no login keychain at all and reported "not
+authenticated" — even though the developer plainly was, in every other respect.
+
+Root-caused directly: `security list-keychains` under a real `$HOME` lists the login keychain;
+under a substituted one, it lists only `System.keychain`, regardless of any other environment
+variable (`GH_CONFIG_DIR`, `GIT_CONFIG_GLOBAL`) pointed at the real files. Confirmed independent of
+`$HOME` entirely once `~/Library/Preferences` and `~/Library/Keychains` were reachable from the
+sandbox (read-only symlinks, nothing under them ever written).
+
+This is not a defect in the product: a real user's shell always has a `$HOME` that matches their own
+Keychain, so `agent-skills install` run normally is unaffected, and `AGENT_SKILLS_HOME`/
+`AGENT_SKILLS_CONFIG_DIR` (the paths a user can legitimately override, per `agent-skills dev
+install --home`) were never involved. It was a gap in how the *test harness* simulated "a stranger
+with the same git access, on a fresh machine" — fixed in `scripts/test-private-source.sh` by
+grafting in exactly the two paths Keychain Services needs, nothing else. No product code changed.
+Two overly strict assertions written alongside it were also corrected: a bare `ghp_` substring match
+(which flagged the shipped source code that *documents* that prefix, not a leaked token — tightened
+to the same token-shape regex every other check here uses) and a bare `fatal:` absence check (the
+classified `AUTHENTICATION_REQUIRED` message is allowed to carry the raw git detail as trailing
+supporting evidence; what must never happen — and does not — is a raw error appearing instead of,
+or ahead of, the classification).
+
+
 ## Post-release verification
 
 Run after `v0.43.0` was tagged and the GitHub release published, against the **real remote** rather
@@ -223,11 +297,6 @@ npx @wamalalawrence/agent-skills install
 
 ## What this run does not prove
 
-- **Private-source installation.** The repository was public throughout. The git provider's
-  authentication-required path was exercised against an unreadable remote, and its authenticated
-  path against a local remote, but installing from an authenticated private GitHub repository is
-  Stage B and requires the visibility change first. See
-  [docs/security-review-v0.43.0.md](../../docs/security-review-v0.43.0.md).
 - **A second published version.** Only `0.43.0` exists on the registry, so `agent-skills update`
   was exercised against git tags and a local fixture remote, not against two published npm
   versions. That path is the same code either way — npm carries the bootstrap, not the payload.
