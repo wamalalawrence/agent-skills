@@ -6,6 +6,114 @@ All notable project changes should be recorded here.
 
 - No unreleased changes.
 
+## 1.0.0-rc.1 - Release candidate: contract freeze and certification
+
+Not a feature release. This candidate freezes the contracts `agent-skills` will support after
+`1.0.0`, fixes the release blockers found while certifying them, and records the certification
+evidence. Offered only to machines on the `rc` channel; `stable` is untouched.
+
+### Contracts frozen
+
+[docs/one-point-oh.md](docs/one-point-oh.md) is the enumerated list. Within the `1.x` line these
+do not change and removing any of them is a breaking change held for `2.0`:
+
+- **CLI** — the release-lifecycle command names (`install`, `update`, `rollback`, `versions`,
+  `check-updates`, `provider`, `verify`, `uninstall`, `hosts`, `doctor`, `migrate`, `version`),
+  the task-lifecycle commands (`start-task`, `finish-task`), and the `access` / `tools` /
+  `context` / `guard` subcommand namespaces. Exit codes: the release table (`0` `2` `3` `4` `5`
+  `6` `7` `10`) plus each subsystem's own small documented contract. `--json` shapes for the
+  reporting commands: fields may be added, never renamed or retyped, and no secret value ever
+  appears in any output.
+- **Installation** — `AGENT_SKILLS_HOME` and `AGENT_SKILLS_CONFIG_DIR` semantics, the versioned
+  layout, `current` as the single activation lever, the atomic transaction with rollback,
+  `update` never downgrading as a side effect, `rollback` as a one-step undo, `uninstall`
+  ownership rules, and the `stable` / `rc` channel behaviour.
+- **Release provider** — the four-verb interface (`resolve_latest`, `resolve_version`,
+  `fetch_release`, `verify_release`); everything after `fetch_release` is provider-independent;
+  providers are chosen by name from a fixed in-process registry, never from a path in
+  environment or config. `release.json` is `schema: agent-skills.release/v1` with a
+  `sha256-tree/v1` payload hash.
+- **npm bootstrap** — `@wamalalawrence/agent-skills` stays a public thin bootstrap containing the
+  installer and nothing else. Bootstrap and runtime versions move in **lockstep**: one version
+  number, published together.
+- **Skills** — nine top-level, two nested, names fixed. Wamala routes by engineering ownership;
+  one owner per dispatched step; verification by persisted artifact; lifecycle wrappers
+  mandatory; the destructive-action safety floor above all of it.
+- **Engineering Tool Capability Framework** — the five tool classes, the four action classes,
+  the eighteen capability family prefixes and their capability names and action classes, the
+  `agent-skills.tool-definition/v1` schema, the deterministic transport resolution order, and
+  the rule that fixtures are never supported tools.
+
+### Breaking changes made before the freeze
+
+None. Nothing was renamed or renumbered. All changes below are additive or fixes.
+
+### Fixes
+
+- **`check-updates --vendored` assumed a public repository.** The release repo is private; an
+  unauthenticated GitHub releases API call now returns not-found. The command's message and
+  `docs/updates.md` (including the CI example) now state that a read token is required, and the
+  error no longer implies the only cause is rate-limiting.
+- **`SECURITY.md` rewritten.** The old "concerns in scope include" list read as a set of
+  predetermined defects. It now describes how the project treats security — external content is
+  untrusted, the Execution Guard's deterministic floor, credentials kept out of agent context —
+  and what a useful report looks like.
+- **`ROADMAP.md` brought current** — v0.44.0 marked shipped, the roadmap repointed at the RC and
+  1.0, stale "no installer / public-benefit / nine skills" language removed.
+- **`docs/versioning.md`** now leads with the RC status and points at the frozen-contract list;
+  the `release.json` schema example no longer bakes in a file count.
+- **`agent-skills tools resolve`** now prints the bounded-read / Context Optimizer instruction
+  inline for a `bounded` capability, at the moment of resolution, rather than in the docs only —
+  the minimal hardening for the v0.44.0 residual without the framework executing anything.
+- **Installing a pre-release checkout: `--dev` installs no longer need `--channel`.** This is
+  the project's first pre-release, and the local release provider correctly refuses to install
+  an `rc` version under the default `stable` channel. That is right for `npx … install`, but it
+  also broke `setup.init` and `agent-skills dev install` — a development install of your working
+  tree is not a release-channel decision. `scripts/install.py` now resolves the channel: an
+  explicit `--channel` always wins; `--dev` falls back to `any`; everything else falls back to
+  `stable` exactly as before. A plain `install --provider local --source …` **still** refuses a
+  pre-release checkout, on purpose. Covered by new `test-cli-install.sh` assertions.
+- **The test harnesses and CI assumed `VERSION` was always stable.** Every path that installs
+  the current tree without `--dev` (`test-cli-install.sh`, `test-global-install.sh`,
+  `test-release-readiness.sh`, `.github/workflows/ci.yml`) now passes `--channel any` — the
+  existing "install exactly this tree" escape hatch, a no-op for a stable version. The git
+  fixture in `test-cli-install.sh` and `test-private-source.sh` derive `rc` from a pre-release
+  `VERSION` so they exercise a real release-candidate publish + install.
+
+### Certification
+
+Full evidence: [`eval-runs/v1.0.0-rc.1/summary.md`](eval-runs/v1.0.0-rc.1/summary.md).
+Security review: [`docs/security-review-v1.0.0-rc.1.md`](docs/security-review-v1.0.0-rc.1.md).
+
+- **Clean private install** — `scripts/test-private-source.sh`: authenticated install / doctor /
+  verify / update / host registration / Guard coherence all pass from the remote into a
+  throwaway `HOME`; unauthenticated exits `3` with `AUTHENTICATION_REQUIRED`, no hang, no
+  partial install, no credential leak, no partial host registration.
+- **Upgrade / rollback** — `0.44.0 → 1.0.0-rc.1 → rollback → 0.44.0 → upgrade` with credential
+  identities, bindings, legacy `.env`, and unrelated host skills preserved. Simulated failed
+  download / integrity / staging / self-test / activation leave no mixed-version install.
+- **Security** — 17 fresh adversarial probes (prompt injection across ticket/log/DB fixtures,
+  capability escalation, secret-leak sweep) plus the standing suites: Execution Guard 108
+  (BYPASS + REDTEAM corpora), release engine 21 (archive traversal, symlink escape, integrity,
+  downgrade, hostile provider), access resolution 100, tool framework 43.
+- **Offline** — after install, `doctor`, `verify`, Context Optimizer, Execution Guard, tool
+  discovery/resolution, project context, and credential-backend reporting all work with the
+  network dead. Only install / update / check-updates / external-service resolution need it.
+- **Hosts** — filesystem registration verified for the eight filesystem hosts (`verify`: N/N
+  skills resolve to the canonical tree each); JetBrains is manual and not filesystem-verifiable,
+  documented as such, no verification manufactured.
+
+### Publication
+
+- Tag `v1.0.0-rc.1`; GitHub release marked **prerelease**, `latest` not moved. The
+  git provider is the distribution path for this candidate.
+- npm bootstrap `1.0.0-rc.1` is **built and audited** (14 files, no product content, version
+  matches `VERSION`, engine byte-identical) but **not yet published** — publishing requires the
+  maintainer's npm credentials, which were not present on the certification machine. The
+  maintainer publishes it with `npm publish --tag rc` from `npm/` (never `--tag latest`);
+  `latest` stays on the last stable. Recorded here so a deferred publish is not a release nobody
+  can install from npm.
+
 ## 0.44.0 - Engineering Tool Capability Framework
 
 The last substantial feature release before `1.0.0-rc.1`. Agent Skills can now use the

@@ -1,7 +1,10 @@
 # Versioning
 
-`agent-skills` is pre-1.0. The project uses semantic-version-shaped releases, but stability promises
-are intentionally narrower before `v1.0.0`.
+`agent-skills` is at `1.0.0-rc.1` — the release candidate for `1.0.0`. From `1.0.0` the contracts
+enumerated in [the 1.0 contract](one-point-oh.md) are stable within the `1.x` line: names do not
+change, exit codes are not renumbered, and machine-readable shapes stay compatible. The
+pre-`1.0.0` rules below still describe every release up to and including `0.44.0`, and a release
+candidate is offered only to machines on the `rc` channel.
 
 ## Before `v1.0.0`
 
@@ -87,10 +90,16 @@ for three minor releases; removing one on schedule is part of that release's che
 Until `v1.0.0`, pin the repository version or tag when you need repeatable behavior across teams or
 automation.
 
-## Contracts under consideration for a 1.0 freeze
+## The 1.0 contract
 
-These are stable-in-practice now and are the review targets before `1.0.0`. After the freeze,
-adding to them is a minor change; renaming or reclassifying is a major change.
+The full enumerated list of what is frozen at `v1.0.0-rc.1` — CLI command and subcommand names,
+exit codes, `--json` shapes, the installation layout and its semantics, the release-provider
+interface, the npm bootstrap lockstep rule, the skill names, and the Engineering Tool Capability
+Framework contract — is in [one-point-oh.md](one-point-oh.md). Within the `1.x` line those names
+do not change, exit codes are not renumbered, and removing any of it is a breaking change held
+for `2.0`.
+
+The items below were the review targets that produced that freeze.
 
 - **The engineering tool capability vocabulary** — the family prefixes and capability names in
   [`lib/tools/capabilities.json`](../lib/tools/capabilities.json), and each capability's action

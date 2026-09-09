@@ -263,12 +263,20 @@ def resolve_capability(reg: Registry, tool: dict, capability: str, allow_write: 
         )
 
     action = reg.action_of(capability)
+    bounded = capability in tool.get("bounded_capabilities", [])
     base = {
         "tool": tool["id"],
         "class": tool["class"],
         "capability": capability,
         "action_class": action,
+        "bounded": bounded,
     }
+    if bounded:
+        base["bounded_note"] = (
+            "This capability reads large, untrusted external output. Read it with an explicit "
+            "bound (time range, row/line limit, message count, log budget) and pass it through "
+            "`agent-skills context pack` before it enters model context. Never fetch everything."
+        )
 
     if action == "DESTRUCTIVE":
         base.update(
@@ -600,6 +608,8 @@ def cmd_resolve(reg: Registry, args) -> int:
             print(f"      missing: {', '.join(step['missing_fields'])}  (service: {step.get('auth_service')})")
     if result.get("detail"):
         print(f"note        : {result['detail']}")
+    if result.get("bounded_note"):
+        print(f"bounded     : {result['bounded_note']}")
     if result.get("status") == "resolved":
         print("reminder    : resolution is not authorization. The Execution Guard gates the command that runs.")
     return code

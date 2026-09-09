@@ -161,9 +161,12 @@ Cloud agents do not run the installer. A vendored copy is updated the way any ve
 python3 scripts/check-updates.py --vendored .agent-skills/skills
 ```
 
-It reads the vendored `metadata.version`, queries GitHub for the latest release tag (unauthenticated,
-which works for public repos within the rate limit; pass `--token` to lift it), and reports `up to
-date` / `update available` / `ahead`. No git checkout required.
+It reads the vendored `metadata.version`, queries GitHub for the latest release tag, and reports
+`up to date` / `update available` / `ahead`. No git checkout required. The release repository is
+**private**, so this call must be authenticated: pass `--token`, or set `GITHUB_TOKEN` in the
+environment, with a token that can read `wamalalawrence/agent-skills`. Without one the query
+returns a not-found/forbidden response and the check reports that it could not determine the
+latest version rather than guessing.
 
 ### CI smoke check
 
@@ -180,6 +183,9 @@ jobs:
       - uses: actions/checkout@v4
       - run: python3 .agent-skills/scripts/check-updates.py --vendored .agent-skills/skills
         continue-on-error: true
+        env:
+          # the release repository is private; the API call must be authenticated
+          GITHUB_TOKEN: ${{ secrets.AGENT_SKILLS_RELEASE_READ_TOKEN }}
 ```
 
 Treat exit `10` as informational. The recommendation is **not** to fail CI on stale skills — surface

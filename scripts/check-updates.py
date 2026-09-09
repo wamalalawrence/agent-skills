@@ -228,8 +228,9 @@ def check_vendored(args: argparse.Namespace) -> int:
                 "status": "error",
                 "local_version": local,
                 "detail": (
-                    f"could not reach GitHub releases API for {args.repo}; "
-                    "rate-limited or offline. Pass --token to lift the rate limit."
+                    f"could not read the GitHub releases API for {args.repo}: offline, "
+                    "rate-limited, or unauthenticated for a private repository. Pass --token "
+                    "(or set GITHUB_TOKEN) with read access to the release repository."
                 ),
             },
             args.json,

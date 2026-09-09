@@ -1,58 +1,48 @@
 # Roadmap
 
-This roadmap is intentionally modest. `agent-skills` is a solo-maintainer public-benefit project, so
-the project should grow through proven usefulness rather than a large up-front framework.
+`agent-skills` is a private, solo-maintained project. It grows through proven usefulness in the
+maintainer's own delivery work, not through an up-front framework.
 
-## Current Focus
+## Now: v1.0.0-rc.1
 
-- Stabilize the nine shipped skills, with [`wamala`](./skills/wamala/) as the single
-  entry point and [`software-engineer`](./skills/software-engineer/) as the flagship
-  engineering skill.
-- Make the [Company Brain](./docs/company-brain.md) loop real rather than documented: the
-  [repo knowledge base](./docs/repo-knowledge.md) travels with the repository,
-  the lifecycle wrappers are gated in CI, and telemetry is read at release time instead
-  of only written.
-- Keep everything a skill writes indistinguishable from careful human writing — see
-  [writing voice](./docs/writing-voice.md).
-- Improve portability across different stacks, workspace layouts, and access paths,
-  including [MCP](./docs/mcp.md) where the host already provides it.
-- Tighten token-efficient context gathering for tracker tickets, user descriptions, repository discovery,
-  product refinement, testing, and review loops.
-- Collect real-world feedback on where nested skills should remain nested or become standalone
-  roles.
+v0.44.0 shipped the last substantial feature — the
+[Engineering Tool Capability Framework](./docs/engineering-tools.md). The work from here is
+**certification and contract freeze**, not features:
 
-## Near-Term
+- Freeze the contracts the project will support after 1.0: the CLI command names, arguments,
+  exit codes, and machine-readable output; the versioned install layout, `current` activation,
+  and update/rollback semantics; the release-provider interface; the skill names and Wamala's
+  routing model; the tool capability vocabulary and tool-definition schema. Frozen set:
+  [docs/one-point-oh.md](./docs/one-point-oh.md).
+- Certify a clean-machine install from the private release source (authenticated succeeds,
+  unauthenticated fails cleanly), upgrade/rollback with no mixed-version state, and preservation
+  of credentials, bindings, knowledge, and unrelated host state.
+- Re-run the full test, eval, and red-team harness; complete a security review.
+- Publish `v1.0.0-rc.1` as a GitHub prerelease and an npm bootstrap on the `rc` dist-tag —
+  never moving `latest` to the release candidate.
 
-- Add practical examples for installing and invoking skills in common AI coding assistants.
-- Add examples that show cross-skill handoffs across product definition, engineering, manual
-  testing, and automation.
-- Improve contribution examples for new reference checklists and nested skills.
-- Keep known limitations and compatibility notes current as users report them.
-- Wire [`scripts/promote-rules.py`](./scripts/promote-rules.py) candidates
-  into an auto-PR helper so org-tier promotion has a one-command path from
-  candidate JSON to a reviewable change.
-- Plug a real agent runner behind [`scripts/run-evals.py`](./scripts/run-evals.py)
-  `--invoke` so the eval harness produces a measured pass/fail per skill per
-  release, not just a structural check. The twelve evals carrying
-  `## Required Output Fields` are the cheapest first grader: field presence is
-  checkable without a model judging prose.
-- Decide the credential model deferred in
-  [the 2026-09 plan](./docs/plans/2026-09-learning-voice-and-router.md): OS-keychain
-  storage, collapsing the duplicated config surface, and retiring `setup.init` as an installer.
+## After 1.0.0
+
+- Move `latest` (GitHub release and npm dist-tag) to `1.0.0` once the RC has been exercised.
+- Keep bootstrap and runtime versions in lockstep: one version number, published together.
+- Maintain the frozen contracts within the major version; breaking changes wait for 2.0.
+- Read release-time telemetry to decide which nested skills, if any, should become top-level.
+- Fill the capability families that ship with vocabulary and design only —
+  `data_pipeline.*`, `design.*`, `security.*` — with a validated reference tool each, when a
+  real workflow needs one. Adding a capability is a compatible change; renaming or reclassifying
+  one is not.
 
 ## Later
 
-- Consider additional top-level role skills, such as `software-architect` or `release-manager`, only
-  when there is enough real workflow content to justify them.
-- Explore packaging or release automation if manual releases become painful.
-- Add issue and pull request templates when community volume justifies them.
-- Invite additional maintainers if the project develops sustained external contribution.
+- A subscription release provider (`lib/asrelease/providers/`) — a new file, not a rewrite of
+  installation. Not started.
+- Additional top-level role skills only when there is real workflow content to justify them.
+- Wire a real agent runner behind [`scripts/run-evals.py`](./scripts/run-evals.py) `--invoke` so
+  the eval harness produces a measured pass/fail per skill per release.
 
-## Non-Goals For Now
+## Non-goals
 
-- No large governance structure before there is a contributor base.
-- No `develop` branch or GitFlow process. Use `main`, short-lived feature branches, pull requests,
-  and version tags.
-- No package registry or installer until the manual folder-based setup is well understood.
+- No `develop` branch or GitFlow. `main`, short-lived branches, pull requests, version tags.
+- No meeting intelligence, dashboard, or UI.
+- No premium registry or subscription system before 1.0.
 - No company-specific workflow bundles in this repository.
-- No promise that every planned role in the README will be built immediately.

@@ -88,7 +88,9 @@ as_run() {
   local args=()
   if [ "${1:-}" = "install" ]; then
     shift
-    args=(install --provider local --source "${REPO_ROOT}")
+    # --channel any: the repo VERSION may be a pre-release (a release candidate).
+    # These tests install exactly the tree they point at, whatever its channel.
+    args=(install --provider local --source "${REPO_ROOT}" --channel any)
     local extra
     for extra in "$@"; do
       case "${extra}" in
@@ -359,7 +361,7 @@ env -i HOME="${H5B}" AGENT_SKILLS_HOME="${H5B}/.agent-skills" \
   AGENT_SKILLS_CONFIG_DIR="${H5B}/.config/agent-skills" \
   PATH="${H5B}/.local/bin:/usr/bin:/bin:/usr/local/bin:/opt/homebrew/bin" TERM=dumb \
   bash "${SRC_COPY}/bin/agent-skills" install \
-    --provider local --source "${SRC_COPY}" >/dev/null 2>&1
+    --provider local --source "${SRC_COPY}" --channel any >/dev/null 2>&1
 if [ -L "${H5B}/.claude/skills/wamala" ]; then
   ok "pre-condition: installed from a throwaway source copy"
 else
@@ -430,7 +432,7 @@ env -i HOME="${H14}" AGENT_SKILLS_HOME="${H14}/.agent-skills" \
   AGENT_SKILLS_CONFIG_DIR="${H14}/.config/agent-skills" \
   PATH="${H14}/.local/bin:/usr/bin:/bin:/usr/local/bin:/opt/homebrew/bin" TERM=dumb \
   bash "${OLD_SRC}/bin/agent-skills" install \
-    --provider local --source "${OLD_SRC}" >/dev/null 2>&1
+    --provider local --source "${OLD_SRC}" --channel any >/dev/null 2>&1
 
 check "pre-upgrade: the old front door is registered" \
   test -L "${H14}/.agents/skills/tech-lead"
@@ -836,7 +838,7 @@ B14="$(
   env -i HOME="${H14}" AGENT_SKILLS_HOME="${H14}/.agent-skills" \
     PATH="/usr/bin:/bin:/usr/local/bin:/opt/homebrew/bin" TERM=dumb \
     bash "${BROKEN_SRC}/bin/agent-skills" install \
-      --provider local --source "${BROKEN_SRC}" 2>&1
+      --provider local --source "${BROKEN_SRC}" --channel any 2>&1
 )"
 B14_RC=$?
 if [ "${B14_RC}" -ne 0 ]; then

@@ -50,6 +50,7 @@ REQUIRED_FILES = [
     "docs/access-resolution.md",
     "docs/engineering-tools.md",
     "docs/engineering-tool-capabilities.md",
+    "docs/one-point-oh.md",
     "docs/security-review-v0.37.0.md",
     "docs/security-review-v0.38.0.md",
     "docs/github-access.md",

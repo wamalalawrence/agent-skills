@@ -82,6 +82,8 @@ Start here when reading the repository outside GitHub's main README.
 - [Severity and confidence](severity-and-confidence.md) - shared review, defect, and investigation
   vocabulary.
 - [Known limitations](known-limitations.md) - what the skills cannot guarantee.
+- [The 1.0 contract](one-point-oh.md) - the enumerated list of names, exit codes, layout, and
+  schemas frozen at v1.0.0-rc.1 and kept stable through the 1.x line.
 - [Versioning and exit codes](versioning.md) - release and compatibility policy, release channels,
   and the stable CLI exit codes.
 - [Destructive-action safety policy](destructive-action-safety.md) - the safety floor every
