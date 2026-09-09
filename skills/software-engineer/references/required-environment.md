@@ -14,7 +14,7 @@ Run this setup preflight before context discovery.
 1. If `AGENT_SKILLS_MODE` is set to `local-workspace` or `in-repo`, use it.
 2. Else if `${WORKSPACE_ROOT}/.env` exists and is readable → `local-workspace`.
 3. Else if `.agent-skills.yml` exists at the repository root → `in-repo`.
-4. Else: stop and tell the user to either run `./setup.init` (multi-repo local) or copy
+4. Else: stop and tell the user to either run `agent-skills install` (multi-repo local) or copy
   `.agent-skills.example.yml` to `.agent-skills.yml` at the repo root (single-repo / online agent).
 
 **Step 2 — verify context for the requested task.** Whichever mode applies, if the resolved
@@ -80,7 +80,7 @@ silently falls back to "no tracker access" is a workflow failure, not a setup fa
 
 **Locate config files before claiming any are missing.** `.env` and `.jira-config.yml` (or
 equivalent tracker config) are
-written by `setup.init` to the **parent workspace folder**, not the repo cwd. Run
+written to the **parent workspace folder** by a pre-v0.37 setup, not the repo cwd. Run
 `agent-skills locate-config` (see [`docs/auth-discovery.md` § Where the files
 live](../../../docs/auth-discovery.md#where-the-files-live)). The script walks the cwd, every
 parent directory, the `WORKSPACE_ROOT` env var, and the directory holding the `.skills`

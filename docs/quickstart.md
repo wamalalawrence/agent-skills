@@ -19,9 +19,7 @@ Use this repo when you want portable, evidence-first workflows for:
 Install once on the machine:
 
 ```bash
-git clone https://github.com/wamalalawrence/agent-skills.git
-cd agent-skills
-./setup.init
+npx @wamala/agent-skills install
 ```
 
 Then open any repository and describe the work. The skills are already discoverable to the agent in
@@ -88,7 +86,7 @@ See [execution modes](execution-modes.md) for the full comparison.
 Your existing workspace keeps working. To move:
 
 ```bash
-cd agent-skills && git pull && ./setup.init
+agent-skills update
 agent-skills migrate
 ```
 

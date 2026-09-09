@@ -203,7 +203,7 @@ writing:
 # the same skill or merges contradictory instructions.
 #
 # All keys are OPTIONAL. The defaults below match the behavior shipped by
-# `setup.init` and the resolution order in docs/skill-source-resolution.md, so
+# the installer and the resolution order in docs/skill-source-resolution.md, so
 # most users do not need to change anything.
 skills:
   # Directory the agent must treat as the canonical skill source. Resolved

@@ -2,11 +2,11 @@
 
 ## Input Context
 
-A `setup.init`-managed workspace looks like this on disk:
+A pre-v0.37 workspace looks like this on disk:
 
 ```
 ~/work/                              # the workspace root
-├── .env                             # written by setup.init
+├── .env                             # written by a pre-v0.37 setup
 ├── .env.local                       # personal overrides
 ├── .jira-config.yml                 # written with --with-jira
 ├── .skills -> ../agent-skills/skills
@@ -31,7 +31,7 @@ that does the new pre-flight (`delivery-planner`, `product-owner`, `manual-teste
 This is the recurring failure the v0.29.0 work targets: an agent at the repo cwd checks
 `./.env`, sees nothing, and tells the user "I can't find your `.env` / `.jira-config.yml`
 files — please tell me where they are". The files are one directory up, exactly where
-`setup.init` put them, and the agent should never have asked.
+a pre-v0.37 setup put them, and the agent should never have asked.
 
 ## Expected Behavior
 
@@ -50,7 +50,7 @@ files — please tell me where they are". The files are one directory up, exactl
 
 - Checking only the cwd for `.env` and giving up.
 - Asking the user "where is your `.env`?" before running the locator.
-- Treating a `.git` boundary as the limit of the search; `setup.init` writes outside every
+- Treating a `.git` boundary as the limit of the search; that layout sits outside every
   repo's `.git` on purpose.
 - Inventing a `.env` path from a guess instead of using the locator's output.
 - Reporting `.jira-config.yml` as missing when only the placeholders are unresolved (that is

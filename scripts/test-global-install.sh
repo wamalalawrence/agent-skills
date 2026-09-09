@@ -76,16 +76,36 @@ new_home() {
 }
 
 # Run the CLI with an isolated HOME and install root.
+#
+# `install` is rewritten to name the local provider explicitly. Since v0.43.0
+# the installer has no implicit source: with no provider flag it goes to the
+# git remote, and a host-adapter test has no business reaching the network. The
+# subject of this suite is what installation does to the machine, not where the
+# payload came from; scripts/test-cli-install.sh covers that.
 as_run() {
   local home="$1"
   shift
+  local args=()
+  if [ "${1:-}" = "install" ]; then
+    shift
+    args=(install --provider local --source "${REPO_ROOT}")
+    local extra
+    for extra in "$@"; do
+      case "${extra}" in
+        --yes|-y) ;;
+        *) args+=("${extra}") ;;
+      esac
+    done
+  else
+    args=("$@")
+  fi
   env -i \
     HOME="${home}" \
     AGENT_SKILLS_HOME="${home}/.agent-skills" \
     AGENT_SKILLS_CONFIG_DIR="${home}/.config/agent-skills" \
     PATH="${home}/.local/bin:/usr/bin:/bin:/usr/sbin:/sbin:/usr/local/bin:/opt/homebrew/bin" \
     TERM="dumb" \
-    bash "${CLI}" "$@"
+    bash "${CLI}" "${args[@]}"
 }
 
 section() { printf '\n== %s ==\n' "$1"; }
@@ -286,7 +306,7 @@ if printf '%s' "${VERIFY_OUT}" | grep -qE 'ghp_|AKIA[0-9A-Z]{16}'; then
 else
   ok "verify output contains no secret-shaped string"
 fi
-for expected in "install manifest present" "canonical source" "Host integrations" \
+for expected in "install manifest present" "active release" "Host integrations" \
   "Credential storage" "Legacy installation remnants" "Cloud and remote agents"; do
   if printf '%s' "${VERIFY_OUT}" | grep -q "${expected}"; then
     ok "verify reports: ${expected}"
@@ -338,13 +358,26 @@ printf -- '---\nname: unrelated-user-skill\ndescription: keep\n---\n# Keep\n' \
 env -i HOME="${H5B}" AGENT_SKILLS_HOME="${H5B}/.agent-skills" \
   AGENT_SKILLS_CONFIG_DIR="${H5B}/.config/agent-skills" \
   PATH="${H5B}/.local/bin:/usr/bin:/bin:/usr/local/bin:/opt/homebrew/bin" TERM=dumb \
-  bash "${SRC_COPY}/bin/agent-skills" install --yes >/dev/null 2>&1
+  bash "${SRC_COPY}/bin/agent-skills" install \
+    --provider local --source "${SRC_COPY}" >/dev/null 2>&1
 if [ -L "${H5B}/.claude/skills/wamala" ]; then
   ok "pre-condition: installed from a throwaway source copy"
 else
   bad "pre-condition: installed from a throwaway source copy"
 fi
 rm -rf "${SRC_COPY}"
+# Since v0.43.0 a release is copied into the install root rather than linked
+# from wherever it was installed from, so deleting the source is no longer even
+# a degraded state: the installation keeps working. That is a stronger property
+# than the one this case was written for, so assert it before the old one.
+if env -i HOME="${H5B}" AGENT_SKILLS_HOME="${H5B}/.agent-skills" \
+  AGENT_SKILLS_CONFIG_DIR="${H5B}/.config/agent-skills" \
+  PATH="${H5B}/.local/bin:/usr/bin:/bin:/usr/local/bin:/opt/homebrew/bin" TERM=dumb \
+  bash "${H5B}/.agent-skills/bin/agent-skills" verify >/dev/null 2>&1; then
+  ok "the installation still verifies after the source it came from is deleted"
+else
+  bad "the installation still verifies after the source it came from is deleted"
+fi
 UNINST="$(as_run "${H5B}" uninstall --yes 2>&1 || true)"
 # Derived rather than hardcoded. This assertion said "removed 8 registration(s)"
 # and broke the moment a ninth top-level skill shipped, which is a test failing
@@ -396,7 +429,8 @@ ln -s "${H14}/my-skills/tech-lead" "${H14}/.kiro/skills/tech-lead"
 env -i HOME="${H14}" AGENT_SKILLS_HOME="${H14}/.agent-skills" \
   AGENT_SKILLS_CONFIG_DIR="${H14}/.config/agent-skills" \
   PATH="${H14}/.local/bin:/usr/bin:/bin:/usr/local/bin:/opt/homebrew/bin" TERM=dumb \
-  bash "${OLD_SRC}/bin/agent-skills" install --yes >/dev/null 2>&1
+  bash "${OLD_SRC}/bin/agent-skills" install \
+    --provider local --source "${OLD_SRC}" >/dev/null 2>&1
 
 check "pre-upgrade: the old front door is registered" \
   test -L "${H14}/.agents/skills/tech-lead"
@@ -413,7 +447,7 @@ cp -R "${REPO_ROOT}/bin" "${OLD_SRC}/bin"
 cp -R "${REPO_ROOT}/scripts" "${OLD_SRC}/scripts"
 cp "${REPO_ROOT}/VERSION" "${OLD_SRC}/VERSION"
 
-OUT14="$(as_run "${H14}" install --yes 2>&1)"
+OUT14="$(as_run "${H14}" install 2>&1)"
 check "upgrade registers wamala in the standard dir" test -L "${H14}/.agents/skills/wamala"
 check "the wamala registration resolves to a SKILL.md" \
   test -f "${H14}/.agents/skills/wamala/SKILL.md"
@@ -659,32 +693,6 @@ refute "migrate --remove-obsolete removes the .skills symlink" test -e "${LEGACY
 refute "migrate --remove-obsolete removes the stale lock file" test -e "${LEGACY}/.agent-skills.lock"
 check "migrate --remove-obsolete never deletes .env" test -f "${LEGACY}/.env"
 
-# An inherited WORKSPACE_ROOT means the caller is already running the legacy
-# model. setup.init must honour it instead of quietly installing globally into
-# their real home directory, which is the kind of surprise this release exists
-# to remove rather than introduce.
-H8B="$(new_home)"
-LEGACY_B="${H8B}/work"
-mkdir -p "${LEGACY_B}/agent-skills"
-cp -R "${REPO_ROOT}/." "${LEGACY_B}/agent-skills/" 2>/dev/null || true
-printf 'JIRA_HOST="https://example.atlassian.net"\n' > "${LEGACY_B}/.env"
-MODE_OUT="$(
-  cd "${LEGACY_B}/agent-skills" && env -i HOME="${H8B}" \
-    AGENT_SKILLS_HOME="${H8B}/.agent-skills" \
-    AGENT_SKILLS_CONFIG_DIR="${H8B}/.config/agent-skills" \
-    WORKSPACE_ROOT="${LEGACY_B}" \
-    PATH="/usr/bin:/bin:/usr/local/bin:/opt/homebrew/bin" TERM=dumb \
-    ./setup.init --yes --no-jira 2>&1 || true
-)"
-if printf '%s' "${MODE_OUT}" | grep -q 'legacy workspace model'; then
-  ok "an inherited WORKSPACE_ROOT with a .env selects the legacy model"
-else
-  bad "an inherited WORKSPACE_ROOT with a .env selects the legacy model" \
-    "$(printf '%s' "${MODE_OUT}" | head -5)"
-fi
-refute "an inherited WORKSPACE_ROOT does not trigger a global install" \
-  test -f "${H8B}/.agent-skills/install.json"
-check "the legacy run still produced its workspace artifacts" test -L "${LEGACY_B}/.skills"
 
 # ------------------------------------------------------------------------------
 section "uninstall"
@@ -743,7 +751,7 @@ section "a flag given without its value fails instead of hanging"
 # used to spin forever printing nothing. A timeout is the assertion: a hang is a
 # different failure from a rejection, and only the timeout tells them apart.
 H11="$(new_home)"
-for FLAG in --hosts --source --branch; do
+for FLAG in --hosts --source --repo --version; do
   FLAG_OUT="$(
     env -i HOME="${H11}" AGENT_SKILLS_HOME="${H11}/.agent-skills" \
       PATH="/usr/bin:/bin:/usr/local/bin:/opt/homebrew/bin" TERM=dumb \
@@ -758,7 +766,8 @@ for FLAG in --hosts --source --branch; do
     ok "install ${FLAG} with no value fails fast"
   fi
   case "${FLAG_OUT}" in
-    *"requires a value"*) ok "install ${FLAG} says the value is missing" ;;
+    *"expected one argument"*|*"requires a value"*)
+      ok "install ${FLAG} says the value is missing" ;;
     *) bad "install ${FLAG} says the value is missing" "${FLAG_OUT}" ;;
   esac
 done
@@ -825,9 +834,9 @@ done
 rm -f "${BROKEN_SRC}/lib/hosts.registry"
 B14="$(
   env -i HOME="${H14}" AGENT_SKILLS_HOME="${H14}/.agent-skills" \
-    AGENT_SKILLS_SOURCE="${BROKEN_SRC}" \
     PATH="/usr/bin:/bin:/usr/local/bin:/opt/homebrew/bin" TERM=dumb \
-    bash "${BROKEN_SRC}/bin/agent-skills" install --yes 2>&1
+    bash "${BROKEN_SRC}/bin/agent-skills" install \
+      --provider local --source "${BROKEN_SRC}" 2>&1
 )"
 B14_RC=$?
 if [ "${B14_RC}" -ne 0 ]; then
@@ -836,7 +845,7 @@ else
   bad "install fails when the host registry is missing" "exit 0: ${B14}"
 fi
 case "${B14}" in
-  *"installed globally"*) bad "install does not claim success without a registry" "${B14}" ;;
+  *"is installed"*) bad "install does not claim success without a registry" "${B14}" ;;
   *) ok "install does not claim success without a registry" ;;
 esac
 case "${B14}" in
@@ -879,64 +888,6 @@ fi
 refute "no tracked .gitignore was created in the user repo" \
   test -f "${SCRATCH_REPO}/.gitignore"
 
-
-# ------------------------------------------------------------------------------
-section "an existing legacy workspace is not silently migrated"
-# ------------------------------------------------------------------------------
-# resolve_install_mode consulted the legacy .env beside the clone only when
-# --verify was passed, so the same machine answered "legacy" for
-# `./setup.init --verify` and "global" for a bare run or --update. An existing
-# user typing the v0.36-documented command was converted without being told.
-H16="$(new_home)"
-LEGACY_WS="${H16}/legacy workspace"
-LEGACY_CLONE="${LEGACY_WS}/agent-skills"
-mkdir -p "${LEGACY_CLONE}"
-for ITEM in bin lib scripts skills docs hooks VERSION setup.init .env.example; do
-  [ -e "${REPO_ROOT}/${ITEM}" ] && cp -R "${REPO_ROOT}/${ITEM}" "${LEGACY_CLONE}/" 2>/dev/null
-done
-# A v0.36-shaped workspace: a managed .env beside the clone, plus the artifacts
-# that model created.
-cat > "${LEGACY_WS}/.env" <<'ENVEOF'
-# >>> agent-skills setup.init
-JIRA_HOST=
-JIRA_LOGIN=
-# <<< agent-skills setup.init
-ENVEOF
-ln -s "${LEGACY_CLONE}/skills" "${LEGACY_WS}/.skills"
-printf '0.36.0\n' > "${LEGACY_WS}/.agent-skills.lock"
-
-as_setup() {
-  env -i HOME="${H16}" \
-    PATH="/usr/bin:/bin:/usr/sbin:/sbin:/usr/local/bin:/opt/homebrew/bin" \
-    TERM=dumb \
-    bash "${LEGACY_CLONE}/setup.init" "$@" 2>&1
-}
-
-for INVOCATION in "--verify" "--yes --no-connectivity-check --no-credential-probe"; do
-  # shellcheck disable=SC2086
-  ROUTE_OUT="$(as_setup ${INVOCATION})"
-  case "${ROUTE_OUT}" in
-    *"legacy workspace model"*)
-      ok "setup.init ${INVOCATION} keeps the legacy workspace model" ;;
-    *)
-      bad "setup.init ${INVOCATION} keeps the legacy workspace model" \
-        "$(printf '%s' "${ROUTE_OUT}" | head -5)" ;;
-  esac
-done
-refute "no global install root was created behind the user's back" \
-  test -e "${H16}/.agent-skills/install.json"
-refute "no launcher was put on PATH behind the user's back" \
-  test -e "${H16}/.local/bin/agent-skills"
-check "the legacy .skills symlink is still there" test -L "${LEGACY_WS}/.skills"
-
-# Opting in explicitly must still work.
-ROUTE_OUT="$(as_setup --global --yes)"
-case "${ROUTE_OUT}" in
-  *"installed globally"*) ok "--global still opts in to the new model" ;;
-  *) bad "--global still opts in to the new model" \
-       "$(printf '%s' "${ROUTE_OUT}" | tail -5)" ;;
-esac
-check "opting in created the global install" test -f "${H16}/.agent-skills/install.json"
 
 # ------------------------------------------------------------------------------
 printf '\n'

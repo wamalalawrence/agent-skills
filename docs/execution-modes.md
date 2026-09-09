@@ -20,7 +20,7 @@ because a cloud agent cannot see files on your machine
 
 ## Mode 1 — `global` (default for local work)
 
-- **When it applies:** you ran `./setup.init` on your machine and the agent runs against your local
+- **When it applies:** you ran `agent-skills install` on your machine and the agent runs against your local
   filesystem.
 - **Skill source:** `${AGENT_SKILLS_HOME}/skills`, reached through each host's global skills
   directory. One canonical tree; see [skill-source-resolution.md](skill-source-resolution.md).
@@ -69,7 +69,7 @@ The original model: a parent workspace folder holding the clone, sibling repos, 
 `.skills` symlink. Still supported so existing installs keep working.
 
 - **When it applies:** you installed before v0.37.0 and have not migrated, or you deliberately chose
-  `./setup.init --legacy-workspace`.
+  a pre-v0.37 `setup.init` run. Nothing creates that layout any more; it is only still recognised.
 - **Skill source:** `<workspace>/.skills`.
 - **Project metadata:** `PROJECTS_JSON` in `${WORKSPACE_ROOT}/.env`.
 - **Credentials:** `${WORKSPACE_ROOT}/.env`, still discovered by the access resolver.
@@ -127,7 +127,7 @@ useful on ephemeral runners that want a tmpfs path.
 
 | Environment | Mode | What to do |
 | --- | --- | --- |
-| Your laptop, any local editor, any number of repos | `global` | `./setup.init` once |
+| Your laptop, any local editor, any number of repos | `global` | `npx @wamala/agent-skills install` once |
 | GitHub Copilot coding agent on github.com | `in-repo` | commit `.agent-skills.yml`, vendor skills into `.github/skills/` or `.agent-skills/skills/` |
 | Cursor cloud / background agents | `in-repo` | vendor into the repo, or enable Cursor's personal-skill sync for `~/.cursor/skills` |
 | Codespaces / Gitpod | `in-repo` | commit `.agent-skills.yml`, add `.cache/` to `.gitignore`, use platform secrets |

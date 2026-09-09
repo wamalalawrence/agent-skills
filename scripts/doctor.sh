@@ -7,10 +7,16 @@
 # a skill plans around what exists instead of discovering it mid-task.
 #
 # It aggregates the checks that already existed but never ran together:
-#   ./setup.init --verify              workspace config sanity
+#   agent-skills verify                installation integrity and host wiring
 #   scripts/auth-preflight.py          tracker / document-store config
 #   scripts/github-access.sh           the GitHub access ladder
-# plus tool detection, build-tool inference, and MCP availability.
+# plus tool detection, build-tool inference, MCP availability, and the state of
+# the installation itself: which release is active, where it came from, whether
+# anything has drifted, and what a rollback would return to.
+#
+# It never contacts the network. Everything it reports about the installation
+# comes from the local manifest, because "am I offline" is one of the questions
+# people run it to answer.
 #
 # Usage:
 #   ./doctor.sh                 full report
@@ -246,23 +252,117 @@ probe_memory() {
 # this can name the right remediation instead of guessing at a layout.
 probe_install() {
   INSTALL_STATE="no"
-  INSTALL_DETAIL="no global installation; run ./setup.init"
+  INSTALL_DETAIL="not installed; run: npx @wamala/agent-skills install"
   INSTALL_VERSION=""
-  if [[ -f "${AS_LIB_DIR:-${REPO_ROOT}/lib}/runtime.sh" ]]; then
-    # shellcheck source=lib/runtime.sh
-    AS_LIB_DIR="${AS_LIB_DIR:-${REPO_ROOT}/lib}" . "${AS_LIB_DIR:-${REPO_ROOT}/lib}/runtime.sh"
-    if as_is_installed; then
-      INSTALL_VERSION="$(as_installed_version 2>/dev/null || printf 'unknown')"
-      INSTALL_STATE="yes"
-      INSTALL_DETAIL="v${INSTALL_VERSION} at $(as_home)"
-      local source_version
-      source_version="$(as_source_version 2>/dev/null || true)"
-      if [[ -n "${source_version}" && "${source_version}" != "${INSTALL_VERSION}" ]]; then
-        INSTALL_DETAIL="${INSTALL_DETAIL} (drift: source is v${source_version})"
-      fi
+  INSTALL_ROOT=""
+  INSTALL_MODE=""
+  INSTALL_CHANNEL=""
+  INSTALL_PROVIDER=""
+  INSTALL_PROVIDER_SOURCE=""
+  INSTALL_ROLLBACK=""
+  INSTALL_SKILLS=""
+  INSTALL_HOSTS=""
+  INSTALL_PATH_STATE="no"
+  INSTALL_PATH_DETAIL="agent-skills is not on PATH"
+  INSTALL_DRIFT=""
+  INSTALL_BROKEN=""
+
+  local lib_dir="${AS_LIB_DIR:-${REPO_ROOT}/lib}"
+  if [[ ! -f "${lib_dir}/runtime.sh" ]]; then
+    INSTALL_DETAIL="lib/runtime.sh not reachable; this release looks incomplete"
+    return 0
+  fi
+  # shellcheck source=lib/runtime.sh
+  AS_LIB_DIR="${lib_dir}" . "${lib_dir}/runtime.sh"
+  INSTALL_ROOT="$(as_home)"
+
+  if as_is_installed; then
+    INSTALL_VERSION="$(as_installed_version 2>/dev/null || printf 'unknown')"
+    INSTALL_STATE="yes"
+    INSTALL_DETAIL="v${INSTALL_VERSION} at ${INSTALL_ROOT}"
+  fi
+
+  # Everything below reads the install manifest, which records where this
+  # machine's releases come from. Nothing here contacts the network: doctor must
+  # work offline, because the machine being offline is one of the things people
+  # run it to find out about.
+  local manifest
+  manifest="$(as_manifest_path)"
+  if [[ -f "${manifest}" ]]; then
+    local fields
+    fields="$(AS_MF="${manifest}" ${PYTHON3} -c '
+import json
+import os
+
+try:
+    with open(os.environ["AS_MF"], encoding="utf-8") as handle:
+        data = json.load(handle)
+except Exception:
+    raise SystemExit(0)
+provider = data.get("provider", {}) or {}
+print(data.get("mode", ""))
+print(data.get("channel", ""))
+print(provider.get("id", ""))
+print(provider.get("description", ""))
+print(" ".join(data.get("hosts", []) or []))
+' 2>/dev/null || true)"
+    INSTALL_MODE="$(printf '%s\n' "${fields}" | sed -n '1p')"
+    INSTALL_CHANNEL="$(printf '%s\n' "${fields}" | sed -n '2p')"
+    INSTALL_PROVIDER="$(printf '%s\n' "${fields}" | sed -n '3p')"
+    INSTALL_PROVIDER_SOURCE="$(printf '%s\n' "${fields}" | sed -n '4p')"
+    INSTALL_HOSTS="$(printf '%s\n' "${fields}" | sed -n '5p')"
+  fi
+
+  local active source_version
+  active="$(as_active_version 2>/dev/null || printf '')"
+  source_version="$(as_source_version 2>/dev/null || true)"
+  if [[ -n "${source_version}" && -n "${INSTALL_VERSION}" && "${source_version}" != "${INSTALL_VERSION}" ]]; then
+    INSTALL_DRIFT="manifest v${INSTALL_VERSION}, active release v${source_version}"
+  elif [[ -n "${active}" && -n "${INSTALL_VERSION}" && "${active}" != "${INSTALL_VERSION}" ]]; then
+    INSTALL_DRIFT="current -> ${active}, manifest v${INSTALL_VERSION}"
+  fi
+
+  INSTALL_ROLLBACK="$(as_rollback_candidate 2>/dev/null || printf '')"
+
+  # A broken link here is the difference between "installed" and "installed and
+  # usable", and it is invisible until a skill fails to load.
+  local tree
+  for tree in current skills scripts lib bin docs hooks; do
+    local path="${INSTALL_ROOT}/${tree}"
+    if [[ -L "${path}" && ! -e "${path}" ]]; then
+      INSTALL_BROKEN="${INSTALL_BROKEN}${tree} "
     fi
-  else
-    INSTALL_DETAIL="lib/runtime.sh not reachable; this clone looks incomplete"
+  done
+
+  local skills_dir="${INSTALL_ROOT}/skills"
+  if [[ -d "${skills_dir}" ]]; then
+    local count=0 entry
+    for entry in "${skills_dir}"/*; do
+      [[ -f "${entry}/SKILL.md" ]] && count=$((count + 1))
+    done
+    INSTALL_SKILLS="${count}"
+  fi
+
+  if have agent-skills; then
+    INSTALL_PATH_STATE="yes"
+    INSTALL_PATH_DETAIL="$(command -v agent-skills)"
+  elif [[ -x "${INSTALL_ROOT}/bin/agent-skills" ]]; then
+    INSTALL_PATH_DETAIL="not on PATH; use ${INSTALL_ROOT}/bin/agent-skills"
+  fi
+
+  # Context Optimizer travels inside the release, so its availability is a
+  # property of the active release rather than a separate installation.
+  CONTEXT_STATE="no"
+  CONTEXT_DETAIL="context runtime not reachable in the active release"
+  local context_script="${REPO_ROOT}/scripts/context.py"
+  [[ -f "${context_script}" ]] || context_script="${INSTALL_ROOT}/scripts/context.py"
+  if [[ -f "${context_script}" ]]; then
+    if ${PYTHON3} "${context_script}" --help >/dev/null 2>&1; then
+      CONTEXT_STATE="yes"
+      CONTEXT_DETAIL="context-optimizer skill and runtime present, same release"
+    else
+      CONTEXT_DETAIL="scripts/context.py present but not runnable"
+    fi
   fi
 
   MODE_STATE="unknown"
@@ -366,6 +466,9 @@ mark() {
 render_brief() {
   echo "  capability report:"
   printf '    %sinstall          %s\n' "$(mark "${INSTALL_STATE}")" "${INSTALL_DETAIL}"
+  if [[ -n "${INSTALL_DRIFT}" ]]; then
+    printf '    NO  version drift    %s\n' "${INSTALL_DRIFT}"
+  fi
   printf '    %smode             %s\n' "$(mark "${MODE_STATE}")" "${MODE_DETAIL}"
   printf '    %ssecret store     %s\n' "$(mark "${SECRET_BACKEND_STATE}")" "${SECRET_BACKEND_DETAIL}"
   printf '    %stracker config   %s\n' "$(mark "${TRACKER_STATE}")" "${TRACKER_DETAIL}"
@@ -388,7 +491,30 @@ render_full() {
   echo "  skills src: ${REPO_ROOT}/skills"
   echo ""
   echo "Installation"
-  printf '  %sglobal install — %s\n' "$(mark "${INSTALL_STATE}")" "${INSTALL_DETAIL}"
+  printf '  %sinstalled — %s\n' "$(mark "${INSTALL_STATE}")" "${INSTALL_DETAIL}"
+  [[ -n "${INSTALL_MODE}" ]] && printf '  --  install kind — %s\n' "${INSTALL_MODE}"
+  [[ -n "${INSTALL_CHANNEL}" ]] && printf '  --  release channel — %s\n' "${INSTALL_CHANNEL}"
+  if [[ -n "${INSTALL_PROVIDER}" ]]; then
+    printf '  --  release source — %s (%s)\n' "${INSTALL_PROVIDER}" "${INSTALL_PROVIDER_SOURCE}"
+  fi
+  printf '  --  skills installed — %s\n' "${INSTALL_SKILLS:-0}"
+  printf '  --  host registrations — %s\n' "${INSTALL_HOSTS:-none}"
+  printf '  %sagent-skills on PATH — %s\n' "$(mark "${INSTALL_PATH_STATE}")" "${INSTALL_PATH_DETAIL}"
+  if [[ -n "${INSTALL_DRIFT}" ]]; then
+    printf '  NO  version drift — %s\n' "${INSTALL_DRIFT}"
+    echo "      Run: agent-skills install"
+  elif [[ "${INSTALL_STATE}" == "yes" ]]; then
+    printf '  ok  version coherence — runtime, skills, and manifest agree\n'
+  fi
+  if [[ -n "${INSTALL_BROKEN}" ]]; then
+    printf '  NO  broken links — %s\n' "${INSTALL_BROKEN% }"
+  fi
+  if [[ -n "${INSTALL_ROLLBACK}" ]]; then
+    printf '  --  previous release — v%s (agent-skills rollback)\n' "${INSTALL_ROLLBACK}"
+  else
+    printf '  --  previous release — none retained yet\n'
+  fi
+  printf '  %scontext optimizer — %s\n' "$(mark "${CONTEXT_STATE}")" "${CONTEXT_DETAIL}"
   printf '  %sexecution mode — %s\n' "$(mark "${MODE_STATE}")" "${MODE_DETAIL}"
   printf '  %ssecret storage — %s\n' "$(mark "${SECRET_BACKEND_STATE}")" "${SECRET_BACKEND_DETAIL}"
   echo ""
@@ -446,6 +572,18 @@ render_json() {
   printf '  "install": "%s",\n' "${INSTALL_STATE}"
   printf '  "install_detail": "%s",\n' "$(json_escape "${INSTALL_DETAIL}")"
   printf '  "installed_version": "%s",\n' "$(json_escape "${INSTALL_VERSION}")"
+  printf '  "install_root": "%s",\n' "$(json_escape "${INSTALL_ROOT}")"
+  printf '  "install_kind": "%s",\n' "$(json_escape "${INSTALL_MODE}")"
+  printf '  "release_channel": "%s",\n' "$(json_escape "${INSTALL_CHANNEL}")"
+  printf '  "release_provider": "%s",\n' "$(json_escape "${INSTALL_PROVIDER}")"
+  printf '  "release_source": "%s",\n' "$(json_escape "${INSTALL_PROVIDER_SOURCE}")"
+  printf '  "skills_installed": "%s",\n' "$(json_escape "${INSTALL_SKILLS}")"
+  printf '  "host_registrations": "%s",\n' "$(json_escape "${INSTALL_HOSTS}")"
+  printf '  "cli_on_path": "%s",\n' "${INSTALL_PATH_STATE}"
+  printf '  "version_drift": "%s",\n' "$(json_escape "${INSTALL_DRIFT}")"
+  printf '  "broken_links": "%s",\n' "$(json_escape "${INSTALL_BROKEN% }")"
+  printf '  "rollback_candidate": "%s",\n' "$(json_escape "${INSTALL_ROLLBACK}")"
+  printf '  "context_optimizer": "%s",\n' "${CONTEXT_STATE}"
   printf '  "mode": "%s",\n' "$(json_escape "${MODE_DETAIL}")"
   printf '  "secret_backend": "%s",\n' "${SECRET_BACKEND_STATE}"
   printf '  "secret_backend_detail": "%s",\n' "$(json_escape "${SECRET_BACKEND_DETAIL}")"

@@ -1,19 +1,23 @@
 #!/usr/bin/env bash
 # agent-skills — one stable entry point, resolvable from any repository.
 #
-# This is the command every globally installed skill invokes. It exists so a
-# skill never has to guess a relative path like `agent-skills/scripts/...`,
-# which only worked when the clone happened to sit next to the current
-# directory. It resolves its own real location through any number of symlinks,
-# then dispatches to the matching helper in the same release.
+# This is the command every globally installed skill invokes, and the command
+# users type. It exists so a skill never has to guess a relative path, and so
+# the product has one durable name that survives changes to how it is
+# distributed.
+#
+# It resolves its own real location through any number of symlinks, which is how
+# it always reaches helpers from its own release:
+#
+#   ~/.local/bin/agent-skills
+#     -> ~/.agent-skills/bin/agent-skills
+#       -> ~/.agent-skills/current/bin/agent-skills
+#         -> ~/.agent-skills/versions/<active>/bin/agent-skills
 #
 # Run `agent-skills help` for the command list.
 
 set -uo pipefail
 
-# Resolve this script's physical directory, following symlinks. The launcher is
-# normally reached through two of them:
-#   ~/.local/bin/agent-skills -> ~/.agent-skills/bin/agent-skills -> <clone>/bin/agent-skills
 AS_SELF="${BASH_SOURCE[0]}"
 while [ -L "${AS_SELF}" ]; do
   AS_SELF_DIR="$(cd -P "$(dirname "${AS_SELF}")" >/dev/null 2>&1 && pwd)"
@@ -34,19 +38,26 @@ export AS_LIB_DIR
 AS_SOURCE_DIR="$(as_source_dir 2>/dev/null || true)"
 PYTHON3="${PYTHON3:-python3}"
 
+# Exit codes are a public contract; see lib/asrelease/exits.py.
+AS_EXIT_USAGE=2
+
 usage() {
   cat <<'EOF'
 Usage: agent-skills <command> [options]
 
-Installation
-  install               Install or refresh the machine-global installation
+Installation and releases
+  install               Install Agent Skills on this machine
+  update                Move to the latest release, transactionally
+  rollback              Return to the previously installed release
+  versions              List installed and available releases
+  check-updates         Compare the installed version against the latest release
   verify                Check the installation and report problems (no writes)
   doctor                Report what this environment can actually do
-  update                Fetch the latest release and refresh the installation
-  check-updates         Compare the installed version against the latest release
-  uninstall             Remove agent-skills-owned links and state
   hosts [--json]        List supported hosts and their global discovery paths
-  migrate               Explain how to move off a pre-0.37 workspace install
+  provider              Where releases come from, and whether it is reachable
+  uninstall             Remove agent-skills-owned links, hooks, and releases
+  dev <install|...>     Development install from a local source tree
+  migrate               Explain how to move off a pre-0.43 installation
 
 Task lifecycle
   start-task [args]     Mandatory preflight: memory, knowledge, capability report
@@ -71,8 +82,21 @@ Memory and helpers
   auth-preflight [args] Legacy tracker auth check; prefer `access resolve`
 
 Other
-  version               Print the installed version
+  version               Print the active version
   help                  Show this message
+
+Install and update options:
+  --version X           Install or update to this exact release
+  --channel stable|rc   Which release line to follow (default: stable)
+  --source DIR          Install from a local source tree instead of the remote
+  --repo URL            Use a different git remote as the release source
+  --provider local|git  Choose the release provider explicitly
+  --hosts a,b,c         Register only these host ids
+  --all-hosts           Register every linkable host, detected or not
+  --no-path-link        Do not link the launcher into a PATH directory
+  --allow-downgrade     Permit replacing the active release with an older one
+  --keep N              How many releases to retain for rollback (default: 2)
+  --purge               With uninstall: also remove credential metadata
 
 Access subcommands (see docs/access-resolution.md):
   access resolve --service NAME [--resource URI] [--require f1,f2] [--secret f]
@@ -104,29 +128,25 @@ Guard subcommands (see docs/execution-guard.md):
   guard rules [--format json]      The rule catalogue and its effective outcomes
   guard audit [--tail N] [--clear]  The local, redacted decision log
   guard run -- '<command>'         Wrapper mode for hosts with no hook
-  guard install|verify|uninstall|doctor
+  guard install|reconcile|verify|uninstall|doctor
 
 The guard is a second layer under the destructive-action policy, not a
 replacement for it. Skill policy is the semantic contract; the guard is the
 technical enforcement point where a host offers one. Exit codes for
 check-command: 0 allow, 10 ask, 20 deny.
 
-Installation options:
-  --yes                 Accept safe defaults (non-interactive)
-  --hosts a,b,c         Register only these host ids
-  --all-hosts           Register every linkable host, detected or not
-  --no-path-link        Do not link the launcher into a PATH directory
-  --source DIR          Use this source tree instead of the detected one
-  --purge               With uninstall: also remove credential metadata
+Exit codes (stable): 0 ok, 2 usage, 3 authentication required, 4 network,
+5 integrity, 6 installation failed, 7 verification failed, 10 update available.
 
-Nothing in `install` asks for a credential. External access is resolved when a
-task needs it. See docs/installation.md and docs/access-resolution.md.
+Nothing in `install` asks for a credential. Reading the release source may need
+the git access you already have; that is distribution access, and it is never
+used for your projects. See docs/installation.md and docs/access-resolution.md.
 EOF
 }
 
 require_source() {
   if [ -z "${AS_SOURCE_DIR}" ]; then
-    as_die "cannot locate the agent-skills source tree. Reinstall with: ./setup.init" 2
+    as_die "no active Agent Skills release found. Install it with: agent-skills install" 6
   fi
 }
 
@@ -138,7 +158,7 @@ run_script() {
   require_source
   local path="${AS_SOURCE_DIR}/${relative}"
   if [ ! -f "${path}" ]; then
-    as_die "missing helper: ${path}" 2
+    as_die "missing helper: ${path}" 6
   fi
   case "${relative}" in
     *.py) exec "${PYTHON3}" "${path}" "$@" ;;
@@ -146,70 +166,78 @@ run_script() {
   esac
 }
 
+# The install engine. Unlike run_script this must work before anything is
+# installed, so it resolves relative to this launcher rather than to the
+# active release: `npx <package> install` runs the launcher out of a freshly
+# downloaded payload with nothing active yet.
+run_installer() {
+  local engine="${AS_BIN_DIR}/../scripts/install.py"
+  if [ ! -f "${engine}" ]; then
+    require_source
+    engine="${AS_SOURCE_DIR}/scripts/install.py"
+  fi
+  exec "${PYTHON3}" "${engine}" "$@"
+}
+
 COMMAND="${1:-help}"
 [ "$#" -gt 0 ] && shift
 
-# Installation options shared by install/uninstall.
-AS_OPT_HOSTS=""
-AS_OPT_ALL_HOSTS="false"
-AS_OPT_NO_PATH="false"
-AS_OPT_PURGE="false"
-AS_OPT_YES="false"
-AS_OPT_JSON="false"
-AS_UPDATE_REF=""
-export AS_OPT_HOSTS AS_OPT_ALL_HOSTS AS_OPT_NO_PATH AS_OPT_PURGE
-
-# Guard every flag that takes its value as a separate argument.
-#
-# `shift 2` is a no-op when the flag is the last argument left: it returns
-# non-zero and shifts nothing, so `while [ "$#" -gt 0 ]` re-reads the same
-# argument forever. This script runs without `set -e`, so the failed shift is
-# not fatal on its own — the loop just spins silently. Fail loudly instead.
-need_value() {
-  [ "$#" -ge 2 ] || as_die "option '$1' requires a value" 2
-}
-
-parse_install_options() {
-  while [ "$#" -gt 0 ]; do
-    case "$1" in
-      --yes|-y) AS_OPT_YES="true"; shift ;;
-      --hosts) need_value "$@"; AS_OPT_HOSTS="$2"; shift 2 ;;
-      --hosts=*) AS_OPT_HOSTS="${1#*=}"; shift ;;
-      --all-hosts) AS_OPT_ALL_HOSTS="true"; shift ;;
-      --no-path-link) AS_OPT_NO_PATH="true"; shift ;;
-      --purge) AS_OPT_PURGE="true"; shift ;;
-      --json) AS_OPT_JSON="true"; shift ;;
-      --source) need_value "$@"; AGENT_SKILLS_SOURCE="$2"; export AGENT_SKILLS_SOURCE; shift 2 ;;
-      --source=*) AGENT_SKILLS_SOURCE="${1#*=}"; export AGENT_SKILLS_SOURCE; shift ;;
-      --branch) need_value "$@"; AS_UPDATE_REF="$2"; shift 2 ;;
-      --branch=*) AS_UPDATE_REF="${1#*=}"; shift ;;
-      --help|-h) usage; exit 0 ;;
-      *) as_die "unknown option for '${COMMAND}': $1" 2 ;;
-    esac
-  done
-  export AS_OPT_HOSTS AS_OPT_ALL_HOSTS AS_OPT_NO_PATH AS_OPT_PURGE
-  AS_SOURCE_DIR="$(as_source_dir 2>/dev/null || true)"
-}
-
 case "${COMMAND}" in
-  install)
-    parse_install_options "$@"
-    # shellcheck source=lib/install.sh
-    . "${AS_LIB_DIR}/install.sh"
-    as_install_global
+  install|update|rollback|versions|check-updates|provider)
+    run_installer "${COMMAND}" "$@"
+    ;;
+
+  dev)
+    # Development install from a working tree. Distinct from `install` so a
+    # maintainer's unreleased branch can never be mistaken for a release, and
+    # so `agent-skills versions` shows which is which.
+    SUB="${1:-install}"
+    [ "$#" -gt 0 ] && shift
+    case "${SUB}" in
+      install)
+        SOURCE_ARG=""
+        case " $* " in
+          *" --source "*|*" --source="*) : ;;
+          *) SOURCE_ARG="--source $(pwd)" ;;
+        esac
+        # shellcheck disable=SC2086
+        run_installer install --provider local ${SOURCE_ARG} --dev "$@"
+        ;;
+      *) as_die "unknown dev subcommand: ${SUB}" "${AS_EXIT_USAGE}" ;;
+    esac
     ;;
 
   verify)
-    parse_install_options "$@"
+    # shellcheck source=lib/install.sh
     . "${AS_LIB_DIR}/install.sh"
+    AS_VERIFY_QUIET="false"
+    for arg in "$@"; do
+      case "${arg}" in
+        --quiet) AS_VERIFY_QUIET="true" ;;
+        *) as_die "unknown option for verify: ${arg}" "${AS_EXIT_USAGE}" ;;
+      esac
+    done
+    if [ "${AS_VERIFY_QUIET}" = "true" ]; then
+      as_verify_install >/dev/null 2>&1
+      exit $?
+    fi
     as_verify_install
     ;;
 
   uninstall)
-    parse_install_options "$@"
     . "${AS_LIB_DIR}/install.sh"
+    AS_OPT_PURGE="false"
+    AS_OPT_YES="false"
+    for arg in "$@"; do
+      case "${arg}" in
+        --purge) AS_OPT_PURGE="true" ;;
+        --yes|-y) AS_OPT_YES="true" ;;
+        *) as_die "unknown option for uninstall: ${arg}" "${AS_EXIT_USAGE}" ;;
+      esac
+    done
+    export AS_OPT_PURGE
     if [ "${AS_OPT_YES}" != "true" ] && [ -t 0 ]; then
-      printf 'Remove agent-skills host registrations and install links? [y/N] '
+      printf 'Remove agent-skills releases, host registrations, and hooks? [y/N] '
       read -r reply
       case "${reply}" in
         y|Y|yes|YES) : ;;
@@ -220,32 +248,83 @@ case "${COMMAND}" in
     ;;
 
   hosts)
-    parse_install_options "$@"
     . "${AS_LIB_DIR}/install.sh"
+    AS_OPT_JSON="false"
+    for arg in "$@"; do
+      case "${arg}" in
+        --json) AS_OPT_JSON="true" ;;
+        *) as_die "unknown option for hosts: ${arg}" "${AS_EXIT_USAGE}" ;;
+      esac
+    done
     as_list_hosts "${AS_OPT_JSON}"
     ;;
 
-  update)
-    parse_install_options "$@"
-    require_source
-    args="--update"
-    [ -n "${AS_UPDATE_REF}" ] && args="${args} --branch ${AS_UPDATE_REF}"
-    # setup.init owns the git-side update (dirty-tree guard, tag checkout,
-    # changelog excerpt) and then re-runs the install.
-    # shellcheck disable=SC2086
-    exec bash "${AS_SOURCE_DIR}/setup.init" ${args}
-    ;;
-
-  check-updates)
-    require_source
-    exec bash "${AS_SOURCE_DIR}/setup.init" --check-updates
-    ;;
-
   migrate)
-    # No need to source install.sh here: the exec replaces this shell, and
-    # migrate.sh sources what it needs itself.
     require_source
     exec bash "${AS_SOURCE_DIR}/lib/migrate.sh" "$@"
+    ;;
+
+  # Run by the install transaction against a staged release, before anything
+  # points at it. A release that cannot answer this is never activated.
+  self-test)
+    RELEASE_DIR="$(cd -P "${AS_BIN_DIR}/.." >/dev/null 2>&1 && pwd)"
+    rc=0
+    version="$(as_read_version_file "${RELEASE_DIR}/VERSION" 2>/dev/null || printf '')"
+    if [ -z "${version}" ]; then
+      printf 'self-test: no readable VERSION in %s\n' "${RELEASE_DIR}" >&2
+      exit 6
+    fi
+    for required in \
+      lib/runtime.sh lib/install.sh lib/hosts.registry lib/guard.registry \
+      scripts/install.py scripts/hosts-reconcile.sh scripts/doctor.sh \
+      scripts/start-task.sh scripts/finish-task.sh scripts/access.py \
+      scripts/guard.py scripts/context.py; do
+      if [ ! -f "${RELEASE_DIR}/${required}" ]; then
+        printf 'self-test: missing %s\n' "${required}" >&2
+        rc=6
+      fi
+    done
+    for script in "${RELEASE_DIR}"/lib/*.sh "${RELEASE_DIR}"/scripts/*.sh; do
+      [ -f "${script}" ] || continue
+      bash -n "${script}" || rc=6
+    done
+    if ! "${PYTHON3}" - "${RELEASE_DIR}" <<'SELFTEST'
+import os
+import sys
+
+root = sys.argv[1]
+sys.path.insert(0, os.path.join(root, "lib"))
+import asrelease  # noqa: F401
+from asrelease.release import read_version_file
+
+failures = []
+for name in sorted(os.listdir(os.path.join(root, "scripts"))):
+    if not name.endswith(".py"):
+        continue
+    path = os.path.join(root, "scripts", name)
+    try:
+        compile(open(path, encoding="utf-8").read(), path, "exec")
+    except SyntaxError as exc:
+        failures.append("{}: {}".format(name, exc))
+if not read_version_file(root):
+    failures.append("VERSION is not readable through the release module")
+skills = os.path.join(root, "skills")
+found = [
+    name
+    for name in os.listdir(skills)
+    if os.path.isfile(os.path.join(skills, name, "SKILL.md"))
+]
+if not found:
+    failures.append("release ships no skills")
+for line in failures:
+    sys.stderr.write("self-test: {}\n".format(line))
+sys.exit(1 if failures else 0)
+SELFTEST
+    then
+      rc=6
+    fi
+    [ "${rc}" -eq 0 ] && printf 'self-test ok: %s\n' "${version}"
+    exit "${rc}"
     ;;
 
   start-task) run_script "scripts/start-task.sh" "$@" ;;
@@ -258,8 +337,7 @@ case "${COMMAND}" in
 
   # Every helper is reachable through this one command, so a skill never has to
   # guess whether the scripts live at `scripts/`, `agent-skills/scripts/`, or
-  # `.agent-skills/scripts/`. That guessing was the v0.36 instruction, and it
-  # only worked when the clone happened to sit next to the current directory.
+  # `.agent-skills/scripts/`.
   memory) run_script "scripts/project-memory.py" "$@" ;;
   knowledge) run_script "scripts/knowledge.py" "$@" ;;
   blackboard) run_script "scripts/blackboard.py" "$@" ;;
@@ -285,6 +363,6 @@ case "${COMMAND}" in
   *)
     printf 'agent-skills: unknown command %s\n\n' "${COMMAND}" >&2
     usage >&2
-    exit 2
+    exit "${AS_EXIT_USAGE}"
     ;;
 esac

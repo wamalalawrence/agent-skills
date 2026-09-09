@@ -38,7 +38,7 @@ the project should grow through proven usefulness rather than a large up-front f
   checkable without a model judging prose.
 - Decide the credential model deferred in
   [the 2026-09 plan](./docs/plans/2026-09-learning-voice-and-router.md): OS-keychain
-  storage, collapsing the duplicated config surface, and splitting `setup.init`.
+  storage, collapsing the duplicated config surface, and retiring `setup.init` as an installer.
 
 ## Later
 

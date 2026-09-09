@@ -39,6 +39,8 @@ Subcommands:
   scan-content    Flag instruction-shaped or credential-shaped untrusted text.
   doctor          Per-host enforcement status.
   install         Register the pre-execution hook with hook-capable hosts.
+  reconcile       Re-point registered hooks at the active release. Run by the
+                  installer after every activation and rollback.
   verify          Check those registrations without writing.
   uninstall       Remove only Agent Skills-owned entries.
   audit           Read the local, redacted decision log.

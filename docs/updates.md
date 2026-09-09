@@ -1,86 +1,123 @@
-# Updates
+# Updates, rollback, and channels
 
-Releases follow [semver](versioning.md) and ship as git tags (`v0.37.0`, `v0.38.0`, …) with matching
-GitHub releases. This page covers noticing a new release and applying it without losing local state.
+Releases follow [semver](versioning.md) and ship as git tags (`v0.42.0`, `v0.43.0`, …) with matching
+GitHub releases. This page covers noticing a new release, applying it without losing local state,
+and undoing it when it turns out to be a mistake.
 
 ## How an update flows
 
 ```text
-GitHub release  --tag-->  origin  --git fetch-->  the source clone
-                                                       |
-                                                       |  agent-skills update
-                                                       v
-                                        one canonical tree under AGENT_SKILLS_HOME
-                                                       |
-                                    (host adapters already point here; nothing to re-copy)
-                                                       v
-                                        the next task uses the new skills
+agent-skills update
+        |
+        v
+  release provider          which release should I be on?
+        |
+        v
+  download + stage          into cache/staging, nothing on the machine has changed yet
+        |
+        v
+  verify                    the payload is the release it claims to be
+        |
+        v
+  self-test                 the staged runtime answers before anything points at it
+        |
+        v
+  ACTIVATE                  one atomic symlink swap: current -> versions/<new>
+        |
+        v
+  reconcile hosts           registrations and Execution Guard hooks re-asserted
+        |
+        v
+  verify machine            and if this fails, roll straight back
 ```
 
-The source of truth is the git tag. Everything downstream — the canonical trees, the per-host
-symlinks, the manifest — is derived from the clone on disk. Because host registrations are symlinks
-into one tree, updating the clone updates every host at once. Nothing is copied, so nothing can go
-stale independently.
+No source checkout is involved. Nothing is copied per host, because host registrations point at
+`~/.agent-skills/skills`, which points at `current` — so activating a release moves every host at
+once and there is no window in which two hosts disagree about the version.
 
 ## Check
 
 ```bash
 agent-skills check-updates
+agent-skills check-updates --json
 ```
 
-Compares local `VERSION` against the latest release tag on `origin` using `git ls-remote --tags`, and
-compares the local commit against `origin/<branch>`. Reports `up to date`, `update available` with
-the version delta, or `ahead / detached` for a contributor checkout.
+Asks the release provider for the latest release on your channel and compares it against the active
+version. Exit codes: `0` up to date or ahead, `10` update available, `2` usage error, `3`
+authentication required, `4` the source was unreachable. The distinct `10` makes it scriptable in a
+shell prompt or CI check without being confused with a failure.
 
-Exit codes: `0` up-to-date or ahead, `10` update available, `2` setup error. The distinct `10` makes
-it scriptable in a shell prompt or CI smoke check without being confused with a generic failure.
-
-Read-only. It does not fetch objects, modify the working tree, or touch the install.
+Read-only. It downloads nothing and touches no installation.
 
 ## Apply
 
 ```bash
 agent-skills update
-agent-skills update --branch main   # track a branch instead of the latest tag
+agent-skills update --version 0.43.0     # a specific release
+agent-skills update --channel rc         # follow release candidates too
 ```
 
-This:
-
-1. Refuses if the clone's working tree is dirty. No silent overwrites.
-2. Runs `git fetch --tags origin`.
-3. Checks out the latest release tag, or the branch you named.
-4. Re-runs the global install to refresh the canonical trees, host registrations, and manifest.
-5. Prints the new release's `CHANGELOG.md` section so you can see what changed before your next task.
-
-`update` is opt-in. It never runs on its own, never writes to `origin`, and never pushes anything.
+`update` is opt-in. It never runs on its own, never writes to a remote, and never pushes anything.
 
 ### What update guarantees
 
-- **One canonical source** is moved; there is no second copy to synchronise.
-- **Host adapters keep pointing at it.** Registrations are refreshed idempotently, so a rerun neither
-  duplicates a skill nor leaves a stale link.
-- **Credentials are untouched.** They live in the OS credential store and the user config directory,
-  neither of which the installer rewrites.
-- **Project bindings are untouched.**
-- **No repository is modified.** Update touches the clone and your home directory, never a project
-  you work on.
-- **Skills you installed yourself survive.** Only links resolving into the install root are managed.
-- **Lock and version metadata are rewritten**, so drift detection is accurate afterwards.
+- **A failed update changes nothing.** Everything before `ACTIVATE` happens in a staging directory.
+  A download that fails, a payload whose hash does not match, or a release whose runtime cannot
+  answer its own self-test all leave the previous release running.
+- **A failed activation is undone.** If activation or host reconciliation fails, the previous release
+  is re-activated and the hosts reconciled back to it.
+- **No mixed installs.** Skills, runtime, and docs come from one version directory. `verify` asserts
+  that the manifest, `current`, and the payload's own `VERSION` all agree, and fails if they do not.
+- **The previous release is kept**, so `rollback` has somewhere to go.
+- **Credentials and project bindings are untouched.** They live in the OS credential store and the
+  user config directory, neither of which the installer rewrites.
+- **No repository you work on is modified.**
+- **Skills and hooks you installed yourself survive.** Only entries resolving into the install root
+  are managed.
+- **Execution Guard hooks stay coherent.** They point at `~/.agent-skills/bin/agent-skills`, which
+  resolves through `current`, so enforcement and the skills it protects are always the same version.
 
-## Manual update
+### Downgrades are never a side effect
 
 ```bash
-cd /path/to/agent-skills
-git fetch --tags origin
-git checkout v0.38.0
-./setup.init                 # refresh the install after a manual checkout
+agent-skills update --version 0.42.0
+# agent-skills: refusing to replace the active release 0.43.0 with the older 0.42.0
+#   to go back deliberately:   agent-skills rollback --version 0.42.0
+#   to force it anyway:        add --allow-downgrade
 ```
 
-This is the contributor path. Most users should prefer `agent-skills update` because it includes the
-dirty-tree check, the install refresh, and the changelog excerpt.
+An update that quietly moves a machine backwards is how a downgrade attack lands a version whose
+vulnerabilities are already published, and it is also just a bad surprise. Going backwards is
+supported — it is called `rollback` — but never as a side effect of `update`.
 
-If you `git pull` and forget the refresh, nothing breaks — the canonical trees are symlinks, so the
-new skills are live immediately. Only the manifest goes stale, which `verify` reports as drift.
+## Rollback
+
+```bash
+agent-skills rollback                  # return to the release you were on before
+agent-skills rollback --version 0.42.0 # a specific installed release
+agent-skills versions                  # what is installed, and what is active
+```
+
+Rollback re-verifies the target payload before activating it, then reconciles host registrations and
+Execution Guard hooks so they resolve to the release you went back to. It is an undo, not a time
+machine: after rolling back, the rollback candidate is the release you rolled back *from*, so a
+second rollback undoes the first rather than walking further into the past.
+
+Two releases are retained by default. `--keep N` on install or update changes that.
+
+## Channels
+
+```bash
+agent-skills update                  # stable
+agent-skills update --channel rc     # release candidates as well
+```
+
+`stable` never offers a pre-release, so `1.0.0-rc.1` will not appear on a stable machine. `rc` is a
+superset: someone tracking release candidates is still offered the stable release that supersedes the
+last one.
+
+The channel a machine is on is recorded in the install manifest and reported by
+`agent-skills doctor`.
 
 ## Drift detection
 
@@ -88,14 +125,16 @@ new skills are live immediately. Only the manifest goes stale, which `verify` re
 agent-skills verify
 ```
 
-Compares the manifest against what is on disk and reports:
+Reports:
 
-- **version drift** — the manifest says `v0.37.0` and the source tree says `v0.38.0`. Expected right
-  after a manual `git pull`; fixed by `./setup.init`.
-- **a broken canonical link** — the clone was moved or deleted. Reinstall repairs it.
+- **version drift** — the manifest, `current`, and the payload's `VERSION` disagree. A failure, not a
+  warning: it means the installation is mixed. `agent-skills install` repairs it.
+- **a broken activation pointer** — `current` points at a release that is no longer there.
+  `agent-skills rollback` or a reinstall repairs it.
 - **a missing or foreign host registration** — a host directory lost a link, or something else owns
   that name. Reported per host.
-- **legacy remnants** — a pre-v0.37.0 `.skills` or `.agent-skills.lock` beside the clone.
+- **whether a rollback target exists**, because a recovery path you have never checked is not a
+  recovery path.
 
 Per-task, an agent that loads a `SKILL.md` compares its `metadata.version` against the installed
 version and surfaces one line when they disagree:
@@ -105,8 +144,8 @@ skill drift: <name> v<a> chosen, v<b> ignored at <path>
 ```
 
 Warnings, not blockers. Skills keep working with the version they loaded; the point is to make skew
-**visible** rather than silent. Under a global install the common causes are a stale vendored copy in
-some repository and an un-refreshed manifest.
+**visible** rather than silent. Under a global install the usual cause is a stale vendored copy in
+some repository.
 
 ## Cloud and in-repo updates
 
@@ -146,48 +185,19 @@ jobs:
 Treat exit `10` as informational. The recommendation is **not** to fail CI on stale skills — surface
 the warning and let the team upgrade on its own cadence.
 
-## Legacy workspace updates
-
-An install that predates v0.37.0 keeps its update path:
-
-```bash
-cd agent-skills
-./setup.init --update --workspace-root /path/to/work
-```
-
-Values in `.env` outside the marker block are preserved verbatim, and Jira / Confluence / Sonar
-credentials inside the block survive the rerun — that behaviour is covered by
-`scripts/test-setup-update-preserves-credentials.sh`. An inherited `WORKSPACE_ROOT` pointing at a
-directory with a `.env` also selects this path, so an existing script keeps working.
-
-To move to the global install, see
-[installation.md](installation.md#upgrading-from-v036x-workspace-installation).
-
 ## Watching for releases
 
 - **GitHub notifications.** Repo → `Watch` → `Custom` → `Releases`.
 - **RSS / Atom.** `https://github.com/wamalalawrence/agent-skills/releases.atom`.
 - **`gh` CLI.** `gh release list --repo wamalalawrence/agent-skills --limit 5`.
 
-## Rollback
-
-```bash
-cd /path/to/agent-skills
-git fetch --tags origin
-git checkout v0.36.0
-./setup.init
-```
-
-Symmetric with update. The manifest is rewritten to the rolled-back version so the next task does not
-warn about drift.
-
 ## What does not change on update
 
 - Credential identities and their stored secrets.
 - Project bindings.
 - `.cache/agent-skills/...` in any repository — that is per-task evidence, not config.
-- Legacy `.env` values outside the marker block.
-- Vendored copies in other repositories. Only the source clone and the install are refreshed.
+- Any legacy `.env` you still have. Nothing writes it; the access resolver still reads it.
+- Vendored copies in other repositories. Only this machine's installation is refreshed.
 - Skills you installed yourself in a host directory.
 
 ## Related
@@ -195,5 +205,6 @@ warn about drift.
 - [Installation](installation.md) — first install and migration.
 - [Skill-source resolution](skill-source-resolution.md) — which directory an agent loads, and how the
   manifest is consulted.
-- [Versioning](versioning.md) — what a version number promises before 1.0.
+- [Versioning and exit codes](versioning.md) — what a version number promises before 1.0.
+- [Release providers](release-providers.md) — where releases come from, and how they are verified.
 - [Release checklist](release-checklist.md) — the maintainer steps that produce a release.

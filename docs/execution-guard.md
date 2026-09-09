@@ -339,7 +339,7 @@ agent-skills guard verify              # confirm the registrations
 agent-skills guard uninstall           # remove only agent-skills-owned entries
 ```
 
-The guard is **not installed by `setup.init` or `agent-skills install`.** It edits host
+The guard is **not installed by `agent-skills install`.** It edits host
 configuration files the user owns — the same files that decide what their agent is allowed to
 do. Changing those as a side effect of "install the skills" would be a surprise in exactly the
 category where surprises are least acceptable. The installer prints a recommendation and the
@@ -650,3 +650,34 @@ Read these as part of the feature, not as a disclaimer.
 - [Installation](installation.md) — the global install this plugs into.
 - [Access resolution](access-resolution.md) — the same trust rule, applied to credentials.
 - [Repo knowledge](repo-knowledge.md) — the untrusted committed tier and its own doctor.
+
+## The guard and the installed release
+
+Guard hooks are registered against `~/.agent-skills/bin/agent-skills`, which resolves through the
+active release. That is deliberate, and it is what keeps enforcement and the skills it protects on
+the same version:
+
+```text
+~/.claude/settings.json
+  -> "~/.agent-skills/bin/agent-skills" guard check-tool --host claude-code
+       -> ~/.agent-skills/current/bin/agent-skills
+            -> ~/.agent-skills/versions/<active>/bin/agent-skills
+```
+
+`agent-skills update` and `agent-skills rollback` therefore move the guard with everything else, in
+the same atomic step. Neither can leave a machine where the skills are on one release and the hook
+enforcing their safety floor is on another.
+
+After every activation the installer runs `agent-skills guard reconcile`, which re-asserts the
+registrations the user already had. It is deliberately narrow: a host the user never registered stays
+unregistered, only entries carrying this project's signature are rewritten, and on a machine with no
+guard installation it does nothing and exits `0`. Installing a security control that edits host
+configuration remains an explicit choice, and an update is not the moment to make it on someone's
+behalf.
+
+`agent-skills uninstall` removes the guard hooks it owns, and nothing else. Hooks you wrote yourself
+survive, including ones in the same file and on the same event.
+
+`agent-skills doctor` reports the per-host enforcement level alongside the rest of the installation
+state, so "is the guard actually running here" is answered in the same place as "which version am I
+on".

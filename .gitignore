@@ -29,3 +29,11 @@ __pycache__/
 
 # Logs
 *.log
+
+# npm bootstrap build output. `scripts/build-npm-bootstrap.sh` regenerates it
+# from lib/asrelease and scripts/install.py, which are the only copies under
+# version control. Committing the vendored copy would create a second
+# installer that could silently drift from the first.
+npm/vendor/
+npm/LICENSE
+npm/*.tgz

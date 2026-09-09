@@ -13,13 +13,13 @@ license: MIT
 compatibility: >-
   Works with any agent that supports the Agent Skills format (Claude Code, Cursor,
   Windsurf, Continue, GitHub Copilot Chat, ChatGPT, etc.). Two execution modes —
-  `local-workspace` (multi-repo, setup.init + .env) and `in-repo` (single-repo,
+  `local-workspace` (multi-repo, a legacy .env) and `in-repo` (single-repo,
   .agent-skills.yml). Optional tracker CLI integration via `.jira-config.yml` (or equivalent
   tracker config for other platforms). See
   docs/execution-modes.md.
 metadata:
   author: wamalalawrence
-  version: "0.42.0"
+  version: "0.43.0"
   homepage: "https://github.com/wamalalawrence/agent-skills"
 argument-hint: >-
   issue URL/key, bug report, incident, support ticket, feature request, or task
@@ -202,7 +202,7 @@ reporting that the issue tracker or linked document store is unavailable:
 
 **Locate config files before claiming any are missing.** Run
 `agent-skills locate-config` — `.env` / `.jira-config.yml` (or equivalent tracker
-config) are written by `setup.init`
+config) live beside a legacy workspace
 to the **parent workspace folder**, not the repo cwd. "Not in cwd" is not "not in the
 workspace". Reporting the former as the latter is a workflow failure.
 
@@ -222,8 +222,8 @@ If config exists but is incomplete, the investigator must report:
 
 - which non-secret fields are unresolved (e.g. `${JIRA_HOST}` not set in `.env`),
 - which secret fields are missing (redacted, never echoed),
-- the smallest fix (typically: rerun `./setup.init` or add the missing key inside the
-  `# >>> agent-skills setup.init` block of `.env`),
+- the smallest fix (typically: add the missing key to `.env`, or hold it as a
+  credential identity with `agent-skills access set`),
 - whether the investigation can continue from supplied issue text alone (it can, with a
   clearly-marked limitation).
 

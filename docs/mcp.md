@@ -44,7 +44,7 @@ connector policy to hold the line.
 
 Not capability — the CLIs already cover capability. **Auth.**
 
-Before v0.37.0, `setup.init` prompted for Atlassian API tokens and wrote them in plaintext to `.env`,
+Before v0.37.0, setup prompted for Atlassian API tokens and wrote them in plaintext to `.env`,
 protected only by file permissions and a gitignore rule. It could not validate them, could not scope
 them, and could not rotate them. That was the weakest part of the whole setup story.
 
@@ -63,7 +63,7 @@ of setup friction at the same time.
 
 **One caveat that decides this for you:** the official remote server is Atlassian Cloud. On
 self-hosted Data Center it does not apply, personal access tokens remain the only option, and
-`setup.init`'s current model stays necessary. Check which you have before planning around it.
+the access resolver stays necessary. Check which you have before planning around it.
 
 ## The recommended minimal set
 

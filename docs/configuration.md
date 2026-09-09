@@ -186,8 +186,7 @@ telemetry live here. The repository root is found with `git rev-parse --show-top
 skill from a nested directory does not create a second cache.
 
 Add `.cache/` to the repository's `.gitignore`. In legacy workspace mode the cache is
-`${WORKSPACE_ROOT}/.cache/agent-skills/` and `setup.init --legacy-workspace` writes the ignore rule
-for you.
+`${WORKSPACE_ROOT}/.cache/agent-skills/`; add the ignore rule there yourself.
 
 ## Legacy workspace configuration
 
@@ -196,19 +195,19 @@ Installs from v0.36.x and earlier keep a `${WORKSPACE_ROOT}/.env` with a managed
 `ENVIRONMENTS_JSON`). That file still works:
 
 - the access resolver discovers it and maps the long-standing variable names onto fields;
-- `./setup.init --legacy-workspace` still writes and refreshes it;
-- `./setup.init --update` with an inherited `WORKSPACE_ROOT` preserves every value in it.
+- nothing writes or rewrites it any more. v0.43.0 removed the code that did, so the file is yours
+  alone and no installer will touch, normalise, or clear it.
 
 `PROJECTS_JSON` is no longer needed for a repository to be understood — inference covers it — but it
 is still read where present. The annotated schema lives in [`.env.example`](../.env.example), which
 is now a legacy reference rather than the primary configuration surface.
 
-Migration: [installation.md](installation.md#upgrading-from-v036x-workspace-installation), or run
+Migration: [installation.md](installation.md#coming-from-the-pre-v037-workspace-layout), or run
 `agent-skills migrate`.
 
-## Setup-managed marker block (legacy)
+### The marker block (legacy)
 
-`setup.init --legacy-workspace` owns one block in `.env`:
+An `.env` written before v0.43.0 carries a managed block:
 
 ```text
 # >>> agent-skills setup.init
@@ -216,10 +215,9 @@ Migration: [installation.md](installation.md#upgrading-from-v036x-workspace-inst
 # <<< agent-skills setup.init
 ```
 
-The block is overwritten on every rerun; edits **outside** it are preserved verbatim. Never define a
-managed key a second time outside the block — shell sourcing means last assignment wins, so a
-duplicate becomes a silent override. Both `setup.init --verify` and `scripts/validate-repo.py` fail
-on that.
+It is now inert punctuation. Nothing rewrites the block, so edits inside and outside it are equally
+safe. One rule survives because shell sourcing still applies: never define the same key twice, since
+the last assignment silently wins. `scripts/validate-repo.py` fails on that.
 
 ## Related
 

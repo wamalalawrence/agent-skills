@@ -50,7 +50,8 @@ Before opening a PR:
 
 ```bash
 python3 scripts/validate-repo.py                  # must pass
-./setup.init --yes --no-jira --workspace-root $(mktemp -d)  # if you touched setup
+bash scripts/test-cli-install.sh                  # if you touched installation
+python3 scripts/test-release-engine.py            # if you touched the release engine
 grep -RE "(https?://[^$]|github\.com/[^$]|@[A-Za-z0-9._%+-]+\.[A-Za-z]{2,})" skills/  # no leaked URLs/handles in skills/
 ```
 

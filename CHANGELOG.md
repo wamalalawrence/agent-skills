@@ -6,6 +6,196 @@ All notable project changes should be recorded here.
 
 - No unreleased changes.
 
+## 0.43.0 - One Command, One Installer
+
+Minor release, and a pre-1.0 architecture change. Installing Agent Skills stops being an act of
+repository maintenance.
+
+Until now the supported install was `git clone`, `cd`, `./setup.init`. That made the distribution
+channel and the product the same object: the installer was a file inside the thing being installed,
+updates were `git pull`, and "which version am I on" was answered by a working tree the user was
+expected to keep. It worked while the repository was public and every user was also a contributor.
+It stops working the moment either of those changes — and both are about to.
+
+The supported installation is now:
+
+```bash
+npx @wamala/agent-skills install
+```
+
+and the durable command afterwards is, as before, `agent-skills`.
+
+### One installer, and a release provider under it
+
+There is exactly one installation implementation. It lives in `lib/asrelease/`, and every path
+reaches it: the npm bootstrap, the `agent-skills` CLI, and `setup.init`. The bootstrap package
+vendors that engine rather than reimplementing it, and CI asserts the vendored copy is byte-identical
+to the repository's, so the two can never drift into being two installers.
+
+Underneath it is a release provider — the seam that decides where a payload comes from:
+
+```text
+agent-skills install
+        |
+        v
+  Release Provider
+        |
+        +----------------------+----------------------+
+        |                      |                      |
+        v                      v                      v
+GitReleaseProvider    LocalReleaseProvider    (future) PremiumRegistryProvider
+```
+
+The user-facing commands do not change across providers. `local` is how an unreleased branch is
+tested and how the whole acceptance suite runs without a network; `git` is how everyone else
+installs, and works identically against a public remote and an authenticated private one. A third is
+proven rather than promised: the test suite registers an in-process fake registry provider — with an
+entitlement check and an `AUTHENTICATION_REQUIRED` path — and runs the real install transaction
+through it. If installation ever grows a hidden dependency on GitHub, that test fails.
+
+Providers are selected by name from a fixed registry, never loaded from a path. A repository the user
+has merely opened must not be able to point the global installer at code, or credentials, of its
+choosing.
+
+See [docs/release-providers.md](docs/release-providers.md).
+
+### Installation is a transaction
+
+```text
+RESOLVE -> DOWNLOAD -> VERIFY -> STAGE -> SELF-TEST -> ACTIVATE -> HOSTS -> VERIFY
+```
+
+Everything up to and including the self-test happens in a staging directory. A download that fails, a
+payload whose hash does not match the one the release was published with, or a release whose runtime
+cannot answer its own self-test all leave the machine untouched and the previous release running.
+Only `ACTIVATE` changes anything, and it is a single atomic symlink swap. If activation or host
+reconciliation fails after that point, the previous release is put back.
+
+```text
+~/.agent-skills/
+├── current -> versions/0.43.0     the only pointer that decides what runs
+├── versions/
+│   ├── 0.42.0/                    kept, so rollback has somewhere to go
+│   └── 0.43.0/
+├── state/                         install history; survives every upgrade
+└── skills -> current/skills       and lib, bin, scripts, docs, hooks
+```
+
+Host registrations and Execution Guard hooks point at `~/.agent-skills/...`, which resolves through
+`current`. Activating a release therefore moves every host and every hook in the same instant, and
+there is no window in which two hosts disagree about which version they are on.
+
+- `agent-skills rollback` returns to the release you were on before, re-verifying its payload first
+  and reconciling hosts and hooks back to it.
+- `agent-skills update` refuses to replace the active release with an older one unless asked. Going
+  backwards is `rollback`; it is never a side effect of an update.
+- `agent-skills versions` shows what is installed, what is active, and what a rollback would restore.
+- Release channels exist: `stable` never offers a pre-release, and `--channel rc` is a superset, so
+  `1.0.0-rc.1` can be installed without corrupting stable update semantics.
+
+### Integrity, and archives treated as hostile
+
+Every release carries a `release.json` manifest with a `tree_sha256` over every payload file's path,
+executable bit, and content. Before a payload goes near activation, four things must agree: the
+version requested, the tag the provider resolved, the payload's own `VERSION`, and the manifest. Any
+disagreement is an integrity failure, not a warning. `signature` is reserved so signed releases add a
+field rather than a schema; no custom cryptography is used or planned.
+
+Anything unpacked from an archive is treated as an attacker-controlled write primitive. Absolute
+paths, `..` components, symlinks or hardlinks escaping the extraction root, device nodes, and setuid
+bits are all rejected — and rejected before a single byte is written, so a hostile archive cannot
+half-extract. The adversarial cases are in `scripts/test-release-engine.py`.
+
+### Distribution access is not project access
+
+The git provider uses credentials the developer already has: git's own credential helpers and
+ssh-agent first, then the GitHub CLI when it is installed and already logged in — through an askpass
+helper, so the token never enters the installer's process, never appears in a command line visible to
+`ps`, and is never written to disk or into Agent Skills configuration. There is no token prompt and
+no `GH_TOKEN` requirement.
+
+Interactive prompting is disabled outright, because an installer that blocks on an invisible
+credential prompt inside an editor's integrated terminal is worse than one that fails. When access is
+missing the installer exits `3` with `AUTHENTICATION_REQUIRED` — including when GitHub answers an
+unauthenticated request for a private repository with a 404, which would otherwise send people
+hunting for a typo that is not there. Every git message is redacted before it is printed.
+
+The v0.37.0 rule is unchanged and now structural: installing Agent Skills does not configure project
+credentials.
+
+### The npm package is a bootstrap, not the product
+
+It contains the Node entry point, the installation engine, and the release providers. Fourteen files,
+28 KB. It contains no skills, no docs, no runtime, and no credentials, because a published npm
+tarball is public permanently regardless of who can read the repository behind it. It declares no
+`preinstall`, `install`, `postinstall`, or `prepare` script: nothing happens on `npm install`, only
+when a human types a command.
+
+`scripts/audit-npm-package.sh` inspects the packed tarball itself — not the `files` list, because
+those two disagree the moment a glob is wrong — and fails the release on product content, anything
+credential-shaped, an absolute developer path, a lifecycle script, or a vendored engine that has
+drifted. It runs in CI on every change.
+
+### `setup.init` retired, and pre-v1 debt removed
+
+`setup.init` went from 2,465 lines to 128. It is now a development helper that installs the working
+tree you are standing in, through the same engine as everything else. It is no longer the product
+installer.
+
+Removed outright, rather than carried into the 1.0 contract:
+
+- `--legacy-workspace` and `--workspace-root`, and the workspace installation model behind them;
+- the installer-written `.env` and its managed marker block, `.jira-config.yml`, the `.skills`
+  symlink, and `.agent-skills.lock`;
+- `PROJECTS_JSON` discovery and configuration at install time;
+- the Jira, Confluence, Sonar, and environments setup prompts;
+- the credential blast-radius probe, a heuristic that raised a question it could not answer;
+- the legacy workspace updater and the second update path it implied.
+
+None of this deletes anything a user has. The access resolver still reads an existing `.env`,
+`.env.local`, `.jira-config.yml`, and `.agent-skills.yml`, and `agent-skills migrate` still reports
+what is obsolete and what is still in use. What is gone is the code that *wrote* those files. A
+removed flag prints what replaced it instead of failing silently.
+
+### Diagnostics
+
+`agent-skills doctor` now reports the active version, the install root, which provider and channel
+the machine is on, how many skills are installed, which hosts are registered, whether the CLI is on
+`PATH`, whether anything has drifted, whether any link is broken, what a rollback would return to,
+and whether Context Optimizer and Execution Guard are present and version-coherent. It contacts no
+network, because "am I offline" is one of the questions people run it to answer.
+
+`agent-skills verify` is machine-oriented and asserts version coherence across the manifest,
+`current`, and the payload. Exit codes are now a documented contract — `0`, `2`, `3`, `4`, `5`, `6`,
+`7`, `10` — frozen at 1.0 and asserted by the test suite so a renumbering cannot pass silently. See
+[docs/versioning.md](docs/versioning.md#exit-codes).
+
+### Tests
+
+- `scripts/test-cli-install.sh` — 104 assertions across fourteen cases, every one against a
+  throwaway `HOME` with a space in its path. Written around failure rather than success: a tampered
+  payload, a release that fails its self-test, an interrupted update, an unrequested downgrade, a
+  source that cannot be read, migration from a pre-CLI installation, and installation from the
+  packed npm artifact over a real git remote with no clone anywhere in the flow.
+- `scripts/test-release-engine.py` — 21 checks covering hostile tar archives, payload integrity,
+  version ordering, redaction, exit-code stability, provider independence, and the one move in the
+  transaction that cannot be undone.
+- `scripts/test-global-install.sh` — retargeted at the new engine and trimmed of the legacy-workspace
+  cases; still 112 assertions on host adapters and ownership.
+- `scripts/audit-npm-package.sh` — the package-content gate, in CI and in the release checklist.
+- `scripts/test-setup-update-preserves-credentials.sh` — removed. It tested a code path that no
+  longer exists.
+
+### Upgrading
+
+```bash
+npx @wamala/agent-skills install
+```
+
+The installer recognises an existing installation, moves it onto the versioned layout, and leaves
+credential identities, project bindings, unrelated skills, and unrelated hooks exactly where they
+are. The old clone is no longer needed and can be removed.
+
 ## 0.42.0 - Even If The Agent Is Wrong
 
 Minor release. Agent Skills already said what an agent must not do. The

@@ -13,7 +13,7 @@ to "execute the phase directly" or substitutes a different skill. This corrupts 
 phase reads as `done` while the actual deliverables (regression tests, defect rows) were
 never produced under the right workflow.
 
-The user has already complained that they ran `./setup.init` and the `.skills/` symlink
+The user has already complained that they installed Agent Skills and the `.skills/` symlink
 exists, so the canonical source is on disk regardless of what the IDE panel surfaces.
 
 ## Input Context
@@ -45,7 +45,7 @@ readable.
 
 - The executor resolves the canonical skill source per
   [skill-source-resolution.md](../docs/skill-source-resolution.md). For a workspace that has
-  run `./setup.init`, the canonical source is `<workspace>/.skills/`.
+  have a legacy workspace, the canonical source is `<workspace>/.skills/`.
 - The executor runs the
   [owner-skill verification recipe](../docs/skill-source-resolution.md#owner-skill-verification-recipe):
   reads `<canonical>/test-automation-engineer/SKILL.md` directly with the file-read tool,
@@ -75,7 +75,7 @@ readable.
   IDE panel contents.
 - Must not require the user to manually paste the skill source path into the prompt. The
   resolution order in [skill-source-resolution.md](../docs/skill-source-resolution.md)
-  already covers `<workspace>/.skills/` after `./setup.init`.
+  already covers `<workspace>/.skills/` in a legacy workspace.
 
 ## Pass/Fail Checklist
 - [ ] Executor reads `<canonical>/<recommended_owner>/SKILL.md` directly via the file-read
