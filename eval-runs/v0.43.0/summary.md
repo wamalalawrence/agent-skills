@@ -145,6 +145,30 @@ Two completed events, no stops. The local counter is not a sample worth drawing 
 and it drove no skill change this release. Recording that it drove nothing is the point: an unread
 counter is worse than no counter, because it looks like evidence.
 
+## Stage A acceptance
+
+While the repository is public, and before any visibility change:
+
+```text
+PUBLIC_SOURCE_INSTALL:         PASS
+AUTH_REQUIRED_BEHAVIOR:        PASS
+RELEASE_PROVIDER_ABSTRACTION:  PASS
+PACKAGE_CONTENT_AUDIT:         PASS
+PRIVATE_TRANSITION_READY:      YES
+```
+
+- **PUBLIC_SOURCE_INSTALL** — clean environment, packed npm bootstrap, git provider, real tagged
+  remote, host registration, `doctor`, `verify`. No manual clone anywhere in the flow.
+- **AUTH_REQUIRED_BEHAVIOR** — an unreadable remote exits `3` with `AUTHENTICATION_REQUIRED`, names
+  distribution access, does not report the repository as missing, does not hang, echoes no token,
+  and installs nothing.
+- **RELEASE_PROVIDER_ABSTRACTION** — the real install transaction runs to completion through an
+  in-process fake registry provider that has never heard of git.
+- **PACKAGE_CONTENT_AUDIT** — 14 files, no product content, no credentials, no lifecycle scripts,
+  vendored engine byte-identical to the repository's.
+
+Stage B is `scripts/test-private-source.sh`. It refuses to run while the repository is public.
+
 ## What this run does not prove
 
 - **Private-source installation.** The repository was public throughout. The git provider's

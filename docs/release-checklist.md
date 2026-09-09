@@ -182,6 +182,20 @@ criterion the release called critical.
 - [ ] Record what the review changed in `eval-runs/<version>/summary.md`, including the fact that the
       suites were green beforehand.
 
+## Private-Source Acceptance (Stage B)
+
+Required before `1.0.0-rc.1`, and only meaningful once the repository is private.
+
+- [ ] Confirm the GitHub repository visibility is **private**. `scripts/test-private-source.sh`
+      refuses to run against a public repository, because anonymous access would satisfy every
+      case in it and nothing about authenticated distribution would be proven.
+- [ ] Run `bash scripts/test-private-source.sh` and confirm it prints
+      `PRIVATE_SOURCE_DISTRIBUTION_READY: YES`.
+- [ ] Confirm it installed from the **remote**, not from this checkout, into a throwaway `HOME`.
+- [ ] Confirm the unauthenticated half exits `3` with `AUTHENTICATION_REQUIRED`, does not report the
+      repository as missing, names a way to fix it, and does not hang.
+- [ ] Record the result in `eval-runs/<release>/summary.md`.
+
 ## Release Publication
 
 - [ ] Create GitHub release notes from the changelog entries.

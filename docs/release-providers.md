@@ -174,6 +174,23 @@ None of that is built. What matters now is that building it later is a new file 
 `lib/asrelease/providers/`, not a rewrite of installation — and that today's GitHub authentication
 is not baked into the long-term product contract.
 
+## Validating a private source
+
+Once the repository is private, the distribution contract is re-validated end to end from a clean
+environment:
+
+```bash
+bash scripts/test-private-source.sh
+```
+
+It installs from the **remote** through the packed npm bootstrap, never from a local checkout, into
+a throwaway `HOME` — so a pass means someone with the same git access could install, not that the
+source happened to be on the disk. It then removes every credential path and asserts the installer
+reports `AUTHENTICATION_REQUIRED` and exits `3`.
+
+It refuses to run while the repository is public, because anonymous access would satisfy every case
+in it and nothing about authenticated distribution would be proven.
+
 ## See also
 
 - [Installation](installation.md)

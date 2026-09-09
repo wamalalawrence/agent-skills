@@ -231,6 +231,7 @@ REQUIRED_FILES = [
     "scripts/hosts-reconcile.sh",
     "scripts/test-cli-install.sh",
     "scripts/test-release-engine.py",
+    "scripts/test-private-source.sh",
     "scripts/audit-npm-package.sh",
     "scripts/build-npm-bootstrap.sh",
     "npm/package.json",
