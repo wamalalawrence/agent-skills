@@ -52,7 +52,7 @@ No global install exists yet. `~/.config/agent-skills/` does not exist.
   workspace; `agent-skills start-task` instead of a repo-relative script path; project context
   inferred instead of `PROJECTS_JSON`; credentials as named identities in the OS keychain instead of
   plaintext in `.env`.
-- [ ] Agent recommends the ordered steps: `npx @wamala/agent-skills install`, then `agent-skills verify`, then
+- [ ] Agent recommends the ordered steps: `npx @wamalalawrence/agent-skills install`, then `agent-skills verify`, then
   optionally `agent-skills access import-legacy`, then optionally
   `agent-skills migrate --remove-obsolete`.
 - [ ] Agent states that `import-legacy` is read-only until `--apply`, displays no secret value, and

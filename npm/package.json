@@ -1,5 +1,5 @@
 {
-  "name": "@wamala/agent-skills",
+  "name": "@wamalalawrence/agent-skills",
   "version": "0.43.0",
   "description": "Installer for Agent Skills: a versioned, transactional agent runtime for your local repositories.",
   "keywords": [

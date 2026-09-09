@@ -6,7 +6,7 @@ named, not by assertion.
 ## What this release changed
 
 Installation stopped being an act of repository maintenance. `git clone && ./setup.init` is
-replaced by `npx @wamala/agent-skills install`, backed by one installation engine, a release
+replaced by `npx @wamalalawrence/agent-skills install`, backed by one installation engine, a release
 provider abstraction, a versioned install root, and a transaction that either completes or leaves
 the previous release running.
 
@@ -195,6 +195,32 @@ Clean `HOME` with a space in its path, no `AGENT_SKILLS_SOURCE`, no clone anywhe
 This closes the one Stage A gap the earlier run recorded: the git provider had been exercised
 end to end only against a local bare remote, because no CLI-installable release had been tagged yet.
 
+## Registry publication
+
+`@wamalalawrence/agent-skills@0.43.0` is published publicly. `@wamala` was the first choice, but an
+authenticated publish with two-factor authentication satisfied returned `404` on the `PUT` — npm's
+way of reporting "you may not create a package in this scope". `npm view` and `npm org ls` had both
+appeared to say otherwise; neither actually answers that question. See
+[docs/release-providers.md](../../docs/release-providers.md#the-package-name).
+
+The supported command, run against the public registry in a clean `HOME` with a space in its path
+and no local checkout involved:
+
+```bash
+npx @wamalalawrence/agent-skills install
+```
+
+| Check | Result |
+| --- | --- |
+| published tarball shasum matches the audited one | `94b158f4…` — identical |
+| `npx` resolves and installs from the registry | pass |
+| release source recorded | git remote, not the npm package |
+| skills installed | 9 |
+| `agent-skills doctor` | pass — version coherence, Context Optimizer present |
+| `agent-skills verify` | pass |
+| `agent-skills check-updates` | `up-to-date` |
+| `agent-skills version` | `0.43.0` |
+
 ## What this run does not prove
 
 - **Private-source installation.** The repository was public throughout. The git provider's
@@ -202,10 +228,9 @@ end to end only against a local bare remote, because no CLI-installable release 
   path against a local remote, but installing from an authenticated private GitHub repository is
   Stage B and requires the visibility change first. See
   [docs/security-review-v0.43.0.md](../../docs/security-review-v0.43.0.md).
-- **npm publication.** Nothing was published to the npm registry. Installation was tested from the
-  packed tarball, which exercises the `files` list and the real package layout, but not the registry
-  round trip. Until the package is published, `npx @wamala/agent-skills install` will not resolve
-  and the source install is the working path.
+- **A second published version.** Only `0.43.0` exists on the registry, so `agent-skills update`
+  was exercised against git tags and a local fixture remote, not against two published npm
+  versions. That path is the same code either way — npm carries the bootstrap, not the payload.
 - **Windows.** Tested on macOS. CI covers Linux. Windows is WSL or Git Bash, untested here.
 - **Real host behaviour.** Registrations are asserted on the filesystem. Whether Cursor or Kiro
   then loads a skill is the host's business and is not observable from a test.

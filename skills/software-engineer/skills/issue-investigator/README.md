@@ -25,6 +25,6 @@ See [SKILL.md](./SKILL.md) for the full workflow.
 
 ## Required environment
 
-Run `npx @wamala/agent-skills install` for the
+Run `npx @wamalalawrence/agent-skills install` for the
 simplest setup path. See [SKILL.md](./SKILL.md#required-environment) for details. Tracker and
 document-store variables are required only when those systems are the source of issue context.

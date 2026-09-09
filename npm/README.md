@@ -3,7 +3,7 @@
 Install Agent Skills on this machine:
 
 ```bash
-npx @wamala/agent-skills install
+npx @wamalalawrence/agent-skills install
 ```
 
 Then open any repository and ask your assistant:

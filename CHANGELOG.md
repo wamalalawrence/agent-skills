@@ -20,7 +20,7 @@ It stops working the moment either of those changes — and both are about to.
 The supported installation is now:
 
 ```bash
-npx @wamala/agent-skills install
+npx @wamalalawrence/agent-skills install
 ```
 
 and the durable command afterwards is, as before, `agent-skills`.
@@ -189,7 +189,7 @@ network, because "am I offline" is one of the questions people run it to answer.
 ### Upgrading
 
 ```bash
-npx @wamala/agent-skills install
+npx @wamalalawrence/agent-skills install
 ```
 
 The installer recognises an existing installation, moves it onto the versioned layout, and leaves

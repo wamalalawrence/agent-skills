@@ -127,7 +127,7 @@ useful on ephemeral runners that want a tmpfs path.
 
 | Environment | Mode | What to do |
 | --- | --- | --- |
-| Your laptop, any local editor, any number of repos | `global` | `npx @wamala/agent-skills install` once |
+| Your laptop, any local editor, any number of repos | `global` | `npx @wamalalawrence/agent-skills install` once |
 | GitHub Copilot coding agent on github.com | `in-repo` | commit `.agent-skills.yml`, vendor skills into `.github/skills/` or `.agent-skills/skills/` |
 | Cursor cloud / background agents | `in-repo` | vendor into the repo, or enable Cursor's personal-skill sync for `~/.cursor/skills` |
 | Codespaces / Gitpod | `in-repo` | commit `.agent-skills.yml`, add `.cache/` to `.gitignore`, use platform secrets |

@@ -32,7 +32,7 @@ This skill also collaborates with the other top-level delivery skills:
 
 ## Required environment
 
-Run `npx @wamala/agent-skills install` for the simplest setup
+Run `npx @wamalalawrence/agent-skills install` for the simplest setup
 path. See the table in [SKILL.md § Required Environment](./SKILL.md#required-environment) for
 details. Minimum for local planning and repo-aware work: `WORKSPACE_ROOT`, `ORG_NAME`,
 `GITHUB_DEFAULT_BRANCH`, and `PROJECTS_JSON`. `GITHUB_ORG` is only required when cloning, pushing,
