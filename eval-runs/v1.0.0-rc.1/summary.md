@@ -90,18 +90,19 @@ compatible change.
 | `python3 scripts/test-release-engine.py` | pass — 21 checks (archive traversal, symlink escape, integrity, downgrade, hostile provider) |
 | `bash scripts/audit-npm-package.sh` | pass — 14 files, no product content, version matches VERSION |
 | `bash scripts/test-release-readiness.sh` | pass — 80/80 (final clean run, exit 0) |
-| `bash scripts/test-private-source.sh` (against `v0.44.0`) | `PRIVATE_SOURCE_DISTRIBUTION_READY: YES` — 41 assertions |
+| `bash scripts/test-private-source.sh` (against `v1.0.0-rc.1` tag, private remote) | `PRIVATE_SOURCE_DISTRIBUTION_READY: YES` — 41 assertions, `INSTALLED_VERSION 1.0.0-rc.1` |
 | RC adversarial probes (`advprobe`) | pass — 17 assertions |
 | RC upgrade/rollback cycle | pass — 16 assertions |
 | RC offline smoke | pass — 13/13 local commands work network-dead (`context check` exit `10` is over-threshold, correct) |
 
-`test-private-source.sh` against the `v1.0.0-rc.1` tag is run after the tag is pushed and appended
-below. The npm bootstrap is built and audited (14 files, clean, version matches `VERSION`) but
+`test-private-source.sh` was re-run against the pushed `v1.0.0-rc.1` tag on the private remote —
+see the block below. The npm bootstrap is built and audited (14 files, clean, version matches
+`VERSION`) but
 **publishing is deferred to the maintainer** — no npm credentials were present on the
 certification machine (`npm whoami` → 401; published `latest` is `0.43.0`). It publishes with
 `npm publish --tag rc` from `npm/`, never `--tag latest`.
 
-## Clean private install (`test-private-source.sh`, against v0.44.0)
+## Clean private install (`test-private-source.sh`, against the `v1.0.0-rc.1` tag)
 
 ```text
 PRIVATE_REPOSITORY_ACCESS       PASS      HOST_REGISTRATION               PASS (8/8)
@@ -117,9 +118,12 @@ AUTHENTICATION_REQUIRED_BEHAVIOR: PASS   (exit 3, no hang, no partial install,
 PRIVATE_SOURCE_DISTRIBUTION_READY: YES
 ```
 
-Installed from the remote through the packed npm bootstrap into a throwaway `HOME`; the real
-installation on this machine was hashed before and after and is unchanged. Re-run against the
-`v1.0.0-rc.1` tag post-push.
+Installed from the **private remote** through the packed npm bootstrap into a throwaway `HOME`,
+authenticated only by the developer's existing `gh` login (no token exported). `INSTALLED_VERSION`
+is `1.0.0-rc.1` — `resolve_latest(rc)` found the release-candidate tag. The unauthenticated half
+exits `3` with `AUTHENTICATION_REQUIRED`, no hang, no partial install, no partial host
+registration, no token echoed. The real installation on this machine was hashed before and after
+and is unchanged. 41 assertions, 0 failures.
 
 ## Upgrade / rollback (`0.44.0 → 1.0.0-rc.1 → rollback → 0.44.0 → upgrade`)
 
@@ -196,3 +200,16 @@ Claude Code.
 - **P1 defects:** none. One P2-class residual (bounded-read not runtime-enforced) accepted and
   documented.
 - **Ready for `v1.0.0`:** YES, after this RC has been exercised from the published `rc` channel.
+
+## Published
+
+- Merge commit: `daa6d51` (Merge pull request #46). PR #46 CI: pass.
+- Tag: `v1.0.0-rc.1` (annotated `8cfc485` → `daa6d51`).
+- GitHub release: <https://github.com/wamalalawrence/agent-skills/releases/tag/v1.0.0-rc.1> —
+  marked **Pre-release**; `v0.44.0` remains **Latest** (not moved).
+- `test-private-source.sh` against the pushed tag on the private remote:
+  `PRIVATE_SOURCE_DISTRIBUTION_READY: YES`, `INSTALLED_VERSION 1.0.0-rc.1`, 41/0.
+- npm bootstrap `1.0.0-rc.1`: **built and audited, not published** — the certification machine
+  has no npm credentials (`npm whoami` → 401; published `latest` is `0.43.0`). The maintainer
+  runs `npm publish --tag rc` from `npm/` (never `--tag latest`) and then installs from the
+  published package into a clean HOME to close the last check.
