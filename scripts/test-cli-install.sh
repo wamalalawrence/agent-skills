@@ -553,6 +553,10 @@ if case_start "npm"; then
   if command -v npm >/dev/null 2>&1 && command -v node >/dev/null 2>&1; then
     BOX="$(new_sandbox)"
     bash "${REPO_ROOT}/scripts/build-npm-bootstrap.sh" --pack > "${BOX}/pack.log" 2>&1
+    # Absolute, and it has to stay absolute. `npm install npm/<file>.tgz` is read
+    # as the GitHub shorthand `github:npm/<file>.tgz` — a bare `<org>/<name>` is
+    # a repository reference to npm — so it clones instead of installing and git
+    # exits 128.
     TARBALL="$(ls -1t "${REPO_ROOT}"/npm/*.tgz 2>/dev/null | head -1)"
     if [ -z "${TARBALL}" ]; then
       bad "the npm bootstrap could not be packed"

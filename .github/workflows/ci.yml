@@ -252,7 +252,12 @@ jobs:
           tmp=$(mktemp -d)
           home="$tmp/home"
           mkdir -p "$home" "$tmp/npmroot" "$tmp/work"
-          tarball=$(ls -1t npm/*.tgz | head -1)
+          # Absolute, and deliberately so. `npm install npm/<file>.tgz` is read as
+          # the GitHub shorthand `github:npm/<file>.tgz`, because a bare
+          # `<org>/<name>` spec is a repository reference to npm — so it tries to
+          # clone, and git exits 128. A path npm cannot mistake for a repo is the
+          # whole fix.
+          tarball="$PWD/$(ls -1t npm/*.tgz | head -1)"
           npm install --silent --prefix "$tmp/npmroot" "$tarball"
           boot="$tmp/npmroot/node_modules/.bin/agent-skills-bootstrap"
           test -x "$boot"
