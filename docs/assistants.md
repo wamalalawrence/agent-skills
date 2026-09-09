@@ -129,6 +129,30 @@ its rules files.
 No filesystem access, so nothing to install. Attach or paste the relevant `SKILL.md`, plus
 `.agent-skills.yml` if the repository has one, and say which mode applies.
 
+## Pre-execution enforcement
+
+The table above answers "where does this host discover skills". A different question is "can
+this host stop a dangerous command before it runs", and the answer is not the same per host.
+[Execution Guard](execution-guard.md) covers that, `lib/guard.registry` is its source of truth,
+and `agent-skills guard doctor` reports the live status on your machine.
+
+| Host | Enforcement | Mechanism |
+| --- | --- | --- |
+| Claude Code | `enforced` | `PreToolUse` hook, native allow/ask/deny |
+| Cursor | `enforced` | `beforeShellExecution` + `beforeMCPExecution`, registered `failClosed` |
+| Kiro | `enforced` | `preToolUse` hook; blocking is by non-zero exit |
+| Codex | `enforced` | `PreToolUse` hook, Claude-compatible contract |
+| GitHub Copilot / VS Code | `partial` | terminal auto-approval rules; cannot consult the guard |
+| JetBrains AI / Junie | `advisory` | Action Allowlist; no external pre-execution callout |
+| Windsurf | `advisory` | none documented |
+| Continue | `advisory` | none documented |
+
+A host that discovers skills well can still enforce nothing, and the reverse is possible too.
+`enforced` is claimed only where the host documents a blocking contract **and** the hook is
+actually registered on this machine; a hook-capable host that has not been set up reports
+`available`. For `partial` and `advisory` hosts, `agent-skills guard run -- '<command>'` is the
+wrapper fallback.
+
 ## The lifecycle commands
 
 Every skill runs these, and they work from any repository:

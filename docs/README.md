@@ -44,6 +44,12 @@ Start here when reading the repository outside GitHub's main README.
   **evidence** is enormous. The shared large-input rule every skill inherits, the measured
   threshold, the character budget, the per-type strategies, mandatory provenance, explicit
   omissions, and why the input is treated as data rather than instructions.
+- [Execution Guard](execution-guard.md) - the runtime layer under the destructive-action
+  policy: a deterministic pre-execution check that classifies every shell command and tool call
+  as allow, ask, or deny before it runs. Covers the decision model, the hard-deny floor, the
+  shell parser and why structural parsing beats pattern matching, target and symlink
+  resolution, the configuration trust levels that stop repository text weakening it, per-host
+  enforcement status, redacted auditing, measured performance, and what it cannot do.
 - [Assistant setup](assistants.md) - using the skills with common AI assistants.
 - [Starter prompts](starter-prompts.md) - copy-paste prompts for single-skill and multi-skill work.
 - [Examples](examples/README.md) - realistic input/output examples for each skill.

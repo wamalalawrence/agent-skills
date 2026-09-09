@@ -94,6 +94,29 @@ work. It applies to every phase of the workflow and is **not waivable by user pr
   the operator to confirm a recent restore test (date, size, owner) before executing the
   destructive step.
 
+### Execution Guard is a second layer, not this skill's job
+
+The rules above are what this skill must not do. Where the user has installed
+[Execution Guard](../../../docs/execution-guard.md), the host also checks every shell command
+and tool call before it runs, deterministically, and answers allow, ask, or deny.
+
+Three consequences for this skill, and no more:
+
+- **Do not duplicate its rules.** They live in `scripts/guard_rules.py`, they are inspectable
+  with `agent-skills guard rules`, and a copy here would drift from them. This file states the
+  policy; the guard enforces the part of it a runtime can check.
+- **Do not dispatch to it.** It is infrastructure. It runs at the host's pre-execution hook with
+  no agent involvement, and there is nothing for a skill to invoke.
+- **Explain a block when asked.** If a command is refused and the user asks why, run
+  `agent-skills guard explain -- '<command>'` and report the rule, the resolved target, and the
+  safe alternative it names. Do not attempt to route around the refusal, restructure the command
+  to evade it, or ask the user to disable the guard.
+
+A guard `ALLOW` is not permission. It means no runtime rule matched, which is a much weaker
+statement than "this action satisfies the safety policy" — the guard cannot see intent, blast
+radius, whether a change record exists, or whether a backup was verified. The rules above still
+bind, and where the two disagree the stricter one wins.
+
 ### What to do when an action is refused
 
 If the agent refuses an action under this section, the output must:

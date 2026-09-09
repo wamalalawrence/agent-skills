@@ -25,7 +25,7 @@ compatibility: >-
   `local-workspace`. See docs/execution-modes.md.
 metadata:
   author: wamalalawrence
-  version: "0.41.0"
+  version: "0.42.0"
   homepage: "https://github.com/wamalalawrence/agent-skills"
 argument-hint: "<the request — a ticket key, a PR link, a bug report, or plain prose>"
 user-invocable: true
@@ -73,6 +73,13 @@ Fallbacks, explicit project/task arguments, the `blocked` / `needs-context` stat
 fact flags, and the full contract: [`docs/lifecycle-preflight.md`](../../docs/lifecycle-preflight.md).
 Skipping the wrappers is the #1 failure mode and task size does not waive them.
 
+> **Runtime layer.** Where the user has installed
+> [Execution Guard](../../docs/execution-guard.md), the host checks every shell command and tool
+> call before it runs and answers allow, ask, or deny. It is infrastructure, not a skill: never
+> route work to it, never restate its rules, and never treat its `ALLOW` as permission under the
+> safety floor. If the user asks why something was blocked, run
+> `agent-skills guard explain -- '<command>'` and report the rule it names.
+>
 > **Safety floor.** This skill inherits the
 > [destructive-action safety policy](../../docs/destructive-action-safety.md). It never
 > dispatches a step that requires a forbidden destructive action, a discovered credential, or

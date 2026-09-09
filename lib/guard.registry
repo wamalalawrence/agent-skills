@@ -1,0 +1,38 @@
+# agent-skills Execution Guard host registry
+#
+# One row per host, describing what that host can actually enforce before a
+# tool call runs. This is separate from `hosts.registry` on purpose: that file
+# answers "where are skills discovered from", this one answers "can this host
+# stop a command". A host can score well on one and badly on the other.
+#
+# Format (pipe-separated, 7 fields, no pipes inside a field):
+#
+#   id | label | enforcement | mechanism | config_path | detect_path | notes
+#
+#   id            matches `hosts.registry` where the host appears in both.
+#   label         human name printed in reports.
+#   enforcement   what this host can do with a pre-execution decision:
+#                   enforced    -> a hook runs before the tool call and its
+#                                  answer decides whether the call proceeds.
+#                   partial     -> the host can be given static rules that deny
+#                                  commands, but cannot consult the guard.
+#                   advisory    -> no pre-execution interception point we can
+#                                  drive; wrapper mode is the only option.
+#                   unavailable -> nothing to integrate with at all.
+#                 Never claim `enforced` without a documented blocking contract.
+#   mechanism     the host's own name for the interception point.
+#   config_path   file the adapter writes, relative to $HOME. `-` when none.
+#   detect_path   directory whose presence means the host is on this machine.
+#   notes         factual note, including the ASK degradation where it applies.
+#
+# Adding a host means adding a row here and a dialect in scripts/guard.py. The
+# rules never change: one engine, many dialects.
+
+claude-code|Claude Code|enforced|PreToolUse hook|.claude/settings.json|.claude|JSON permissionDecision allow/ask/deny; exit 2 also blocks and cannot be overridden by hook output.
+cursor|Cursor|enforced|beforeShellExecution + beforeMCPExecution|.cursor/hooks.json|.cursor|Native allow/ask/deny. Registered with failClosed so a hook crash or timeout blocks rather than proceeds.
+kiro|Kiro|enforced|preToolUse hook|.kiro/hooks/agent-skills-guard.json|.kiro|Blocking is by non-zero exit; the contract has no ask, so ASK is surfaced to the agent instead. Set AGENT_SKILLS_GUARD_ASK_FALLBACK=deny to block on ASK too.
+codex|Codex|enforced|PreToolUse hook|.codex/hooks.json|.codex|Documented as Claude-compatible: permissionDecision JSON or exit 2. Registered with the same dialect.
+copilot|GitHub Copilot / VS Code|partial|terminal auto-approval rules|-|.copilot|Deny rules can be configured in editor settings, but the editor cannot consult the guard. Static rules only; use wrapper mode for the rest.
+jetbrains|JetBrains AI / Junie|advisory|Action Allowlist|-|-|Approval is an allowlist inside the IDE with no external pre-execution callout. Wrapper mode only.
+windsurf|Windsurf|advisory|none documented|-|.windsurf|No documented pre-execution interception point. Wrapper mode only.
+continue|Continue|advisory|none documented|-|.continue|No documented pre-execution interception point. Wrapper mode only.

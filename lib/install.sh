@@ -546,11 +546,55 @@ EOF
   printf 'No credentials were requested or stored.\n'
   printf 'External-service access is configured only when a task requires it.\n'
   printf '\n'
+  as_recommend_guard
   printf 'Next:\n'
   printf '  cd into any repository on this machine and invoke a skill.\n'
   printf '  agent-skills doctor    what this environment can actually do\n'
   printf '  agent-skills verify    re-check this installation\n'
   printf '  agent-skills update    apply a new release\n'
+}
+
+# Execution Guard is recommended here and installed only on request.
+#
+# It edits host configuration files the user owns — the same files that decide
+# what their agent is allowed to do. Changing those as a side effect of "install
+# the skills" would be a surprise in exactly the category where surprises are
+# least acceptable, so this prints what the command would do and stops. See
+# docs/execution-guard.md.
+as_recommend_guard() {
+  local source_dir
+  source_dir="$(as_source_dir 2>/dev/null || true)"
+  [ -n "${source_dir}" ] || return 0
+  [ -f "${source_dir}/scripts/guard.py" ] || return 0
+
+  local registered=""
+  registered="$(python3 "${source_dir}/scripts/guard.py" verify --format json 2>/dev/null \
+    | python3 -c '
+import json
+import sys
+
+try:
+    hosts = json.load(sys.stdin)["hosts"]
+except Exception:
+    sys.exit(0)
+names = [h["label"] for h in hosts if h["state"] == "registered"]
+sys.stdout.write(", ".join(names))
+' 2>/dev/null || true)"
+
+  printf 'Execution Guard (not installed automatically)\n'
+  if [ -n "${registered}" ]; then
+    printf '  Already enforcing before execution for: %s\n' "${registered}"
+    printf '  Re-check with: agent-skills guard verify\n'
+  else
+    printf '  A deterministic check that runs before every shell command and tool\n'
+    printf '  call, and blocks the destructive ones. It edits your host hook\n'
+    printf '  configuration, so it is opt-in:\n'
+    printf '\n'
+    printf '    agent-skills guard install --dry-run   show exactly what would change\n'
+    printf '    agent-skills guard install             register the hooks\n'
+    printf '    agent-skills guard doctor              per-host enforcement status\n'
+  fi
+  printf '\n'
 }
 
 as_print_host_summary() {

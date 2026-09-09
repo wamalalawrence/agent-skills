@@ -153,6 +153,50 @@ A repository with no `agent-skills` configuration is a normal, supported case. A
 not be inferred safely appears under `needs_confirmation` rather than being asserted. Committed
 configuration is optional and wins where present — see [configuration.md](configuration.md).
 
+## Execution Guard (separate, opt-in)
+
+`agent-skills install` does **not** register [Execution Guard](execution-guard.md). It prints a
+recommendation and the exact commands, and stops.
+
+The reason is scope of consent. Registering the guard edits host configuration files the user
+owns — `~/.claude/settings.json`, `~/.cursor/hooks.json`, `~/.kiro/hooks/`, `~/.codex/hooks.json`
+— and those files decide what the user's agent is allowed to do. Changing them as a side effect
+of "install the skills" would be a surprise in the one category where surprises are least
+acceptable. Nothing about a security tool justifies installing it without being asked.
+
+```bash
+agent-skills guard install --dry-run   # print every change; write nothing
+agent-skills guard install             # register the hooks
+agent-skills guard verify              # confirm the registrations
+agent-skills guard doctor              # per-host enforcement level
+agent-skills guard uninstall           # remove only agent-skills-owned entries
+```
+
+`--hosts a,b` limits the operation to named hosts. `--all-hosts` registers every hook-capable
+host including undetected ones.
+
+What installation does to each file:
+
+| Host | File | Change |
+| --- | --- | --- |
+| Claude Code | `~/.claude/settings.json` | two `hooks.PreToolUse` entries appended |
+| Cursor | `~/.cursor/hooks.json` | one entry each on `beforeShellExecution` and `beforeMCPExecution`, with `failClosed` |
+| Kiro | `~/.kiro/hooks/agent-skills-guard.json` | a new file it owns entirely |
+| Codex | `~/.codex/hooks.json` | two `PreToolUse` entries appended |
+
+Every one of those is a merge, never a replacement:
+
+- Hooks you already had survive, including ones on the same event.
+- The first modification leaves `<name>.agent-skills-guard.bak` beside the file.
+- A file that is not valid JSON is refused rather than overwritten.
+- A same-named file the installer did not write is left alone.
+- Running it twice produces one registration, not two.
+- `uninstall` removes only entries carrying the `guard check-tool --host` signature.
+
+Ownership is recorded at `<config-dir>/guard/hosts.json`, alongside the local decision log. The
+guard's own uninstall is separate from `agent-skills uninstall`, so removing the skills does not
+silently strip a security control the user asked for — run both when that is what you want.
+
 ## Uninstall
 
 ```bash
