@@ -8,11 +8,39 @@ senior-engineer, product-owner, tester, or reviewer output instead of generic an
 > interfaces may still evolve. v0.43.0 froze the installation and distribution contract ahead of
 > `1.0.0-rc.1`.
 
-New here? Start with the [quickstart](docs/quickstart.md), then read [starter
-prompts](docs/starter-prompts.md), [examples](docs/examples/README.md), the
-[requirement-understanding workflow](docs/requirement-understanding.md) every skill runs before
-acting, [validation](docs/validation.md), [known limitations](docs/known-limitations.md), and the
-[versioning policy](docs/versioning.md).
+## Start here
+
+```bash
+npx @wamala/agent-skills install
+```
+
+Then open any repository on your machine and ask:
+
+```text
+Use Wamala to investigate this project.
+```
+
+That is the whole setup. No clone, no per-repository step, no credentials.
+
+| I want to… | Go to |
+| --- | --- |
+| See it work in five minutes | [Quickstart](docs/quickstart.md) |
+| Know what to type | [Starter prompts](docs/starter-prompts.md) · [Examples](docs/examples/README.md) |
+| Pick the right skill | [Skills](#skills) |
+| Install, update, or roll back | [Install](#install) · [docs/installation.md](docs/installation.md) |
+| Understand what it will not do | [Known limitations](docs/known-limitations.md) |
+| Read everything | [docs/README.md](docs/README.md) |
+
+## Contents
+
+- [Start here](#start-here) — install and first prompt
+- [Wamala](#wamala) — the front door
+- [Why skills](#why-skills) — what a skill changes
+- [Install](#install) — install, update, roll back, uninstall
+- [Skills](#skills) — the eleven skills, and which one owns what
+- [The company brain](#the-company-brain) — memory, knowledge, telemetry
+- [Documentation](#documentation) — the full index
+- [Design principles](#design-principles) · [Contributing](#contributing) · [License](#license)
 
 ## Wamala
 
@@ -47,15 +75,28 @@ checklist, and the right stopping conditions.
 
 ## Install
 
-Install once. Use from any local project. Configure external access only when needed.
+Install once, per machine. Use from any local project. Configure external access only when needed.
 
 ```bash
 npx @wamala/agent-skills install
 ```
 
-That is the whole local setup — no clone, no `cd`, no per-repository step. It installs
-`agent-skills` on the **machine**, registers the skills with every supported agent host it finds,
-and makes the runtime invocable from anywhere:
+**Everyday commands** — the durable command is `agent-skills`; npm is not needed again.
+
+| Command | Does |
+| --- | --- |
+| `agent-skills doctor` | What this environment can actually do |
+| `agent-skills verify` | Check the installation, write nothing |
+| `agent-skills update` | Move to the latest release, transactionally |
+| `agent-skills rollback` | Return to the release you were on before |
+| `agent-skills versions` | What is installed, active, and available |
+| `agent-skills hosts` | Which editors and agents see the skills |
+| `agent-skills uninstall` | Remove it, keeping everything you own |
+
+Requirements: Python 3.8+, bash, and git. macOS or Linux; on Windows use WSL or Git Bash.
+
+**What installing actually does.** It puts `agent-skills` on the **machine**, registers the skills
+with every supported agent host it finds, and makes the runtime invocable from anywhere:
 
 ```text
   resolve    0.43.0 (stable, via git)
@@ -76,17 +117,15 @@ Agent Skills 0.43.0 is installed.
 No credentials were requested or stored.
 ```
 
-Nothing is activated until the release has been downloaded, its contents checked against the hash
-the release was published with, and its runtime run once off to the side. If any of that fails, the
-version you already had is still the version you are running.
+Nothing is activated until the release has been downloaded, checked against the hash it was
+published with, and run once off to the side. If any of that fails, the version you already had is
+still the version you are running — and `agent-skills rollback` undoes an update you regret.
 
 The npm package is a bootstrap and nothing more: it fetches and verifies a release, then hands over
-to the installer. Afterwards the durable command is `agent-skills`, and npm is not needed again.
+to the installer. The product itself is never inside it.
 
 Then open any repository on the machine — one you already have, or one you clone next year — and
 invoke a skill. There is no per-workspace setup step and no sibling `agent-skills` checkout.
-
-Requirements: Python 3.8+, bash, and git. macOS or Linux; on Windows use WSL or Git Bash.
 
 ### Execution Guard (opt-in)
 
@@ -198,13 +237,29 @@ installer makes through a release provider, not something wired into it; see
 
 ## Skills
 
-This repository currently contains **nine top-level skills** and **two nested support skills**. The
-top-level skills are intended to be invoked directly. The nested support skills are loaded by the
-engineering workflow when investigation or review needs a more specific checklist.
-
-New here, or unsure which skill fits? Invoke [`wamala`][wamala] and describe the work — it picks
-the owner and dispatches. Direct invocation stays first-class and is faster whenever you already
+Unsure which one you need? You do not have to choose. Invoke [`wamala`][wamala], describe the work,
+and it picks the owner. Naming a skill directly stays first-class and is faster when you already
 know the answer.
+
+| Skill | Owns | Reach for it when |
+| --- | --- | --- |
+| [`wamala`][wamala] | Routing | You do not know which specialist should act next |
+| [`product-owner`][product-owner] | Requirements | A request is vague, and building it now would be guessing |
+| [`delivery-planner`][delivery-planner] | Planning | Work spans several repos, teams, or phases |
+| [`delivery-runner`][delivery-runner] | Execution | A plan exists and someone has to drive it to done |
+| [`software-engineer`][software-engineer] | Code | Something needs building, fixing, or changing |
+| [`issue-investigator`][issue-investigator] | Diagnosis | A bug needs evidence and a root cause, not a guess |
+| [`code-reviewer`][code-reviewer] | Review | A diff needs judging against the task it claims to do |
+| [`manual-tester`][manual-tester] | Exploratory testing | You need to know how it actually behaves |
+| [`test-automation-engineer`][tae] | Automated tests | Coverage needs to hold the behaviour down |
+| [`domain-modeler`][domain-modeler] | Domain language | The code and the business disagree about words |
+| [`context-optimizer`][context-optimizer] | Large inputs | The file is far too big for any model to read |
+
+Nine are top-level and meant to be invoked directly. Two — `issue-investigator` and
+`code-reviewer` — are nested support skills the engineering workflow loads when it needs a more
+specific checklist.
+
+Each is described in full below.
 
 ### [`wamala`][wamala] (top-level)
 
