@@ -5,7 +5,8 @@
 # Keep this file only if you want a project- or workspace-specific default
 # project, board, or epic preselected for the CLI.
 #
-# Prefer running `./setup.init` and choosing Jira setup. It copies this file to
+# Legacy format. Nothing generates this file any more; the access resolver still reads an
+# existing one. Prefer `agent-skills access set`. To use this format, copy this file to
 # `.jira-config.yml` in your workspace root. You can still copy it manually when
 # you want full control. The real `.jira-config.yml` is gitignored.
 #

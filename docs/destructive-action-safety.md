@@ -361,14 +361,15 @@ The policy is reinforced by three concrete artifacts in this repository:
   destructive/IAM/secret/backup change, or when monitoring/IAM/network-policy was changed
   without an explicit waiver. See the schema and rules in
   [definition-of-done.md](../skills/software-engineer/references/definition-of-done.md).
-- **Credential blast-radius probe in `setup.init`.** A warn-only heuristic that runs on
-  first setup and on `setup.init --verify`. It scans the configured `.env` and the current
-  shell for destructive-capable cloud / orchestrator / database credentials
-  (`AWS_ACCESS_KEY_ID`, `KUBECONFIG`, `DATABASE_ADMIN_URL`, etc.) and warns the operator to
-  scope them to a least-privilege role with no delete-bucket / terminate-instance /
-  drop-database / delete-snapshot / IAM-modify / backup-mutation privileges. The probe
-  cannot inspect cloud-provider IAM policies — it flags the *presence* of broad
-  credentials so the operator can confirm scoping. Skip with `--no-credential-probe`.
+- **Credential blast-radius awareness.** Installation no longer inspects your shell or your
+  `.env` for destructive-capable cloud / orchestrator / database credentials
+  (`AWS_ACCESS_KEY_ID`, `KUBECONFIG`, `DATABASE_ADMIN_URL`, …). The warn-only probe that did
+  so was removed in v0.43.0 along with the rest of the installer's project-configuration
+  surface: installation and credential handling are separate concerns, and a heuristic that
+  could not read a cloud IAM policy was never able to answer the question it raised. Scoping
+  those credentials to a least-privilege role with no delete-bucket / terminate-instance /
+  drop-database / delete-snapshot / IAM-modify / backup-mutation privilege remains the
+  operator's responsibility, and `agent-skills access` is where an identity now lives.
 - **[Execution Guard](execution-guard.md).** The runtime layer described above. Its rule
   catalogue is in [`scripts/guard_rules.py`](../scripts/guard_rules.py), its adversarial and
   false-positive corpora in [`scripts/guard_corpus.py`](../scripts/guard_corpus.py), and its

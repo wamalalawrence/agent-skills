@@ -219,7 +219,23 @@ REQUIRED_FILES = [
     "eval-runs/v0.38.0/summary.md",
     "eval-runs/v0.39.0/summary.md",
     "evals/code-reviewer-verdict-gating.md",
-    "scripts/test-setup-update-preserves-credentials.sh",
+    # The v0.43.0 installation contract. Each of these is required rather than
+    # merely expected: the engine, its acceptance suite, the package-content
+    # gate that keeps protected content out of a published tarball, and the
+    # bootstrap the supported install command runs.
+    "lib/asrelease/release.py",
+    "lib/asrelease/transaction.py",
+    "lib/asrelease/providers/git.py",
+    "lib/asrelease/providers/local.py",
+    "scripts/install.py",
+    "scripts/hosts-reconcile.sh",
+    "scripts/test-cli-install.sh",
+    "scripts/test-release-engine.py",
+    "scripts/audit-npm-package.sh",
+    "scripts/build-npm-bootstrap.sh",
+    "npm/package.json",
+    "npm/bin/agent-skills-bootstrap.js",
+    "docs/release-providers.md",
 ]
 
 # Setup-managed environment keys. They MUST appear inside the

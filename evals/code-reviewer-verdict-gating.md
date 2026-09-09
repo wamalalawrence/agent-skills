@@ -14,7 +14,7 @@ test passing and one failing during Spring context startup.
 `.env` and `.jira-config.yml` exist but `${JIRA_HOST}` / `${JIRA_LOGIN}` /
 `${JIRA_API_TOKEN}` resolve to empty strings (e.g. because the placeholders
 were never filled, or because `--update` blanked them — the v0.21.0
-`setup.init` fix addresses the latter).
+installer fix addresses the latter).
 
 ## Skill Under Test
 

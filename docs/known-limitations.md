@@ -35,7 +35,7 @@ runtime enforcement, or guaranteed outcomes.
   on your machine; this repository's table can lag a host update.
 - **The install depends on the clone staying put.** Canonical trees are symlinks into the source
   repository. Move or delete the clone and the install breaks; `agent-skills verify` detects exactly
-  that, and rerunning `./setup.init` repairs it.
+  that, and rerunning `agent-skills install` repairs it.
 - **Native Windows is not supported.** Run under WSL or Git Bash. PowerShell-native installation, and
   Windows Credential Manager with it, are evaluated but not implemented.
 

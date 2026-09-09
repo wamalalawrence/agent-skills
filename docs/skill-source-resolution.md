@@ -92,12 +92,12 @@ For installs that predate v0.37.0 and have not migrated:
 
 In this order, so the rule stays decidable when both are present:
 
-1. `<workspace>/.skills/` — the symlink the old `setup.init` created. Preferred, because it is what
+1. `<workspace>/.skills/` — the symlink pre-v0.37 setup created. Preferred, because it is what
    that installer actually pointed agents at.
 2. `<workspace>/agent-skills/skills/` — a sibling clone with no symlink. The fallback for a
    workspace whose symlink was never created or has since been deleted.
 
-Both still work. Surface a one-line note that `./setup.init` now installs globally and
+Both still work. Surface a one-line note that installation is now machine-global and
 `agent-skills migrate` explains the move. Do not block on it.
 
 ### 6. Nothing found
@@ -211,7 +211,7 @@ BLOCKED: recommended owner skill unavailable
 ```
 
 Record the same paths and reason on `phases[<id>].blocked_reason` in `evidence-pack.yml`. The
-operator's next action is to fix the skill source (`./setup.init`, `agent-skills verify`, sync the
+operator's next action is to fix the skill source (`agent-skills install`, `agent-skills verify`, sync the
 vendored copy, or pass an explicit path), not to proceed without the skill.
 
 This applies equally outside a `delivery-planner` phase: a prompt naming a skill demands that skill,

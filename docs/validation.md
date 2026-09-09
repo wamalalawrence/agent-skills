@@ -20,17 +20,32 @@ python3 scripts/validate_skills.py
 
 GitHub Actions runs the same repository validator on pushes and pull requests to `main`.
 
-Five shell suites sit alongside it and assert **behaviour** rather than structure. CI runs all five;
+Seven suites sit alongside it and assert **behaviour** rather than structure. CI runs all seven;
 [`test-release-readiness.sh`](../scripts/test-release-readiness.sh) runs them together with the rest
 of the mechanical release checks.
 
 ```bash
-bash scripts/test-global-install.sh          # install, hosts, uninstall, upgrade
+bash scripts/test-cli-install.sh             # install, update, rollback, migration, uninstall
+python3 scripts/test-release-engine.py       # integrity, hostile archives, provider independence
+bash scripts/test-global-install.sh          # host adapters and ownership edge cases
 bash scripts/test-access-resolution.sh       # credential precedence and refusals
 bash scripts/test-front-door-skill.sh        # routing table order and skill identity
 bash scripts/test-context-optimizer.sh       # large-input selection, safety, budget
-bash scripts/test-setup-update-preserves-credentials.sh
+bash scripts/test-guard.sh                   # Execution Guard rules, hosts, and bypasses
+bash scripts/audit-npm-package.sh            # exactly what a publish would contain
 ```
+
+[`test-cli-install.sh`](../scripts/test-cli-install.sh) is the installation contract. Every case runs
+against a throwaway `HOME` with a space in its path, and the suite is deliberately written around
+failure rather than success: a tampered payload, a release that cannot run its own self-test, an
+interrupted update, an unrequested downgrade, and a release source that cannot be read. The property
+being asserted in each is the same one — that the machine is either fully on the new release or
+fully on the old one, and never in between.
+
+[`test-release-engine.py`](../scripts/test-release-engine.py) covers what a shell test would do
+violence to: hand-built hostile tar archives, hash verification of a deliberately corrupted payload,
+and an in-process fake registry provider that runs the real install transaction without git or a
+network. That last one is the guarantee that installation is not quietly coupled to GitHub.
 
 [`test-context-optimizer.sh`](../scripts/test-context-optimizer.sh) is the one that generates its own
 fixtures — they are large by definition, and shipping a 5 MB synthetic log to test large-input

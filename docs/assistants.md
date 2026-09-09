@@ -3,7 +3,7 @@
 Skills are plain Markdown with YAML frontmatter under [`../skills/`](../skills/), conforming to the
 [Agent Skills specification](https://agentskills.io/specification).
 
-On a local machine you do not point an assistant at anything. `./setup.init` registers the skills in
+On a local machine you do not point an assistant at anything. `agent-skills install` registers the skills in
 each host's own global skills directory, so the host discovers them the way it discovers any other
 installed skill. Invoke one by name.
 

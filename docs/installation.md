@@ -3,24 +3,44 @@
 Tested on macOS and Linux with `bash` 3.2+ and `zsh`. Windows users should run via WSL or Git Bash;
 native PowerShell is not supported.
 
+Requires Python 3.8 or newer, `bash`, and `git`.
+
 ## Install once, per machine
 
 ```bash
-git clone https://github.com/wamalalawrence/agent-skills.git
-cd agent-skills
-./setup.init
+npx @wamala/agent-skills install
 ```
 
-That is the entire local installation. You do not run it again per workspace, per repository, or per
-project.
+That is the entire local installation. No clone, no `cd`. You do not run it again per workspace, per
+repository, or per project.
+
+The npm package is a bootstrap: it checks the machine can run the installer and hands over to it.
+The product is not inside the package — it is downloaded from the release source and verified. After
+installing, the durable command is `agent-skills` and npm is not needed again.
 
 What it does:
 
-- establishes one canonical installation under `AGENT_SKILLS_HOME` (default `~/.agent-skills`);
+- resolves the latest release from a [release provider](release-providers.md);
+- downloads the payload, checks it against the hash the release was published with, and runs its
+  runtime once in a staging directory before anything points at it;
+- activates it under `AGENT_SKILLS_HOME` (default `~/.agent-skills`);
 - registers the skills with every supported agent host it finds on the machine;
 - links the `agent-skills` launcher into a directory on your `PATH`;
-- creates the non-secret user config directory;
-- writes update and version metadata, then verifies the result.
+- creates the non-secret user config directory, then verifies the result.
+
+### The installation is a transaction
+
+```text
+RESOLVE -> DOWNLOAD -> VERIFY -> STAGE -> SELF-TEST -> ACTIVATE -> HOSTS -> VERIFY
+```
+
+Everything up to and including the self-test happens off to the side. If any of it fails, the
+machine has not been touched and the release you were already running is still the one you are
+running. Only `ACTIVATE` changes anything, and it is a single atomic symlink swap. If activation or
+host registration fails after that point, the previous release is put back.
+
+There is no state in which some hosts are on one version and some on another, because hosts do not
+point at versions — they point at `~/.agent-skills/skills`, which points at `current`.
 
 What it does **not** do, by design:
 
@@ -38,14 +58,20 @@ owns only the first. Access to an external service is resolved when a task needs
 
 ```text
 ~/.agent-skills/            # AGENT_SKILLS_HOME — the canonical installation
-├── install.json            # version, source, registered hosts, timestamps
-├── VERSION
-├── skills   -> <clone>/skills
-├── scripts  -> <clone>/scripts
-├── lib      -> <clone>/lib
-├── bin      -> <clone>/bin
-├── docs     -> <clone>/docs
-└── hooks    -> <clone>/hooks
+├── current -> versions/0.43.0     the only pointer that decides what runs
+├── versions/
+│   ├── 0.42.0/                    the previous release, kept for rollback
+│   └── 0.43.0/                    skills, scripts, lib, bin, docs, release.json
+├── state/                         install history; survives every upgrade
+├── cache/                         downloads; safe to delete
+├── install.json                   version, provider, registered hosts, timestamps
+├── VERSION                        the active version, as plain text
+├── skills   -> current/skills
+├── scripts  -> current/scripts
+├── lib      -> current/lib
+├── bin      -> current/bin
+├── docs     -> current/docs
+└── hooks    -> current/hooks
 
 ~/.config/agent-skills/     # non-secret user state (XDG_CONFIG_HOME aware)
 ├── credentials.json        # profile metadata only — never a secret value
@@ -54,9 +80,19 @@ owns only the first. Access to an external service is resolved when a task needs
 ~/.local/bin/agent-skills -> ~/.agent-skills/bin/agent-skills
 ```
 
-Every tree is a symlink into the clone, so there is exactly **one** copy of each skill on the
-machine and `git pull` in the clone updates everything at once. The clone can live anywhere; move it
-and rerun `./setup.init` to re-point the install.
+Two properties follow from this shape, and most of the rest of the design rests on them.
+
+**A version directory is complete.** The skills, the runtime, and the docs of one release live
+together and are never mixed, because `current` can only point at one of them. A skill discovered
+from any repository reaches helpers from its own release.
+
+**Every stable path goes through `current`.** A host registration points at
+`~/.agent-skills/skills/<name>`; an Execution Guard hook points at `~/.agent-skills/bin/agent-skills`.
+Activating a release repoints one symlink and every host, every hook, and every skill follows in the
+same instant. Nothing has to be rewritten per host.
+
+Credentials are deliberately outside all of it, so removing an installation cannot destroy an
+identity.
 
 ## Host registration
 
@@ -87,32 +123,45 @@ agent-skills hosts --json   # the same, machine-readable
 agent-skills verify
 ```
 
-Reports the installed version, the canonical source, every host integration and whether it resolves
-to the canonical tree, runtime and lifecycle-helper availability, the credential-store backend
-(without listing any secret), legacy installation remnants, version drift, and the cloud limitation.
+Reports the active release, whether the manifest, `current`, and the payload all agree on a version,
+every host integration and whether it resolves to the canonical tree, runtime and lifecycle-helper
+availability, the credential-store backend (without listing any secret), what a rollback would
+return to, legacy installation remnants, and the cloud limitation. It writes nothing and prints no
+secret. Exit `0` healthy, `7` when something is wrong.
 
 ```bash
 agent-skills doctor         # what this environment can actually do
 agent-skills doctor --json
 ```
 
-## Flags
+## Commands and flags
+
+```bash
+agent-skills install [--version X] [--channel stable|rc] [--hosts a,b] [--all-hosts]
+agent-skills update  [--version X] [--channel stable|rc] [--allow-downgrade]
+agent-skills rollback [--version X]
+agent-skills versions [--json] [--local]
+agent-skills check-updates [--json]
+agent-skills provider [--json]
+agent-skills verify | doctor | hosts | uninstall
+```
 
 | Flag | Purpose |
 | --- | --- |
-| `--yes` | Non-interactive; accept safe defaults. |
+| `--version X` | Install or update to this exact release rather than the latest. |
+| `--channel stable\|rc` | Which release line to follow. Default `stable`, which never offers a pre-release. |
+| `--source DIR` | Install from a local source tree instead of the remote. Selects the `local` provider. |
+| `--repo URL` | Use a different git remote as the release source. |
+| `--provider local\|git` | Choose the release provider explicitly. |
 | `--hosts a,b,c` | Register only these host ids (see `agent-skills hosts`). |
 | `--all-hosts` | Register every supported host, detected or not. |
 | `--no-path-link` | Do not link the launcher into a `PATH` directory. |
-| `--verify` | Check the installation and report problems. Writes nothing. |
-| `--check-updates` | Compare local `VERSION` against the latest release tag on `origin`. Exits `0` up-to-date, `10` update available, `2` setup error. |
-| `--update` | Fetch tags, check out the latest release (or `--branch NAME`), refresh the install. Refuses on a dirty working tree. |
-| `--legacy-workspace` | Use the pre-v0.37.0 workspace model instead. |
-| `--workspace-root PATH` | Legacy workspace root. Implies `--legacy-workspace`. |
-| `--help` | Show usage. |
+| `--allow-downgrade` | Permit `update` to replace the active release with an older one. |
+| `--keep N` | How many releases to retain for rollback. Default `2`. |
+| `--purge` | With `uninstall`: also remove credential metadata and project bindings. |
+| `--home DIR` | Install into a different root. Useful for testing a branch without touching the real install. |
 
-The legacy Jira/Confluence/Sonar/environment flags (`--with-jira`, `--no-confluence`, …) still exist
-and still select the legacy model, because that is the only model in which they mean anything.
+Exit codes are a stable contract; see [versioning.md](versioning.md#exit-codes).
 
 Environment overrides, useful for testing and for unusual layouts:
 
@@ -122,7 +171,7 @@ Environment overrides, useful for testing and for unusual layouts:
 | `AGENT_SKILLS_CONFIG_DIR` | Non-secret user state. Default `$XDG_CONFIG_HOME/agent-skills` or `~/.config/agent-skills`. |
 | `AGENT_SKILLS_SOURCE` | Use this source tree instead of the detected one. |
 | `AGENT_SKILLS_CACHE_DIR` | Where per-task artifacts go. Default: `<repo>/.cache/agent-skills`. |
-| `AGENT_SKILLS_MODE` | Force `global`, `in-repo`, or `local-workspace`. |
+| `AGENT_SKILLS_MODE` | Force `global` or `in-repo`. |
 | `AGENT_SKILLS_STRICT_BINDING` | Require an explicit credential binding. See [access resolution](access-resolution.md). |
 
 ## Using it from a repository
@@ -204,54 +253,61 @@ agent-skills uninstall            # remove registrations, links, and install met
 agent-skills uninstall --purge    # also remove credential metadata and project bindings
 ```
 
-It removes only paths this project owns. Skills you installed yourself survive, the source clone is
-untouched, and secrets held in an OS keychain are never removed implicitly — that needs an explicit
-`agent-skills access forget --profile <name>`.
+It removes only paths this project owns: the installed releases under `versions/`, the activation
+pointer, the launcher link, host registrations that resolve into the install root, and Execution
+Guard hook entries carrying this project's signature.
 
-## Upgrading from v0.36.x workspace installation
+It does not remove skills you installed yourself, hooks you wrote yourself, your credential
+identities, your project bindings, per-project memory, or a repository's committed knowledge base.
+Secrets held in an OS keychain are never removed implicitly — that needs an explicit
+`agent-skills access forget --profile <name>`. `--purge` additionally removes the credential
+metadata and bindings, and is the only thing that does.
 
-Before v0.37.0, `setup.init` wrote into a parent workspace folder:
+## Upgrading from an earlier release
+
+```bash
+npx @wamala/agent-skills install
+```
+
+The installer recognises an existing installation, moves it onto the versioned layout, and leaves
+everything you own alone. Nothing is deleted and no secret is copied without you asking.
+
+| Before v0.43.0 | v0.43.0 |
+| --- | --- |
+| Clone the repository, run `./setup.init` | `npx @wamala/agent-skills install` |
+| Install trees linked into a clone you maintain | Releases copied into `~/.agent-skills/versions/` |
+| `agent-skills update` was `git pull` in that clone | A staged, verified, transactional update |
+| A failed update left the clone in whatever state it reached | A failed update leaves the previous release running |
+| No way back from a bad release | `agent-skills rollback` |
+| The clone had to keep existing | The installation is self-contained |
+
+The old clone is no longer needed once you have installed, and can be removed.
+
+### Coming from the pre-v0.37 workspace layout
+
+Before v0.37.0, setup wrote into a parent workspace folder:
 
 ```text
 ~/work/
 ├── agent-skills/
 ├── repo-a/
-├── repo-b/
 ├── .env                  <- credentials in plaintext
 ├── .jira-config.yml
 ├── .skills -> agent-skills/skills
 └── .agent-skills.lock
 ```
 
-That still works. Nothing about the upgrade is forced, and nothing is deleted.
-
-### What changed
-
-| v0.36.x | v0.37.0 |
-| --- | --- |
-| Setup per workspace | Install once per machine |
-| `<workspace>/.skills` symlink | Host registrations into each agent's global skills dir |
-| `bash agent-skills/scripts/start-task.sh` | `agent-skills start-task` |
-| `PROJECTS_JSON` registered up front | Project context inferred from each repository |
-| Credentials prompted at install, stored in `.env` | Resolved on demand, stored in the OS keychain |
-| Credentials belonged to a workspace | Credentials belong to named identities |
-
-### The move
+Nothing writes that layout any more, and v0.43.0 removed the code that did. Nothing is deleted
+either: the access resolver still reads an existing `.env`, `.env.local`, `.jira-config.yml`, and
+`.agent-skills.yml`, so leaving them in place costs nothing.
 
 ```bash
-cd agent-skills
-git pull
-./setup.init                             # installs globally; asks for nothing
-agent-skills verify                      # confirm every host sees the skills
-agent-skills migrate                     # what is now obsolete, and what is still read
+agent-skills migrate                      # what is now obsolete, and what is still read
+agent-skills migrate --remove-obsolete    # removes only .skills and .agent-skills.lock
 ```
 
-`migrate` is read-only. It reports:
-
-- `.skills` and `.agent-skills.lock` as obsolete — they carry no information the global install
-  needs;
-- `.env`, `.env.local`, `.jira-config.yml`, and `.agent-skills.yml` as **still discovered** by the
-  access resolver, so leaving them in place costs nothing.
+`migrate` is read-only by default, and `.env` is never removed automatically — it may be your only
+copy of a token.
 
 Optionally move legacy credentials into named identities:
 
@@ -263,24 +319,26 @@ agent-skills access import-legacy --apply # opt-in
 Import never displays a secret value and never deletes a legacy file. If a token sat in plaintext
 long enough to worry you, rotate it — moving it does not un-expose it.
 
-Then, when you are satisfied:
+### Flags that were removed in v0.43.0
+
+`--legacy-workspace`, `--workspace-root`, `--with-jira`, `--no-jira`, `--with-confluence`,
+`--with-sonar`, `--with-environments`, `--symlink`, and `--no-symlink` are gone, along with the code
+that acted on them. They belonged to a model that wrote credentials to disk during installation.
+Passing one now prints what replaced it rather than failing silently.
+
+## Working on Agent Skills itself
+
+`setup.init` remains as a development helper. It installs the working tree you are standing in, as a
+development release, through the same installation engine:
 
 ```bash
-agent-skills migrate --remove-obsolete    # removes only .skills and .agent-skills.lock
+./setup.init                          # install this checkout
+./setup.init --home /tmp/as-test      # into a throwaway root, leaving your real install alone
+agent-skills versions --local         # which releases are installed, and which is active
 ```
 
-`.env` is never removed automatically. It may be your only copy of a token, and the resolver still
-reads it.
-
-### Staying on the legacy model
-
-```bash
-./setup.init --legacy-workspace
-./setup.init --verify --workspace-root /path/to/work
-```
-
-An inherited `WORKSPACE_ROOT` pointing at a directory with a `.env` also selects the legacy model,
-so an existing shell profile or script keeps behaving as it did.
+A development install is recorded as such in the manifest and reported by `agent-skills doctor`, so
+an unreleased branch is never mistaken for a release.
 
 ## Cloud and remote agents (`in-repo`)
 
@@ -298,28 +356,27 @@ install does not reach it. Those environments use an in-repo mechanism:
 See [execution-modes.md](execution-modes.md) for the full comparison and
 [assistants.md](assistants.md) for per-platform notes.
 
-## Manual installation
+## Installing without npm
 
-Supported when you want full control. The install is only symlinks and a manifest:
+The npm package is a convenience, not a dependency. Any release can be installed directly:
 
 ```bash
-mkdir -p ~/.agent-skills
-ln -s /path/to/agent-skills/skills  ~/.agent-skills/skills
-ln -s /path/to/agent-skills/scripts ~/.agent-skills/scripts
-ln -s /path/to/agent-skills/lib     ~/.agent-skills/lib
-ln -s /path/to/agent-skills/bin     ~/.agent-skills/bin
-ln -s ~/.agent-skills/skills/software-engineer ~/.claude/skills/software-engineer
+git clone https://github.com/wamalalawrence/agent-skills.git
+cd agent-skills
+./setup.init
 ```
 
-`agent-skills verify` will report the missing manifest; run `./setup.init` once to write it.
+This is the same installation engine reached a different way, and it produces the same versioned
+layout. It is the supported path for contributors and for machines with no Node.js.
 
 ## Related
 
 - [Quickstart](quickstart.md) — the shortest useful path.
 - [Access resolution](access-resolution.md) — how external access is established, lazily.
 - [Configuration](configuration.md) — optional committed project configuration.
-- [Execution modes](execution-modes.md) — global, in-repo, and legacy workspace.
+- [Execution modes](execution-modes.md) — global and in-repo.
+- [Release providers](release-providers.md) — where releases come from, and distribution access.
 - [Assistants](assistants.md) — per-host discovery paths and verification.
 - [Skill-source resolution](skill-source-resolution.md) — which directory an agent loads from.
-- [Updates](updates.md) — noticing and applying a new release.
+- [Updates](updates.md) — noticing, applying, and undoing a release.
 - [Known limitations](known-limitations.md) — what none of this guarantees.

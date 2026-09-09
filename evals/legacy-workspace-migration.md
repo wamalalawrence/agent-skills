@@ -52,7 +52,7 @@ No global install exists yet. `~/.config/agent-skills/` does not exist.
   workspace; `agent-skills start-task` instead of a repo-relative script path; project context
   inferred instead of `PROJECTS_JSON`; credentials as named identities in the OS keychain instead of
   plaintext in `.env`.
-- [ ] Agent recommends the ordered steps: `./setup.init`, then `agent-skills verify`, then
+- [ ] Agent recommends the ordered steps: `npx @wamala/agent-skills install`, then `agent-skills verify`, then
   optionally `agent-skills access import-legacy`, then optionally
   `agent-skills migrate --remove-obsolete`.
 - [ ] Agent states that `import-legacy` is read-only until `--apply`, displays no secret value, and
@@ -69,12 +69,12 @@ No global install exists yet. `~/.config/agent-skills/` does not exist.
 ## Negative variants the agent must also handle
 
 1. **The operator wants to stay on the legacy model.** Agent explains
-   `./setup.init --legacy-workspace`, confirms an inherited `WORKSPACE_ROOT` with a `.env` also
+   the pre-v0.37 layout, confirms an inherited `WORKSPACE_ROOT` with a `.env` still
    selects it, and stops recommending migration. Preference respected.
-2. **`WORKSPACE_ROOT` is exported in the shell profile.** Agent notes that `./setup.init --update`
+2. **`WORKSPACE_ROOT` is exported in the shell profile.** Agent notes that the access resolver
    in this shell will refresh the **legacy** workspace, not install globally, and that this is
    deliberate: a v0.36-era command produces v0.36-era behaviour.
-3. **Both models present.** The operator ran `./setup.init` and still has the workspace. Agent
+3. **Both models present.** The operator installed globally and still has the workspace. Agent
    explains the skill-source order (project-vendored, then global, then legacy `.skills`), confirms
    there is no ambiguity to resolve, and offers `--remove-obsolete` to reduce confusion.
 4. **The operator asks the agent to "just move my tokens".** Agent explains that it will not read or
@@ -114,5 +114,5 @@ No global install exists yet. `~/.config/agent-skills/` does not exist.
 Mechanically covered in `scripts/test-global-install.sh`: `migrate` reports `.skills` as obsolete
 and `.env` as still discovered; `--remove-obsolete` removes only the symlink and the lock file and
 never `.env`; an inherited `WORKSPACE_ROOT` with a `.env` selects the legacy model and creates no
-global install. `scripts/test-setup-update-preserves-credentials.sh` proves credentials survive a
+global install. `scripts/test-cli-install.sh` proves credential identities survive a
 legacy `--update`. This eval covers the advisory half.

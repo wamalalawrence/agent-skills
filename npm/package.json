@@ -1,0 +1,44 @@
+{
+  "name": "@wamala/agent-skills",
+  "version": "0.43.0",
+  "description": "Installer for Agent Skills: a versioned, transactional agent runtime for your local repositories.",
+  "keywords": [
+    "agent",
+    "skills",
+    "claude",
+    "cursor",
+    "codex",
+    "copilot",
+    "installer"
+  ],
+  "license": "MIT",
+  "author": "Lawrence Wamala",
+  "homepage": "https://github.com/wamalalawrence/agent-skills",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/wamalalawrence/agent-skills.git"
+  },
+  "bugs": {
+    "url": "https://github.com/wamalalawrence/agent-skills/issues"
+  },
+  "engines": {
+    "node": ">=18"
+  },
+  "bin": {
+    "agent-skills-bootstrap": "bin/agent-skills-bootstrap.js"
+  },
+  "files": [
+    "bin/agent-skills-bootstrap.js",
+    "vendor/install.py",
+    "vendor/asrelease/*.py",
+    "vendor/asrelease/providers/*.py",
+    "README.md",
+    "LICENSE"
+  ],
+  "scripts": {
+    "test": "node bin/agent-skills-bootstrap.js --help"
+  },
+  "publishConfig": {
+    "access": "public"
+  }
+}

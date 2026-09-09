@@ -704,6 +704,50 @@ def cmd_verify(args: argparse.Namespace) -> int:
     return 1 if problems else 0
 
 
+def cmd_reconcile(args: argparse.Namespace) -> int:
+    """Re-point already-registered hooks at the newly activated release.
+
+    Called by the install transaction after every activation and every
+    rollback, so guard enforcement and the skills it protects are always the
+    same version. It is deliberately narrow:
+
+      * hosts the user never registered stay unregistered — installing the
+        guard edits files that decide what an agent may do, and that stays an
+        explicit choice;
+      * only entries carrying this project's signature are rewritten;
+      * a machine with no guard installation exits 0 having written nothing.
+
+    The hook command itself points at `<home>/bin/agent-skills`, which resolves
+    through `current`, so in the normal case there is nothing to rewrite and
+    this only re-asserts the registration. The rewrite matters when the hook
+    contract changed between releases.
+    """
+    recorded = sorted(read_manifest().get("hosts", {}))
+    if not recorded:
+        if args.format != "quiet":
+            sys.stdout.write("Execution Guard is not installed; nothing to reconcile.\n")
+        return 0
+    rows = [row for row in read_registry() if row.identifier in recorded]
+    results: list[InstallResult] = []
+    for row in rows:
+        if row.identifier not in ADAPTERS:
+            continue
+        install, _ = ADAPTERS[row.identifier]
+        results.append(install(row, False))
+    _record_install(results)
+    failed = [result for result in results if result.status == "failed"]
+    if args.format != "quiet":
+        for result in results:
+            sys.stdout.write("  %-28s %s\n" % (result.host, result.detail))
+    if failed:
+        sys.stderr.write(
+            "Execution Guard could not be re-registered for: %s\n"
+            % ", ".join(result.host for result in failed)
+        )
+        return 1
+    return 0
+
+
 def cmd_doctor(args: argparse.Namespace) -> int:
     rows = status_rows()
     if args.format == "json":
@@ -748,6 +792,12 @@ def register_cli(subparsers) -> None:
     verify = subparsers.add_parser("verify", help="check hook registration")
     verify.add_argument("--format", choices=("text", "json"), default="text")
     verify.set_defaults(func=cmd_verify)
+
+    reconcile = subparsers.add_parser(
+        "reconcile", help="re-point registered hooks at the active release"
+    )
+    reconcile.add_argument("--format", choices=("text", "quiet"), default="text")
+    reconcile.set_defaults(func=cmd_reconcile)
 
     doctor = subparsers.add_parser("doctor", help="per-host enforcement status")
     doctor.add_argument("--format", choices=("text", "json"), default="text")

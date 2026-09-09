@@ -15,7 +15,7 @@ ${AGENT_SKILLS_CACHE_DIR:-${WORKSPACE_ROOT:-$REPO_ROOT}/.cache/agent-skills}/<is
 
 `<issue-key>` is the Jira key, GitHub issue number, or a short slug derived from the user's brief
 when no ticket exists (e.g., `local-2026-04-flaky-login`). The `.cache/` directory is already
-covered by the workspace `.gitignore` block managed by `setup.init`, so nothing here ever leaks to a
+covered by the repository's own `.gitignore`, so nothing here ever leaks to a
 repo.
 
 Every skill that consumes one of these files MUST validate its presence and surface a finding when

@@ -16,11 +16,11 @@ license: MIT
 compatibility: >-
   Works with any agent that supports the Agent Skills format (Claude Code, Cursor,
   Windsurf, Continue, GitHub Copilot Chat, ChatGPT, etc.). Two execution modes —
-  `local-workspace` (multi-repo, setup.init + .env) and `in-repo` (single-repo,
+  `local-workspace` (multi-repo, a legacy .env) and `in-repo` (single-repo,
   .agent-skills.yml). See docs/execution-modes.md.
 metadata:
   author: wamalalawrence
-  version: "0.42.0"
+  version: "0.43.0"
   homepage: "https://github.com/wamalalawrence/agent-skills"
 argument-hint: "<the large task to decompose — a feature, migration, or refactor>"
 user-invocable: true
@@ -252,7 +252,7 @@ inaccessible. Treat unresolved `${VAR}` placeholders in `.jira-config.yml` (or e
 **Locate config files before declaring any are missing.** Run
 `agent-skills locate-config` — `.env` / `.jira-config.yml` (or equivalent tracker
 config) are written by
-`setup.init` to the **parent workspace folder**, not the repo cwd. "Not in cwd" is
+a pre-v0.37 setup to the **parent workspace folder**, not the repo cwd. "Not in cwd" is
 **not** "not in the workspace".
 
 **Project memory.** Before producing the destination brief, run

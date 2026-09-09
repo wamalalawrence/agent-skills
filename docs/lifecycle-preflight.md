@@ -67,7 +67,7 @@ Walk this ladder instead, in order:
 4. `bash scripts/start-task.sh --skill <skill-name>` — you are inside the `agent-skills` repo itself.
 
 If none resolve, the installation is missing or broken. Report that and point the user at
-`./setup.init`, then `agent-skills verify`. Do not treat it as "memory is unavailable, continue
+`agent-skills install`, then `agent-skills verify`. Do not treat it as "memory is unavailable, continue
 silently".
 
 If detection picks the wrong project or task id, pass them explicitly:

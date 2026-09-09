@@ -38,7 +38,7 @@ store as named identities, and configuration is inferred from the repository. If
 a `.env`, you are either on a pre-v0.37.0 install or in a repository that keeps its own gitignored
 one.
 
-For those cases, `setup.init --legacy-workspace` put `.env` and `.jira-config.yml` in the **parent
+For those cases, pre-v0.37 setup put `.env` and `.jira-config.yml` in the **parent
 workspace folder** holding the sibling repos and the `.skills` symlink — not inside any repository.
 An agent whose cwd is `<workspace>/<repo>` and which only checks the cwd will incorrectly report the
 files as missing.
@@ -50,7 +50,7 @@ Authoritative legacy locations, in resolution order:
 2. The cwd, then every parent directory up to the filesystem root. Do **not** stop at the first
   `.git` boundary — the workspace folder usually sits *outside* every repo's `.git`.
 3. The directory containing the `.skills` symlink. Whichever directory holds `.skills` is, by
-  setup.init's contract, the workspace root and therefore the home of `.env` /
+  that layout's contract, the workspace root and therefore the home of `.env` /
   `.jira-config.yml` / `.env.local`.
 4. In `in-repo` mode, the repository root itself, where `.agent-skills.yml` replaces `.env` /
   `.jira-config.yml`. Secrets in this mode come from the host platform's environment-variable
@@ -93,7 +93,7 @@ yields a usable configuration; otherwise continue.
   `CONFLUENCE_SPACE_KEYS`. Skills must `set -a && source .env && set +a` (or equivalent) so
   child processes inherit the values.
 4. **`.env.local`** in the workspace root, when present, layered on top of `.env`. The same
-  loader rules apply. `setup.init` does not write to this file; users add it for personal
+  loader rules apply. Nothing in Agent Skills writes this file; users add it for personal
   overrides (alternate hosts, sandbox tokens, scratch project keys).
 5. **Process environment variables** already injected by the host (CI secrets, Codespaces
   secrets, the user's shell). These win over file values when conflicts exist.
@@ -227,8 +227,8 @@ unresolved fields, never the secret values, and propose the smallest fix:
 
 > Jira config: incomplete. Unresolved placeholder `${JIRA_HOST}` (no value in `.env`,
 > `.env.local`, or process environment). `JIRA_API_TOKEN`: missing (hidden field).
-> Add both to `${WORKSPACE_ROOT}/.env` inside the `# >>> agent-skills setup.init` block,
-> or rerun `./setup.init` to regenerate. I will not continue with Jira-aware work because
+> Add both to `${WORKSPACE_ROOT}/.env`, or hold them as a credential identity with
+> `agent-skills access set`. I will not continue with Jira-aware work because
 > the result would be based on incomplete context.
 
 When auth is **unusable for this task** (preflight `2`, or preflight passed but Jira rejected):

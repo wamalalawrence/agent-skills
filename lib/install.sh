@@ -1,8 +1,11 @@
 #!/usr/bin/env bash
-# agent-skills global installer.
+# agent-skills host adapters, verification, and uninstall.
 #
-# Owns exactly four verbs: install, verify, uninstall, and the host
-# registration underneath them. `lib/runtime.sh` must be sourced first.
+# Since v0.43.0 this file no longer owns installation. The install transaction
+# lives in `lib/asrelease/transaction.py`, which stages, verifies, and activates
+# a release, then calls `as_reconcile_hosts` here to point the machine's agent
+# hosts at whatever `current` now resolves to. There is one installer, and this
+# is its host-facing half. `lib/runtime.sh` must be sourced first.
 #
 # Safety rules, in force everywhere in this file:
 #
@@ -359,114 +362,36 @@ EOF
 }
 
 # ------------------------------------------------------------------------------
-# Manifest
+# Host reconciliation
+#
+# This is the only part of installation that writes outside AGENT_SKILLS_HOME,
+# and it is the reason the host adapters stayed in shell: the ownership
+# predicates above decide what may be touched inside a directory that belongs to
+# the user, and they are the most safety-critical code in the project.
+#
+# The install transaction in lib/asrelease/transaction.py calls this through
+# scripts/hosts-reconcile.sh after activating a release, and again after a
+# rollback. It never registers a version: every registration points at
+# `<home>/skills/<name>`, which resolves through `current`. Repointing `current`
+# therefore moves every host at once, and there is no window in which two hosts
+# disagree about which version they are on.
+#
+# Reads:  AS_OPT_HOSTS, AS_OPT_ALL_HOSTS, AS_OPT_NO_PATH
+# Writes: AS_RESULT_HOSTS=<ids>, AS_RESULT_CLI_LINK=<path> on stdout
 # ------------------------------------------------------------------------------
-as_write_manifest() {
-  local source_dir="$1"
-  local hosts="$2"
-  local cli_link="$3"
-  local version git_sha manifest
-  version="$(as_read_version_file "${source_dir}/VERSION" || printf 'unknown')"
-  git_sha=""
-  if command -v git >/dev/null 2>&1 && [ -d "${source_dir}/.git" ]; then
-    git_sha="$(cd "${source_dir}" && git rev-parse --short=12 HEAD 2>/dev/null || true)"
-  fi
-  manifest="$(as_manifest_path)"
-
-  AS_MF_VERSION="${version}" \
-  AS_MF_SHA="${git_sha}" \
-  AS_MF_SOURCE="${source_dir}" \
-  AS_MF_HOME="$(as_home)" \
-  AS_MF_HOSTS="${hosts}" \
-  AS_MF_CLI="${cli_link}" \
-  AS_MF_PATH="${manifest}" \
-  python3 -c '
-import json
-import os
-
-hosts = [h for h in os.environ.get("AS_MF_HOSTS", "").split() if h]
-home = os.environ["AS_MF_HOME"]
-payload = {
-    "schema": "agent-skills.install/v1",
-    "version": os.environ.get("AS_MF_VERSION", ""),
-    "git_sha": os.environ.get("AS_MF_SHA", ""),
-    "source_dir": os.environ["AS_MF_SOURCE"],
-    "home": home,
-    "canonical_skills_dir": os.path.join(home, "skills"),
-    "hosts": hosts,
-    "cli_link": os.environ.get("AS_MF_CLI", ""),
-    "installed_at": __import__("datetime").datetime.now(
-        __import__("datetime").timezone.utc
-    ).strftime("%Y-%m-%dT%H:%M:%SZ"),
-    "installed_by": "agent-skills install " + os.environ.get("AS_MF_VERSION", ""),
-}
-target = os.environ["AS_MF_PATH"]
-with open(target, "w", encoding="utf-8") as handle:
-    json.dump(payload, handle, indent=2)
-    handle.write("\n")
-os.chmod(target, 0o644)
-'
-}
-
-# ------------------------------------------------------------------------------
-# install
-# ------------------------------------------------------------------------------
-# Options are passed as environment variables so the CLI stays the only place
-# that parses flags:
-#   AS_OPT_HOSTS       comma-separated allow-list, empty means auto-detect
-#   AS_OPT_ALL_HOSTS   "true" registers every linkable host
-#   AS_OPT_NO_PATH     "true" skips the PATH link
-as_install_global() {
-  local source_dir home version
+as_reconcile_hosts() {
+  local source_dir home
   source_dir="$(as_source_dir 2>/dev/null || true)"
-  if [ -z "${source_dir}" ]; then
-    as_die "cannot locate an agent-skills source tree. Run this from a clone, or set AGENT_SKILLS_SOURCE." 2
-  fi
+  [ -n "${source_dir}" ] || as_die "no active release to register; run: agent-skills install" 6
   home="$(as_home)"
-  version="$(as_read_version_file "${source_dir}/VERSION" || printf 'unknown')"
 
-  # Hard prerequisites, checked before anything is written. Both of these used to
-  # fail silently mid-install and still print "installed globally": the host loop
-  # and the manifest writer are both driven through `$(...)`, which discards the
-  # exit status of whatever ran inside.
   command -v python3 >/dev/null 2>&1 \
-    || as_die "python3 is required to install agent-skills (it writes the install manifest and resolves access)" 2
+    || as_die "python3 is required to install agent-skills" 2
   as_registry_path >/dev/null 2>&1 \
-    || as_die "host registry not found; this source tree is incomplete (expected lib/hosts.registry)" 2
+    || as_die "host registry not found; this release is incomplete (expected lib/hosts.registry)" 5
   [ -n "$(as_registry_rows)" ] \
-    || as_die "host registry is empty; this source tree is incomplete (expected lib/hosts.registry)" 2
+    || as_die "host registry is empty; this release is incomplete" 5
 
-  printf 'Installing agent-skills %s\n' "${version}"
-  printf '  source: %s\n' "${source_dir}"
-  printf '  home:   %s\n' "${home}"
-  printf '\n'
-
-  mkdir -p "${home}" || as_die "cannot create ${home}" 2
-  mkdir -p "$(as_config_dir)" || as_die "cannot create $(as_config_dir)" 2
-  chmod 700 "$(as_config_dir)" 2>/dev/null || true
-
-  # One canonical realpath per tree. Everything downstream — host adapters, the
-  # CLI, skill references — resolves through these five links.
-  printf 'Canonical trees\n'
-  local tree status conflicts=""
-  for tree in ${AS_LINKED_TREES}; do
-    [ -e "${source_dir}/${tree}" ] || continue
-    status="$(as_link_path "${source_dir}/${tree}" "${home}/${tree}")"
-    case "${status}" in
-      conflict)
-        as_fail "${home}/${tree} exists and is not managed by agent-skills"
-        conflicts="${conflicts}${tree} "
-        ;;
-      *) as_ok "${tree} -> ${source_dir}/${tree} (${status})" ;;
-    esac
-  done
-  if [ -n "${conflicts}" ]; then
-    as_die "refusing to overwrite unmanaged paths in ${home}: ${conflicts}" 2
-  fi
-  printf '%s\n' "${version}" > "${home}/VERSION"
-
-  # Host registration.
-  printf '\nHost integrations\n'
   local registered="" row id label global_dir register skipped=""
   while IFS= read -r row; do
     [ -n "${row}" ] || continue
@@ -512,55 +437,34 @@ EOF
     as_info "not detected on this machine, skipped: ${skipped%, }"
   fi
 
-  # CLI launcher.
-  printf '\nCommand line\n'
   local cli_link=""
   if [ "${AS_OPT_NO_PATH:-false}" = "true" ]; then
-    as_info "PATH link skipped (--no-path-link)"
+    as_info "PATH link skipped"
   elif as_link_cli; then
     cli_link="${AS_CLI_LINK}"
     if [ "${AS_CLI_ON_PATH}" = "yes" ]; then
       as_ok "agent-skills -> ${cli_link}"
     else
       as_warn "linked ${cli_link} but its directory is not on PATH"
-      printf '        Add this line to your shell profile:\n'
-      printf '          export PATH="%s:$PATH"\n' "$(dirname "${cli_link}")"
+      as_warn "add to your shell profile: export PATH=\"$(dirname "${cli_link}"):\$PATH\""
     fi
   else
     as_warn "no writable PATH directory found; use ${home}/bin/agent-skills directly"
   fi
 
-  # The manifest is what every later command reads to decide whether this machine
-  # is installed at all, so a failed write must not reach the success banner.
-  as_write_manifest "${source_dir}" "${registered}" "${cli_link}" \
-    || as_die "could not write the install manifest at $(as_manifest_path)" 2
-  [ -s "$(as_manifest_path)" ] \
-    || as_die "install manifest missing or empty at $(as_manifest_path)" 2
+  # Execution Guard hooks must follow the active release. `guard reconcile`
+  # rewrites only hook entries this project owns, and is a no-op when the guard
+  # was never installed, so an update or rollback can call it unconditionally.
+  if [ -f "${source_dir}/scripts/guard.py" ]; then
+    python3 "${source_dir}/scripts/guard.py" reconcile >/dev/null 2>&1 || true
+  fi
 
-  printf '\n'
-  printf 'Agent Skills v%s installed globally.\n' "${version}"
-  printf '\n'
-  printf 'Skills are available to:\n'
-  as_print_host_summary "${registered}"
-  printf '\n'
-  printf 'No credentials were requested or stored.\n'
-  printf 'External-service access is configured only when a task requires it.\n'
-  printf '\n'
-  as_recommend_guard
-  printf 'Next:\n'
-  printf '  cd into any repository on this machine and invoke a skill.\n'
-  printf '  agent-skills doctor    what this environment can actually do\n'
-  printf '  agent-skills verify    re-check this installation\n'
-  printf '  agent-skills update    apply a new release\n'
+  printf 'AS_RESULT_HOSTS=%s\n' "${registered% }"
+  printf 'AS_RESULT_CLI_LINK=%s\n' "${cli_link}"
+  return 0
 }
 
-# Execution Guard is recommended here and installed only on request.
-#
-# It edits host configuration files the user owns — the same files that decide
-# what their agent is allowed to do. Changing those as a side effect of "install
-# the skills" would be a surprise in exactly the category where surprises are
-# least acceptable, so this prints what the command would do and stops. See
-# docs/execution-guard.md.
+
 as_recommend_guard() {
   local source_dir
   source_dir="$(as_source_dir 2>/dev/null || true)"
@@ -633,27 +537,63 @@ as_verify_install() {
 
   if [ ! -f "${manifest}" ]; then
     as_fail "no install manifest at ${manifest}"
-    printf '        Run: ./setup.init   (or: agent-skills install)\n' >&2
-    return 1
+    printf '        Run: agent-skills install\n' >&2
+    return 7
   fi
 
-  local installed_version source_version
+  local installed_version source_version active_version
   installed_version="$(as_installed_version || printf 'unknown')"
   as_ok "install manifest present (v${installed_version})"
 
-  source_dir="$(as_source_dir 2>/dev/null || true)"
-  if [ -z "${source_dir}" ]; then
-    as_fail "canonical source tree is unreachable; the clone may have been moved or deleted"
+  # The active release. `current` is the only pointer that decides which version
+  # this machine runs, so it is checked before anything that depends on it.
+  active_version="$(as_active_version || printf '')"
+  if [ -z "${active_version}" ]; then
+    as_fail "no active release: ${home}/current does not point at an installed version"
+    printf '        Run: agent-skills install\n' >&2
+    errors=$((errors + 1))
+  elif [ ! -d "$(as_realpath "${home}/current" 2>/dev/null || printf '/nonexistent')" ]; then
+    as_fail "${home}/current is a broken link (points at ${active_version})"
+    printf '        Run: agent-skills rollback   (or: agent-skills install)\n' >&2
     errors=$((errors + 1))
   else
-    as_ok "canonical source: ${source_dir}"
+    as_ok "active release: v${active_version} at ${home}/versions/${active_version}"
+  fi
+
+  source_dir="$(as_source_dir 2>/dev/null || true)"
+  if [ -z "${source_dir}" ]; then
+    as_fail "the active release tree is unreachable"
+    errors=$((errors + 1))
+  else
     source_version="$(as_read_version_file "${source_dir}/VERSION" || printf 'unknown')"
+    # Version coherence. Skills, runtime, manifest, and the release payload all
+    # come from one directory, so a disagreement between any two of them means
+    # the install is mixed and must not be reported as healthy.
     if [ "${source_version}" != "${installed_version}" ]; then
-      as_warn "version drift: manifest v${installed_version}, source v${source_version}"
-      printf '        Run: agent-skills install   (re-links and refreshes the manifest)\n' >&2
+      as_fail "version drift: manifest v${installed_version}, active release v${source_version}"
+      printf '        Run: agent-skills install   (re-activates and refreshes the manifest)\n' >&2
+      errors=$((errors + 1))
+    elif [ -n "${active_version}" ] && [ "${active_version}" != "${source_version}" ]; then
+      as_fail "version drift: current -> ${active_version}, payload VERSION ${source_version}"
+      errors=$((errors + 1))
     else
-      as_ok "no version drift (source and manifest both v${source_version})"
+      as_ok "version coherence: manifest, current, and payload all v${source_version}"
     fi
+    if [ -f "${source_dir}/release.json" ]; then
+      as_ok "release manifest present in the active release"
+    else
+      as_warn "active release has no release.json; integrity cannot be re-checked"
+    fi
+  fi
+
+  # A recovery path is part of a working installation, so its absence is
+  # reported rather than left to be discovered during an incident.
+  local rollback_to
+  rollback_to="$(as_rollback_candidate || printf '')"
+  if [ -n "${rollback_to}" ]; then
+    as_ok "previous release retained: v${rollback_to} (agent-skills rollback)"
+  else
+    as_info "no previous release retained; rollback has nothing to return to yet"
   fi
 
   local tree tree_errors=0
@@ -840,6 +780,17 @@ as_uninstall_global() {
   printf 'Uninstalling agent-skills\n'
   printf '  home: %s\n\n' "${home}"
 
+  # Execution Guard hooks first, while the release that owns them is still
+  # reachable. `guard uninstall` removes only entries carrying this project's
+  # signature; an unrelated hook the user wrote in the same file survives.
+  local source_dir
+  source_dir="$(as_source_dir 2>/dev/null || true)"
+  if [ -n "${source_dir}" ] && [ -f "${source_dir}/scripts/guard.py" ]; then
+    if python3 "${source_dir}/scripts/guard.py" uninstall >/dev/null 2>&1; then
+      as_ok "removed agent-skills-owned Execution Guard hooks"
+    fi
+  fi
+
   local row id label global_dir register
   while IFS= read -r row; do
     [ -n "${row}" ] || continue
@@ -875,7 +826,20 @@ EOF
       rm -f "${home}/${tree}"
     fi
   done
+  [ -L "${home}/current" ] && rm -f "${home}/current"
+  # Installed release payloads. Only ever inside our own versions/ directory,
+  # which nothing but the installer writes to.
+  if [ -d "${home}/versions" ]; then
+    rm -rf "${home}/versions"
+    as_ok "removed installed release payloads"
+  fi
+  rm -rf "${home}/cache"
   rm -f "${home}/VERSION" "$(as_manifest_path)"
+  if [ "${AS_OPT_PURGE:-false}" = "true" ]; then
+    rm -rf "${home}/state"
+  else
+    as_info "kept install history in ${home}/state"
+  fi
   rmdir "${home}" 2>/dev/null || as_info "kept ${home} (not empty)"
 
   if [ "${AS_OPT_PURGE:-false}" = "true" ]; then
@@ -892,7 +856,8 @@ EOF
   fi
 
   printf '\n'
-  printf 'Removed %s host registration(s). The source clone was not touched.\n' "${removed}"
+  printf 'Removed %s host registration(s).\n' "${removed}"
+  as_info "user memory, repo knowledge, and unrelated skills and hooks were not touched"
   return 0
 }
 

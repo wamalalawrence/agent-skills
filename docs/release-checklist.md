@@ -60,6 +60,38 @@ adapters, or any rule the guard enforces.
 - [ ] Grep the release diff for any new output path that could carry a raw command line into a
       log, an error message, or telemetry.
 
+## Distribution and Packaging
+
+Required whenever a release changes `lib/asrelease/`, `scripts/install.py`, `bin/agent-skills`,
+the host adapters, or the npm bootstrap.
+
+- [ ] Run `bash scripts/test-cli-install.sh` and confirm it exits `0`. Record the assertion count in
+      `eval-runs/<release>/summary.md`.
+- [ ] Run `python3 scripts/test-release-engine.py` and confirm it exits `0`.
+- [ ] Run `bash scripts/audit-npm-package.sh` and read the file listing it prints. Do not skim it. A
+      published npm tarball is public permanently and cannot be recalled, so this is the last point
+      at which anything protected can be kept out of it.
+- [ ] Confirm the packed tarball contains no skills, docs, evals, hooks, credentials, `.env` files,
+      or absolute developer paths, and that the vendored engine is byte-identical to
+      `lib/asrelease/` and `scripts/install.py`. The audit asserts all of this; read the output
+      rather than trusting the summary line.
+- [ ] Confirm `npm/package.json` declares no `preinstall`, `install`, `postinstall`, or `prepare`
+      script. Nothing may run on `npm install`; installation happens only when a human types a
+      command.
+- [ ] Install **from the packed tarball**, not from the source tree, and run `doctor` and `verify`
+      against the result. `npm link` is not proof: it does not exercise the `files` list, which is
+      what decides what a publish actually contains.
+- [ ] Confirm the repository `VERSION`, `npm/package.json` version, the git tag, and the release
+      manifest inside the payload all state the same version.
+- [ ] Exercise the recovery path by hand at least once: install, update, break the new release,
+      `rollback`, and confirm `verify` is green afterwards. A rollback nobody has run is not a
+      recovery path.
+- [ ] Confirm exit codes still match [docs/versioning.md](versioning.md#exit-codes). After `1.0.0`
+      these are frozen; changing one is a breaking change.
+- [ ] Confirm a release source that cannot be read reports `AUTHENTICATION_REQUIRED` and exits `3`,
+      rather than reporting a missing repository, hanging on a credential prompt, or echoing a
+      token. Run it with a synthetic `GH_TOKEN` in the environment and grep the output.
+
 ## Telemetry Review
 
 The counters exist so "the skills are improving" can be checked rather than asserted. Before
@@ -156,5 +188,11 @@ criterion the release called critical.
 - [ ] Verify sponsor and funding links still render, including
       [.github/FUNDING.yml](../.github/FUNDING.yml).
 - [ ] Tag the release with the `v` prefix, for example `v0.8.0`.
-- [ ] Verify `./setup.init --check-updates` reports `up to date` against the new tag.
+- [ ] Verify `agent-skills check-updates` reports `up to date` against the new tag.
 - [ ] Verify the release page links to the correct tag, changelog, docs, and skill files.
+- [ ] If this release publishes the npm bootstrap: run `bash scripts/audit-npm-package.sh` one final
+      time against the exact tarball being published, then `npm publish` it, then install **from the
+      registry** on a machine with no source checkout and run `doctor` and `verify`.
+- [ ] If publication is deliberately deferred, say so explicitly in the changelog and record what
+      remains outstanding. A deferred publish that nobody wrote down becomes a release nobody can
+      install.

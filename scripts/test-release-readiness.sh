@@ -121,18 +121,18 @@ python3 -c 'import yaml; yaml.safe_load(open(".github/workflows/ci.yml"))' 2>/de
 # ------------------------------------------------------------------------------
 sec "3. test suites"
 # ------------------------------------------------------------------------------
-for suite in test-global-install test-access-resolution test-front-door-skill \
-  test-context-optimizer test-guard; do
+for suite in test-cli-install test-global-install test-access-resolution \
+  test-front-door-skill test-context-optimizer test-guard; do
   if bash "scripts/$suite.sh" </dev/null >"/tmp/as-rr-$suite.log" 2>&1; then
     good "$suite.sh: $(tail -1 "/tmp/as-rr-$suite.log")"
   else
-    bad "$suite.sh" "$(grep '  FAIL' "/tmp/as-rr-$suite.log" | head -5)"
+    bad "$suite.sh" "$(grep 'FAIL' "/tmp/as-rr-$suite.log" | head -5)"
   fi
 done
-if bash scripts/test-setup-update-preserves-credentials.sh >/tmp/as-rr-cred.log 2>&1; then
-  good "credential preservation across --update"
+if python3 scripts/test-release-engine.py >/tmp/as-rr-engine.log 2>&1; then
+  good "release engine: $(tail -1 /tmp/as-rr-engine.log)"
 else
-  bad "credential preservation" "$(tail -5 /tmp/as-rr-cred.log)"
+  bad "release engine" "$(grep 'FAIL' /tmp/as-rr-engine.log | head -5)"
 fi
 
 # ------------------------------------------------------------------------------
@@ -152,18 +152,20 @@ else
 fi
 
 # ------------------------------------------------------------------------------
-sec "5. clean-HOME install, verify, drift, uninstall"
+sec "5. clean-HOME install, verify, drift, rollback, uninstall"
 # ------------------------------------------------------------------------------
 BOX="$(sandbox)"
 HOME_DIR="$BOX/clean home"
 mkdir -p "$HOME_DIR"
 run_clean() {
-  env HOME="$HOME_DIR" \
+  env -u AGENT_SKILLS_SOURCE HOME="$HOME_DIR" \
     AGENT_SKILLS_HOME="$HOME_DIR/.agent-skills" \
     AGENT_SKILLS_CONFIG_DIR="$HOME_DIR/.config/agent-skills" \
     PATH="$HOME_DIR/.local/bin:$PATH" "$@"
 }
-if run_clean ./setup.init --yes >"$BOX/install.log" 2>&1; then
+as_cli() { run_clean bash bin/agent-skills "$@"; }
+
+if as_cli install --provider local --source "$PWD" >"$BOX/install.log" 2>&1; then
   good "install from a clean HOME exits 0"
 else
   bad "clean install" "$(tail -5 "$BOX/install.log")"
@@ -178,14 +180,18 @@ fi
 for artifact in ".config/agent-skills/credentials.json" ".env" ".skills"; do
   [ -e "$HOME_DIR/$artifact" ] && bad "install created $artifact" || good "install created no $artifact"
 done
+[ -L "$HOME_DIR/.agent-skills/current" ] \
+  && good "the install is versioned: current points at a release" || bad "no current symlink"
+[ -f "$HOME_DIR/.agent-skills/current/release.json" ] \
+  && good "the active release carries an integrity manifest" || bad "no release.json"
 
-if run_clean ./setup.init --verify >"$BOX/verify.log" 2>&1; then
-  good "--verify passes on a fresh install"
+if as_cli verify >"$BOX/verify.log" 2>&1; then
+  good "verify passes on a fresh install"
 else
-  bad "--verify" "$(tail -8 "$BOX/verify.log")"
+  bad "verify" "$(tail -8 "$BOX/verify.log")"
 fi
-for line in "install manifest present" "canonical source" "Host integrations" \
-  "Runtime" "Credential storage" "Legacy installation remnants" "Cloud and remote agents"; do
+for line in "install manifest present" "active release" "version coherence" \
+  "Host integrations" "Runtime" "Credential storage" "Cloud and remote agents"; do
   grep -q "$line" "$BOX/verify.log" && good "verify reports: $line" || bad "verify missing: $line"
 done
 if grep -Eq 'ghp_|AKIA[0-9A-Z]{16}' "$BOX/verify.log"; then
@@ -194,7 +200,10 @@ else
   good "verify prints no secret-shaped string"
 fi
 
-python3 - "$HOME_DIR/.agent-skills/install.json" <<'PY'
+# Drift: the manifest and the active release must agree, and a reinstall must
+# be the thing that repairs the disagreement.
+MANIFEST_FILE="$HOME_DIR/.agent-skills/install.json"
+python3 - "$MANIFEST_FILE" <<'DRIFTPY'
 import json
 import sys
 
@@ -204,122 +213,113 @@ with open(path, encoding="utf-8") as handle:
 data["version"] = "0.0.1"
 with open(path, "w", encoding="utf-8") as handle:
     json.dump(data, handle, indent=2)
-PY
+DRIFTPY
 # Captured rather than piped into `grep -q`: under `set -o pipefail` a matching
-# `grep -q` exits early and SIGPIPEs the writer, inverting the assertion. And the
-# healthy line reads "no version drift", so match the WARN prefix specifically.
-DRIFT="$(run_clean ./setup.init --verify 2>&1)"
+# `grep -q` exits early and SIGPIPEs the writer, inverting the assertion.
+DRIFT="$(as_cli verify 2>&1 || true)"
 case "$DRIFT" in
-  *"WARN  version drift"*) good "verify detects version drift" ;;
+  *"version drift"*) good "verify detects version drift" ;;
   *) bad "drift detection" "$(printf '%s' "$DRIFT" | head -6)" ;;
 esac
-run_clean ./setup.init --yes >/dev/null 2>&1
-DRIFT_AFTER="$(run_clean ./setup.init --verify 2>&1)"
+as_cli install --provider local --source "$PWD" >/dev/null 2>&1
+DRIFT_AFTER="$(as_cli verify 2>&1 || true)"
 case "$DRIFT_AFTER" in
-  *"WARN  version drift"*) bad "reinstall did not clear drift" ;;
-  *"no version drift"*) good "reinstall clears drift" ;;
+  *"version drift"*) bad "reinstall did not clear drift" ;;
+  *"version coherence"*) good "reinstall clears drift" ;;
   *) bad "drift state unclear after reinstall" "$(printf '%s' "$DRIFT_AFTER" | head -6)" ;;
 esac
 
-run_clean bash bin/agent-skills uninstall --yes >/dev/null 2>&1 \
+# A release candidate needs a recovery path that has actually been run, not one
+# that exists on paper.
+NEXTREL="$BOX/next"
+mkdir -p "$NEXTREL"
+for entry in VERSION bin lib scripts skills docs hooks README.md LICENSE; do
+  [ -e "$entry" ] && cp -R "$entry" "$NEXTREL/$entry"
+done
+printf '99.0.0\n' > "$NEXTREL/VERSION"
+as_cli update --provider local --source "$NEXTREL" >"$BOX/update.log" 2>&1 \
+  && good "update to a newer release exits 0" || bad "update" "$(tail -5 "$BOX/update.log")"
+[ "$(run_clean bash "$HOME_DIR/.agent-skills/bin/agent-skills" version)" = "99.0.0" ] \
+  && good "the newer release is active" || bad "update did not activate the new release"
+as_cli rollback >"$BOX/rollback.log" 2>&1 \
+  && good "rollback exits 0" || bad "rollback" "$(tail -5 "$BOX/rollback.log")"
+[ "$(run_clean bash "$HOME_DIR/.agent-skills/bin/agent-skills" version)" = "$(cat VERSION)" ] \
+  && good "rollback restored the previous release" || bad "rollback did not restore"
+
+as_cli uninstall --yes >/dev/null 2>&1 \
   && good "uninstall exits 0" || bad "uninstall"
 [ -e "$HOME_DIR/.agents/skills/wamala" ] \
   && bad "a registration survived uninstall" || good "uninstall removed our registrations"
+[ -d "$HOME_DIR/.agent-skills/versions" ] \
+  && bad "release payloads survived uninstall" || good "uninstall removed the release payloads"
+
 
 # ------------------------------------------------------------------------------
-sec "6. upgrade from $PREVIOUS_TAG"
+sec "6. upgrade from the $PREVIOUS_TAG installation"
 # ------------------------------------------------------------------------------
+# The migration every existing user actually performs: a pre-CLI global install
+# produced by the previous release, upgraded by the v0.43.0 installer. What must
+# survive is not the installation — that is replaced — but everything the user
+# owns: credential identities, project bindings, and any legacy `.env` the
+# access resolver still reads for them.
 UP="$(sandbox)"
 if git worktree add -q --detach "$UP/previous" "$PREVIOUS_TAG" 2>/dev/null; then
-  mkdir -p "$UP/work/repo-a/.git"
-  cp -R "$UP/previous" "$UP/work/agent-skills"
+  UP_HOME="$UP/home"
+  UP_OLD="$UP/previous-clone"
+  mkdir -p "$UP_HOME" "$UP/work/repo-a"
+  cp -R "$UP/previous" "$UP_OLD"
+  rm -rf "$UP_OLD/.git"
+  ( cd "$UP/work/repo-a" && git init -q )
   printf '[project]\nname = "repo-a"\n' > "$UP/work/repo-a/pyproject.toml"
-  ( cd "$UP/work/agent-skills" \
-      && ./setup.init --yes --no-jira --workspace-root "$UP/work" ) >"$UP/old.log" 2>&1
-  if [ -f "$UP/work/.env" ] && [ -L "$UP/work/.skills" ]; then
-    good "$PREVIOUS_TAG produced its workspace layout (.env + .skills)"
-  else
-    bad "$PREVIOUS_TAG layout" "$(tail -5 "$UP/old.log")"
-  fi
-  # Put the credentials where setup.init itself writes them: inside the managed
-  # block. Appending them after the block instead tests a shape setup.init
-  # deliberately normalises away, which made this section pass for the wrong
-  # reason. In-block is what a real v0.36 user has.
-  python3 - "$UP/work/.env" <<'PY'
-import sys
-path = sys.argv[1]
-with open(path, encoding="utf-8") as handle:
-    text = handle.read()
-text = text.replace('JIRA_HOST=""', 'JIRA_HOST="https://legacy.example.com"')
-text = text.replace('JIRA_LOGIN=""', 'JIRA_LOGIN="me@example.com"')
-text = text.replace('JIRA_API_TOKEN=""', 'JIRA_API_TOKEN="legacy-token-value-1234"')
-with open(path, "w", encoding="utf-8") as handle:
-    handle.write(text)
-PY
-  grep -q 'JIRA_HOST="https://legacy.example.com"' "$UP/work/.env" \
-    && good "fixture seeded a credential inside the managed block" \
-    || bad "fixture could not seed the managed block"
 
-  rm -rf "$UP/work/agent-skills"
-  cp -R "$REPO" "$UP/work/agent-skills"
-  UP_HOME="$UP/newhome"
-  mkdir -p "$UP_HOME"
   run_upgraded() {
-    env HOME="$UP_HOME" \
+    env -i HOME="$UP_HOME" \
       AGENT_SKILLS_HOME="$UP_HOME/.agent-skills" \
       AGENT_SKILLS_CONFIG_DIR="$UP_HOME/.config/agent-skills" \
-      PATH="$UP_HOME/.local/bin:$PATH" "$@"
+      PATH="$UP_HOME/.local/bin:/usr/bin:/bin:/usr/local/bin:/opt/homebrew/bin" \
+      TERM=dumb "$@"
   }
-  # A bare run on an existing legacy workspace must KEEP the legacy model. Before
-  # v0.37.0 this silently converted the user to a global install, which is a
-  # different layout, registrations in every detected host, and a launcher on
-  # PATH — none of it asked for. Migrating is opt-in via --global.
-  ( cd "$UP/work/agent-skills" && run_upgraded ./setup.init --yes ) >"$UP/new.log" 2>&1 \
-    && good "a bare run on a legacy workspace exits 0" \
-    || bad "bare run on a legacy workspace" "$(tail -5 "$UP/new.log")"
-  grep -q 'legacy workspace model' "$UP/new.log" \
-    && good "a bare run keeps the legacy workspace model" \
-    || bad "bare run did not report the legacy model" "$(tail -5 "$UP/new.log")"
+
+  run_upgraded bash "$UP_OLD/bin/agent-skills" install --yes >"$UP/old.log" 2>&1
   [ -f "$UP_HOME/.agent-skills/install.json" ] \
-    && bad "a bare run silently migrated the user to a global install" \
-    || good "a bare run created no global install"
-  [ -f "$UP/work/.env" ] && good "upgrade did not delete the legacy .env" || bad "legacy .env deleted"
-  [ -L "$UP/work/.skills" ] \
-    && good "upgrade left the legacy .skills alone" || bad ".skills removed by upgrade"
-  # The managed-block writer emits empty strings for any service whose mode
-  # resolves to "no", so a rerun that does not opt populated services back in
-  # erases credentials it was never asked to touch.
-  grep -q 'JIRA_HOST="https://legacy.example.com"' "$UP/work/.env" \
-    && good "a bare rerun preserved the in-block Jira credential" \
-    || bad "a bare rerun cleared the in-block Jira credential" \
-         "$(grep -E '^JIRA_(HOST|LOGIN|API_TOKEN)=' "$UP/work/.env")"
-  grep -q 'JIRA_API_TOKEN="legacy-token-value-1234"' "$UP/work/.env" \
-    && good "a bare rerun preserved the in-block Jira token" \
-    || bad "a bare rerun cleared the in-block Jira token"
+    && good "$PREVIOUS_TAG produced its own global install" \
+    || bad "$PREVIOUS_TAG install" "$(tail -5 "$UP/old.log")"
+  [ -L "$UP_HOME/.agents/skills/wamala" ] \
+    && good "$PREVIOUS_TAG registered its skills" || bad "$PREVIOUS_TAG registration"
 
-  # Opting in explicitly is what produces the new model.
-  ( cd "$UP/work/agent-skills" && run_upgraded ./setup.init --global --yes ) \
-    >"$UP/optin.log" 2>&1 \
-    && good "--global exits 0 on a legacy workspace" \
-    || bad "--global on a legacy workspace" "$(tail -5 "$UP/optin.log")"
-  [ -f "$UP_HOME/.agent-skills/install.json" ] \
-    && good "--global produced the global install" || bad "no global install after --global"
-  [ -f "$UP/work/.env" ] \
-    && good "opting in still did not delete the legacy .env" || bad "--global deleted the legacy .env"
+  # State the user owns, in both places it can live.
+  run_upgraded python3 "$UP_OLD/scripts/access.py" set --profile work \
+    --service demo-service --field host=demo.example.invalid >/dev/null 2>&1
+  [ -f "$UP_HOME/.config/agent-skills/credentials.json" ] \
+    && good "a credential identity exists before the upgrade" \
+    || bad "could not seed a credential identity"
+  cat > "$UP/work/.env" <<'LEGACYENV'
+JIRA_HOST="https://legacy.example.com"
+JIRA_LOGIN="me@example.com"
+JIRA_API_TOKEN="legacy-token-value-1234"
+LEGACYENV
 
-  ( cd "$UP/work/agent-skills" \
-      && run_upgraded bash lib/migrate.sh --workspace-root "$UP/work" ) >"$UP/migrate.log" 2>&1
-  grep -q '\.skills is obsolete' "$UP/migrate.log" \
-    && good "migrate reports .skills as obsolete" || bad "migrate .skills report"
-  grep -q '\.env is still discovered' "$UP/migrate.log" \
-    && good "migrate reports .env as still read" || bad "migrate .env report"
-  ( cd "$UP/work/agent-skills" && run_upgraded bash lib/migrate.sh \
-      --workspace-root "$UP/work" --remove-obsolete ) >/dev/null 2>&1
-  [ -e "$UP/work/.skills" ] \
-    && bad "--remove-obsolete left .skills" || good "--remove-obsolete removed .skills"
-  [ -f "$UP/work/.env" ] \
-    && good "--remove-obsolete kept .env" || bad "--remove-obsolete deleted .env"
+  run_upgraded bash "$REPO/bin/agent-skills" install \
+    --provider local --source "$REPO" >"$UP/new.log" 2>&1 \
+    && good "the v0.43.0 installer upgrades a pre-CLI installation" \
+    || bad "upgrade from $PREVIOUS_TAG" "$(tail -8 "$UP/new.log")"
+  [ "$(run_upgraded bash "$UP_HOME/.agent-skills/bin/agent-skills" version)" = "$(cat VERSION)" ] \
+    && good "the upgraded machine runs this release" || bad "upgrade did not activate this release"
+  [ "$(readlink "$UP_HOME/.agent-skills/skills")" = "current/skills" ] \
+    && good "the upgrade moved the install onto the versioned layout" \
+    || bad "install trees still point outside current"
+  run_upgraded bash "$UP_HOME/.agent-skills/bin/agent-skills" verify >"$UP/verify.log" 2>&1 \
+    && good "verify passes after the upgrade" || bad "verify after upgrade" "$(tail -8 "$UP/verify.log")"
 
+  [ -f "$UP_HOME/.config/agent-skills/credentials.json" ] \
+    && good "the credential identity survived the upgrade" \
+    || bad "the upgrade destroyed a credential identity"
+  grep -q 'work' "$UP_HOME/.config/agent-skills/credentials.json" \
+    && good "the identity itself is intact" || bad "the identity was rewritten"
+
+  # A legacy `.env` is no longer written by anything, but it is still read on
+  # behalf of users who have one. Dropping that quietly would take away a
+  # credential the user believes is configured.
   LEGACY_RESOLVE="$(
     cd "$UP/work/repo-a" && env HOME="$UP_HOME" \
       AGENT_SKILLS_CONFIG_DIR="$UP_HOME/.config/agent-skills" \
@@ -328,17 +328,25 @@ PY
       --require host,token --secret token --no-capability 2>&1
   )"
   case "$LEGACY_RESOLVE" in
-    *"status: resolved"*) good "a legacy .env credential still resolves after upgrade" ;;
+    *"status: resolved"*) good "a legacy .env credential still resolves after the upgrade" ;;
     *) bad "legacy credential lost after upgrade" "$(printf '%s' "$LEGACY_RESOLVE" | head -6)" ;;
   esac
   case "$LEGACY_RESOLVE" in
     *legacy-token-value-1234*) bad "the legacy token value was echoed" ;;
     *) good "the legacy token value was not echoed" ;;
   esac
+
+  # The migration report still explains what a pre-v0.37 workspace leaves behind.
+  run_upgraded bash "$UP_HOME/.agent-skills/bin/agent-skills" migrate \
+    --workspace-root "$UP/work" >"$UP/migrate.log" 2>&1 || true
+  grep -q '\.env' "$UP/migrate.log" \
+    && good "migrate still explains an existing legacy .env" || bad "migrate .env report"
+
   git worktree remove --force "$UP/previous" 2>/dev/null || true
 else
   bad "could not create a worktree for $PREVIOUS_TAG"
 fi
+
 
 # ------------------------------------------------------------------------------
 sec "6b. global-install upgrade across the rename ($RENAME_TAG)"
@@ -380,12 +388,13 @@ if git worktree add -q --detach "$GU/previous" "$RENAME_TAG" 2>/dev/null; then
     && good "$RENAME_TAG registered tech-lead globally" \
     || bad "$RENAME_TAG registration" "$(tail -5 "$GU/old.log")"
 
-  # `agent-skills update` swaps the clone's contents in place. Reproduce that
-  # without a network fetch by copying this release over the same directory.
+  # Reproduce the upgrade without a network fetch: this release, installed over
+  # the pre-rename one by the v0.43.0 installer.
   rm -rf "$GU_SRC"
   cp -R "$REPO" "$GU_SRC"
   rm -rf "$GU_SRC/.git" "$GU_SRC/.venv" "$GU_SRC/.cache"
-  run_gu bash "$GU_SRC/bin/agent-skills" install --yes >"$GU/new.log" 2>&1
+  run_gu bash "$GU_SRC/bin/agent-skills" install \
+    --provider local --source "$GU_SRC" >"$GU/new.log" 2>&1
 
   [ -L "$GU_HOME/.agents/skills/wamala" ] \
     && good "the upgrade registered wamala" || bad "wamala not registered" "$(tail -8 "$GU/new.log")"
@@ -401,7 +410,8 @@ if git worktree add -q --detach "$GU/previous" "$RENAME_TAG" 2>/dev/null; then
     || bad "the upgrade deleted a user skill named tech-lead"
   run_gu bash "$GU_SRC/bin/agent-skills" verify >"$GU/verify.log" 2>&1 \
     && good "verify passes after the upgrade" || bad "verify after upgrade" "$(tail -8 "$GU/verify.log")"
-  run_gu bash "$GU_SRC/bin/agent-skills" install --yes >/dev/null 2>&1
+  run_gu bash "$GU_SRC/bin/agent-skills" install \
+    --provider local --source "$GU_SRC" >/dev/null 2>&1
   GU_WAMALA="$(find "$GU_HOME/.agents/skills" -maxdepth 1 -name wamala | wc -l | tr -d ' ')"
   [ "$GU_WAMALA" = "1" ] \
     && good "a second upgrade run leaves exactly one wamala registration" \

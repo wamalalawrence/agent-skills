@@ -101,20 +101,36 @@ as_manifest_path() {
   printf '%s/install.json' "$(as_home)"
 }
 
-# The source tree the install points at.
+# The active release tree.
+#
+# Since v0.43.0 an installation holds several releases under `<home>/versions/`
+# and one symlink, `<home>/current`, that decides which of them the machine
+# runs. Everything else — the top-level trees, every host registration, every
+# Execution Guard hook — resolves through that one link, which is what makes
+# activation and rollback a single atomic operation.
 #
 # Resolution order:
-#   1. AGENT_SKILLS_SOURCE, when it looks like a source tree.
-#   2. The realpath of `<home>/skills`, minus the trailing `skills` — this is
-#      the normal answer once installed, and it survives the CLI being invoked
-#      through two layers of symlink.
-#   3. The tree containing this very file, for a not-yet-installed clone.
+#   1. AGENT_SKILLS_SOURCE, when it looks like a release tree. Used by the
+#      staged-release self-test and by development installs.
+#   2. `<home>/current`, the normal answer once installed.
+#   3. The realpath of `<home>/skills` minus the trailing `skills`, which is how
+#      a pre-v0.43 installation is still located so it can be migrated.
+#   4. The tree containing this very file, for a checkout that is not installed.
 as_source_dir() {
   local candidate resolved
 
   if [ -n "${AGENT_SKILLS_SOURCE:-}" ] && as_is_source_tree "${AGENT_SKILLS_SOURCE}"; then
     as_realpath "${AGENT_SKILLS_SOURCE}"
     return 0
+  fi
+
+  candidate="$(as_home)/current"
+  if [ -e "${candidate}" ]; then
+    resolved="$(as_realpath "${candidate}" 2>/dev/null || true)"
+    if [ -n "${resolved}" ] && as_is_source_tree "${resolved}"; then
+      printf '%s' "${resolved}"
+      return 0
+    fi
   fi
 
   candidate="$(as_home)/skills"
@@ -133,8 +149,49 @@ as_source_dir() {
   return 1
 }
 
-# A source tree is a checkout of this repository: it has VERSION, skills/, and
-# scripts/. Checked rather than assumed so a stray directory cannot be adopted.
+# The version `<home>/current` points at, read from the link itself.
+#
+# Deliberately independent of the manifest: when the two disagree, that is drift
+# worth reporting, and a reader that consults only the manifest cannot see it.
+as_active_version() {
+  local link target
+  link="$(as_home)/current"
+  [ -L "${link}" ] || return 1
+  target="$(readlink "${link}" 2>/dev/null || true)"
+  [ -n "${target}" ] || return 1
+  printf '%s' "$(basename "${target%/}")"
+}
+
+# The version `agent-skills rollback` would return to, or empty.
+as_rollback_candidate() {
+  local history active
+  history="$(as_home)/state/history.json"
+  [ -f "${history}" ] || return 1
+  active="$(as_active_version 2>/dev/null || printf '')"
+  AS_HISTORY="${history}" AS_ACTIVE="${active}" AS_HOME_DIR="$(as_home)" python3 -c '
+import json
+import os
+import sys
+
+try:
+    with open(os.environ["AS_HISTORY"], encoding="utf-8") as handle:
+        entries = json.load(handle)
+except Exception:
+    sys.exit(1)
+active = os.environ.get("AS_ACTIVE", "")
+home = os.environ["AS_HOME_DIR"]
+for entry in reversed(entries if isinstance(entries, list) else []):
+    previous = entry.get("from", "")
+    if previous and previous != active:
+        if os.path.isdir(os.path.join(home, "versions", previous)):
+            sys.stdout.write(previous)
+            sys.exit(0)
+sys.exit(1)
+' 2>/dev/null
+}
+
+# A release tree carries VERSION, skills/, and scripts/. Checked rather than
+# assumed so a stray directory cannot be adopted as an installation.
 as_is_source_tree() {
   local dir="$1"
   [ -n "${dir}" ] || return 1

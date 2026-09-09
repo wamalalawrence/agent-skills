@@ -65,11 +65,19 @@ jobs:
             exit 1
           fi
 
-      - name: Global install and access-resolution test suites
+      - name: Installation, host, and access-resolution test suites
         run: |
           set -euo pipefail
+          bash scripts/test-cli-install.sh
           bash scripts/test-global-install.sh
           bash scripts/test-access-resolution.sh
+
+      # Integrity, hostile archives, and provider independence. These are the
+      # parts of distribution where the failure mode is silent: a payload that
+      # verified when it should not have, or an installer that quietly depends
+      # on GitHub. Both are asserted here rather than inferred.
+      - name: Release engine, archive safety, and provider independence
+        run: python3 scripts/test-release-engine.py
 
       - name: Front-door skill identity and contract
         run: bash scripts/test-front-door-skill.sh
@@ -156,37 +164,37 @@ jobs:
           echo "ok: budget honoured, hostile content flagged and preserved"
           rm -rf "$BOX"
 
-      - name: Verify the default global install from a clean HOME
+      - name: Verify a clean install, from a clean HOME with a space in the path
         run: |
           set -euo pipefail
-          # A throwaway HOME with a space in the path, so quoting regressions
-          # fail here rather than on a user's machine.
           tmp=$(mktemp -d)
           home="$tmp/clean home"
           mkdir -p "$home/.claude/skills/pre-existing-user-skill"
           printf -- '---\nname: pre-existing-user-skill\ndescription: not ours\n---\n# Mine\n' \
             > "$home/.claude/skills/pre-existing-user-skill/SKILL.md"
-          run_setup() {
-            env HOME="$home" \
+          run_cli() {
+            env -u AGENT_SKILLS_SOURCE HOME="$home" \
               AGENT_SKILLS_HOME="$home/.agent-skills" \
               AGENT_SKILLS_CONFIG_DIR="$home/.config/agent-skills" \
               PATH="$home/.local/bin:$PATH" \
-              "$@"
+              bash bin/agent-skills "$@"
           }
-          run_setup ./setup.init --yes > "$tmp/install.log" 2>&1 || {
+          run_cli install --provider local --source "$PWD" > "$tmp/install.log" 2>&1 || {
             cat "$tmp/install.log"; exit 1;
           }
           cat "$tmp/install.log"
           # The binding requirement: no credential is requested or stored.
           if grep -Eiq 'JIRA_|CONFLUENCE_|SONAR_|paste|api token' "$tmp/install.log"; then
-            echo "ERROR: the global install mentioned a credential" >&2
+            echo "ERROR: the install mentioned a credential" >&2
             exit 1
           fi
           test ! -f "$home/.config/agent-skills/credentials.json"
           test ! -f "$home/.env"
           test ! -e "$home/.skills"
-          # One canonical source, registered per skill.
+          # One versioned release, one activation pointer, one canonical tree.
           test -f "$home/.agent-skills/install.json"
+          test -L "$home/.agent-skills/current"
+          test -f "$home/.agent-skills/current/release.json"
           test -L "$home/.agents/skills/wamala"
           test -f "$home/.agents/skills/wamala/SKILL.md"
           test -L "$home/.claude/skills/software-engineer"
@@ -199,12 +207,12 @@ jobs:
           test "$a" = "$b"
           # Idempotency: a rerun adds nothing.
           before=$(ls -1 "$home/.agents/skills" | wc -l)
-          run_setup ./setup.init --yes > /dev/null 2>&1
+          run_cli install --provider local --source "$PWD" > /dev/null 2>&1
           after=$(ls -1 "$home/.agents/skills" | wc -l)
           test "$before" = "$after"
-          run_setup ./setup.init --verify
+          run_cli verify
           # The runtime must resolve from an unrelated repository, several
-          # directories deep, which is the whole point of the release.
+          # directories deep, which is the whole point of the global install.
           mkdir -p "$tmp/elsewhere/service/src/main/java/deep"
           (cd "$tmp/elsewhere/service" && git init -q)
           expected=$(cat VERSION)
@@ -222,95 +230,88 @@ jobs:
           printf '%s\n' "$out" | grep -q 'status: needs-setup'
           printf '%s\n' "$out" | grep -q 'does not authorize destructive action'
           # Uninstall removes only what we own.
-          run_setup ./setup.init --yes > /dev/null 2>&1
-          run_setup bash bin/agent-skills uninstall --yes
+          run_cli uninstall --yes
           test ! -e "$home/.agents/skills/wamala"
           test -f "$home/.claude/skills/pre-existing-user-skill/SKILL.md"
 
-      - name: Verify the legacy workspace model still works
+      # The npm bootstrap is a published artifact, and a published tarball is
+      # public permanently. Its contents are audited here, on every change,
+      # rather than at release time when the cost of finding a problem is
+      # highest.
+      # The npm bootstrap is a published artifact, and a published tarball is
+      # public permanently. Its contents are audited on every change rather than
+      # at release time, when the cost of finding a problem is highest.
+      - name: Build the npm bootstrap and audit exactly what it would publish
+        run: bash scripts/audit-npm-package.sh
+
+      # Installation from the packed artifact over a real git remote: the
+      # supported path, end to end, with no manual clone anywhere in it.
+      - name: Install from the packed npm artifact over a git remote
         run: |
           set -euo pipefail
           tmp=$(mktemp -d)
-          # Place agent-skills as a sibling under tmp/work so workspace root sits above it.
-          # Make the workspace root itself a git repo so the .gitignore branch is exercised.
-          mkdir -p "$tmp/work"
-          (cd "$tmp/work" && git init -q)
-          cp -R . "$tmp/work/agent-skills"
-          # Provide a sibling repo so PROJECTS_JSON detection has something to find.
-          mkdir -p "$tmp/work/example-py/.git"
-          printf '[project]\nname = "example-py"\n' > "$tmp/work/example-py/pyproject.toml"
-          (cd "$tmp/work/agent-skills" && ./setup.init --yes --no-jira --workspace-root "$tmp/work")
-          (cd "$tmp/work/agent-skills" && ./setup.init --verify --workspace-root "$tmp/work")
-          test -f "$tmp/work/.env"
-          test -L "$tmp/work/.skills"
-          test -f "$tmp/work/.gitignore"
-          grep -q "^# >>> agent-skills setup\.init$" "$tmp/work/.env"
-          grep -q ">>> agent-skills setup.init" "$tmp/work/.gitignore"
-          # Idempotency: rerun must not duplicate the gitignore block.
-          (cd "$tmp/work/agent-skills" && ./setup.init --yes --no-jira --workspace-root "$tmp/work")
-          test "$(grep -c '>>> agent-skills setup.init' "$tmp/work/.gitignore")" = "1"
-          # Marker block in .env must appear exactly once.
-          test "$(grep -c '^# >>> agent-skills setup\.init$' "$tmp/work/.env")" = "1"
-          # A legacy workspace must still be recognised and explained, not broken.
-          # Capture both streams. The report writes findings to stdout, but an
-          # assertion about a command's output should not be the thing that
-          # silently changes meaning if a line moves between streams.
-          (cd "$tmp/work/agent-skills" \
-            && bash lib/migrate.sh --workspace-root "$tmp/work" 2>&1) \
-            | grep -q '\.skills is obsolete'
-          # No setup-managed key may appear outside the marker block.
-          MANAGED='ORG_NAME|ORG_DOMAIN|WORKSPACE_ROOT|GITHUB_ORG'
-          MANAGED="$MANAGED|GITHUB_DEFAULT_BRANCH|PROJECTS_JSON"
-          MANAGED="$MANAGED|JIRA_CONFIG_FILE|JIRA_HOST|JIRA_AUTH_TYPE"
-          MANAGED="$MANAGED|JIRA_LOGIN|JIRA_API_TOKEN|JIRA_PROJECT_KEYS|JIRA_KEY_REGEX"
-          MANAGED="$MANAGED|CONFLUENCE_HOST|CONFLUENCE_LOGIN"
-          MANAGED="$MANAGED|CONFLUENCE_API_TOKEN|CONFLUENCE_SPACE_KEYS"
-          MANAGED="$MANAGED|SONAR_HOST_URL|SONAR_TOKEN|ENVIRONMENTS_JSON"
-          awk -v keys="$MANAGED" '
-            BEGIN { inb = 0; bad = 0; pat = "^[[:space:]]*(export[[:space:]]+)?(" keys ")[[:space:]]*=" }
-            /# >>> agent-skills setup\.init/ { inb = 1; next }
-            /# <<< agent-skills setup\.init/ { inb = 0; next }
-            inb { next }
-            $0 ~ pat { print "duplicate-outside-marker: " $0; bad = 1 }
-            END { exit bad }
-          ' "$tmp/work/.env"
-          # Confluence opt-in flow must place CONFLUENCE_* keys inside the marker block.
-          rm -rf "$tmp/conf"
-          mkdir -p "$tmp/conf/work"
-          (cd "$tmp/conf/work" && git init -q)
-          cp -R . "$tmp/conf/work/agent-skills"
-          (cd "$tmp/conf/work/agent-skills" && ./setup.init --yes --no-jira --with-confluence --workspace-root "$tmp/conf/work")
-          grep -q "^CONFLUENCE_HOST=" "$tmp/conf/work/.env"
-          grep -q "^CONFLUENCE_API_TOKEN=" "$tmp/conf/work/.env"
-          test "$(grep -c '^CONFLUENCE_HOST=' "$tmp/conf/work/.env")" = "1"
-          # Safety: must refuse unsafe roots like $HOME.
-          if (cd "$tmp/work/agent-skills" && ./setup.init --yes --no-jira --workspace-root "$HOME"); then
-            echo "ERROR: setup.init accepted \$HOME as workspace root" >&2
-            exit 1
-          fi
-          # A workspace root that is NOT a git repo is the DEFAULT layout, and it is
-          # where the pre-0.36.0 bug lived: the .gitignore was silently skipped, so
-          # the generated .env carrying plaintext tokens was unprotected the moment
-          # anyone ran `git init` there. The checks above use a git-initialised root
-          # and would not have caught it.
-          rm -rf "$tmp/nogit"
-          mkdir -p "$tmp/nogit/work"
-          cp -R . "$tmp/nogit/work/agent-skills"
-          (cd "$tmp/nogit/work/agent-skills" && ./setup.init --yes --no-jira --workspace-root "$tmp/nogit/work")
-          test ! -d "$tmp/nogit/work/.git"
-          test -f "$tmp/nogit/work/.gitignore"
-          grep -qx '.env' "$tmp/nogit/work/.gitignore"
-          # And a stored token with the ignore rule removed must FAIL verification.
-          sed -i.bak 's/^JIRA_API_TOKEN=.*/JIRA_API_TOKEN="tok-abcdefghijklmnop1234"/' "$tmp/nogit/work/.env"
-          grep -v '^\.env$' "$tmp/nogit/work/.gitignore" > "$tmp/nogit/g"
-          mv "$tmp/nogit/g" "$tmp/nogit/work/.gitignore"
-          if (cd "$tmp/nogit/work/agent-skills" && ./setup.init --verify --workspace-root "$tmp/nogit/work"); then
-            echo "ERROR: --verify passed with a plaintext token in an unignored .env" >&2
-            exit 1
-          fi
+          home="$tmp/home"
+          mkdir -p "$home" "$tmp/npmroot" "$tmp/work"
+          tarball=$(ls -1t npm/*.tgz | head -1)
+          npm install --silent --prefix "$tmp/npmroot" "$tarball"
+          boot="$tmp/npmroot/node_modules/.bin/agent-skills-bootstrap"
+          test -x "$boot"
+          version=$(cat VERSION)
+          git init -q --bare "$tmp/remote.git"
+          for entry in VERSION bin lib scripts skills docs hooks README.md LICENSE; do
+            [ -e "$entry" ] && cp -R "$entry" "$tmp/work/$entry"
+          done
+          (cd "$tmp/work" \
+            && git -c init.defaultBranch=as-fixture init -q \
+            && git -c user.email=ci@example.invalid -c user.name=ci add -A \
+            && git -c user.email=ci@example.invalid -c user.name=ci commit -qm "release $version" \
+            && git -c user.email=ci@example.invalid -c user.name=ci tag -a "v$version" -m "v$version" \
+            && git remote add box "$tmp/remote.git" \
+            && git push -q box HEAD:refs/heads/as-fixture --tags)
+          env -u AGENT_SKILLS_SOURCE HOME="$home" \
+            AGENT_SKILLS_HOME="$home/.agent-skills" \
+            AGENT_SKILLS_CONFIG_DIR="$home/.config/agent-skills" \
+            PATH="$home/.local/bin:$PATH" \
+            "$boot" install --repo "$tmp/remote.git"
+          got=$(env HOME="$home" AGENT_SKILLS_HOME="$home/.agent-skills" \
+            bash "$home/.agent-skills/bin/agent-skills" version)
+          test "$got" = "$version"
+          env HOME="$home" AGENT_SKILLS_HOME="$home/.agent-skills" \
+            AGENT_SKILLS_CONFIG_DIR="$home/.config/agent-skills" \
+            bash "$home/.agent-skills/bin/agent-skills" verify
 
-      - name: setup.init --update preserves credentials
-        run: bash scripts/test-setup-update-preserves-credentials.sh
+      # Missing distribution access must be reported as missing access, in a
+      # sentence that says what to do, and must never hang waiting for a
+      # credential prompt nobody can see.
+      - name: A release source that cannot be read fails cleanly
+        run: |
+          set -euo pipefail
+          tmp=$(mktemp -d)
+          home="$tmp/home"
+          mkdir -p "$home"
+          # Assembled from parts so this fixture is not itself a token-shaped
+          # string in the repository. Nothing here is or ever was a credential;
+          # it exists so the assertion below can prove it never reaches a log.
+          FAKE_TOKEN="ghp_""$(printf 'A%.0s' $(seq 1 36))"
+          set +e
+          env -u AGENT_SKILLS_SOURCE HOME="$home" \
+            AGENT_SKILLS_HOME="$home/.agent-skills" \
+            GH_TOKEN="$FAKE_TOKEN" \
+            timeout 120 bash bin/agent-skills install --provider git \
+              --repo https://github.com/wamalalawrence/agent-skills-private-does-not-exist.git \
+              > "$tmp/auth.log" 2>&1
+          rc=$?
+          set -e
+          cat "$tmp/auth.log"
+          test "$rc" = "3"
+          grep -q 'AUTHENTICATION_REQUIRED' "$tmp/auth.log"
+          grep -qi 'distribution access' "$tmp/auth.log"
+          if grep -Eq 'gh[pousr]_[A-Za-z0-9]{16,}' "$tmp/auth.log"; then
+            echo "ERROR: a token-shaped string reached the output" >&2
+            exit 1
+          fi
+          test ! -d "$home/.agent-skills/versions"
+
 
       - name: Markdown link check
         uses: gaurav-nelson/github-action-markdown-link-check@v1

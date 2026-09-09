@@ -4,8 +4,9 @@ Reusable [Agent Skills](https://agentskills.io/) for software-engineering work �
 role-shaped workflows your AI assistant can load on demand so the same model produces
 senior-engineer, product-owner, tester, or reviewer output instead of generic answers.
 
-> **Status:** `0.41.0` — pre-1.0. Core skill set is shipped and stable enough for public use;
-> interfaces may still evolve.
+> **Status:** `0.43.0` — pre-1.0. Core skill set is shipped and stable enough for public use;
+> interfaces may still evolve. v0.43.0 froze the installation and distribution contract ahead of
+> `1.0.0-rc.1`.
 
 New here? Start with the [quickstart](docs/quickstart.md), then read [starter
 prompts](docs/starter-prompts.md), [examples](docs/examples/README.md), the
@@ -49,33 +50,43 @@ checklist, and the right stopping conditions.
 Install once. Use from any local project. Configure external access only when needed.
 
 ```bash
-git clone https://github.com/wamalalawrence/agent-skills.git
-cd agent-skills
-./setup.init
+npx @wamala/agent-skills install
 ```
 
-That is the whole local setup. It installs `agent-skills` on the **machine**, registers the skills
-with every supported agent host it finds, and makes the runtime invocable from anywhere:
+That is the whole local setup — no clone, no `cd`, no per-repository step. It installs
+`agent-skills` on the **machine**, registers the skills with every supported agent host it finds,
+and makes the runtime invocable from anywhere:
 
 ```text
-Agent Skills v0.42.0 installed globally.
+  resolve    0.43.0 (stable, via git)
+  download   164 files staged
+  verify     payload hash and version agree
+  self-test  staged runtime answers correctly
+  activate   current -> versions/0.43.0
+  hosts      claude-code, agents-standard, cursor, codex
+  verified   installation is consistent
 
-Skills are available to:
-  [x] Claude Code (~/.claude/skills)
-  [x] Agent Skills standard dir (~/.agents/skills)
-  [x] Codex (~/.codex/skills)
-  [x] Cursor (~/.cursor/skills)
-  [x] GitHub Copilot (~/.copilot/skills)
-  [x] Kiro (~/.kiro/skills)
-  [ ] JetBrains AI Assistant — one settings action, see docs/assistants.md
+Agent Skills 0.43.0 is installed.
+
+  install root : ~/.agent-skills
+  active release: ~/.agent-skills/versions/0.43.0
+  hosts        : claude-code, agents-standard, cursor, codex
+  command      : ~/.local/bin/agent-skills
 
 No credentials were requested or stored.
-External-service access is configured only when a task requires it.
 ```
 
+Nothing is activated until the release has been downloaded, its contents checked against the hash
+the release was published with, and its runtime run once off to the side. If any of that fails, the
+version you already had is still the version you are running.
+
+The npm package is a bootstrap and nothing more: it fetches and verifies a release, then hands over
+to the installer. Afterwards the durable command is `agent-skills`, and npm is not needed again.
+
 Then open any repository on the machine — one you already have, or one you clone next year — and
-invoke a skill. There is no per-workspace setup step, no `.skills` symlink, and no sibling
-`agent-skills` checkout.
+invoke a skill. There is no per-workspace setup step and no sibling `agent-skills` checkout.
+
+Requirements: Python 3.8+, bash, and git. macOS or Linux; on Windows use WSL or Git Bash.
 
 ### Execution Guard (opt-in)
 
@@ -139,43 +150,51 @@ reference the skills inside the target repository. That covers GitHub Copilot co
 cloud/background agents, Codespaces, Gitpod, Devin, and web chats with a repo attached. See
 [docs/execution-modes.md](docs/execution-modes.md).
 
-### Upgrading from v0.36.x
+### Upgrading from an earlier release
 
-Your existing workspace keeps working — the resolver still reads a legacy `.env`, and
-`./setup.init --legacy-workspace` still writes the old layout. To move:
+Run the installer. It recognises an existing installation, moves it onto the versioned layout, and
+keeps your credential identities, project bindings, and unrelated skills exactly where they are.
 
 ```bash
-cd agent-skills
-git pull
-./setup.init                          # install globally
-agent-skills migrate                  # what changed, and what is now obsolete
+npx @wamala/agent-skills install
 ```
 
-Nothing is deleted and no secret is copied without you asking. See
-[docs/installation.md](docs/installation.md#upgrading-from-v036x-workspace-installation).
+If you are coming from the pre-v0.37 workspace layout — a `.env`, `.jira-config.yml`, and `.skills`
+symlink beside a clone — none of it is deleted, and the access resolver still reads that `.env` for
+you. `agent-skills migrate` reports what is now obsolete and what is still in use. The old clone
+itself is no longer needed and can be removed once you have installed.
 
-### Or — install just the skills via the [Agent Skills](https://skills.sh) ecosystem
+### Or — install individual skills via the [Agent Skills](https://skills.sh) ecosystem
 
 ```bash
 npx skills add wamalalawrence/agent-skills
 ```
 
+That is skill-level interoperability, not a complete installation. It copies `SKILL.md` files; it
+does not install the runtime those skills call — the access resolver, Context Optimizer, Execution
+Guard, memory, and the lifecycle helpers. Use it to try a single skill inside another toolchain. Use
+the first-party CLI to install the product.
+
 ## Updating
 
-Releases are git tags (`v0.41.0`, `v0.42.0`, …) on this repo. Two commands cover the common case;
-full details, cloud-agent updates, and drift detection are in
-[docs/updates.md](docs/updates.md).
-
 ```bash
-agent-skills check-updates   # read-only; exit 0 up-to-date, 10 update available
-agent-skills update          # fetch tags, check out the latest release, refresh the install
+agent-skills check-updates   # read-only; exit 0 up to date, 10 update available
+agent-skills update          # download, verify, activate — transactionally
+agent-skills rollback        # return to the release you were on before
 ```
 
-`update` moves one canonical source, keeps every host adapter pointing at it, and leaves your
-credentials and project bindings alone. It never auto-runs and never pushes anything.
+An update is staged and verified in full before anything on the machine changes, so a failed one
+leaves the previous release running rather than a half-installed mixture. The previous release is
+kept, and `rollback` restores it along with every host registration and security hook that pointed
+at it.
 
-`agent-skills verify` reports version drift when the installed manifest and the source tree
-disagree — for example after a manual `git pull` without a reinstall.
+`agent-skills update` never runs on its own, never pushes anything, and never silently replaces a
+newer release with an older one — going backwards is `rollback`, and it is always something you
+asked for.
+
+Releases are git tags (`v0.42.0`, `v0.43.0`, …). Where a release comes from is a choice the
+installer makes through a release provider, not something wired into it; see
+[docs/release-providers.md](docs/release-providers.md).
 
 ## Skills
 
@@ -344,7 +363,8 @@ the per-tier docs: [task blackboard](docs/task-blackboard.md),
 
 - [Docs index](docs/README.md)
 - [First-time user quickstart](docs/quickstart.md)
-- [Installation & `setup.init`](docs/installation.md)
+- [Installation](docs/installation.md)
+- [Release providers and distribution](docs/release-providers.md)
 - [Configuration](docs/configuration.md) — project configuration, which never holds a secret
 - [Access resolution](docs/access-resolution.md) — the one generic mechanism for reaching any
   external service: the deterministic precedence order, credential identities, OS-native secret

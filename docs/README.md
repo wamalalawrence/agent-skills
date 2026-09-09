@@ -19,7 +19,9 @@ Start here when reading the repository outside GitHub's main README.
 - [Skill-source resolution](skill-source-resolution.md) - which directory the agent must
   treat as the canonical skill source when more than one is present on disk, and how the
   install manifest is consulted for drift.
-- [Updates](updates.md) - how a user notices a new release and applies it without losing
+- [Release providers](release-providers.md) - where releases come from, how they are verified,
+  and how distribution access differs from project access.
+- [Updates, rollback, and channels](updates.md) - how a user notices a new release and applies it without losing
   credentials or bindings (`agent-skills check-updates`, `agent-skills update`, `git pull`).
 - [Lifecycle preflight](lifecycle-preflight.md) - the full contract behind the two commands
   every skill runs (`start-task.sh` / `finish-task.sh`): fallbacks, statuses, durable-fact
@@ -73,7 +75,8 @@ Start here when reading the repository outside GitHub's main README.
 - [Severity and confidence](severity-and-confidence.md) - shared review, defect, and investigation
   vocabulary.
 - [Known limitations](known-limitations.md) - what the skills cannot guarantee.
-- [Versioning](versioning.md) - release and compatibility policy.
+- [Versioning and exit codes](versioning.md) - release and compatibility policy, release channels,
+  and the stable CLI exit codes.
 - [Destructive-action safety policy](destructive-action-safety.md) - the safety floor every
   skill in this repository inherits; what an agent must never do autonomously, what counts as
   a discovered credential, and how human-controlled execution must work.

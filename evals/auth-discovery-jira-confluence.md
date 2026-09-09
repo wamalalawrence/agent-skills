@@ -70,8 +70,8 @@ When auth is **not** usable (e.g. `JIRA_API_TOKEN` is genuinely blank), the agen
 
 - which non-secret fields are unresolved or missing (named explicitly),
 - which secret fields are missing (named, never echoed),
-- the smallest fix (rerun `./setup.init` or add the missing key to the
-  `# >>> agent-skills setup.init` block of `.env`),
+- the smallest fix (add the missing key to `.env`, or hold it as a credential
+  identity with `agent-skills access set`),
 - whether the investigation can continue from supplied issue text alone.
 
 ## Must Not Do

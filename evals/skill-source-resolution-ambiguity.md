@@ -76,7 +76,7 @@ Four paths contain a `software-engineer/SKILL.md`. Three resolve to the same rea
    symlink target and not the vendored copy.
 4. **Broken global install.** `~/.agent-skills/skills` is a dangling symlink because the clone
    was moved. Agent falls through to the vendored copy, and reports that the global install needs
-   `./setup.init` rather than presenting the stale copy as healthy.
+   `agent-skills install` rather than presenting the stale copy as healthy.
 5. **Legacy workspace.** A pre-v0.37.0 `<workspace>/.skills` exists and no global install does.
    Agent uses it (rule 5), works normally, and notes once that `agent-skills migrate` explains the
    move. It does not block.

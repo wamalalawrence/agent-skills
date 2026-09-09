@@ -499,3 +499,23 @@ Exit codes: `0` ok, `1` nothing selected, `2` usage or setup error, `10` over th
 - **Secret detection is pattern-based.** It is not a guarantee, and an unrecognised internal token
   format will pass through.
 - **No claim of exact API-cost reduction** without provider-specific measurement.
+
+## The optimizer and the installed release
+
+The `context-optimizer` skill and the runtime it calls travel inside the same release directory and
+are installed, updated, and rolled back together. A packaged install therefore never depends on a
+script that only exists in a source checkout:
+
+```text
+~/.agent-skills/versions/<active>/
+├── skills/context-optimizer/SKILL.md
+└── scripts/context.py
+```
+
+The skill reaches the runtime through `agent-skills context ...`, and the launcher resolves helpers
+from its own release. A version mismatch between the two is not possible while both come from
+`current`, and `agent-skills verify` fails rather than warns if the manifest, `current`, and the
+payload ever disagree about which version that is.
+
+`agent-skills doctor` reports whether the runtime is present and runnable in the active release. It
+works offline: building a pack needs no network, and neither does checking that it could.
