@@ -14,6 +14,9 @@ senior-engineer, product-owner, tester, or reviewer output instead of generic an
 npx @wamala/agent-skills install
 ```
 
+> The npm package is not published yet. Until it is, install from source — same installer, same
+> result: `git clone https://github.com/wamalalawrence/agent-skills.git && cd agent-skills && ./setup.init`
+
 Then open any repository on your machine and ask:
 
 ```text

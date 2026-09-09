@@ -169,6 +169,32 @@ PRIVATE_TRANSITION_READY:      YES
 
 Stage B is `scripts/test-private-source.sh`. It refuses to run while the repository is public.
 
+## Post-release verification
+
+Run after `v0.43.0` was tagged and the GitHub release published, against the **real remote** rather
+than a local fixture. This is the case the rest of the suite could not run before the tag existed.
+
+```bash
+npm install --prefix <sandbox> npm/wamala-agent-skills-0.43.0.tgz
+<sandbox>/node_modules/.bin/agent-skills-bootstrap install
+```
+
+Clean `HOME` with a space in its path, no `AGENT_SKILLS_SOURCE`, no clone anywhere in the flow.
+
+| Check | Result |
+| --- | --- |
+| install from the packed bootstrap against `github.com/wamalalawrence/agent-skills` | pass |
+| resolved release | `0.43.0` (stable, via git) |
+| payload verification and staged self-test | pass |
+| host registration | pass |
+| `agent-skills doctor` | pass — reports the git provider it came from, `install kind: release`, version coherence |
+| `agent-skills verify` | pass |
+| `agent-skills check-updates` | `up-to-date` |
+| `agent-skills version` | `0.43.0` |
+
+This closes the one Stage A gap the earlier run recorded: the git provider had been exercised
+end to end only against a local bare remote, because no CLI-installable release had been tagged yet.
+
 ## What this run does not prove
 
 - **Private-source installation.** The repository was public throughout. The git provider's
@@ -176,8 +202,10 @@ Stage B is `scripts/test-private-source.sh`. It refuses to run while the reposit
   path against a local remote, but installing from an authenticated private GitHub repository is
   Stage B and requires the visibility change first. See
   [docs/security-review-v0.43.0.md](../../docs/security-review-v0.43.0.md).
-- **Publication.** Nothing was published to npm. Installation was tested from the packed tarball,
-  which exercises the `files` list and the real package layout, but not the registry round trip.
+- **npm publication.** Nothing was published to the npm registry. Installation was tested from the
+  packed tarball, which exercises the `files` list and the real package layout, but not the registry
+  round trip. Until the package is published, `npx @wamala/agent-skills install` will not resolve
+  and the source install is the working path.
 - **Windows.** Tested on macOS. CI covers Linux. Windows is WSL or Git Bash, untested here.
 - **Real host behaviour.** Registrations are asserted on the filesystem. Whether Cursor or Kiro
   then loads a skill is the host's business and is not observable from a test.
