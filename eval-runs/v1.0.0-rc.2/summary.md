@@ -340,7 +340,20 @@ pinned by evals. Recorded as a limitation rather than estimated.
 
 ## P0 / P1 findings outstanding
 
-None.
+None for this candidate.
+
+**One blocker recorded against the 1.0 promotion**, found while verifying the publish. The
+public bootstrap's `latest` is `0.43.0`, while `0.43.1` and `0.44.0` shipped as GitHub releases
+with no matching npm publish. The bootstrap does not pin its own version — it resolves the
+runtime by channel — so a `0.43.0` doorway installs the `0.44.0` runtime today. That is allowed
+now, because the lockstep rule binds from `1.x` onward, and the deferral was a deliberate
+decision recorded in the v0.44.0 changelog.
+
+It does not survive `1.0.0`. Tracked in [ROADMAP](../../ROADMAP.md#before-100).
+
+The v0.44.0 note describing that deferral is also inaccurate: it says the registry "still points
+at `0.43.1`", which was never published. Corrected under `Unreleased` in the changelog rather
+than by editing a shipped entry.
 
 ## Release decision
 

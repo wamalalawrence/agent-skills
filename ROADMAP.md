@@ -3,7 +3,7 @@
 `agent-skills` is a private, solo-maintained project. It grows through proven usefulness in the
 maintainer's own delivery work, not through an up-front framework.
 
-## Now: v1.0.0-rc.1
+## Now: v1.0.0-rc.2
 
 v0.44.0 shipped the last substantial feature — the
 [Engineering Tool Capability Framework](./docs/engineering-tools.md). The work from here is
@@ -18,8 +18,23 @@ v0.44.0 shipped the last substantial feature — the
   unauthenticated fails cleanly), upgrade/rollback with no mixed-version state, and preservation
   of credentials, bindings, knowledge, and unrelated host state.
 - Re-run the full test, eval, and red-team harness; complete a security review.
-- Publish `v1.0.0-rc.1` as a GitHub prerelease and an npm bootstrap on the `rc` dist-tag —
-  never moving `latest` to the release candidate.
+- Publish each release candidate as an npm bootstrap on the `rc` dist-tag — never moving
+  `latest` to a release candidate. `1.0.0-rc.1` and `1.0.0-rc.2` are both published there;
+  `latest` is untouched at `0.43.0`.
+
+## Before 1.0.0
+
+- **Resolve the stable-line npm publication.** `0.43.1` and `0.44.0` shipped as GitHub releases
+  with no matching npm publish, so the public bootstrap's `latest` is `0.43.0` while the newest
+  stable runtime is `0.44.0`. The bootstrap does not pin its own version — it resolves the
+  runtime by channel — so a `0.43.0` doorway currently installs the `0.44.0` runtime. That works,
+  and it is allowed today because the lockstep rule in
+  [docs/one-point-oh.md](./docs/one-point-oh.md#npm-bootstrap) binds from `1.x` onward.
+
+  It does not survive `1.0.0`. Either the matching stable bootstrap is published, or the lockstep
+  contract is amended before it freezes. The underlying question is the one v0.44.0 raised and
+  left open: whether a private, proprietary project should keep publishing a public bootstrap at
+  all. Answering it is a precondition for the promotion, not a follow-up to it.
 
 ## After 1.0.0
 
