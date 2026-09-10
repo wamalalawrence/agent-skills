@@ -236,6 +236,8 @@ note() {
 
 SAFE_PROJECT="$(printf '%s' "${PROJECT}" | "${PYTHON3}" "${BOUNDARY_SCRIPT}")"
 SAFE_ISSUE_KEY="$(printf '%s' "${ISSUE_KEY}" | "${PYTHON3}" "${BOUNDARY_SCRIPT}")"
+PROJECT="${SAFE_PROJECT}"
+ISSUE_KEY="${SAFE_ISSUE_KEY}"
 
 echo "== agent-skills finish-task =="
 echo "  project:   ${SAFE_PROJECT}"

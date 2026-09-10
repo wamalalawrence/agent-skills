@@ -156,6 +156,22 @@ class SecretBoundaryTests(unittest.TestCase):
             self.assertNotIn(self.canary, persisted)
             self.assertIn("REDACTED", persisted)
 
+    def test_start_task_redacts_identity_before_output_and_context_persistence(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            env = os.environ.copy()
+            env["AGENT_SKILLS_CACHE_DIR"] = tmp
+            proc = subprocess.run(
+                ["bash", str(SCRIPTS / "start-task.sh"), self.canary, "demo-task",
+                 "--no-org"], env=env, capture_output=True, text=True, check=False,
+            )
+            self.assertEqual(proc.returncode, 0, proc.stderr)
+            artifacts = proc.stdout + proc.stderr
+            for path in Path(tmp).rglob("*"):
+                if path.is_file():
+                    artifacts += path.read_text(encoding="utf-8", errors="replace")
+            self.assertNotIn(self.canary, artifacts)
+            self.assertIn("REDACTED", artifacts)
+
     def test_delivery_output_redacts_stdout_stderr_and_json(self):
         with tempfile.TemporaryDirectory() as tmp:
             index = Path(tmp) / "phased-plan" / "README.md"

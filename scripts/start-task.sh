@@ -254,13 +254,17 @@ done
 SAFE_PROJECT="$(printf '%s' "${PROJECT}" | "${PYTHON3}" "${BOUNDARY_SCRIPT}")"
 SAFE_ISSUE_KEY="$(printf '%s' "${ISSUE_KEY}" | "${PYTHON3}" "${BOUNDARY_SCRIPT}")"
 SAFE_CACHE_ROOT="$(printf '%s' "${CACHE_ROOT}" | "${PYTHON3}" "${BOUNDARY_SCRIPT}")"
+PROJECT="${SAFE_PROJECT}"
+ISSUE_KEY="${SAFE_ISSUE_KEY}"
 
 echo "== agent-skills start-task =="
 echo "  project:    ${SAFE_PROJECT} (${PROJECT_SOURCE})"
 echo "  issue-key:  ${SAFE_ISSUE_KEY} (${ISSUE_SOURCE})"
 echo "  cache-root: ${SAFE_CACHE_ROOT}"
 if [[ ${#SKILLS[@]} -gt 0 ]]; then
-  echo "  skills:     ${SKILLS[*]}"
+  printf '  skills:     '
+  printf '%s' "${SKILLS[*]}" | "${PYTHON3}" "${BOUNDARY_SCRIPT}"
+  echo ""
 fi
 print_separator
 
@@ -364,9 +368,11 @@ echo "[5/5] blackboard: initialising ${ISSUE_KEY} (project: ${PROJECT})..."
 BB_PATH="$(${PYTHON3} "${BB_SCRIPT}" --cache-root "${CACHE_ROOT}" path "${ISSUE_KEY}" 2>&1)"
 
 BB_ARGS=("${BB_SCRIPT}" --cache-root "${CACHE_ROOT}" init --project "${PROJECT}" "${ISSUE_KEY}")
-for skill in "${SKILLS[@]}"; do
-  BB_ARGS+=(--skill "${skill}")
-done
+if [[ ${#SKILLS[@]} -gt 0 ]]; then
+  for skill in "${SKILLS[@]}"; do
+    BB_ARGS+=(--skill "${skill}")
+  done
+fi
 
 if ${PYTHON3} "${BB_ARGS[@]}" 2>&1; then
   echo "[5/5] blackboard: ready at ${BB_PATH}"
