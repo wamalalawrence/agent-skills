@@ -17,6 +17,25 @@ Subcommands:
 Recognised event names (others are accepted but flagged in reports):
   invoked, loop_round, handoff, finding, stopped, completed,
   artifact, outcome
+
+Recognised performance fields, all optional. They exist so "the skills got
+faster" can be checked rather than asserted, and so the thing being checked is
+the right one. Total runtime is the wrong measure: a faster wrong answer is a
+regression. What matters is *time to verified useful result*, which is why the
+two duration fields below are anchored to the first useful artifact and to the
+point a result was verified, not to when the process exited.
+
+  profile               LIGHT | STANDARD | RIGOROUS
+  first_artifact_minutes  minutes until the first useful artifact was written
+  verified_minutes        minutes until the result was verified
+  dispatches              fresh-context agents opened for this task
+  context_loads           full context reloads paid
+  review_rounds           independent review rounds run
+  parallel_used           true when work ran concurrently
+  no_output               true when the run produced no artifact at all
+
+Everything stays in the local project cache. Nothing is transmitted anywhere,
+and no repository or task content is recorded — only counters and enums.
 """
 from __future__ import annotations
 
@@ -113,6 +132,72 @@ def filter_since(events: list[dict], since: str | None) -> list[dict]:
     return out
 
 
+def _median(values: list[float]) -> float | None:
+    if not values:
+        return None
+    ordered = sorted(values)
+    middle = len(ordered) // 2
+    if len(ordered) % 2:
+        return round(ordered[middle], 1)
+    return round((ordered[middle - 1] + ordered[middle]) / 2, 1)
+
+
+def performance(events: list[dict]) -> dict:
+    """Aggregate the optional performance fields.
+
+    Median rather than mean throughout: one pathological run — the hour that
+    produced nothing — would drag a mean far enough to hide what the typical
+    run costs, and the typical run is the thing a change is trying to move.
+
+    Only what was actually emitted is counted. A field nobody sets reports
+    `null` rather than `0`, because "no data" and "zero" answer different
+    questions and conflating them is how a counter starts looking like evidence.
+    """
+    first_artifact: list[float] = []
+    verified: list[float] = []
+    totals = {
+        "dispatches": 0,
+        "context_loads": 0,
+        "review_rounds": 0,
+        "parallel_runs": 0,
+        "no_output_runs": 0,
+    }
+    profiles: dict[str, int] = defaultdict(int)
+    runs = 0
+
+    for ev in events:
+        if ev.get("event") in {"completed", "stopped"}:
+            runs += 1
+        profile = ev.get("profile")
+        if isinstance(profile, str) and profile:
+            profiles[profile] += 1
+        for key, target in (
+            ("first_artifact_minutes", first_artifact),
+            ("verified_minutes", verified),
+        ):
+            value = ev.get(key)
+            if isinstance(value, (int, float)) and not isinstance(value, bool):
+                target.append(float(value))
+        for key in ("dispatches", "context_loads", "review_rounds"):
+            value = ev.get(key)
+            if isinstance(value, int) and not isinstance(value, bool):
+                totals[key] += value
+        if ev.get("parallel_used") is True:
+            totals["parallel_runs"] += 1
+        if ev.get("no_output") is True:
+            totals["no_output_runs"] += 1
+
+    return {
+        "runs": runs,
+        "median_minutes_to_first_artifact": _median(first_artifact),
+        "median_minutes_to_verified_result": _median(verified),
+        "profiles": dict(profiles),
+        **totals,
+        "dispatches_per_run": round(totals["dispatches"] / runs, 2) if runs else None,
+        "context_loads_per_run": round(totals["context_loads"] / runs, 2) if runs else None,
+    }
+
+
 def summarise(events: list[dict]) -> dict:
     by_skill: dict[str, dict[str, int]] = defaultdict(lambda: defaultdict(int))
     unknown_events: dict[str, int] = defaultdict(int)
@@ -126,6 +211,7 @@ def summarise(events: list[dict]) -> dict:
         "total_events": len(events),
         "skills": {k: dict(v) for k, v in by_skill.items()},
         "unknown_events": dict(unknown_events),
+        "performance": performance(events),
     }
 
 
