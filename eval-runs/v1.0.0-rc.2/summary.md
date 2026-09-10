@@ -207,39 +207,42 @@ and the guard was doing its job.
 ### Private-source acceptance (Stage B)
 
 `bash scripts/test-private-source.sh` — run against the private remote with an authenticated
-account, installing from the **remote** into a throwaway `HOME`. **38 passed, 3 failed.**
+account, installing from the **remote** into a throwaway `HOME`.
+
+Run twice, and the pair is the evidence.
+
+**Before the tag existed: 38 passed, 3 failed.** `INSTALLED_VERSION` reported `1.0.0-rc.1` where
+`1.0.0-rc.2` was expected, and `EXECUTION_GUARD_COHERENCE` failed alongside it. All three
+failures were one fact — the suite installs from the remote, so with no `v1.0.0-rc.2` tag it
+resolved the latest release on the `rc` channel, installed `rc.1`, and then compared that against
+the local `VERSION`. The guard hook had resolved correctly to
+`versions/1.0.0-rc.1/bin/agent-skills` inside the sandbox, which is right for the release
+actually installed; its sibling assertion, that the hook resolves inside the sandbox rather than
+the real machine, passed.
+
+**After tagging `v1.0.0-rc.2`: 41 passed, 0 failed.**
 
 | Criterion | Result |
 | --- | --- |
 | `PRIVATE_REPOSITORY_ACCESS` | PASS |
 | `CLEAN_PRIVATE_INSTALL` | PASS |
+| `INSTALLED_VERSION` | 1.0.0-rc.2 (expected 1.0.0-rc.2) |
 | `AGENT_SKILLS_DOCTOR` | PASS |
 | `AGENT_SKILLS_VERIFY` | PASS |
 | `PRIVATE_UPDATE_PATH` | PASS |
 | `RELEASE_PROVIDER` | git |
 | `HOST_REGISTRATION` | PASS (8/8 host directories) |
+| `EXECUTION_GUARD_COHERENCE` | PASS |
 | `EXISTING_STATE_ISOLATION` | PASS — the real installation's manifest and active release unchanged |
 | `AUTHENTICATION_REQUIRED_BEHAVIOR` | PASS — exits `3`, does not hang, echoes no token |
-| `INSTALLED_VERSION` | 1.0.0-rc.1 (expected 1.0.0-rc.2) |
-| `EXECUTION_GUARD_COHERENCE` | FAIL |
 
-**All three failures are one fact: `v1.0.0-rc.2` is not tagged on the remote yet.** This suite
-installs from the remote, so it resolves the latest release on the `rc` channel — which is
-`v1.0.0-rc.1` — and then asserts the installed version equals the local `VERSION`. The guard
-check fails for the same reason and nothing else: the hook resolved correctly to
-`versions/1.0.0-rc.1/bin/agent-skills`, inside the sandbox, which is the right behaviour for the
-release that was actually installed. Its own sibling assertion, that the hook resolves inside the
-sandbox's install root rather than the real machine, passed.
+```text
+PRIVATE_SOURCE_DISTRIBUTION_READY: YES
+```
 
-So this suite runs **after** the tag, not before, and the comment block at the top of the script
-now says so. Everything it checks that does not depend on the version is meaningful now and
-passed: authenticated access to a private repository, a clean install from the remote into a
-throwaway `HOME`, `doctor`, `verify`, provider selection, the update path, host registration,
-token non-disclosure across install / doctor / verify / update output, and isolation from the
-real installation on this machine.
-
-**Re-run this after tagging** and confirm it prints `PRIVATE_SOURCE_DISTRIBUTION_READY: YES`
-before publishing the npm bootstrap.
+Every previously-failing criterion passed once the tag existed and nothing else changed, which
+is what confirms the diagnosis rather than merely asserting it. This suite therefore runs
+**after** the tag, not before, and the comment block at the top of the script now says so.
 
 ### Publication ordering — a constraint worth stating
 
@@ -257,8 +260,14 @@ The tag has to exist before the npm publish. A GitHub *Release page* is a separa
 decision — the git provider resolves from tags, not from Release objects — so the prerelease
 page can be skipped without breaking anything.
 
-For the record, `v1.0.0-rc.1` currently exists on the remote as **both** a git tag and a GitHub
-prerelease.
+For the record, `v1.0.0-rc.1` exists on the remote as **both** a git tag and a GitHub prerelease.
+For `1.0.0-rc.2` the tag was pushed and the Release page deliberately skipped.
+
+**Resolved.** `v1.0.0-rc.2` is an annotated tag on the main line — PR #50 landed as a merge
+commit, so the tagged commit is an ancestor of `main` and the tag's tree is byte-identical to
+`main`'s. A squash merge would have orphaned it: the tagged commit would have been reachable only
+through the tag and absent from `main`'s history. Version lockstep verified at the tag —
+`VERSION`, `npm/package.json`, the git tag, and every `SKILL.md` all read `1.0.0-rc.2`.
 
 Three new validator warnings appeared during development and all three were removed rather than
 accepted. Two came from writing a regex character class for "A to Z, 0 to 9" the long way: the
@@ -334,6 +343,9 @@ pinned by evals. Recorded as a limitation rather than estimated.
 None.
 
 ## Release decision
+
+Certified. Merged as `1c74f53`, tagged `v1.0.0-rc.2`, distribution from the private remote
+verified `PRIVATE_SOURCE_DISTRIBUTION_READY: YES`.
 
 Ready to publish as `v1.0.0-rc.2` on the npm `rc` dist-tag. **Not** ready to promote to `1.0.0`:
 the adaptive-execution mechanism is new, and one release candidate's worth of real use is what it
