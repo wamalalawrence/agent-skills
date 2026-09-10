@@ -6,6 +6,121 @@ All notable project changes should be recorded here.
 
 - No unreleased changes.
 
+## 1.0.0-rc.2 - Release candidate: adaptive execution and two reliability fixes
+
+Not a feature release. Field use of `rc.1` produced two defects and one architectural
+complaint; this candidate fixes all three and records the evidence. Offered only to machines on
+the `rc` channel; `stable` is untouched. Every change is additive against the contracts frozen
+at `rc.1` — nothing renamed, renumbered, or retyped.
+
+### Fixes
+
+- **Cleanup could delete a task directory that matched only by filesystem accident.**
+  `finish-task` run with a lowercase issue key deleted the cache directory belonging to the
+  uppercase key. macOS compares path components case-insensitively, so an existence check
+  answered `True` for a directory whose real name differed only in case, and the recursive delete
+  took it — then reported removing a path that had never existed on disk. It was being managed
+  by pasting "always type the key in uppercase" into every subsequent dispatch brief, which is a
+  warning standing in for an invariant. `cleanup_task` now resolves the key against the real
+  directory entries by exact name and refuses anything ambiguous, naming the directory it
+  declined to touch. Those warnings are gone from the briefs.
+
+  Two further holes surfaced while writing the regression suite, both live: `cleanup-task .` and
+  `cleanup-task ""` deleted the entire cache root, and a directory containing a git repository
+  was deleted recursively. Both now refuse, as does a symlinked task directory.
+
+- **Database credentials could reach agent and chat context.** A script printed two passwords
+  into a transcript during read-only work. Once a value reaches model context it is in the
+  transcript, in every summary of it, and in whatever the agent writes next — there is no recall,
+  only rotation, which is why this is treated as a release blocker rather than hygiene.
+
+  `redact()` already existed and was applied in exactly two places, both inside the Execution
+  Guard. Probing it against the shapes a database workflow actually emits found six holes:
+  `mysql -p<value>`, quoted JSON values, prefixed JSON key names, the `password:` colon spelling,
+  `MYSQL_PWD`, and `DB_PASS`. All six now redact.
+
+  New `agent-skills redact` filter, with a `--check` mode that exits non-zero and reports line
+  numbers without printing the line. Four durable write paths — the blackboard, project memory,
+  telemetry, and the committed knowledge base — now redact on write whether or not anyone
+  remembered to pipe. [docs/secret-boundary.md](docs/secret-boundary.md) states the primary
+  control (resolve access through the Access Resolver, never put a value on a command line) and
+  states plainly what redaction does not cover.
+
+### Adaptive execution
+
+The complaint was not that the workflow is slow. It is that the same workflow was applied to work
+of wildly different consequence: a request for three read-only numbers got three fresh-context
+dispatches and three 40 KB evidence dossiers, and small delivery phases paid the full cost of a
+fresh agent, a lifecycle, and a review round regardless of size.
+
+- **Three profiles**, chosen deterministically by `agent-skills execution-profile`: `LIGHT`,
+  `STANDARD`, `RIGOROUS`. The two halves are asymmetric on purpose. Relaxation needs seven
+  conditions to hold at once, and any unstated signal keeps `STANDARD`. Escalation is
+  unconditional — nine domains, irreversibility, and a production or cross-system blast radius
+  each force `RIGOROUS`, and a request to lower one is refused out loud rather than honoured or
+  silently dropped.
+- **`LIGHT` buys less ceremony, never less safety.** Credential safety, authorization checks,
+  bounded reads, explicit verification, evidence retention, and the destructive-action floor are
+  one list, identical at all three profiles, asserted by test so it cannot grow a per-profile
+  exception later.
+- **Output contract.** A dispatch can now say what artifact the human needs — audience, primary
+  question, deliverable, reading-time target, evidence depth and location — not only what
+  question to answer. The primary deliverable is not automatically the evidence artifact;
+  evidence is preserved at a named path rather than suppressed. No global character cap: a hard
+  limit would truncate the one review that genuinely needed nine findings.
+- **Proportional phase execution.** Phases carry `execution_profile`,
+  `expected_effort_minutes`, and `mutation_targets`. `delivery-runner` runs `LIGHT` phases inline
+  and keeps fresh context plus independent review for `RIGOROUS`. It reads profiles and may not
+  change one in either direction — that is a planner decision. A `LIGHT` phase is still verified
+  from artifacts, never from the fact that the runner's own context just did the work.
+- **Safe concurrency.** `plan-next` proposes a parallel group only when there is no dependency
+  edge, both phases are `parallel_safe`, each lists the other in `parallel_with`, and declared
+  `mutation_targets` are disjoint. A phase that does not declare what it writes is treated as
+  writing everything. Capped at 3; `AGENT_SKILLS_MAX_PARALLEL` is clamped, not trusted.
+- **Watchdog.** `agent-skills watchdog` measures stagnation, not elapsed time. A hard timeout
+  kills careful work along with stuck work and teaches everyone to pad estimates; work still
+  writing milestones at three times its budget is bigger than someone thought, not stuck, and
+  gets narrowed or split. No daemon and nothing polling — it is a pure function of what is on
+  disk.
+- **Incremental artifacts.** `agent-skills blackboard progress` records milestones so an
+  interrupted run leaves behind what it had already learned. The reported case — an overscoped
+  dispatch that ran about an hour and wrote nothing, so the retry started from zero — now reaches
+  a `stop` verdict, and a brief that has produced nothing past its settling window reaches
+  `restart`.
+- **Wamala remains an ownership dispatcher.** It gains profile selection and one guardrail — do
+  not implement under `LIGHT` either — and loses nothing. Routing, one owner per step, artifact
+  verification, the dispatch cap, and the safety floor are unchanged. What adapts is execution
+  depth, not ownership.
+
+### Performance measurement
+
+Telemetry gains optional fields for `profile`, time to first artifact, time to verified result,
+dispatches, context loads, review rounds, concurrency use, and no-output runs. Reported as
+medians, because one pathological run drags a mean far enough to hide what a typical run costs.
+The headline measure is **time to verified useful result**; total runtime is not the target, and
+a faster incorrect result is a regression. Local cache only, nothing transmitted.
+
+### Additive against the frozen contracts
+
+Three new CLI verbs (`redact`, `execution-profile`, `watchdog`), one new blackboard subcommand
+(`progress`), optional new fields in `plan-next` output, the phase and index templates, and
+telemetry. The `Profile` and `Parallel` index columns are **appended**, never inserted — cells
+are read positionally, so inserting them would silently mis-read every plan already in a cache
+directory. Six-column indexes parse unchanged and default to `STANDARD`, as does an unrecognised
+value.
+
+### Validation
+
+Three new suites, 129 assertions, 9 mutation probes:
+`test-lifecycle-fs.sh`, `test-secret-boundary.sh`, `test-adaptive-execution.sh`. Each probe
+weakens the build and asserts the matching check then fails — emptying the escalation table drops
+a migration to `LIGHT`, removing the overlap check groups two writers to one file, marking every
+run stalled kills work that was still producing.
+
+Seven new evals drawn from the reported incidents rather than implementation internals. No
+regression in the standing suites: guard 108, tools 43, access-resolution 100, context-optimizer
+105, front-door 63, release-engine and run-evals green, validator at its 61-warning baseline.
+
 ## 1.0.0-rc.1 - Release candidate: contract freeze and certification
 
 Not a feature release. This candidate freezes the contracts `agent-skills` will support after

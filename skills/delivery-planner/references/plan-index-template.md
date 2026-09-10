@@ -95,13 +95,22 @@ or stop with `BLOCKED: required input missing` — do not invent context.
 
 ## Phases
 
-| ID         | Title                                | Owner skill              | Size | State        | Prereqs |
-| ---------- | ------------------------------------ | ------------------------ | ---- | ------------ | ------- |
-| phase-01   | Confirm JWT issuer metadata          | issue-investigator       | S    | done         | none    |
-| phase-02   | Feature flag scaffolding             | software-engineer        | S    | done         | 01      |
-| phase-03   | Dual-write path (legacy + SSO)       | software-engineer        | M    | ready        | 02      |
-| phase-04   | Manual cutover validation in staging | manual-tester            | S    | provisional  | 03      |
-| phase-05   | Regression test for flag-flip rollback | test-automation-engineer | S    | provisional  | 03      |
+| ID         | Title                                | Owner skill              | Size | State        | Prereqs | Profile  | Parallel |
+| ---------- | ------------------------------------ | ------------------------ | ---- | ------------ | ------- | -------- | -------- |
+| phase-01   | Confirm JWT issuer metadata          | issue-investigator       | S    | done         | none    | LIGHT    | no       |
+| phase-02   | Feature flag scaffolding             | software-engineer        | S    | done         | 01      | STANDARD | no       |
+| phase-03   | Dual-write path (legacy + SSO)       | software-engineer        | M    | ready        | 02      | RIGOROUS | no       |
+| phase-04   | Manual cutover validation in staging | manual-tester            | S    | provisional  | 03      | STANDARD | yes      |
+| phase-05   | Regression test for flag-flip rollback | test-automation-engineer | S    | provisional  | 03      | LIGHT    | yes      |
+
+The last two columns are **appended**, never inserted. `scripts/delivery-run-next.py` reads
+cells positionally, so moving `State` to make room would silently mis-read every plan already
+sitting in a cache directory. An index written before these columns existed parses unchanged and
+defaults to `STANDARD` / `no`, and so does an unrecognised value — a garbled column must never
+buy a phase a weaker profile than it earned.
+
+`Profile` and `Parallel` are roll-ups of the per-phase files, which stay authoritative. When the
+two disagree the **stronger profile wins**, so a stale index can never downgrade a phase.
 
 ## Dependency map
 
@@ -110,6 +119,12 @@ Plain-prose two-to-four-sentence summary of the dependency graph. Example:
 > Phase 1 must finish first; it gates phase 2's design choices. Phase 2
 > must finish before phase 3. Phases 4 and 5 are parallel-safe with each
 > other but both require phase 3 to finish first.
+
+Concurrency is decided from the per-phase files, not from this prose. Two phases run together
+only when both are marked `parallel_safe`, each lists the other in `parallel_with`, neither
+depends on the other, and their declared `mutation_targets` are disjoint. A phase that does not
+declare `mutation_targets` is treated as writing everything. See
+[adaptive execution](../../../docs/adaptive-execution.md#concurrency).
 
 ## Dispatch pointer rules (binding)
 

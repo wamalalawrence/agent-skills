@@ -80,6 +80,43 @@ The
 [`code-reviewer-concise-output`](../evals/code-reviewer-concise-output.md) eval pins
 this expectation with a worked example.
 
+## The output contract
+
+Every dispatch may carry an **output contract**: not what question to answer, but what artifact
+the human on the other end actually needs.
+
+```yaml
+output_contract:
+  audience: engineering meeting
+  primary_question: how many payments failed in each of the three systems yesterday?
+  deliverable: one compact table
+  reading_time_target: under 30 seconds
+  evidence_depth: retained-separately
+  evidence_location: .cache/agent-skills/PROJ-1234/evidence/
+```
+
+Fields: `audience`, `primary_question`, `deliverable`, `reading_time_target`, `evidence_depth`
+(`cited-inline` | `retained-separately` | `none`), and `evidence_location` when evidence is kept
+apart.
+
+**The primary deliverable is not automatically the evidence artifact.** This is the rule the
+contract exists for. A request for three numbers received two citation-heavy reports over 40 KB
+each, because the skill that was dispatched builds evidence trails and nobody had told it the
+answer needed to be readable in half a minute. Both things were wanted; only one of them was the
+deliverable.
+
+So evidence is **preserved, not suppressed** — written to `evidence_location` and referenced by
+one line. Depth of investigation and size of answer are separate decisions, and collapsing them
+is what produced the dossiers.
+
+There is deliberately **no global character limit**. A hard cap would truncate the one review
+that genuinely needed nine findings. The contract states the target for *this* piece of work,
+and the skill meets it.
+
+When no contract is supplied, infer one from the request and say what you inferred in a single
+line. "You asked in a meeting context, so this is a table; the full query output is at `<path>`"
+costs nothing and lets the reader correct you.
+
 ## Why this exists
 
 Real reviewers signal expertise by what they leave **out**. A review that mechanically

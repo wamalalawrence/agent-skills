@@ -52,6 +52,11 @@ import sys
 from datetime import date, datetime, timezone
 from pathlib import Path
 
+# One redaction implementation for the whole project, in guard_audit. This
+# tier is COMMITTED: it lands in the repository, survives a fresh clone, and
+# is pushed. A credential written here is a credential published.
+from guard_audit import redact
+
 KNOWLEDGE_DIRNAME = Path(".agent-skills") / "knowledge"
 
 DEFAULT_SECTIONS = (
@@ -286,6 +291,7 @@ def ensure_skeleton(repo_root: Path) -> Path:
 # project.md notes
 # ---------------------------------------------------------------------------
 def append_note(repo_root: Path, section: str, text: str) -> None:
+    text = redact(text)
     ensure_skeleton(repo_root)
     project = knowledge_dir(repo_root) / "project.md"
     content = project.read_text(encoding="utf-8")
@@ -390,6 +396,8 @@ def add_lesson(
         )
     if domain not in DOMAINS:
         raise UsageError(f"unknown domain {domain!r}: choose from {', '.join(DOMAINS)}")
+    trigger = redact(trigger)
+    action = redact(action)
 
     ensure_skeleton(repo_root)
     path = lessons_dir(repo_root) / f"{identifier}.md"

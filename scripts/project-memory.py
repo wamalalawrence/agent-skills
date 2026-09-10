@@ -42,6 +42,12 @@ import sys
 from datetime import datetime, timezone
 from pathlib import Path
 
+# One redaction implementation for the whole project, in guard_audit. Project
+# memory outlives the task that wrote it and is read back into every later
+# agent's starting context, so a credential landing here is a credential that
+# keeps arriving.
+from guard_audit import redact
+
 DEFAULT_SECTIONS = (
     "Project facts",
     "Build & runtime",
@@ -179,6 +185,10 @@ def warn_on_slug_collision(js: Path, project: str) -> None:
 
 
 def append_note(pdir: Path, section: str, text: str) -> None:
+    # Redacted at the choke point rather than at each caller, so `finish-task
+    # --summary`, `--gotcha`, `--build-runtime`, and `--fact` are all covered by
+    # one guarantee instead of four that have to be remembered separately.
+    text = redact(text)
     md = pdir / "memory.md"
     if not md.exists():
         raise SystemExit(f"FAIL memory.md missing at {md}; run 'init' first")
@@ -209,14 +219,95 @@ def append_note(pdir: Path, section: str, text: str) -> None:
     js.write_text(json.dumps(data, indent=2), encoding="utf-8")
 
 
-def cleanup_task(cache_root: Path, issue_key: str) -> Path | None:
-    if issue_key.startswith("_") or "/" in issue_key or ".." in issue_key:
+# Names directly under the cache root that are never task scratch. `_projects/`
+# holds every project's durable memory and `_org/` holds org memory; a cleanup
+# that reached either would destroy the Company Brain rather than one task.
+RESERVED_CACHE_NAMES = ("_projects", "_org")
+
+
+def _resolve_task_dir(cache_root: Path, issue_key: str) -> Path | None:
+    """Resolve an issue key to the one directory cleanup is allowed to delete.
+
+    Returns the directory, or `None` when there is nothing to clean. Raises
+    `SystemExit` on anything ambiguous.
+
+    This function exists because recursive deletion driven by a user-supplied
+    string went wrong in the field. `finish-task` run with a lowercase issue key
+    deleted the directory belonging to the uppercase key: macOS compares path
+    components case-insensitively, so `(cache_root / "proj-805").exists()`
+    answered True for a directory actually named `PROJ-805`, and the cleanup
+    deleted whatever that resolved to. The log then named a path that had never
+    existed on disk.
+
+    So the key is matched against the **real directory entries**, by exact name.
+    Two strings that a filesystem happens to treat as equivalent are not the
+    same task, and cleanup fails closed on the difference: the thing it would
+    otherwise guess away is the only copy of a task's working state.
+    """
+    key = issue_key.strip()
+    if (
+        not key
+        or key in {".", ".."}
+        or key.startswith("_")
+        or "/" in key
+        or "\\" in key
+        or ".." in key
+        or Path(key).name != key
+    ):
         raise SystemExit(f"FAIL refusing to clean up unsafe path: {issue_key!r}")
-    target = cache_root / issue_key
-    if not target.exists():
+    if key in RESERVED_CACHE_NAMES:
+        raise SystemExit(f"FAIL refusing to clean up reserved directory: {key!r}")
+
+    try:
+        names = sorted(entry.name for entry in cache_root.iterdir())
+    except OSError:
         return None
+
+    exact = [name for name in names if name == key]
+    folded = [name for name in names if name != key and name.lower() == key.lower()]
+
+    if not exact:
+        if folded:
+            variants = ", ".join(repr(name) for name in folded)
+            raise SystemExit(
+                f"FAIL refusing to clean up {key!r}: no directory has that exact name, "
+                f"but {variants} differs only in case. Nothing was removed. Re-run with "
+                f"the exact name if that is genuinely the target."
+            )
+        return None
+    if folded:
+        variants = ", ".join(repr(name) for name in folded)
+        raise SystemExit(
+            f"FAIL refusing to clean up {key!r}: it is ambiguous with {variants}. "
+            f"Nothing was removed."
+        )
+
+    target = cache_root / key
+    if target.is_symlink():
+        raise SystemExit(f"FAIL refusing to clean up a symlink: {target}")
     if not target.is_dir():
         raise SystemExit(f"FAIL not a directory: {target}")
+
+    resolved = target.resolve()
+    root = cache_root.resolve()
+    if root not in resolved.parents:
+        raise SystemExit(f"FAIL refusing to clean up outside the cache root: {resolved}")
+
+    # Task scratch never contains a repository. If one is here, the cache root
+    # is pointed somewhere it should not be, and a recursive delete would take
+    # the user's work with it.
+    if (target / ".git").exists():
+        raise SystemExit(
+            f"FAIL refusing to recursively delete a directory containing a git "
+            f"repository: {target}"
+        )
+    return target
+
+
+def cleanup_task(cache_root: Path, issue_key: str) -> Path | None:
+    target = _resolve_task_dir(cache_root, issue_key)
+    if target is None:
+        return None
 
     # Preserve delivery-planner artifacts (destination.md + phased-plan/)
     # when a phased plan is present. The plan must survive across executor

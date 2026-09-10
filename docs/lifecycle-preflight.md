@@ -178,6 +178,21 @@ Memory first, scratch second, branches last, and only when safe:
 That order is what guarantees durable knowledge survives every cleanup pass. Reverse it and a
 crash between steps loses the knowledge but keeps the mess.
 
+### Cleanup fails closed
+
+Step 2 is recursive deletion driven by a string a caller supplied, which makes it the most
+dangerous thing this project does. It resolves the key against the **real directory entries by
+exact name**, and refuses anything ambiguous.
+
+A key that matches only because the filesystem folds case removes nothing and names the
+directory it declined to touch. This is not theoretical: before `1.0.0-rc.2`, `finish-task` run
+with a lowercase key deleted the uppercase key's directory on macOS, and reported removing a
+path that had never existed. Cleanup also refuses `.`, an empty key, a reserved `_` name, a
+symlink, and any directory containing a git repository.
+
+**You do not need to think about the capitalisation of an issue key.** If a brief tells you to,
+it is out of date — the invariant is in software now, which is where it belongs.
+
 ## Task size does not waive this
 
 Skipping the wrappers is the single most common workflow failure, and "it was a small change"

@@ -40,7 +40,13 @@ Start here when reading the repository outside GitHub's main README.
   provider-neutral capability list with each capability's action class; a candidate for freezing
   at 1.0.
 - [Output discipline](output-discipline.md) - the canonical conciseness rules every skill
-  inherits in its Expected Output Contract; what "menu, not checklist" means in practice.
+  inherits in its Expected Output Contract; what "menu, not checklist" means in practice, and
+  the output contract that says what artifact the human actually needs back.
+- [Adaptive execution](adaptive-execution.md) - how much workflow a piece of work gets. The
+  LIGHT / STANDARD / RIGOROUS profiles and what each changes, the escalation floor no request
+  can lower, the safety invariants that hold identically at every profile, the conditions
+  concurrency requires before anything runs in parallel, and the watchdog that measures
+  stagnation rather than elapsed time.
 - [Writing voice](writing-voice.md) - how everything a skill writes for a human reader
   should sound, the AI tells that are banned outright, the honesty boundary that voice
   rules must never cross, and the `ai_attribution` knob.
@@ -59,6 +65,10 @@ Start here when reading the repository outside GitHub's main README.
   shell parser and why structural parsing beats pattern matching, target and symlink
   resolution, the configuration trust levels that stop repository text weakening it, per-host
   enforcement status, redacted auditing, measured performance, and what it cannot do.
+- [The secret boundary](secret-boundary.md) - where a credential is allowed to travel and what
+  stands in the way when it tries to go somewhere else. The primary control (never hold the
+  value), the `redact` filter, the four durable write paths that redact whether or not anyone
+  remembered, and a plain statement of what redaction does not cover.
 - [Assistant setup](assistants.md) - using the skills with common AI assistants.
 - [Starter prompts](starter-prompts.md) - copy-paste prompts for single-skill and multi-skill work.
 - [Examples](examples/README.md) - realistic input/output examples for each skill.

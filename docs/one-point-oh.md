@@ -8,6 +8,13 @@ optional field — stays allowed.
 
 [Versioning](versioning.md) has the general policy. This page is the enumerated list.
 
+> **Added in `1.0.0-rc.2`, additively.** Adaptive execution, the execution watchdog, and the
+> redaction filter arrived after the freeze. Nothing below was renamed, renumbered, or retyped
+> to make room: three new CLI verbs (`redact`, `execution-profile`, `watchdog`), one new
+> blackboard subcommand (`progress`), optional new fields in `plan-next` output and the phase
+> and index templates, and optional new telemetry fields. Plan indexes written before that
+> release parse unchanged. See [adaptive execution](adaptive-execution.md).
+
 ## CLI command names
 
 The launcher is `agent-skills`, resolved through any number of symlinks to the active release.
@@ -40,7 +47,13 @@ guard  <check-command|explain|check-tool|scan-content|rules|audit|run|install|re
 ```text
 project    knowledge    memory    blackboard    org-memory    telemetry
 plan-next    locate-config    auth-preflight    github-access
+redact    execution-profile    watchdog
 ```
+
+`redact`, `execution-profile`, and `watchdog` were added in `1.0.0-rc.2`. Their exit contracts:
+`redact` — `0` processed or `--check` clean, `1` `--check` found something, `2` usage.
+`execution-profile` — `0` decided, `2` usage. `watchdog` — `0` continue, `10` reassess,
+`20` stop, `2` usage.
 
 `dev` and `self-test` are development/internal entry points and are **not** part of the frozen
 surface; they may change.
@@ -87,6 +100,9 @@ Rules that hold across all of them:
 
 - **No secret value ever appears** — not in stdout, stderr, a log, `doctor`, `verify`, tool
   output, an evidence pack, telemetry, or a context pack. Only whether a secret *resolves*.
+  From `1.0.0-rc.2` this is also enforced on the durable write paths — the blackboard, project
+  memory, telemetry, and the committed knowledge base redact on write rather than trusting the
+  caller. See [the secret boundary](secret-boundary.md).
 - New fields may be **added**. Existing field names and their types do not change within `1.x`.
 - A `--json` invocation that fails still exits with the code from the tables above; the error
   goes to stderr.
@@ -200,6 +216,11 @@ Frozen behaviour:
   test plan, the PR URL.
 - **The lifecycle wrappers are mandatory:** `agent-skills start-task` before work,
   `agent-skills finish-task` after, with a lifecycle receipt in the output.
+- **Workflow depth adapts; ownership does not.** From `1.0.0-rc.2` a task or phase carries an
+  execution profile that decides how much ceremony it runs. Escalation to `RIGOROUS` is a floor
+  no request can lower, and the safety invariants — credential safety, authorization checks,
+  bounded reads, explicit verification, evidence retention, and the destructive-action floor —
+  are identical at every profile.
 - **Every skill degrades safely** to CLI, then REST, then stopping and asking — no skill
   requires MCP.
 - **The [destructive-action safety policy](destructive-action-safety.md) floor is above all of
