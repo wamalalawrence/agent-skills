@@ -272,6 +272,55 @@ else
 fi
 
 # ---------------------------------------------------------------------------
+sec "A refused cleanup does not fail the closeout"
+# ---------------------------------------------------------------------------
+# Cleanup fails closed, which is right. But by the time it runs, memory and
+# telemetry are already written — the durable work is done and only scratch is
+# left. Failing the whole closeout over undeleted scratch would report a lost
+# task when nothing was lost, and would do it on EVERY task for anyone holding a
+# cache directory created before issue keys were normalised.
+
+FT="$REPO/scripts/finish-task.sh"
+CACHE="$(new_cache closeout)"
+make_task_dir "$CACHE" "PROJ-901"
+FT_OUT="$(AGENT_SKILLS_CACHE_DIR="$CACHE" bash "$FT" demo PROJ-901 \
+  --summary "closeout against a legacy-cased directory" 2>&1)"
+FT_RC=$?
+
+if [ "$FT_RC" -eq 0 ]; then
+  ok "a refused cleanup still reports a successful closeout"
+else
+  bad "a refused cleanup still reports a successful closeout" "rc=$FT_RC"
+fi
+if contains "$FT_OUT" "PROJ-901" && contains "$FT_OUT" "NOT removed"; then
+  ok "the refusal is surfaced rather than swallowed"
+else
+  bad "the refusal is surfaced rather than swallowed" "$FT_OUT"
+fi
+if [ -f "$CACHE/PROJ-901/blackboard.json" ]; then
+  ok "the scratch it declined to delete is still there"
+else
+  bad "the scratch it declined to delete is still there"
+fi
+if grep -rq "proj-901" "$CACHE/_projects" 2>/dev/null; then
+  ok "durable memory was written before cleanup was attempted"
+else
+  bad "durable memory was written before cleanup was attempted"
+fi
+
+CACHE="$(new_cache closeout-ok)"
+make_task_dir "$CACHE" "proj-902"
+AGENT_SKILLS_CACHE_DIR="$CACHE" bash "$FT" demo proj-902 \
+  --summary "ordinary closeout" >/dev/null 2>&1
+FT_RC=$?
+if [ "$FT_RC" -eq 0 ] && [ ! -d "$CACHE/proj-902" ]; then
+  ok "an ordinary closeout still removes its scratch and exits zero"
+else
+  bad "an ordinary closeout still removes its scratch and exits zero" \
+      "rc=$FT_RC, dir present=$([ -d "$CACHE/proj-902" ] && echo yes || echo no)"
+fi
+
+# ---------------------------------------------------------------------------
 sec "Incremental progress survives an interrupted run"
 # ---------------------------------------------------------------------------
 # A long execution that is killed must leave behind what it had already learned.

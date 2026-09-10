@@ -61,6 +61,9 @@ the reported one:
 | a symlinked task dir | unhandled `OSError` | refuses with the path named |
 | `cleanup-task PROJ-805` against `PROJ-805/` | removed it | removes it — unchanged |
 
+A refusal is reported by `finish-task` but does **not** fail the closeout: memory and telemetry
+are written before cleanup runs, so the durable work is already done and only scratch is left.
+
 That is the usual return on testing a dangerous operation properly instead of testing only the
 case that was reported.
 
@@ -122,8 +125,8 @@ written, caught two real bugs in a security default's own test coverage across t
 
 | Suite | Assertions | Mutation probes |
 | --- | --- | --- |
-| `test-lifecycle-fs.sh` | 28 | 2 |
-| `test-secret-boundary.sh` | 33 | 4 |
+| `test-lifecycle-fs.sh` | 33 | 2 |
+| `test-secret-boundary.sh` | 35 | 4 |
 | `test-adaptive-execution.sh` | 68 | 3 |
 
 All three exit `0`.
@@ -147,6 +150,14 @@ One guard deliberately carries **no** probe: the symlink refusal. `shutil.rmtree
 declines a symlink, so removing the explicit check does not change what survives — it earns its
 place by turning an unhandled `OSError` into a message naming the path. Claiming a probe there
 would be the same error the probe discipline exists to prevent, in reverse.
+
+**A usability regression was caught by reading the diff, not by a test.** Cleanup fails closed,
+which is right — but `finish-task` propagated the refusal as its own exit code, so a closeout
+against a legacy-cased cache directory reported failure even though memory and telemetry had
+already been written in steps 1 and 2. Anyone holding a directory created before issue keys were
+normalised would have seen a failed closeout on every task, for undeleted scratch. The refusal is
+now surfaced prominently and the closeout still succeeds, because nothing durable was lost.
+Covered by five new assertions.
 
 Two test defects were found and fixed while writing these, both of which would have produced
 false confidence:

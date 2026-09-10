@@ -370,7 +370,21 @@ fi
 
 if [[ "${CLEANUP}" == "true" ]]; then
   echo "[3/3] cleanup: removing per-task scratch after memory write..."
-  "${PYTHON3}" "${PM_SCRIPT}" --cache-root "${CACHE_ROOT}" cleanup-task "${ISSUE_KEY}"
+  # A refusal is reported, not fatal. Cleanup fails closed on an ambiguous
+  # target — most often a cache directory created before issue keys were
+  # normalised, whose name differs from this key only in case. By the time we
+  # get here the durable work is already done: memory was written in step 1 and
+  # telemetry in step 2. Failing the whole closeout over undeleted scratch would
+  # report a lost task when nothing was lost, and would do it on every task for
+  # anyone holding a legacy directory.
+  if ! "${PYTHON3}" "${PM_SCRIPT}" --cache-root "${CACHE_ROOT}" cleanup-task "${ISSUE_KEY}"; then
+    echo ""
+    echo "  NOTE: scratch was NOT removed, and memory was already written, so"
+    echo "        nothing durable was lost. Cleanup refuses anything ambiguous"
+    echo "        rather than guessing which directory you meant."
+    echo "        Remove it by its exact name once you have checked it:"
+    echo "          ${PYTHON3} ${PM_SCRIPT} cleanup-task <exact-directory-name>"
+  fi
 else
   echo "[3/3] cleanup: skipped; per-task scratch preserved for resumption."
 fi
