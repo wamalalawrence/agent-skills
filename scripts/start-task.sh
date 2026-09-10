@@ -235,6 +235,7 @@ CACHE_ROOT="$(resolve_cache_root)"
 PM_SCRIPT="${SCRIPT_DIR}/project-memory.py"
 OM_SCRIPT="${SCRIPT_DIR}/org-memory.py"
 BB_SCRIPT="${SCRIPT_DIR}/blackboard.py"
+BOUNDARY_SCRIPT="${SCRIPT_DIR}/boundary_safety.py"
 KB_SCRIPT="${SCRIPT_DIR}/knowledge.py"
 DOCTOR_SCRIPT="${SCRIPT_DIR}/doctor.sh"
 LAST_CONTEXT="${CACHE_ROOT}/.last-task-context"
@@ -250,10 +251,14 @@ for script in "${PM_SCRIPT}" "${OM_SCRIPT}" "${BB_SCRIPT}"; do
   fi
 done
 
+SAFE_PROJECT="$(printf '%s' "${PROJECT}" | "${PYTHON3}" "${BOUNDARY_SCRIPT}")"
+SAFE_ISSUE_KEY="$(printf '%s' "${ISSUE_KEY}" | "${PYTHON3}" "${BOUNDARY_SCRIPT}")"
+SAFE_CACHE_ROOT="$(printf '%s' "${CACHE_ROOT}" | "${PYTHON3}" "${BOUNDARY_SCRIPT}")"
+
 echo "== agent-skills start-task =="
-echo "  project:    ${PROJECT} (${PROJECT_SOURCE})"
-echo "  issue-key:  ${ISSUE_KEY} (${ISSUE_SOURCE})"
-echo "  cache-root: ${CACHE_ROOT}"
+echo "  project:    ${SAFE_PROJECT} (${PROJECT_SOURCE})"
+echo "  issue-key:  ${SAFE_ISSUE_KEY} (${ISSUE_SOURCE})"
+echo "  cache-root: ${SAFE_CACHE_ROOT}"
 if [[ ${#SKILLS[@]} -gt 0 ]]; then
   echo "  skills:     ${SKILLS[*]}"
 fi

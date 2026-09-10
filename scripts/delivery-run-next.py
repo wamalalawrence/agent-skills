@@ -33,6 +33,8 @@ import re
 import sys
 from pathlib import Path
 
+from boundary_safety import redact_boundary
+
 DONE_STATES = {"done", "skipped"}
 DISPATCHABLE_STATES = {"ready", "in-progress"}
 HALT_READINESS = {"NEEDS_CLARIFICATION", "NEEDS_EVIDENCE", "BLOCKED"}
@@ -236,23 +238,27 @@ def main(argv: list[str]) -> int:
     requested_mode = argv[3] if len(argv) == 4 else "STANDARD"
     execution_mode = requested_mode.upper()
     if execution_mode not in MODE_CONTRACTS:
-        print(json.dumps({
+        payload = {
             "action": "error",
             "reason": "invalid-mode",
-            "message": f"Invalid execution mode '{requested_mode}'. Expected LIGHT, STANDARD, or RIGOROUS.",
-        }))
+            "message": f"Invalid execution mode '{requested_mode}'. "
+                       "Expected LIGHT, STANDARD, or RIGOROUS.",
+        }
+        print(json.dumps(redact_boundary(payload)))
         return 2
     index_path = find_index(argv[1])
     if index_path is None:
-        print(json.dumps({"action": "error", "reason": "index-not-found",
-                          "message": f"No phased-plan/README.md found for {argv[1]!r}."}))
+        payload = {"action": "error", "reason": "index-not-found",
+                   "message": f"No phased-plan/README.md found for {argv[1]!r}."}
+        print(json.dumps(redact_boundary(payload)))
         return 2
     try:
         decision = decide(index_path, execution_mode)
     except OSError as exc:
-        print(json.dumps({"action": "error", "reason": "read-failed", "message": str(exc)}))
+        payload = {"action": "error", "reason": "read-failed", "message": str(exc)}
+        print(json.dumps(redact_boundary(payload)))
         return 2
-    print(json.dumps(decision, indent=2))
+    print(json.dumps(redact_boundary(decision), indent=2))
     return 0
 
 

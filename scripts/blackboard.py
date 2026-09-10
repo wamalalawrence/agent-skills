@@ -56,6 +56,8 @@ import sys
 from datetime import datetime, timezone
 from pathlib import Path
 
+from boundary_safety import redact_boundary
+
 SECTIONS = ("facts", "assumptions", "unknowns", "decisions")
 
 
@@ -74,7 +76,8 @@ def resolve_cache_root(explicit: str | None) -> Path:
 
 
 def check_issue_key(issue_key: str) -> None:
-    if issue_key.startswith("_") or "/" in issue_key or ".." in issue_key:
+    if (not issue_key or issue_key.startswith("_") or "/" in issue_key
+            or "\\" in issue_key or ".." in issue_key or "\x00" in issue_key):
         raise SystemExit(f"FAIL refusing unsafe issue key: {issue_key!r}")
 
 
@@ -86,17 +89,17 @@ def blackboard_path(cache_root: Path, issue_key: str) -> Path:
 def load(path: Path) -> dict:
     if not path.exists():
         raise SystemExit(f"FAIL blackboard missing: {path}; run 'init' first")
-    return json.loads(path.read_text(encoding="utf-8"))
+    return redact_boundary(json.loads(path.read_text(encoding="utf-8")))
 
 
 def save(path: Path, data: dict) -> None:
     path.parent.mkdir(parents=True, exist_ok=True)
     data["updated_at"] = now_iso()
-    path.write_text(json.dumps(data, indent=2), encoding="utf-8")
+    path.write_text(json.dumps(redact_boundary(data), indent=2), encoding="utf-8")
 
 
 def cmd_path(args: argparse.Namespace) -> int:
-    print(blackboard_path(resolve_cache_root(args.cache_root), args.issue_key))
+    print(redact_boundary(str(blackboard_path(resolve_cache_root(args.cache_root), args.issue_key))))
     return 0
 
 
@@ -125,7 +128,7 @@ def cmd_init(args: argparse.Namespace) -> int:
     if args.project:
         data["project"] = args.project
     save(path, data)
-    print(path)
+    print(redact_boundary(str(path)))
     return 0
 
 

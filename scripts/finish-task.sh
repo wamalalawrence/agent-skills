@@ -34,6 +34,7 @@ RECENT_TASK_ONLY="false"
 SHOW_CANDIDATES="true"
 KB_SCRIPT="${SCRIPT_DIR}/knowledge.py"
 BB_SCRIPT="${SCRIPT_DIR}/blackboard.py"
+BOUNDARY_SCRIPT="${SCRIPT_DIR}/boundary_safety.py"
 
 usage() {
   cat <<'EOF'
@@ -233,9 +234,12 @@ note() {
     --section "${section}" --text "${text}"
 }
 
+SAFE_PROJECT="$(printf '%s' "${PROJECT}" | "${PYTHON3}" "${BOUNDARY_SCRIPT}")"
+SAFE_ISSUE_KEY="$(printf '%s' "${ISSUE_KEY}" | "${PYTHON3}" "${BOUNDARY_SCRIPT}")"
+
 echo "== agent-skills finish-task =="
-echo "  project:   ${PROJECT}"
-echo "  issue-key: ${ISSUE_KEY}"
+echo "  project:   ${SAFE_PROJECT}"
+echo "  issue-key: ${SAFE_ISSUE_KEY}"
 echo "  status:    ${STATUS}"
 
 recent="${ISSUE_KEY}: ${STATUS} - ${SUMMARY}"
@@ -308,7 +312,7 @@ fi
 # invent one.
 # ---------------------------------------------------------------------------
 if [[ "${SHOW_CANDIDATES}" == "true" && -f "${BB_SCRIPT}" ]]; then
-  CANDIDATES="$("${PYTHON3}" - "$@" <<PYEOF 2>/dev/null || true
+CANDIDATES="$("${PYTHON3}" - "$@" <<PYEOF 2>/dev/null || true
 import json
 import pathlib
 import sys
@@ -335,6 +339,7 @@ for text in seen[:8]:
     print(text)
 PYEOF
 )"
+  CANDIDATES="$(printf '%s' "${CANDIDATES}" | "${PYTHON3}" "${BOUNDARY_SCRIPT}")"
   if [[ -n "${CANDIDATES}" ]]; then
     echo ""
     echo "Durable-fact candidates from this task's blackboard:"

@@ -6,6 +6,8 @@ All notable project changes should be recorded here.
 
 - Add deterministic `LIGHT`, `STANDARD`, and `RIGOROUS` delivery-runner modes,
   with size-based phase eligibility and additive machine/human output contracts.
+- Make task cleanup case-insensitively identity-safe and redact credential-shaped
+  values before lifecycle state, telemetry, or delivery-runner output is persisted.
 
 ## 1.0.0-rc.1 - Release candidate: contract freeze and certification
 

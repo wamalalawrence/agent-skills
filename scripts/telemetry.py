@@ -29,6 +29,8 @@ from collections import defaultdict
 from datetime import datetime, timezone
 from pathlib import Path
 
+from boundary_safety import redact_boundary
+
 KNOWN_EVENTS = {
     "invoked",
     "loop_round",
@@ -65,10 +67,12 @@ def telemetry_path(cache_root: Path, project: str) -> Path:
 
 
 def emit(cache_root: Path, project: str, event: str, fields: dict) -> Path:
+    project = redact_boundary(project)
+    event = redact_boundary(event)
     path = telemetry_path(cache_root, project)
     path.parent.mkdir(parents=True, exist_ok=True)
     payload = {"at": now_iso(), "project": project, "event": event}
-    payload.update(fields)
+    payload.update(redact_boundary(fields))
     with path.open("a", encoding="utf-8") as fp:
         fp.write(json.dumps(payload, separators=(",", ":")) + "\n")
     return path
@@ -141,7 +145,7 @@ def parse_fields(pairs: list[str]) -> dict:
 def cmd_emit(args: argparse.Namespace) -> int:
     fields = parse_fields(args.field or [])
     path = emit(resolve_cache_root(args.cache_root), args.project, args.event, fields)
-    print(path)
+    print(redact_boundary(str(path)))
     return 0
 
 
@@ -158,7 +162,7 @@ def cmd_report(args: argparse.Namespace) -> int:
             raise SystemExit("FAIL provide <project> or --all")
         events = read_events(telemetry_path(cache_root, args.project))
     events = filter_since(events, args.since)
-    print(json.dumps(summarise(events), indent=2))
+    print(json.dumps(redact_boundary(summarise(events)), indent=2))
     return 0
 
 

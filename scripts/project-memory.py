@@ -42,6 +42,8 @@ import sys
 from datetime import datetime, timezone
 from pathlib import Path
 
+from boundary_safety import redact_text
+
 DEFAULT_SECTIONS = (
     "Project facts",
     "Build & runtime",
@@ -117,6 +119,8 @@ def now_iso() -> str:
 
 
 def ensure_skeleton(pdir: Path, project: str, repo: str | None) -> Path:
+    project = redact_text(project)
+    repo = redact_text(repo) if repo else None
     pdir.mkdir(parents=True, exist_ok=True)
     md = pdir / "memory.md"
     if not md.exists():
@@ -172,7 +176,8 @@ def warn_on_slug_collision(js: Path, project: str) -> None:
     if recorded and recorded != project:
         print(
             f"WARN slug {slugify(project)!r} already holds memory for project "
-            f"{recorded!r}, not {project!r}. Two names collide on one store; "
+            f"{redact_text(str(recorded))!r}, not {redact_text(project)!r}. "
+            "Two names collide on one store; "
             f"pass a distinct project name or set AGENT_SKILLS_CACHE_DIR.",
             file=sys.stderr,
         )
@@ -184,6 +189,7 @@ def append_note(pdir: Path, section: str, text: str) -> None:
         raise SystemExit(f"FAIL memory.md missing at {md}; run 'init' first")
     content = md.read_text(encoding="utf-8")
     section_re = re.compile(rf"(^## {re.escape(section)}\s*\n)", re.MULTILINE)
+    text = redact_text(text)
     bullet = f"- ({now_iso()}) {text.strip()}\n"
     if section_re.search(content):
         # Replace the placeholder line if present, else insert just under the heading.
@@ -209,12 +215,32 @@ def append_note(pdir: Path, section: str, text: str) -> None:
     js.write_text(json.dumps(data, indent=2), encoding="utf-8")
 
 
+def canonical_issue_key(value: str) -> str:
+    """Return the filesystem-independent identity used only for exact task matching."""
+    return value.casefold()
+
+
 def cleanup_task(cache_root: Path, issue_key: str) -> Path | None:
-    if issue_key.startswith("_") or "/" in issue_key or ".." in issue_key:
+    if (not issue_key or issue_key.startswith("_") or "/" in issue_key
+            or "\\" in issue_key or ".." in issue_key or "\x00" in issue_key):
         raise SystemExit(f"FAIL refusing to clean up unsafe path: {issue_key!r}")
-    target = cache_root / issue_key
-    if not target.exists():
+    cache_root = cache_root.resolve()
+    if not cache_root.is_dir():
         return None
+    canonical = canonical_issue_key(issue_key)
+    matches = [
+        child for child in cache_root.iterdir()
+        if canonical_issue_key(child.name) == canonical
+    ]
+    if not matches:
+        return None
+    if len(matches) != 1:
+        raise SystemExit("FAIL refusing ambiguous case-colliding task cleanup")
+    target = matches[0]
+    if target.is_symlink():
+        raise SystemExit("FAIL refusing symlink task cleanup target")
+    if target.parent.resolve() != cache_root:
+        raise SystemExit("FAIL refusing task cleanup outside cache root")
     if not target.is_dir():
         raise SystemExit(f"FAIL not a directory: {target}")
 
@@ -239,14 +265,14 @@ def cleanup_task(cache_root: Path, issue_key: str) -> Path | None:
 
 def cmd_path(args: argparse.Namespace) -> int:
     pdir = project_dir(resolve_cache_root(args.cache_root), args.project)
-    print(pdir / "memory.md")
+    print(redact_text(str(pdir / "memory.md")))
     return 0
 
 
 def cmd_init(args: argparse.Namespace) -> int:
     pdir = project_dir(resolve_cache_root(args.cache_root), args.project)
     md = ensure_skeleton(pdir, args.project, args.repo)
-    print(md)
+    print(redact_text(str(md)))
     return 0
 
 
@@ -254,9 +280,9 @@ def cmd_read(args: argparse.Namespace) -> int:
     pdir = project_dir(resolve_cache_root(args.cache_root), args.project)
     md = pdir / "memory.md"
     if not md.exists():
-        print(f"-- no project memory yet at {md}", file=sys.stderr)
+        print(f"-- no project memory yet at {redact_text(str(md))}", file=sys.stderr)
         return 1
-    print(md.read_text(encoding="utf-8"))
+    print(redact_text(md.read_text(encoding="utf-8")))
     return 0
 
 
@@ -270,9 +296,9 @@ def cmd_note(args: argparse.Namespace) -> int:
 def cmd_cleanup(args: argparse.Namespace) -> int:
     removed = cleanup_task(resolve_cache_root(args.cache_root), args.issue_key)
     if removed:
-        print(f"removed: {removed}")
+        print(f"removed: {redact_text(str(removed))}")
     else:
-        print(f"absent: {args.issue_key}")
+        print(f"absent: {redact_text(args.issue_key)}")
     return 0
 
 
@@ -397,7 +423,7 @@ def cmd_compact(args: argparse.Namespace) -> int:
 def cmd_promote_candidates(args: argparse.Namespace) -> int:
     pdir = project_dir(resolve_cache_root(args.cache_root), args.project)
     found = find_repeated_bullets(pdir, args.section, args.min_count)
-    print(json.dumps(found, indent=2))
+    print(json.dumps(json.loads(redact_text(json.dumps(found))), indent=2))
     return 0
 
 
@@ -408,7 +434,7 @@ def cmd_search(args: argparse.Namespace) -> int:
         print("-- no matches", file=sys.stderr)
         return 1
     for line_no, line in hits:
-        print(f"{line_no}: {line}")
+        print(f"{line_no}: {redact_text(line)}")
     return 0
 
 
