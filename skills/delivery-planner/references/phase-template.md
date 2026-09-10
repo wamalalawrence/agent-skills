@@ -18,13 +18,54 @@ state: provisional | ready | in-progress | done | skipped | blocked
 recommended_owner: software-engineer | product-owner | issue-investigator |
                    manual-tester | test-automation-engineer
 size: S | M | L
+execution_profile: LIGHT | STANDARD | RIGOROUS
+fresh_context_required: true | false
+independent_review_required: true | false
+expected_effort_minutes: 20
 parallel_safe: true | false
 parallel_with: []        # phase ids it can run alongside, when parallel_safe
+mutation_targets: []     # every path or resource this phase WRITES
 prerequisites: [02]      # phase ids that must be complete first
 created_at: 2026-05-06
 updated_at: 2026-05-06
 ---
 ```
+
+### Execution profile
+
+See [adaptive execution](../../../docs/adaptive-execution.md) for the full policy. Choose with
+`agent-skills execution-profile` rather than by feel, and record the answer:
+
+- **LIGHT** — a small, independently verifiable, low-risk phase: a documentation fix, a test
+  rename, a bounded read-only check. Runs without a fresh-agent handoff or a review agent.
+- **STANDARD** — ordinary implementation work. The default, and what an unmarked phase gets.
+- **RIGOROUS** — security controls, cryptography, auth, schema migrations, production
+  infrastructure, payment correctness, credential handling, anything irreversible or spanning
+  systems. Nothing downgrades a phase marked RIGOROUS.
+
+Do not mark a phase LIGHT to make a plan look cheaper. The runner reads this field to decide
+whether to skip isolation and review, and the cost of being wrong is paid by whoever inherits
+the change.
+
+### `expected_effort_minutes`
+
+What this phase should take, so `agent-skills watchdog` has something to measure against. It is
+not a deadline: the watchdog looks for *stagnation*, and a phase still writing milestones past
+its budget gets narrowed or split, never killed. An honest number is more useful than a padded
+one.
+
+### `mutation_targets`
+
+Every path or resource this phase writes — source files, migrations, generated artifacts, shared
+caches. Concurrency eligibility is decided by whether two phases' targets are disjoint.
+
+A phase that omits this field is treated as writing **everything** and will never run alongside
+anything. That is the safe default and it is fine to leave it that way; declare targets only
+when the phase is genuinely a candidate for parallel execution.
+
+`parallel_with` must be **mutual**. If phase 04 lists 05, phase 05 must list 04. A one-sided
+claim means one of the two was written without the other in mind, which is exactly the case that
+collides.
 
 ## Body sections
 
@@ -62,6 +103,25 @@ Pointers, not pasted content. Examples:
 - **Out of scope.** What this phase deliberately does not change, even when
   adjacent or tempting. Mirrors the destination's non-goals at the phase
   level.
+
+## Output contract
+
+What the human on the other end actually needs back, per
+[output discipline](../../../docs/output-discipline.md). Distinct from the artifact list
+below: the deliverable is not automatically the evidence.
+
+```yaml
+output_contract:
+  audience: reviewer | engineering meeting | operator | ticket
+  primary_question: <the one question this phase answers>
+  deliverable: patch | table | short answer | test plan | report
+  reading_time_target: under 2 minutes
+  evidence_depth: cited-inline | retained-separately | none
+  evidence_location: <path, when evidence is kept apart>
+```
+
+Omit for an implementation phase whose deliverable is obviously the diff. Include it whenever
+the phase produces something a person reads, because that is where the mismatch happens.
 
 ## Expected outputs / artifacts
 

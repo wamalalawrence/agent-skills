@@ -236,6 +236,25 @@ Repeat until a stop condition fires:
    leave the loop and go to step 3. On `action: dispatch`, continue. Extract
    `plan_branch` from the decision JSON — it is the single branch ALL phases
    of this plan commit to.
+1b. **Read the phase's execution profile.** The decision JSON carries
+   `phase.execution_profile`, `phase.fresh_context_required`,
+   `phase.independent_review_required`, and `phase.expected_effort_minutes`.
+   See [adaptive execution](../../docs/adaptive-execution.md).
+
+   - `RIGOROUS` — the existing path, unchanged: fresh empty-context agent,
+     independent review, full evidence. Never reduce it.
+   - `STANDARD` — fresh empty-context agent, as before.
+   - `LIGHT` — a small, independently verifiable, low-risk phase (a docs fix, a
+     test rename, a bounded read-only check). Run it without a fresh-agent
+     handoff and without a review agent. **Everything else still holds**: the
+     owner skill is still verified and followed, the safety screen still runs,
+     the checkpoint is still written, and the result is still verified from
+     artifacts rather than from what just happened in this context.
+
+   The runner reads the profile; it never chooses or edits one. If the phase
+   file and the index disagree, `plan-next` already returned the stronger of the
+   two — do not second-guess it downward.
+
 2. **Verify the owner skill resolves.** Read the `recommended_owner`'s `SKILL.md`
    from the resolved canonical skill source (a file read, not a host listing —
    see [skill-source resolution](../../docs/skill-source-resolution.md)). If it
@@ -253,11 +272,35 @@ Repeat until a stop condition fires:
    its own start-task/finish-task wrappers, write the phase-continuity
    checkpoint and regenerate the index, do ONLY this phase, do not touch other
    phases).
-5. **Dispatch a fresh-context agent** with that handoff (sub-agent, CLI, or
-   human-relayed). Wait for it to finish.
-6. **Verify from artifacts.** Re-run `delivery-run-next.py` (and read the phase
+5. **Dispatch.** For `STANDARD` and `RIGOROUS`, open a fresh-context agent with
+   the handoff (sub-agent, CLI, or human-relayed) and wait. For `LIGHT`, run the
+   phase inline against its owner skill, bounded by the phase's scope.
+
+   **Concurrent dispatch.** When the decision carries a `concurrency.parallel_group`
+   of more than one phase, those phases were proven independent — no dependency
+   edge, mutual `parallel_with`, both `parallel_safe`, and disjoint declared
+   `mutation_targets` — and may be dispatched at the same time. Wait for all of
+   them, then verify each from its own artifacts. An empty group means dispatch
+   one. Never assemble a group by hand: independence is decided by
+   `plan-next` from the phase files, not by how unrelated two titles look.
+6. **Check for stagnation.** Between phases, and for any phase that has run past
+   its `expected_effort_minutes`:
+
+   ```bash
+   agent-skills watchdog <work-key> --budget-minutes <expected_effort_minutes>
+   ```
+
+   `continue` (exit 0) → carry on. `narrow` / `split` / `restart` (exit 10) →
+   stop the loop and hand back with the verdict and its reason; re-scoping a
+   phase is planner work, not runner work. `stop` (exit 20) → stop the loop.
+
+   It measures stagnation, not elapsed time: a phase still writing milestones
+   past its budget is bigger than someone thought, not stuck.
+7. **Verify from artifacts.** Re-run `delivery-run-next.py` (and read the phase
    row / checkpoint) and apply the [verification rules](#3-verify-each-phase-from-artifacts).
-7. **Record one line** of progress (phase id → result) and loop. Keep the
+   A `LIGHT` phase is verified exactly like any other — from the index and the
+   checkpoint, never from the fact that this context just did the work.
+8. **Record one line** of progress (phase id → result) and loop. Keep the
    runner's own context lean: a pointer plus one-line notes, never the phase's
    full output.
 
@@ -316,6 +359,9 @@ the suite. Stop — do not retry, do not re-plan, do not improvise — on any of
   (`total_phases + retry_budget`) is reached.
 - **Concurrency suspected.** A phase is already `in-progress` with a recent checkpoint that
   this runner did not write. Ask before dispatching a duplicate.
+- **The watchdog asked for a reassessment.** `narrow`, `split`, or `restart` means the phase
+  needs re-scoping, and re-scoping belongs to `delivery-planner`. Stop and hand back the
+  verdict.
 
 Every stop preserves scratch (`finish-task.sh --status blocked`) and names the phase and the
 reason. The detection signal and response for each case are in the table below.
@@ -332,6 +378,8 @@ reason. The detection signal and response for each case are in the table below.
 | Validation reported failing | checkpoint `validation` shows failure | treat as blocked; stop |
 | Index ↔ evidence-pack disagree | helper / cross-read mismatch | stop `BLOCKED: phase index out of sync`; no reconcile |
 | Pointer never advances | same pointer past retry budget | stop `BLOCKED: no progress`; never spin |
+| Phase running long with nothing written | `watchdog` verdict `restart` | stop; the brief is too broad to produce anything |
+| Phase long but still producing | `watchdog` verdict `narrow` / `split` | stop, route to planner to re-scope; do NOT kill it |
 | Plan superseded mid-run | index `state: superseded` | stop, route to planner |
 
 Recovery is always: **stop cleanly, preserve scratch (`finish-task --status
@@ -363,7 +411,7 @@ or memory write ran unless it actually ran.
 - Lifecycle:
 - Work key:
 - Plan index: <path to phased-plan/README.md>
-- Phases dispatched this run: <ids, in order>
+- Phases dispatched this run: <ids, in order; group concurrent ones as [a, b]>
 - Phases completed: <n> / <total>
 - Final dispatch pointer: <phase id or "none — plan complete">
 - Stop reason: complete | blocked | needs-human | no-progress | superseded
@@ -371,8 +419,9 @@ or memory write ran unless it actually ran.
 
 ## Phase Results
 
-- **<phase-id> — <title>** (owner: <skill>) — <done | blocked | skipped>.
-  Verified by: <index State + checkpoint validation, or "retry then stalled">.
+- **<phase-id> — <title>** (owner: <skill>, profile: <LIGHT|STANDARD|RIGOROUS>) —
+  <done | blocked | skipped>. Verified by: <index State + checkpoint validation,
+  or "retry then stalled">.
 
 ## Blocked Phase
 
@@ -398,8 +447,16 @@ or memory write ran unless it actually ran.
   in the lifecycle receipt (once for the whole run), or the status explains why.
 - [ ] The runner read `phased-plan/README.md` as the dispatch source of truth and
   used `delivery-run-next.py` for each decision.
-- [ ] Each phase ran in a fresh-context agent; the runner did not load any
-  executor skill into its own context or implement a phase itself.
+- [ ] Each `STANDARD` / `RIGOROUS` phase ran in a fresh-context agent; the runner
+  did not load any executor skill into its own context or implement such a phase
+  itself.
+- [ ] Any phase run inline was marked `LIGHT` by the plan, not judged small by
+  the runner, and was still verified from artifacts.
+- [ ] No `RIGOROUS` phase lost its fresh context or its independent review.
+- [ ] Anything dispatched concurrently came from `plan-next`'s `parallel_group`,
+  not from the runner's own reading of the plan.
+- [ ] The watchdog was consulted for phases running past their effort budget, and
+  a reassessment verdict stopped the loop rather than being retried.
 - [ ] Each phase's `recommended_owner` skill was resolved (file read) before
   dispatch; an unresolved owner stopped the run.
 - [ ] Every phase result was verified from the index / checkpoint, not from the
@@ -444,6 +501,13 @@ or memory write ran unless it actually ran.
   [destructive-action safety policy](../../docs/destructive-action-safety.md).
 - Do not spin. Respect the iteration cap and the no-progress guard; stop and
   report rather than loop forever.
+- Do not downgrade a phase's execution profile, and do not run a `STANDARD` or
+  `RIGOROUS` phase inline because it looks small from here. The plan decided
+  that, with more context about the phase than the runner has.
+- Do not upgrade one either — a phase marked `LIGHT` that turns out to need more
+  is a planner decision, so stop and say so.
+- Do not invent a parallel group. Dispatch concurrently only what `plan-next`
+  proved independent, and never more than the cap it reports.
 - Do not run a second runner against a plan that already has an active
   in-progress phase without confirming with the user.
 
@@ -469,7 +533,12 @@ See [starter prompts](../../docs/starter-prompts.md).
 - [Run-loop checklist](./references/run-loop-checklist.md) — the single
   pre-flight + per-iteration self-check the runner applies.
 - [`scripts/delivery-run-next.py`](../../scripts/delivery-run-next.py) — the
-  read-only dispatch-decision helper the loop calls each iteration.
+  read-only dispatch-decision helper the loop calls each iteration. It returns
+  the phase's execution profile, effort budget, and any proven-safe parallel
+  group.
+- [Adaptive execution](../../docs/adaptive-execution.md) — what each profile
+  changes, why escalation cannot be overridden, and how concurrency and the
+  watchdog decide.
 - [Plan-index template](../delivery-planner/references/plan-index-template.md) —
   the index shape the runner reads (pointer, phase table, readiness).
 - [Evidence-pack `delivery_plan` ownership rule](../software-engineer/references/evidence-pack.md#3-skill-responsibilities)

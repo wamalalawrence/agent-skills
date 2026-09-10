@@ -258,6 +258,31 @@ the request. Its confidence verdict outranks the classification:
 This ordering is the single most valuable thing Wamala does. Most bad engineering output is a
 confident answer to a question nobody pinned down.
 
+### 2.5 Choose the execution profile
+
+The gate says whether the request is understood. This says how much workflow it warrants.
+
+```bash
+agent-skills execution-profile --reads-only --size S --uncertainty low \
+    --blast-radius contained --verification-cost low
+```
+
+Three answers — `LIGHT`, `STANDARD`, `RIGOROUS` — and the full policy is in
+[adaptive execution](../../docs/adaptive-execution.md). Two rules matter here:
+
+- **Escalation is a floor.** Security, crypto, auth, migrations, infrastructure, payments,
+  credentials, data-loss, cross-system, and anything irreversible force `RIGOROUS`. Nothing —
+  no signal, no user request, no apparent smallness — brings that down.
+- **Unstated is risky.** A bare invocation returns `STANDARD`. `LIGHT` requires every
+  relaxation condition to hold explicitly.
+
+Record the profile alongside the class, and pass it in the dispatch brief. It changes how much
+ceremony the step runs. It never changes **who owns it**, and it never touches the safety floor.
+
+This exists because a request for three read-only numbers was classified correctly, routed
+correctly, and then executed as three root-cause investigations producing 40 KB dossiers. The
+routing was right. The depth was not.
+
 ### 3. Route
 
 Take the first row that matches. The full table with rationale is in
@@ -307,6 +332,21 @@ verdict, the artifact paths, and the binding instruction to load and follow that
 
 One step per dispatch. Never bundle "implement and test" into one handoff — that is two owners,
 and the second one loses its independent context.
+
+The brief carries three things beyond the request: the execution profile from step 2.5, an
+**output contract** saying what the human actually needs back, and an effort budget. State the
+audience, the deliverable, and the reading-time target — a specialist told only the question
+answers it in its own default shape, which for an investigator is an evidence trail.
+
+Evidence is retained either way. What the contract decides is whether the evidence *is* the
+deliverable or sits beside it at a named path.
+
+**Concurrent dispatch.** Independent read-only steps may be dispatched at the same time —
+inspect CI, inspect Sentry, read the database evidence — and combined afterwards. Only when
+every one holds: no dependency between them, none of them writes, and no shared mutable state.
+Anything that writes, or anything whose independence is unproven, goes sequentially. Cap the
+fan-out at three. Concurrency is an optimisation; losing it costs time, and being wrong about it
+costs a corrupted working tree and a debugging session that starts with "which agent did this?"
 
 ### 6. Verify from artifacts
 
@@ -388,6 +428,7 @@ memory=<updated|blocked>; skill=wamala@<version>`. Do not claim a wrapper ran un
 - Class: defect | change | intent-unclear | question | review | validation | automation |
   terminology | oversized
 - Understanding confidence: unknown | low | medium | high
+- Execution profile: LIGHT | STANDARD | RIGOROUS — <one-line reason>
 - Routed to: <skill> — <one-line reason>
 - Chain: <skill> -> <skill> (or "single step")
 - Dispatch mechanism: sub-agent | cli | human-relayed
@@ -423,6 +464,11 @@ memory=<updated|blocked>; skill=wamala@<version>`. Do not claim a wrapper ran un
 - [ ] The request was classified, and the class plus a one-line reason are recorded.
 - [ ] The requirement-understanding gate ran, and its confidence outranked the class when the
   two disagreed.
+- [ ] An execution profile was chosen, recorded, and passed in every dispatch brief.
+- [ ] No profile was lowered below a floor, and no work was implemented inline because it
+  looked small at LIGHT.
+- [ ] Each brief stated what the human needed back, not only what question to answer.
+- [ ] Anything dispatched concurrently was proven independent; everything else ran in sequence.
 - [ ] No executor skill was loaded into this skill's own context — every step was dispatched to
   a fresh agent.
 - [ ] Each target's `SKILL.md` was verified by file read before dispatch, not by host listing.
@@ -437,6 +483,8 @@ memory=<updated|blocked>; skill=wamala@<version>`. Do not claim a wrapper ran un
 - The routing reason cites something concrete from the request or the artifacts, never a
   restatement of the destination's name.
 - Confidence beats classification whenever they disagree.
+- The execution profile is justified by a signal, not by how big the request sounded.
+- The output matches what the reader needed: a meeting question gets a table, not a dossier.
 - One owner per step, always. A handoff naming two skills is a bug.
 - Chains are re-gated between steps, not assumed from the shape of the request.
 - Wamala's own output stays short: a decision, a step list, and any blocker.
@@ -446,6 +494,13 @@ memory=<updated|blocked>; skill=wamala@<version>`. Do not claim a wrapper ran un
 
 - Do not implement, review, refine, test, or plan. Dispatch to the owner instead. This skill
   writing code is the failure mode it exists to prevent.
+- **Do not implement under LIGHT either.** LIGHT reduces the ceremony inside a step; it does not
+  turn this skill into an executor. A one-line answer still belongs to the specialist who owns
+  it, and "it was only a lookup" is exactly how a dispatcher becomes a doer.
+- Do not lower an execution profile below its floor, and do not talk yourself past one because
+  the change looks small. A migration is RIGOROUS at one line.
+- Do not dispatch steps concurrently unless they are provably independent — no dependency, no
+  writes, no shared state. Uncertain means sequential.
 - Do not load an executor skill into this skill's context. That breaks the
   [depth cap of two](../../docs/review-loops.md#universal-loop-bounds).
 - Do not bundle two owners into one dispatch.
@@ -476,4 +531,7 @@ See [starter prompts](../../docs/starter-prompts.md) and the
 - [Routing table](./references/routing-table.md) — the full condition-to-owner mapping with
   rationale, chains, and the ambiguous cases worth knowing.
 - [Handoff prompt template](./references/handoff-prompt-template.md) — the binding shape of the
-  brief handed to each fresh-context agent.
+  brief handed to each fresh-context agent, including the output contract and the two worked
+  examples (STANDARD and LIGHT).
+- [Adaptive execution](../../docs/adaptive-execution.md) — the profile policy, the escalation
+  floor, and the concurrency rules.

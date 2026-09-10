@@ -63,8 +63,12 @@ _PATTERNS: tuple[tuple[re.Pattern, str], ...] = (
     # clients actually use. A leading segment plus `_` is required so the
     # shell's own `PWD=` is left alone; redacting the working directory out of
     # an audit line would make it unreadable to buy nothing.
+    #
+    # `\d` rather than `0-9`, for the same reason as the URL rule below: the
+    # literal class `A-Z0-9` contains the substring `Z0-9`, which this
+    # repository's own ticket-key scanner reads as a ticket reference.
     (
-        re.compile(r"(?i)(^|\s)([A-Z0-9]+(?:_[A-Z0-9]+)*_(?:PWD|PASS))=[^\s]+"),
+        re.compile(r"(?i)(^|\s)([A-Z\d]+(?:_[A-Z\d]+)*_(?:PWD|PASS))=[^\s]+"),
         r"\1\2=" + REDACTED,
     ),
     # A quoted value under a credential-shaped key, which is how an API response,
@@ -72,9 +76,9 @@ _PATTERNS: tuple[tuple[re.Pattern, str], ...] = (
     # PROBE_ANCHOR_JSON_CREDENTIAL_KEY
     (
         re.compile(
-            r"""(?i)("[A-Za-z0-9_.\-]*"""
+            r"""(?i)("[A-Za-z\d_.\-]*"""
             r"""(?:password|passwd|secret|token|api[_-]?key|credential|private[_-]?key)"""
-            r"""[A-Za-z0-9_.\-]*"\s*:\s*")[^"]*(")"""
+            r"""[A-Za-z\d_.\-]*"\s*:\s*")[^"]*(")"""
         ),
         r"\1" + REDACTED + r"\2",
     ),
@@ -82,7 +86,7 @@ _PATTERNS: tuple[tuple[re.Pattern, str], ...] = (
     # covers `=`, which left the YAML and libpq spellings intact.
     (
         re.compile(
-            r"(?i)\b((?:[a-z0-9]+[_.\-])*(?:password|passwd|secret)s?)"
+            r"(?i)\b((?:[a-z\d]+[_.\-])*(?:password|passwd|secret)s?)"
             r"""(\s*[:=]\s*)(?!\s)([^\s,;"']+)"""
         ),
         r"\1\2" + REDACTED,

@@ -234,8 +234,8 @@ def _resolve_task_dir(cache_root: Path, issue_key: str) -> Path | None:
     This function exists because recursive deletion driven by a user-supplied
     string went wrong in the field. `finish-task` run with a lowercase issue key
     deleted the directory belonging to the uppercase key: macOS compares path
-    components case-insensitively, so `(cache_root / "bpf-805").exists()`
-    answered True for a directory actually named `BPF-805`, and the cleanup
+    components case-insensitively, so `(cache_root / "proj-805").exists()`
+    answered True for a directory actually named `PROJ-805`, and the cleanup
     deleted whatever that resolved to. The log then named a path that had never
     existed on disk.
 
