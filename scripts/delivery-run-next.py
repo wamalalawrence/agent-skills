@@ -191,7 +191,6 @@ def parallel_group(
     head_targets = set(head.get("mutation_targets") or [])
     head_with = {normalise_phase_id(x) for x in (head.get("parallel_with") or [])}
 
-    by_id = {row["id"]: row for row in rows}
     chosen: list[str] = []
     claimed = set(head_targets)
 
@@ -250,7 +249,6 @@ def parallel_group(
 
     if not chosen and not notes:
         notes.append("no other phase is both ready and declared parallel-safe with it")
-    _ = by_id
     return chosen, notes
 
 

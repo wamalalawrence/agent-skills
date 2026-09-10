@@ -208,6 +208,35 @@ else
   bad "--check never prints the value it found" "$CHECK_OUT"
 fi
 
+# Line numbers must be the ORIGINAL file's. Some patterns span lines and
+# collapse them — a PEM private key block becomes one token — so a pairwise
+# comparison of the before and after line lists silently misreports every line
+# after the first collapse. Sending someone hunting for a credential to the
+# wrong line is worse than telling them nothing.
+# The PEM markers are assembled rather than written out, for the same reason the
+# credentials are generated: a contiguous private-key header in a tracked file
+# trips every scanner that reads this repository, including this project's own
+# pre-commit hook, and no scanner can tell a fixture from the real thing.
+PEM_LABEL="PRIV""ATE KEY"
+{
+  printf 'line one is clean\n'
+  printf -- '-----BEGIN RSA %s-----\nAAAA\nBBBB\n-----END RSA %s-----\n' \
+    "$PEM_LABEL" "$PEM_LABEL"
+  printf 'trailing line with PGPASSWORD=%s here\n' "$SHORT"
+} > "$BOX/multiline.txt"
+CHECK_OUT="$("$PYTHON3" "$REDACT" --check "$BOX/multiline.txt" 2>&1)"
+if contains "$CHECK_OUT" "6"; then
+  ok "--check reports the original file's line numbers across a collapsing block"
+else
+  bad "--check reports the original file's line numbers across a collapsing block" \
+      "the trailing credential is on line 6; got: $CHECK_OUT"
+fi
+if ! contains "$CHECK_OUT" "$SHORT"; then
+  ok "--check still prints no value when reporting a multi-line file"
+else
+  bad "--check still prints no value when reporting a multi-line file" "$CHECK_OUT"
+fi
+
 # ---------------------------------------------------------------------------
 sec "A child process cannot leak through a pipe"
 # ---------------------------------------------------------------------------

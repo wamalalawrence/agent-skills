@@ -33,6 +33,7 @@ from __future__ import annotations
 
 import argparse
 import sys
+from difflib import SequenceMatcher
 from pathlib import Path
 
 from guard_audit import redact
@@ -90,13 +91,22 @@ def main(argv: list[str] | None = None) -> int:
     if cleaned == text:
         return EXIT_OK
 
+    # Aligned with a sequence matcher rather than zipped pairwise. Some patterns
+    # span lines and collapse them — a PEM private key block becomes one token —
+    # so the two line lists can differ in length, and zipping them silently
+    # misreports every line after the first collapse. Wrong line numbers in a
+    # tool someone is using to find a leaked credential are worse than none.
     original_lines = text.splitlines()
     cleaned_lines = cleaned.splitlines()
-    hits = [
-        number
-        for number, (before, after) in enumerate(zip(original_lines, cleaned_lines), start=1)
-        if before != after
-    ]
+    hits: list[int] = []
+    for tag, i1, i2, _j1, _j2 in SequenceMatcher(
+        a=original_lines, b=cleaned_lines, autojunk=False
+    ).get_opcodes():
+        if tag == "equal":
+            continue
+        # Line numbers are the ORIGINAL file's, which is the file the reader has.
+        hits.extend(range(i1 + 1, max(i2, i1 + 1) + 1))
+
     located = ", ".join(str(number) for number in hits[:20])
     if len(hits) > 20:
         located += f", and {len(hits) - 20} more"
