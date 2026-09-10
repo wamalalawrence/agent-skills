@@ -30,17 +30,20 @@ No command, flag, exit code, skill name, tool class, or capability was renamed o
 
 ```text
 $ ls .cache/agent-skills/
-BPF-805
-$ python3 scripts/project-memory.py cleanup-task bpf-805
-removed: .../.cache/agent-skills/bpf-805
+PROJ-805
+$ python3 scripts/project-memory.py cleanup-task proj-805
+removed: .../.cache/agent-skills/proj-805
 $ ls .cache/agent-skills/
 $
 ```
 
-The directory deleted was `BPF-805`. The path reported was `bpf-805`, which had never existed —
+The directory deleted was `PROJ-805`. The path reported was `proj-805`, which had never existed —
 so the incident was unreconstructable from its own log. macOS compares path components
 case-insensitively, `Path.exists()` answered `True`, and `shutil.rmtree` took whatever that
 resolved to.
+
+(The reported incident used a real ticket key. These fixtures use the `PROJ` placeholder prefix
+the repository validator requires; the property exercised is identical.)
 
 It had been caught once in the field, and the response was a paragraph in every subsequent
 dispatch brief telling the next agent to type the key in uppercase. A warning standing in for an
@@ -51,7 +54,7 @@ the reported one:
 
 | Invocation | Before | After |
 | --- | --- | --- |
-| `cleanup-task bpf-805` against `BPF-805/` | deleted the wrong directory | refuses, names `BPF-805` |
+| `cleanup-task proj-805` against `PROJ-805/` | deleted the wrong directory | refuses, names `PROJ-805` |
 | `cleanup-task .` | **deleted the entire cache root** | refuses |
 | `cleanup-task ""` | **deleted the entire cache root** | refuses |
 | a task dir containing `.git/` | deleted the repository | refuses |
@@ -168,9 +171,10 @@ false confidence:
 | `test-release-engine.py` | pass |
 
 Three new validator warnings appeared during development and all three were removed rather than
-accepted. Two were the character class `A-Z0-9` containing the substring `Z0-9`, which this
-repository's own ticket-key scanner reads as a ticket reference — the pre-existing URL rule
-already dodged that with `\d`, and the new rules now do too.
+accepted. Two came from writing a regex character class for "A to Z, 0 to 9" the long way: the
+literal characters of that class contain a letter-digit-hyphen-digit run, which this repository's
+own ticket-key scanner reads as a ticket reference. The pre-existing URL rule already dodged it
+by spelling the digit range as an escape, and the new rules now do the same.
 
 ### npm bootstrap
 

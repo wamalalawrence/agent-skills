@@ -11,14 +11,18 @@ One command runs the mechanical half of this list, so the evidence recorded in
 bash scripts/test-release-readiness.sh
 ```
 
-It covers the structural validators, syntax across every shipped artifact, all six test suites,
+It covers the structural validators, syntax across every shipped artifact, all nine test suites,
 the CLI surface, a clean-`HOME` install with drift and uninstall, an upgrade from the previous
 release tag in both the legacy-workspace and global-install shapes, cloud/in-repo mode, the
 public-safety sweep, README and link integrity, the telemetry report, and version consistency.
-Section 3 runs all six test suites, including
+Section 3 runs all nine test suites, including
 [`test-context-optimizer.sh`](../scripts/test-context-optimizer.sh) and its five mutation probes,
-and [`test-guard.sh`](../scripts/test-guard.sh) with its adversarial corpus, false-positive
-corpus, host-adapter checks, and seven mutation probes.
+[`test-guard.sh`](../scripts/test-guard.sh) with its adversarial corpus, false-positive
+corpus, host-adapter checks, and seven mutation probes, and the three added in `1.0.0-rc.2`:
+[`test-lifecycle-fs.sh`](../scripts/test-lifecycle-fs.sh),
+[`test-secret-boundary.sh`](../scripts/test-secret-boundary.sh), and
+[`test-adaptive-execution.sh`](../scripts/test-adaptive-execution.sh), carrying nine further
+mutation probes between them.
 Everything is sandboxed under `mktemp`; it never touches your real home directory, host skill
 directories, or credential store. It is not in CI because it builds a
 worktree of the previous tag and performs several full installs.

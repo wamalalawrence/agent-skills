@@ -122,7 +122,8 @@ python3 -c 'import yaml; yaml.safe_load(open(".github/workflows/ci.yml"))' 2>/de
 sec "3. test suites"
 # ------------------------------------------------------------------------------
 for suite in test-cli-install test-global-install test-access-resolution \
-  test-front-door-skill test-context-optimizer test-guard; do
+  test-front-door-skill test-context-optimizer test-guard \
+  test-lifecycle-fs test-secret-boundary test-adaptive-execution; do
   if bash "scripts/$suite.sh" </dev/null >"/tmp/as-rr-$suite.log" 2>&1; then
     good "$suite.sh: $(tail -1 "/tmp/as-rr-$suite.log")"
   else
@@ -285,8 +286,23 @@ if git worktree add -q --detach "$UP/previous" "$PREVIOUS_TAG" 2>/dev/null; then
   # fetch from a throwaway $HOME cannot authenticate, and this section is about
   # upgrade mechanics and state preservation, not distribution access — that is
   # scripts/test-private-source.sh. The tree is already at $UP_OLD.
+  #
+  # The channel has to be derived because the PREVIOUS tag can itself be a
+  # pre-release — from v1.0.0-rc.2 onward it usually is. The local provider
+  # correctly refuses to install an `rc` version under the default `stable`
+  # channel, so a bare install of an rc predecessor fails on a guard that is
+  # doing its job. `--channel any` is the existing "install exactly this tree"
+  # hatch and is a no-op for a stable predecessor. Same reasoning as the
+  # current-tree installs above; this path was simply not a pre-release until
+  # now.
+  UP_OLD_VERSION="$(head -n 1 "$UP_OLD/VERSION" 2>/dev/null | tr -d '[:space:]')"
+  UP_OLD_CHANNEL_ARGS=()
+  case "$UP_OLD_VERSION" in
+    *-*) UP_OLD_CHANNEL_ARGS=(--channel any) ;;
+  esac
   run_upgraded bash "$UP_OLD/bin/agent-skills" install \
-    --provider local --source "$UP_OLD" >"$UP/old.log" 2>&1
+    --provider local --source "$UP_OLD" "${UP_OLD_CHANNEL_ARGS[@]+"${UP_OLD_CHANNEL_ARGS[@]}"}" \
+    >"$UP/old.log" 2>&1
   [ -f "$UP_HOME/.agent-skills/install.json" ] \
     && good "$PREVIOUS_TAG produced its own global install" \
     || bad "$PREVIOUS_TAG install" "$(tail -5 "$UP/old.log")"
