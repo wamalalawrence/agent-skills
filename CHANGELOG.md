@@ -4,7 +4,22 @@ All notable project changes should be recorded here.
 
 ## Unreleased
 
-- No unreleased changes.
+- **Correction to the v0.44.0 npm-deferral note.** That entry states the public bootstrap "still
+  points at `0.43.1`". It does not, and never did: `0.43.1` was never published to the registry.
+  `latest` points at `0.43.0`, so the stable-line deferral began one release earlier than the
+  record says. Both `0.43.1` and `0.44.0` exist as GitHub releases with no matching npm publish.
+
+  The v0.44.0 entry is left as written — historical changelog entries are not edited — so the
+  correction lives here. The deferral itself was deliberate and remains an open owner decision;
+  what was wrong was only the record of where the registry stood.
+
+  Registry state as of `1.0.0-rc.2`: `latest` `0.43.0`, `rc` `1.0.0-rc.2`. Published versions:
+  `0.43.0`, `1.0.0-rc.1`, `1.0.0-rc.2`.
+
+- **Recorded as a 1.0 blocker:** the stable-line npm publication has to be resolved before
+  `1.0.0`. See [ROADMAP](ROADMAP.md#before-100). Not a defect today — the lockstep rule in
+  [docs/one-point-oh.md](docs/one-point-oh.md#npm-bootstrap) binds from `1.x` — but it does not
+  survive the promotion unchanged.
 
 ## 1.0.0-rc.2 - Release candidate: adaptive execution and two reliability fixes
 
