@@ -96,11 +96,10 @@ compatible change.
 | RC offline smoke | pass — 13/13 local commands work network-dead (`context check` exit `10` is over-threshold, correct) |
 
 `test-private-source.sh` was re-run against the pushed `v1.0.0-rc.1` tag on the private remote —
-see the block below. The npm bootstrap is built and audited (14 files, clean, version matches
-`VERSION`) but
-**publishing is deferred to the maintainer** — no npm credentials were present on the
-certification machine (`npm whoami` → 401; published `latest` is `0.43.0`). It publishes with
-`npm publish --tag rc` from `npm/`, never `--tag latest`.
+see the block below. The npm bootstrap `@wamalalawrence/agent-skills@1.0.0-rc.1` is
+**published** to the public registry under the `rc` dist-tag (`latest` unchanged at `0.43.0`),
+and the exact published tarball was then installed into a clean `HOME` — see
+"Install from the published npm package" below.
 
 ## Clean private install (`test-private-source.sh`, against the `v1.0.0-rc.1` tag)
 
@@ -124,6 +123,33 @@ is `1.0.0-rc.1` — `resolve_latest(rc)` found the release-candidate tag. The un
 exits `3` with `AUTHENTICATION_REQUIRED`, no hang, no partial install, no partial host
 registration, no token echoed. The real installation on this machine was hashed before and after
 and is unchanged. 41 assertions, 0 failures.
+
+## Install from the published npm package
+
+The maintainer ran `npm publish --tag rc` from `npm/`. Registry state afterwards:
+`latest: 0.43.0` (not moved), `rc: 1.0.0-rc.1`. The published tarball is byte-identical to the
+source tree — `integrity sha512-QsSWVUDrNlTQ671FIIPMZ+ceVApch4aW7ztGEfwkvbRsrU5btHpMvRL2AG6VoPqc+6Jm7N1ewjVOdmdgDxK6Vg==`,
+`shasum 088dd2349a2d66d4692b73ee0d691708ca8a5f2f`, 14 files — matching `npm pack` on `npm/`.
+
+Into a throwaway `HOME` with no prior install:
+
+```text
+npx -y @wamalalawrence/agent-skills@rc install --channel rc
+  resolve    1.0.0-rc.1 (rc, via git)
+  download   199 files staged
+  verify     payload hash and version agree
+  self-test  staged runtime answers correctly
+  activate   current -> versions/1.0.0-rc.1
+  verified   installation is consistent
+
+agent-skills version   -> 1.0.0-rc.1
+agent-skills verify     -> exit 0, "Installation verified."
+agent-skills doctor     -> exit 0
+agent-skills tools doctor -> integrity OK (16 reference tools, 4 fixtures, 72 caps / 18 families)
+```
+
+Run first with no git auth: exits `3` `AUTHENTICATION_REQUIRED`, no hang, no secret prompt, no
+partial install. Re-run with the developer's existing git credential: full success as above.
 
 ## Upgrade / rollback (`0.44.0 → 1.0.0-rc.1 → rollback → 0.44.0 → upgrade`)
 
@@ -209,7 +235,11 @@ Claude Code.
   marked **Pre-release**; `v0.44.0` remains **Latest** (not moved).
 - `test-private-source.sh` against the pushed tag on the private remote:
   `PRIVATE_SOURCE_DISTRIBUTION_READY: YES`, `INSTALLED_VERSION 1.0.0-rc.1`, 41/0.
-- npm bootstrap `1.0.0-rc.1`: **built and audited, not published** — the certification machine
-  has no npm credentials (`npm whoami` → 401; published `latest` is `0.43.0`). The maintainer
-  runs `npm publish --tag rc` from `npm/` (never `--tag latest`) and then installs from the
-  published package into a clean HOME to close the last check.
+- npm bootstrap `@wamalalawrence/agent-skills@1.0.0-rc.1`: **published** under the `rc`
+  dist-tag. `latest` stays at `0.43.0` (not moved to the RC). Published tarball is
+  byte-identical to `npm/` (`shasum 088dd2349a2d66d4692b73ee0d691708ca8a5f2f`, 14 files).
+  `npx @wamalalawrence/agent-skills@rc install --channel rc` into a clean `HOME` resolves
+  `1.0.0-rc.1 (rc, via git)` and passes `verify` / `doctor` / `tools doctor`. Unauthenticated
+  it exits `3` cleanly. Last certification check closed.
+- Ready for `v1.0.0`: **YES.** The RC is now installable from the published `rc` channel and
+  has been exercised from it end to end.

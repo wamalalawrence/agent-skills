@@ -107,12 +107,12 @@ Security review: [`docs/security-review-v1.0.0-rc.1.md`](docs/security-review-v1
 
 - Tag `v1.0.0-rc.1`; GitHub release marked **prerelease**, `latest` not moved. The
   git provider is the distribution path for this candidate.
-- npm bootstrap `1.0.0-rc.1` is **built and audited** (14 files, no product content, version
-  matches `VERSION`, engine byte-identical) but **not yet published** — publishing requires the
-  maintainer's npm credentials, which were not present on the certification machine. The
-  maintainer publishes it with `npm publish --tag rc` from `npm/` (never `--tag latest`);
-  `latest` stays on the last stable. Recorded here so a deferred publish is not a release nobody
-  can install from npm.
+- npm bootstrap `@wamalalawrence/agent-skills@1.0.0-rc.1` is **published** under the `rc`
+  dist-tag (14 files, no product content, version matches `VERSION`, tarball byte-identical to
+  `npm/`). `latest` stays on `0.43.0` — the RC is not promoted to `latest`.
+  `npx @wamalalawrence/agent-skills@rc install --channel rc` into a clean `HOME` resolves
+  `1.0.0-rc.1 (rc, via git)` and passes `verify` / `doctor` / `tools doctor`; run without git
+  auth it exits `3` cleanly.
 
 ## 0.44.0 - Engineering Tool Capability Framework
 
