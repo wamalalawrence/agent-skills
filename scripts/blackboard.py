@@ -20,7 +20,8 @@ Shape (JSON):
     "unknowns":     [ {at, by, text}, ... ],
     "decisions":    [ {at, by, text}, ... ],
     "artifacts":    [ {at, by, path, kind, note}, ... ],
-    "handoffs":     [ {at, from, to, reason}, ... ]
+    "handoffs":     [ {at, from, to, reason}, ... ],
+    "progress":     [ {at, by, kind, note}, ... ]
   }
 
 Subcommands:
@@ -35,6 +36,10 @@ Subcommands:
                                               decisions.
   artifact <issue-key> --by SKILL --path P --kind K [--note N]
                                               Record an artifact reference.
+  progress <issue-key> --by SKILL --kind K [--note N]
+                                              Record a meaningful milestone so
+                                              an interrupted run is recoverable
+                                              and the watchdog can see motion.
   handoff <issue-key> --from SKILL --to SKILL --reason R
                                               Record a skill -> skill handoff.
   record-skill <issue-key> --name N --version V
@@ -46,6 +51,10 @@ Rules:
     cleanup contract handles it. `<issue-key>` must not start with `_`.
   * This script writes only to `<cache-root>/<issue-key>/blackboard.json`. It
     never writes to `_projects/` or `_org/`.
+  * Every free-text value written here is redacted first. The blackboard is the
+    file skills paste tool output into, which makes it the most likely place for
+    a credential to come to rest, and it is read back into the next agent's
+    context by design. See `docs/secret-boundary.md`.
 """
 from __future__ import annotations
 
@@ -56,7 +65,25 @@ import sys
 from datetime import datetime, timezone
 from pathlib import Path
 
+# One redaction implementation for the whole project, in guard_audit. A second
+# pattern set would drift from the first and the weaker one would decide.
+from guard_audit import redact
+
 SECTIONS = ("facts", "assumptions", "unknowns", "decisions")
+
+# What counts as meaningful progress. Deliberately short: the ledger is a record
+# of milestones a human would recognise as movement, not a keystroke log. A
+# checkpoint every few seconds is noise that hides the stall it was meant to
+# reveal.
+PROGRESS_KINDS = (
+    "artifact",    # something durable was written or updated
+    "hypothesis",  # a candidate explanation was recorded
+    "query",       # a query or probe completed and returned something
+    "test",        # a test or check was executed
+    "file",        # a source file was changed
+    "evidence",    # evidence was captured
+    "checkpoint",  # an explicit resumable checkpoint
+)
 
 
 def now_iso() -> str:
@@ -116,6 +143,7 @@ def cmd_init(args: argparse.Namespace) -> int:
             "decisions": [],
             "artifacts": [],
             "handoffs": [],
+            "progress": [],
         }
     for pair in args.skill or []:
         if "=" not in pair:
@@ -145,7 +173,7 @@ def cmd_append(args: argparse.Namespace) -> int:
     path = blackboard_path(resolve_cache_root(args.cache_root), args.issue_key)
     data = load(path)
     data.setdefault(args.section, []).append(
-        {"at": now_iso(), "by": args.by, "text": args.text.strip()}
+        {"at": now_iso(), "by": args.by, "text": redact(args.text.strip())}
     )
     save(path, data)
     return 0
@@ -158,9 +186,36 @@ def cmd_artifact(args: argparse.Namespace) -> int:
         {
             "at": now_iso(),
             "by": args.by,
-            "path": args.path,
+            # A path can carry a credential too — a signed URL keeps its
+            # signature in the query string.
+            "path": redact(args.path),
             "kind": args.kind,
-            "note": args.note or "",
+            "note": redact(args.note or ""),
+        }
+    )
+    save(path, data)
+    return 0
+
+
+def cmd_progress(args: argparse.Namespace) -> int:
+    """Record one milestone.
+
+    This exists because a long execution used to leave nothing behind. A
+    mechanism-selection dispatch ran for roughly an hour, was terminated, and
+    had written no artifact at all — so the retry restarted from zero and the
+    hour bought nothing. The ledger makes partial work recoverable and gives
+    `agent-skills watchdog` something to measure other than elapsed time.
+    """
+    if args.kind not in PROGRESS_KINDS:
+        raise SystemExit(f"FAIL --kind must be one of {PROGRESS_KINDS}")
+    path = blackboard_path(resolve_cache_root(args.cache_root), args.issue_key)
+    data = load(path)
+    data.setdefault("progress", []).append(
+        {
+            "at": now_iso(),
+            "by": args.by,
+            "kind": args.kind,
+            "note": redact((args.note or "").strip()),
         }
     )
     save(path, data)
@@ -175,7 +230,7 @@ def cmd_handoff(args: argparse.Namespace) -> int:
             "at": now_iso(),
             "from": args.from_skill,
             "to": args.to_skill,
-            "reason": args.reason,
+            "reason": redact(args.reason),
         }
     )
     save(path, data)
@@ -224,6 +279,13 @@ def main(argv: list[str] | None = None) -> int:
     sp.add_argument("--kind", required=True)
     sp.add_argument("--note", default=None)
     sp.set_defaults(func=cmd_artifact)
+
+    sp = sub.add_parser("progress")
+    sp.add_argument("issue_key")
+    sp.add_argument("--by", required=True)
+    sp.add_argument("--kind", required=True, choices=PROGRESS_KINDS)
+    sp.add_argument("--note", default=None)
+    sp.set_defaults(func=cmd_progress)
 
     sp = sub.add_parser("handoff")
     sp.add_argument("issue_key")
