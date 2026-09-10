@@ -15,7 +15,7 @@ scratch that a fresh phase may have to reconstruct. Reading the index keeps the
 runner correct even after a phase has finished and its scratch was cleaned.
 
 Usage:
-    python3 scripts/delivery-run-next.py <work-dir-or-index-path>
+    python3 scripts/delivery-run-next.py <work-dir-or-index-path> [--mode MODE]
 
 `<work-dir-or-index-path>` may be:
   * the per-task cache dir            (.cache/agent-skills/PROJ-123)
@@ -36,6 +36,19 @@ from pathlib import Path
 DONE_STATES = {"done", "skipped"}
 DISPATCHABLE_STATES = {"ready", "in-progress"}
 HALT_READINESS = {"NEEDS_CLARIFICATION", "NEEDS_EVIDENCE", "BLOCKED"}
+MODE_CONTRACTS = {
+    "LIGHT": {"phase_budget": "S", "eligible_phase_sizes": ["S"], "mandatory_gates": True},
+    "STANDARD": {
+        "phase_budget": "M",
+        "eligible_phase_sizes": ["S", "M"],
+        "mandatory_gates": True,
+    },
+    "RIGOROUS": {
+        "phase_budget": "L",
+        "eligible_phase_sizes": ["S", "M", "L"],
+        "mandatory_gates": True,
+    },
+}
 
 
 def find_index(arg: str) -> Path | None:
@@ -126,7 +139,7 @@ def stop_for_pointer(base: dict, pointer: str, target: dict | None,
     return None
 
 
-def decide(index_path: Path) -> dict[str, object]:
+def decide(index_path: Path, execution_mode: str = "STANDARD") -> dict[str, object]:
     text = index_path.read_text(encoding="utf-8")
     header = parse_header(text)
     rows = phase_rows(text)
@@ -150,6 +163,8 @@ def decide(index_path: Path) -> dict[str, object]:
             "done": sum(1 for r in rows if r["state"] in DONE_STATES),
             "remaining": sum(1 for r in rows if r["state"] not in DONE_STATES),
         },
+        "execution_mode": execution_mode,
+        "execution_contract": MODE_CONTRACTS[execution_mode],
     }
 
     if plan_state == "superseded":
@@ -168,6 +183,16 @@ def decide(index_path: Path) -> dict[str, object]:
     if stop is not None:
         return stop
     assert target is not None  # stop_for_pointer returns non-None when target is None
+
+    if target["size"].upper() not in MODE_CONTRACTS[execution_mode]["eligible_phase_sizes"]:
+        return {
+            **base,
+            "action": "stop",
+            "reason": "mode-phase-ineligible",
+            "message": f"Phase '{pointer}' size '{target['size']}' exceeds the "
+                       f"{execution_mode} phase budget "
+                       f"'{MODE_CONTRACTS[execution_mode]['phase_budget']}'. Select a higher mode.",
+        }
 
     phase_file = phase_file_for(index_path, pointer)
     return {
@@ -205,8 +230,17 @@ def unmet_prerequisites(target: dict[str, str], rows: list[dict[str, str]]) -> l
 
 
 def main(argv: list[str]) -> int:
-    if len(argv) != 2:
-        print("usage: delivery-run-next.py <work-dir-or-index-path>", file=sys.stderr)
+    if len(argv) not in {2, 4} or (len(argv) == 4 and argv[2] != "--mode"):
+        print("usage: delivery-run-next.py <work-dir-or-index-path> [--mode MODE]", file=sys.stderr)
+        return 2
+    requested_mode = argv[3] if len(argv) == 4 else "STANDARD"
+    execution_mode = requested_mode.upper()
+    if execution_mode not in MODE_CONTRACTS:
+        print(json.dumps({
+            "action": "error",
+            "reason": "invalid-mode",
+            "message": f"Invalid execution mode '{requested_mode}'. Expected LIGHT, STANDARD, or RIGOROUS.",
+        }))
         return 2
     index_path = find_index(argv[1])
     if index_path is None:
@@ -214,7 +248,7 @@ def main(argv: list[str]) -> int:
                           "message": f"No phased-plan/README.md found for {argv[1]!r}."}))
         return 2
     try:
-        decision = decide(index_path)
+        decision = decide(index_path, execution_mode)
     except OSError as exc:
         print(json.dumps({"action": "error", "reason": "read-failed", "message": str(exc)}))
         return 2

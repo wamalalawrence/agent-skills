@@ -4,7 +4,8 @@ All notable project changes should be recorded here.
 
 ## Unreleased
 
-- No unreleased changes.
+- Add deterministic `LIGHT`, `STANDARD`, and `RIGOROUS` delivery-runner modes,
+  with size-based phase eligibility and additive machine/human output contracts.
 
 ## 1.0.0-rc.1 - Release candidate: contract freeze and certification
 

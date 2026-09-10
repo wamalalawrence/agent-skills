@@ -22,6 +22,7 @@ an existing delivery-planner plan, then stop.
 
 Work key: <work-key>
 Task cache dir: <cache-dir>/<work-key>/
+Execution mode: <LIGHT | STANDARD | RIGOROUS>
 
 Read these, in order, before doing anything else:
 1. Destination brief: <cache-dir>/<work-key>/destination.md
@@ -56,6 +57,8 @@ Do this:
   PREFLIGHT start-task.sh and closing finish-task.sh lifecycle wrappers.
 - Honor the phase's scope (in/out), validation/exit criteria, and rollback
   notes. Do not start, edit, or "get ahead" on any other phase.
+- Apply the selected execution mode only to proportional effort. Do not weaken
+  lifecycle, safety, branch, owner-skill, review, validation, or checkpoint gates.
 - Before any repo mutation, run the pre-work isolation gate (plan-branch gate,
   working_branch, base_branch, branch-isolation assertion, owner-skill
   verification) from skills/software-engineer/references/evidence-pack.md.

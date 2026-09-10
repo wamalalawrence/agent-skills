@@ -182,9 +182,40 @@ Ask for whatever is missing before looping.
 - Any explicit skill-source path the user supplied, so each phase agent resolves
   the correct `recommended_owner` skill — see
   [skill-source resolution](../../docs/skill-source-resolution.md).
+- Execution mode: `LIGHT`, `STANDARD`, or `RIGOROUS`. Omitted means
+  `STANDARD`, preserving the pre-adaptive runner behavior.
 
 If no plan artifacts can be found, stop and route to
 [`delivery-planner`](../delivery-planner/SKILL.md). Do not invent a plan.
+
+## Adaptive Execution Contract
+
+Mode selection is deterministic and proportional to the existing phase `Size`
+column. `LIGHT` permits `S`, `STANDARD` permits `S` and `M`, and `RIGOROUS`
+permits `S`, `M`, and `L`. A pointer to a larger phase stops with
+`mode-phase-ineligible`; the runner does not skip it or scan ahead.
+
+Every mode keeps the same owner-skill verification, destructive-action screen,
+branch isolation, validation, review, checkpoint, and lifecycle gates. Mode
+changes effort eligibility, never safety requirements.
+
+Call `agent-skills plan-next <cache-dir> --mode <mode>`. Its additive output
+fields are stable across all decisions:
+
+```json
+{
+  "execution_mode": "STANDARD",
+  "execution_contract": {
+    "phase_budget": "M",
+    "eligible_phase_sizes": ["S", "M"],
+    "mandatory_gates": true
+  }
+}
+```
+
+Existing fields retain their names and types. Invalid modes return exit `2`
+with `action: error` and `reason: invalid-mode`. An ineligible pointer is a
+normal stop decision (exit `0`) with `reason: mode-phase-ineligible`.
 
 ## Required Environment
 
@@ -216,7 +247,7 @@ with `BLOCKED: no phased plan found` and route to `delivery-planner`.
 Run the dispatch-decision helper against the cache dir:
 
 ```bash
-agent-skills plan-next "${CACHE_DIR}/<work-key>"
+agent-skills plan-next "${CACHE_DIR}/<work-key>" --mode "${EXECUTION_MODE}"
 ```
 
 It prints a JSON decision. Read it once before looping to confirm the plan is
@@ -232,7 +263,8 @@ active. Ask the user before resuming; do not dispatch a duplicate.
 
 Repeat until a stop condition fires:
 
-1. **Decide.** Run `delivery-run-next.py`. On `action: stop` or `action: error`,
+1. **Decide.** Run `agent-skills plan-next "${CACHE_DIR}/<work-key>" --mode
+   "${EXECUTION_MODE}"`. On `action: stop` or `action: error`,
    leave the loop and go to step 3. On `action: dispatch`, continue. Extract
    `plan_branch` from the decision JSON — it is the single branch ALL phases
    of this plan commit to.
@@ -255,8 +287,9 @@ Repeat until a stop condition fires:
    phases).
 5. **Dispatch a fresh-context agent** with that handoff (sub-agent, CLI, or
    human-relayed). Wait for it to finish.
-6. **Verify from artifacts.** Re-run `delivery-run-next.py` (and read the phase
-   row / checkpoint) and apply the [verification rules](#3-verify-each-phase-from-artifacts).
+6. **Verify from artifacts.** Re-run `agent-skills plan-next
+   "${CACHE_DIR}/<work-key>" --mode "${EXECUTION_MODE}"` (and read the phase row /
+   checkpoint) and apply the [verification rules](#3-verify-each-phase-from-artifacts).
 7. **Record one line** of progress (phase id → result) and loop. Keep the
    runner's own context lean: a pointer plus one-line notes, never the phase's
    full output.
@@ -362,6 +395,8 @@ or memory write ran unless it actually ran.
 
 - Lifecycle:
 - Work key:
+- Execution mode: <LIGHT | STANDARD | RIGOROUS>
+- Phase budget: <S | M | L>; eligible sizes: <list>; mandatory gates: enabled
 - Plan index: <path to phased-plan/README.md>
 - Phases dispatched this run: <ids, in order>
 - Phases completed: <n> / <total>
@@ -397,7 +432,7 @@ or memory write ran unless it actually ran.
 - [ ] `start-task.sh` ran before reading the plan; `finish-task.sh` is reflected
   in the lifecycle receipt (once for the whole run), or the status explains why.
 - [ ] The runner read `phased-plan/README.md` as the dispatch source of truth and
-  used `delivery-run-next.py` for each decision.
+  used `delivery-run-next.py` with the selected mode for each decision.
 - [ ] Each phase ran in a fresh-context agent; the runner did not load any
   executor skill into its own context or implement a phase itself.
 - [ ] Each phase's `recommended_owner` skill was resolved (file read) before

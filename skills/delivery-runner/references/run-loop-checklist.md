@@ -9,7 +9,10 @@ phase. They never trigger their own review loop and never re-plan.
 - [ ] `start-task.sh --skill delivery-runner=<version>` ran.
 - [ ] The task cache dir is resolved and contains both
       `phased-plan/README.md` and `destination.md`.
-- [ ] `delivery-run-next.py "<cache-dir>/<work-key>"` returns `action: dispatch`
+- [ ] Execution mode is resolved (`STANDARD` when omitted), recorded for the
+      run summary, and passed unchanged to every `plan-next` invocation.
+- [ ] `agent-skills plan-next "<cache-dir>/<work-key>" --mode "${EXECUTION_MODE}"`
+      returns `action: dispatch`
       (not a first-decision `stop` / `error`). If it stops, report and exit —
       there is nothing to run autonomously.
 - [ ] No phase is `in-progress` from another active agent/runner (concurrency
@@ -18,8 +21,11 @@ phase. They never trigger their own review loop and never re-plan.
 
 ## Per iteration (per phase)
 
-- [ ] Re-ran `delivery-run-next.py`; acted on its `action`
+- [ ] Re-ran `agent-skills plan-next "<cache-dir>/<work-key>" --mode
+      "${EXECUTION_MODE}"`; acted on its `action`
       (`dispatch` / `stop` / `error`).
+- [ ] Confirmed the pointed phase size is eligible for the selected mode; an
+      ineligible pointer stops the run without skipping ahead.
 - [ ] For `dispatch`: the `recommended_owner` `SKILL.md` was loaded by file read
       from the canonical skill source and its `name` matches.
 - [ ] The phase file was safety-screened (no forbidden destructive action, no

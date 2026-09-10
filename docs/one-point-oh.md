@@ -91,6 +91,11 @@ Rules that hold across all of them:
 - A `--json` invocation that fails still exits with the code from the tables above; the error
   goes to stderr.
 
+`plan-next` also emits JSON. Its pre-RC2 fields remain compatible; adaptive
+execution adds `execution_mode` (string) and `execution_contract` (object).
+Omitting `--mode` is `STANDARD`. Invalid modes exit `2`; a phase above the
+selected mode's size budget is a successful stop decision, not a skipped phase.
+
 ## Error semantics
 
 - A classification leads every failure message; a raw underlying error (a `git fatal:` line, a
