@@ -318,6 +318,10 @@ sec "Mutation probes"
 PROBE_DIR="$BOX/probe"
 mkdir -p "$PROBE_DIR"
 cp "$PM" "$PROBE_DIR/project-memory.py"
+# The sandbox needs the redaction module too. Without it the weakened build dies
+# on import, refuses everything, and the probe reads as "the guard held" when in
+# fact nothing ran.
+cp "$REPO/scripts/guard_audit.py" "$PROBE_DIR/guard_audit.py"
 
 # Probe 1: restore the pre-fix `exists()`-driven deletion.
 python3 - "$PROBE_DIR/project-memory.py" <<'PY'
@@ -367,6 +371,10 @@ fi
 # check earns its place by turning an unhandled OSError into a message that says
 # which path was refused and why, not by being the only thing standing there.
 cp "$PM" "$PROBE_DIR/project-memory.py"
+# The sandbox needs the redaction module too. Without it the weakened build dies
+# on import, refuses everything, and the probe reads as "the guard held" when in
+# fact nothing ran.
+cp "$REPO/scripts/guard_audit.py" "$PROBE_DIR/guard_audit.py"
 python3 - "$PROBE_DIR/project-memory.py" <<'PY'
 import pathlib
 import re

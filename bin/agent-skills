@@ -71,6 +71,11 @@ Context and access
 
 Runtime safety
   guard <subcommand>    Execution Guard: decide before an action runs (see below)
+  redact [--check]      Strip credential-shaped values from text on stdin
+
+Adaptive execution
+  execution-profile     Choose LIGHT / STANDARD / RIGOROUS for a task or phase
+  watchdog [args]       Ask whether a running task is still making progress
 
 Memory and helpers
   memory [args]         Per-project memory (project-memory.py)
@@ -296,6 +301,8 @@ case "${COMMAND}" in
       scripts/install.py scripts/hosts-reconcile.sh scripts/doctor.sh \
       scripts/start-task.sh scripts/finish-task.sh scripts/access.py \
       scripts/guard.py scripts/context.py scripts/tools.py \
+      scripts/redact.py scripts/execution-profile.py \
+      scripts/execution-watchdog.py \
       lib/tools/capabilities.json lib/tools/classes.json; do
       if [ ! -f "${RELEASE_DIR}/${required}" ]; then
         printf 'self-test: missing %s\n' "${required}" >&2
@@ -350,6 +357,7 @@ SELFTEST
   doctor) run_script "scripts/doctor.sh" "$@" ;;
   access) run_script "scripts/access.py" "$@" ;;
   guard) run_script "scripts/guard.py" "$@" ;;
+  redact) run_script "scripts/redact.py" "$@" ;;
   project) run_script "scripts/project-context.py" "$@" ;;
   context) run_script "scripts/context.py" "$@" ;;
   tools) run_script "scripts/tools.py" "$@" ;;
@@ -363,6 +371,8 @@ SELFTEST
   org-memory) run_script "scripts/org-memory.py" "$@" ;;
   telemetry) run_script "scripts/telemetry.py" "$@" ;;
   plan-next) run_script "scripts/delivery-run-next.py" "$@" ;;
+  execution-profile) run_script "scripts/execution-profile.py" "$@" ;;
+  watchdog) run_script "scripts/execution-watchdog.py" "$@" ;;
   locate-config) run_script "scripts/locate-config.py" "$@" ;;
   auth-preflight) run_script "scripts/auth-preflight.py" "$@" ;;
   promote-rules) run_script "scripts/promote-rules.py" "$@" ;;

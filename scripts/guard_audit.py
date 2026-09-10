@@ -51,12 +51,49 @@ _PATTERNS: tuple[tuple[re.Pattern, str], ...] = (
         ),
         r"\1\2" + REDACTED,
     ),
+    # PROBE_ANCHOR_CREDENTIAL_ASSIGNMENT
     (
         re.compile(
             r"(?i)(^|\s)([A-Z0-9_]*(?:TOKEN|SECRET|PASSWORD|PASSWD|APIKEY|API_KEY|"
             r"ACCESS_KEY|PRIVATE_KEY|CREDENTIAL)[A-Z0-9_]*)=[^\s]+"
         ),
         r"\1\2=" + REDACTED,
+    ),
+    # `MYSQL_PWD`, `DB_PASS`, `PGPASS` — the abbreviated spellings the database
+    # clients actually use. A leading segment plus `_` is required so the
+    # shell's own `PWD=` is left alone; redacting the working directory out of
+    # an audit line would make it unreadable to buy nothing.
+    (
+        re.compile(r"(?i)(^|\s)([A-Z0-9]+(?:_[A-Z0-9]+)*_(?:PWD|PASS))=[^\s]+"),
+        r"\1\2=" + REDACTED,
+    ),
+    # A quoted value under a credential-shaped key, which is how an API response,
+    # a config dump, or `psql -A --json` prints one.
+    # PROBE_ANCHOR_JSON_CREDENTIAL_KEY
+    (
+        re.compile(
+            r"""(?i)("[A-Za-z0-9_.\-]*"""
+            r"""(?:password|passwd|secret|token|api[_-]?key|credential|private[_-]?key)"""
+            r"""[A-Za-z0-9_.\-]*"\s*:\s*")[^"]*(")"""
+        ),
+        r"\1" + REDACTED + r"\2",
+    ),
+    # `password: value` and `db_password = value`. The rule above this one only
+    # covers `=`, which left the YAML and libpq spellings intact.
+    (
+        re.compile(
+            r"(?i)\b((?:[a-z0-9]+[_.\-])*(?:password|passwd|secret)s?)"
+            r"""(\s*[:=]\s*)(?!\s)([^\s,;"']+)"""
+        ),
+        r"\1\2" + REDACTED,
+    ),
+    # `mysql -u root -phunter2` — the attached short flag. Anchored to the mysql
+    # client family because a bare `-p` means something different almost
+    # everywhere else (`mkdir -p`, `grep -p`, `ssh -p 22`).
+    # PROBE_ANCHOR_ATTACHED_PASSWORD_FLAG
+    (
+        re.compile(r"(?i)\b(mysql(?:dump|admin|sh|_config)?\b[^\n]*?\s-p)(?!\s)[^\s]+"),
+        r"\1" + REDACTED,
     ),
     (
         re.compile(
@@ -94,6 +131,18 @@ _PATTERNS: tuple[tuple[re.Pattern, str], ...] = (
             r"x-amz-signature|se|sp|sv)=)[^&\s\"']+"
         ),
         r"\1" + REDACTED,
+    ),
+    # Prose: "connection failed using password hunter2Xy9q against db.internal".
+    # A client that reports its own failure this way is exactly the shape that
+    # leaked in the field, and none of the key=value rules above see it.
+    #
+    # Deliberately narrow, because this one has real false-positive potential.
+    # The candidate must be at least eight characters and contain a digit, which
+    # keeps "password rotation is due", "password field is required", and
+    # "password expires in 30 days" intact while catching a generated value.
+    (
+        re.compile(r"(?i)\b(password|passwd)(\s+)(?=\S*\d)\S{8,}"),
+        r"\1\2" + REDACTED,
     ),
 )
 

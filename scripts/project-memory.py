@@ -42,6 +42,12 @@ import sys
 from datetime import datetime, timezone
 from pathlib import Path
 
+# One redaction implementation for the whole project, in guard_audit. Project
+# memory outlives the task that wrote it and is read back into every later
+# agent's starting context, so a credential landing here is a credential that
+# keeps arriving.
+from guard_audit import redact
+
 DEFAULT_SECTIONS = (
     "Project facts",
     "Build & runtime",
@@ -179,6 +185,10 @@ def warn_on_slug_collision(js: Path, project: str) -> None:
 
 
 def append_note(pdir: Path, section: str, text: str) -> None:
+    # Redacted at the choke point rather than at each caller, so `finish-task
+    # --summary`, `--gotcha`, `--build-runtime`, and `--fact` are all covered by
+    # one guarantee instead of four that have to be remembered separately.
+    text = redact(text)
     md = pdir / "memory.md"
     if not md.exists():
         raise SystemExit(f"FAIL memory.md missing at {md}; run 'init' first")

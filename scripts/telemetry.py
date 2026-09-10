@@ -29,6 +29,8 @@ from collections import defaultdict
 from datetime import datetime, timezone
 from pathlib import Path
 
+from guard_audit import redact
+
 KNOWN_EVENTS = {
     "invoked",
     "loop_round",
@@ -68,7 +70,13 @@ def emit(cache_root: Path, project: str, event: str, fields: dict) -> Path:
     path = telemetry_path(cache_root, project)
     path.parent.mkdir(parents=True, exist_ok=True)
     payload = {"at": now_iso(), "project": project, "event": event}
-    payload.update(fields)
+    # Counters and enums are the intended content and nothing here should ever
+    # be free-form. `--field` accepts arbitrary text, though, so the string
+    # values are redacted rather than trusted: this log is append-only, so a
+    # value written by mistake cannot be edited out afterwards.
+    payload.update(
+        {key: redact(value) if isinstance(value, str) else value for key, value in fields.items()}
+    )
     with path.open("a", encoding="utf-8") as fp:
         fp.write(json.dumps(payload, separators=(",", ":")) + "\n")
     return path
