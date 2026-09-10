@@ -3,7 +3,18 @@
 #
 # Run this AFTER the GitHub repository visibility has been changed to private.
 # It is the evidence that the distribution contract works against an
-# authenticated private source, and it is a precondition for `1.0.0-rc.1`.
+# authenticated private source, and it is a precondition for every release from
+# `1.0.0-rc.1` onward.
+#
+# ORDERING. This suite installs from the REMOTE, so it can only certify a
+# version whose tag has been pushed. Run against a working tree whose VERSION
+# is not yet tagged, the version assertions fail by construction — the remote
+# advertises the previous release and that is the one that gets installed.
+# That is not a defect in the build under test; it means this suite runs
+# AFTER the tag, not before. Everything it checks that does not depend on the
+# version — authenticated access, clean install, doctor, verify, provider
+# selection, host registration, guard coherence, token non-disclosure, and
+# isolation from the real installation — is still meaningful beforehand.
 #
 #   bash scripts/test-private-source.sh
 #
@@ -489,5 +500,5 @@ if [ "${FAIL}" -eq 0 ]; then
   exit 0
 fi
 printf 'PRIVATE_SOURCE_DISTRIBUTION_READY: NO\n' >&2
-printf 'Fix the failures above before cutting 1.0.0-rc.1.\n' >&2
+printf 'Fix the failures above before cutting %s.\n' "${VERSION}" >&2
 exit 1

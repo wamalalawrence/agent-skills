@@ -168,7 +168,86 @@ false confidence:
 | `test-context-optimizer.sh` | 105 passed |
 | `test-front-door-skill.sh` | 63 passed |
 | `test-cli-install.sh` | 107 passed |
+| `test-global-install.sh` | 112 passed |
 | `test-release-engine.py` | pass |
+
+### Release readiness
+
+`bash scripts/test-release-readiness.sh` — **83 of 83 checks passed**, exit `0`. Section 3 now
+runs nine suites rather than six; the three new ones are registered there and in CI.
+
+**One release blocker found and fixed.** Section 6 installs the *previous* release tag to
+exercise upgrade mechanics and state preservation. That tag is now `v1.0.0-rc.1` — itself a
+pre-release — and the local provider correctly refuses to install an `rc` version under the
+default `stable` channel:
+
+```text
+FAIL  v1.0.0-rc.1 install
+      agent-skills: source ... holds a rc release (1.0.0-rc.1), not a stable one
+        pass --channel rc to install it
+FAIL  v1.0.0-rc.1 registration
+```
+
+The same class `rc.1` fixed for current-tree installs, on a path that fix did not reach because
+the predecessor had never been a pre-release before. The channel is now derived from the
+predecessor's own `VERSION`. **No product change** — the provider's channel gate is untouched
+and the guard was doing its job.
+
+### Private-source acceptance (Stage B)
+
+`bash scripts/test-private-source.sh` — run against the private remote with an authenticated
+account, installing from the **remote** into a throwaway `HOME`. **38 passed, 3 failed.**
+
+| Criterion | Result |
+| --- | --- |
+| `PRIVATE_REPOSITORY_ACCESS` | PASS |
+| `CLEAN_PRIVATE_INSTALL` | PASS |
+| `AGENT_SKILLS_DOCTOR` | PASS |
+| `AGENT_SKILLS_VERIFY` | PASS |
+| `PRIVATE_UPDATE_PATH` | PASS |
+| `RELEASE_PROVIDER` | git |
+| `HOST_REGISTRATION` | PASS (8/8 host directories) |
+| `EXISTING_STATE_ISOLATION` | PASS — the real installation's manifest and active release unchanged |
+| `AUTHENTICATION_REQUIRED_BEHAVIOR` | PASS — exits `3`, does not hang, echoes no token |
+| `INSTALLED_VERSION` | 1.0.0-rc.1 (expected 1.0.0-rc.2) |
+| `EXECUTION_GUARD_COHERENCE` | FAIL |
+
+**All three failures are one fact: `v1.0.0-rc.2` is not tagged on the remote yet.** This suite
+installs from the remote, so it resolves the latest release on the `rc` channel — which is
+`v1.0.0-rc.1` — and then asserts the installed version equals the local `VERSION`. The guard
+check fails for the same reason and nothing else: the hook resolved correctly to
+`versions/1.0.0-rc.1/bin/agent-skills`, inside the sandbox, which is the right behaviour for the
+release that was actually installed. Its own sibling assertion, that the hook resolves inside the
+sandbox's install root rather than the real machine, passed.
+
+So this suite runs **after** the tag, not before, and the comment block at the top of the script
+now says so. Everything it checks that does not depend on the version is meaningful now and
+passed: authenticated access to a private repository, a clean install from the remote into a
+throwaway `HOME`, `doctor`, `verify`, provider selection, the update path, host registration,
+token non-disclosure across install / doctor / verify / update output, and isolation from the
+real installation on this machine.
+
+**Re-run this after tagging** and confirm it prints `PRIVATE_SOURCE_DISTRIBUTION_READY: YES`
+before publishing the npm bootstrap.
+
+### Publication ordering — a constraint worth stating
+
+[The 1.0 contract](../../docs/one-point-oh.md#npm-bootstrap) freezes bootstrap and runtime in
+lockstep: `npm/package.json` version equals the repository `VERSION` equals the git tag equals
+the manifest inside the payload, **always**.
+
+The npm package is a thin installer that fetches the runtime from the private git repository by
+tag. Publishing `@wamalalawrence/agent-skills@1.0.0-rc.2` without a `v1.0.0-rc.2` git tag would
+therefore ship a bootstrap that advertises a version it cannot install: it would resolve the
+latest release on the `rc` channel and install `1.0.0-rc.1` instead, which is exactly the
+mismatch recorded above.
+
+The tag has to exist before the npm publish. A GitHub *Release page* is a separate, optional
+decision — the git provider resolves from tags, not from Release objects — so the prerelease
+page can be skipped without breaking anything.
+
+For the record, `v1.0.0-rc.1` currently exists on the remote as **both** a git tag and a GitHub
+prerelease.
 
 Three new validator warnings appeared during development and all three were removed rather than
 accepted. Two came from writing a regex character class for "A to Z, 0 to 9" the long way: the
