@@ -10,15 +10,22 @@ skill versions) plus the outcome (`merged`, `reverted`, `hotfixed`, `blocked`,
   2. A telemetry event (`outcome`) carrying the structured payload.
   3. (For non-success outcomes) a `Lesson` line in project memory under
      "Common gotchas" so the next task on the same project sees it on read.
-  4. (When --promote-to-org is set with --confirmed-in N>=2) a copy into org
-     memory under "Outcomes" with provenance attribution.
+  4. (When --promote-to-org is set with --confirmed-in <project,project,...>)
+     a copy into org memory under "Outcomes" with provenance naming every
+     project the pattern was observed in.
+
+Promotion is derived from observations, not asserted by a count. Each project
+named in --confirmed-in must have a project memory on disk under this cache
+root, and there must be at least two distinct projects including --project.
+The old `--confirmed-in N` integer form is refused: a number the caller typed
+proved nothing about where the pattern had been seen.
 
 It does **not** open issues, push code, or run git. Callers feed the outcome.
 
 Subcommands:
   record --project P --issue K --outcome O --skills S=v[,S=v...]
          [--summary "one-line"] [--blast-radius N] [--lesson "text"]
-         [--promote-to-org --confirmed-in N]
+         [--promote-to-org --confirmed-in proj-a,proj-b]
 
   list   --project P [--since ISO]
                               Print recent outcomes for one project.
@@ -86,6 +93,50 @@ def call_org_promote(
     subprocess.run(args, check=True)
 
 
+def projects_root(cache_root: str | None) -> Path:
+    base = cache_root or os.environ.get("AGENT_SKILLS_CACHE_DIR")
+    if not base:
+        base = str(Path(os.environ.get("WORKSPACE_ROOT") or os.getcwd()) / ".cache" / "agent-skills")
+    return Path(base) / "_projects"
+
+
+def confirmed_projects(project: str, spec: str | None, cache_root: str | None) -> list[str]:
+    """Resolve and verify the projects a pattern was observed in.
+
+    The caller names them; this checks each one exists as a project memory
+    under the cache root, so the count in the org-memory bullet is derived from
+    stores that are actually there rather than typed in.
+    """
+    if not spec or not spec.strip():
+        raise SystemExit(
+            "FAIL --promote-to-org requires --confirmed-in <project,project,...>: the "
+            "projects the pattern was observed in, at least two including --project"
+        )
+    if spec.strip().isdigit():
+        raise SystemExit(
+            "FAIL --confirmed-in takes project names, not a count: a number proves nothing "
+            "about where the pattern was seen"
+        )
+    names = {slugify(project)}
+    for part in spec.split(","):
+        part = part.strip()
+        if part:
+            names.add(slugify(part))
+    root = projects_root(cache_root)
+    missing = sorted(name for name in names if not (root / name / "memory.md").exists())
+    if missing:
+        raise SystemExit(
+            f"FAIL --confirmed-in names project(s) with no memory under {root}: "
+            f"{', '.join(missing)} — a project this workspace has never recorded cannot "
+            f"have confirmed anything"
+        )
+    if len(names) < 2:
+        raise SystemExit(
+            "FAIL --promote-to-org needs at least two distinct projects including --project"
+        )
+    return sorted(names)
+
+
 def parse_skills(spec: str) -> dict[str, str]:
     out: dict[str, str] = {}
     for part in spec.split(","):
@@ -128,14 +179,12 @@ def cmd_record(args: argparse.Namespace) -> int:
         call_project_memory(args.project, "Common gotchas", lesson, args.cache_root)
 
     if args.promote_to_org:
-        if args.confirmed_in is None or args.confirmed_in < 2:
-            raise SystemExit(
-                "FAIL --promote-to-org requires --confirmed-in N where N >= 2"
-            )
+        projects = confirmed_projects(args.project, args.confirmed_in, args.cache_root)
         call_org_promote(
-            args.project,
+            ",".join(projects),
             "Outcomes",
-            f"{args.outcome} pattern observed in {args.confirmed_in} projects: {summary}",
+            f"{args.outcome} pattern observed in {len(projects)} projects "
+            f"({', '.join(projects)}): {summary}",
             args.cache_root,
         )
 
@@ -193,7 +242,11 @@ def main(argv: list[str] | None = None) -> int:
     sp.add_argument("--blast-radius", type=int, default=None)
     sp.add_argument("--lesson", default=None)
     sp.add_argument("--promote-to-org", action="store_true")
-    sp.add_argument("--confirmed-in", type=int, default=None)
+    sp.add_argument(
+        "--confirmed-in",
+        default=None,
+        help="Comma-separated project names the pattern was observed in (verified on disk).",
+    )
     sp.set_defaults(func=cmd_record)
 
     sp = sub.add_parser("list")

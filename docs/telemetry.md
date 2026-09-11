@@ -34,13 +34,22 @@ the `--field K=V` pairs supplied by the caller.
 | `loop_round` | A producer-reviewer round started/finished. | `skill`, `reviewer`, `round` |
 | `handoff` | One skill handed off to another. | `from`, `to`, `reason` |
 | `finding` | A reviewer / investigator emitted a finding. | `skill`, `severity` |
-| `stopped` | A skill stopped on missing context. | `skill`, `reason` |
-| `completed` | A skill finished its contract for this task. | `skill`, `issue` |
+| `stopped` | A skill stopped on missing context. | `skill`, `reason`, `closeout` |
+| `completed` | A skill finished its contract for this task. | `skill`, `issue`, `evidence`, `verified_delivery` |
 | `artifact` | A durable artifact was produced. | `skill`, `kind`, `path` |
 | `outcome` | An outcome was recorded for the task. | `outcome`, `issue` |
 
 Custom event names are accepted; `report` lists unknown ones separately so
 they can be folded back into this table.
+
+`finish-task` adds three fields from `1.0.0`. `evidence` is `definition-of-done`,
+`evidence-pack`, or `none` — what was on disk for the task at closeout. `verified_delivery` is
+`yes` when `dod-check` accepted the artifact, `no` when it did not or nothing was there, and
+`n/a` for a status other than `complete` / `pr-opened`. `closeout=fallback` marks a record
+written by the session-stop hook's `--if-open` path rather than by the agent. A rising share of
+`completed` events with `verified_delivery=no` is the first thing to look at in a release's
+telemetry review: it means closeouts are being recorded as done without the artifact that would
+show it.
 
 ## CLI
 

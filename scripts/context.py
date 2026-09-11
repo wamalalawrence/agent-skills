@@ -2092,6 +2092,23 @@ class Symbol:
     start_line: int
     end_line: int
     indent: int
+    # The span was cut at SYMBOL_SPAN_CAP lines and the body continues past it.
+    capped: bool = False
+    # Decorator / annotation lines pulled into the span above the declaration.
+    decorators: int = 0
+
+
+# Symbol spans are inferred from indentation, not parsed. This is deliberate —
+# no language toolchain is a dependency — and it is also why every span is
+# marked approximate and a long one is capped rather than trusted.
+SYMBOL_SPAN_CAP = 400
+SYMBOL_SPAN_NOTE = (
+    "symbol spans are inferred from indentation, not parsed: a span may end "
+    "early or run into the next declaration, and a [span-capped] fragment was "
+    "cut at %d lines — expand the exact target before editing or concluding"
+    % SYMBOL_SPAN_CAP
+)
+DECORATOR_RE = re.compile(r"^\s*(?:@\w|#\[|\[[A-Z]\w*)")
 
 
 def parse_symbols(lines: list[str]) -> list[Symbol]:
@@ -2118,7 +2135,20 @@ def parse_symbols(lines: list[str]) -> list[Symbol]:
             if following.indent <= symbol.indent:
                 end = following.start_line - 1
                 break
-        symbol.end_line = max(symbol.start_line, min(end, symbol.start_line + 400))
+        cap = symbol.start_line + SYMBOL_SPAN_CAP
+        symbol.capped = end > cap
+        symbol.end_line = max(symbol.start_line, min(end, cap))
+    # Decorators and annotations sit above the declaration at the same
+    # indentation. They are part of the symbol — a `@transactional` or a
+    # `@pytest.fixture` changes what the body means — so the span starts at
+    # the first of them rather than at the `def`.
+    for position, symbol in enumerate(found):
+        floor = found[position - 1].end_line if position else 0
+        start = symbol.start_line
+        while start - 1 > floor and DECORATOR_RE.match(lines[start - 2]):
+            start -= 1
+        symbol.decorators = symbol.start_line - start
+        symbol.start_line = start
     return found
 
 
@@ -2184,6 +2214,9 @@ def select_source(source: SourceInput, terms: list[Term], options: PackOptions) 
             score = 30 + score_hits(hits) - (10 if generated else 0)
             body = lines[symbol.start_line - 1:symbol.end_line]
             counter += 1
+            flags = ["generated"] if generated else []
+            if symbol.capped:
+                flags.append("span-capped")
             selection.fragments.append(
                 Fragment(
                     identifier=f"f{counter}",
@@ -2192,9 +2225,11 @@ def select_source(source: SourceInput, terms: list[Term], options: PackOptions) 
                     text="\n".join(body),
                     start_line=symbol.start_line,
                     end_line=symbol.end_line,
-                    flags=["generated"] if generated else [],
+                    flags=flags,
                 )
             )
+    if matched and SYMBOL_SPAN_NOTE not in selection.notes:
+        selection.notes.append(SYMBOL_SPAN_NOTE)
 
     # In-file call sites of a matched symbol: one line each, cheap and useful.
     reference_lines: list[tuple[int, str]] = []

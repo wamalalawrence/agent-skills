@@ -139,10 +139,19 @@ Independent work may run at the same time. `plan-next` proposes a `parallel_grou
 - both phases marked `parallel_safe`;
 - each lists the other in `parallel_with` — a one-sided claim means one phase was written
   without the other in mind, which is exactly when they collide;
-- declared `mutation_targets` are disjoint.
+- declared `mutation_targets` are disjoint **after normalisation** — the same path spelled
+  differently (`./src/api`, `src/./api`) is one path, and a parent contains its children:
+  `src/api` beside `src/api/handler.ts` is the same write.
 
 A phase that does not declare `mutation_targets` is treated as writing everything. Silence is
-not a safety claim.
+not a safety claim. A target that cannot be proven independent — an absolute path, a path that
+escapes the repository (`../elsewhere`), an empty value — disqualifies its phase from any group
+rather than being compared as text.
+
+A target is either a repository-relative path or a named resource (`db:orders`,
+`port:8080`, `cache://sessions`). Paths overlap by containment; resources overlap by identity,
+case-insensitively. Declare shared generated outputs, indexes, databases, and test resources as
+targets too: a worktree isolates files, not the database both phases migrate.
 
 Safe by construction: inspect CI, inspect Sentry, read AWS logs, gather database evidence — four
 readers, four separate evidence files, no shared writes.

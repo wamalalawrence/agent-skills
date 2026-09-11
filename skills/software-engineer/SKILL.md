@@ -20,7 +20,7 @@ compatibility: >-
   .agent-skills.yml). See docs/execution-modes.md.
 metadata:
   author: wamalalawrence
-  version: "1.0.0-rc.4"
+  version: "1.0.0"
   homepage: "https://github.com/wamalalawrence/agent-skills"
 argument-hint: "<the change to make — a ticket key, a bug, or a described feature>"
 user-invocable: true
@@ -39,7 +39,7 @@ it detects the project and task id, then prints org memory, project memory, the 
 knowledge base, and a capability report:
 
 ```bash
-agent-skills start-task --skill software-engineer
+agent-skills start-task --skill software-engineer --brief "<one-line task brief>"
 ```
 
 **The output IS your starting context.** Do not re-discover what it just told you. Treat every
@@ -529,8 +529,14 @@ the defect deterministically.
   `${AGENT_SKILLS_CACHE_DIR:-${WORKSPACE_ROOT:-$REPO_ROOT}/.cache/agent-skills}/<issue-key>/repro-recipe.yml`
   per the [evidence-pack & repro-recipe schema](./references/evidence-pack.md).
 - [ ] **Write the failing regression test FIRST.** Commit it as the first commit on the branch
-  (e.g., `test: failing test for <TICKET>`). The test must fail on the parent commit and pass on the
-  fix commit. The reviewer will verify this by checking out the parent.
+  (e.g., `test: failing test for <TICKET>`). Demonstrate RED against the **unfixed implementation
+  with the new test present**: run the test on that test-only commit (or an isolated baseline with
+  the test transplanted), confirm it ran and failed for the expected behavioural assertion, and
+  record the command, revision, exit code, and assertion as `checks.regression_red` in the
+  Definition of Done. A missing test, zero collected tests, a setup error, or an unrelated failure
+  is not RED. Then run the same test on the fix and record GREEN. The reviewer re-runs both on the
+  same baselines; a parent commit that does not contain the test is not a valid one. Full rule:
+  [evidence discipline](../../docs/evidence-discipline.md#red-means-the-test-ran-and-failed-for-the-right-reason).
 - [ ] If the bug cannot be reproduced or no failing test can be written, escalate via
   `issue-investigator`'s _Recommended Next Action_ instead of guessing at a fix.
 - [ ] Skip this gate only for: pure refactors, formatting, docs, or new features without a reported
@@ -641,8 +647,9 @@ resilience, and a worked mock-heavy vs behaviour-oriented example:
 [developer testing](./references/developer-testing.md).
 
 For bug fixes this does not replace [1.5](#15-reproduce-before-fix-gate-bug-fixes-only): the failing
-regression test still comes first and still must fail on the parent commit. These six decisions
-choose *what level and shape* that regression test takes.
+regression test still comes first and still must be shown failing against the unfixed
+implementation with the test present. These six decisions choose *what level and shape* that
+regression test takes.
 
 ### 2.5 Inner-loop code review (call `code-reviewer`)
 
@@ -662,8 +669,9 @@ before treating the review as issue-aware.
   fewer blocker/major findings than the previous one. If the loop is not converging
   (`Loop: not-converging` or `Loop: max-rounds`), stop and surface a summary to the user instead of
   grinding indefinitely.
-- For bug fixes, reference the failing-test commit from Phase 1.5 in the evidence pack so the
-  reviewer can verify it fails on the parent commit and passes on the fix.
+- For bug fixes, reference the test-only commit from Phase 1.5 in the evidence pack so the
+  reviewer can re-run the regression test on that baseline (test present, fix absent) and on
+  the fix.
 
 **Auto-iterate, do not hand each round back to the user.** The engineer owns the inner loop;
 the user is the loop's escalation path, not its driver. After each reviewer round, dispatch on
@@ -876,6 +884,15 @@ must not run with unresolved reviewer findings.
 - [ ] API endpoints documented and protected?
 - [ ] Migration scripts safe and idempotent?
 - [ ] If build/run/configuration behavior changed, README/setup docs updated?
+- [ ] If an API, configuration, build/run procedure, or user workflow changed: which document or
+  generated specification owns that contract? Updated it, or recorded why no update applies, and
+  ran the existing generator/contract check — recorded as `checks.docs_contract`. No second
+  source of truth, no unrelated rewrite.
+- [ ] If user-visible UI changed: reused the project's canonical design tokens, components, and
+  design references; validated the affected states at the relevant viewport and theme with the
+  project's existing visual/accessibility checks — recorded as `checks.ui_visual`. Changed
+  visual baselines reviewed one by one, never approved wholesale. Backend-only work records
+  `not_applicable`.
 - [ ] If the service health model changed, health checks and operational logging still make sense?
 
 ### 4.2 Cross-project impact
@@ -911,20 +928,32 @@ must not run with unresolved reviewer findings.
 Write
 `${AGENT_SKILLS_CACHE_DIR:-${WORKSPACE_ROOT:-$REPO_ROOT}/.cache/agent-skills}/<issue-key>/definition-of-done.json`
 per [definition-of-done.md](./references/definition-of-done.md). The reviewer reads this file as
-part of its hard-handoff contract and must not declare `PASS` if any `false` flag is missing a
-written waiver.
+part of its hard-handoff contract and runs `agent-skills dod-check` on it; it must not declare
+`PASS` unless the check verifies. Completion is not verification: a lifecycle closeout records
+what happened, and this artifact is what establishes that the delivery checks passed
+([evidence discipline](../../docs/evidence-discipline.md#completion-is-not-verification)).
 
-- [ ] Build, tests, format, lint/static analysis, security scan all `passed: true` or explicitly
-  waived.
-- [ ] For bug fixes: `bug_fix.is_bug_fix: true`, `regression_test_commit` set,
-  `fails_on_parent: true`, `passes_on_head: true`, `repro_recipe_path` populated,
+- [ ] Every required check — `build`, `tests`, `format`, `lint_or_static_analysis`,
+  `security_scan` — recorded as `pass` with its execution record (command, cwd, revision =
+  `head_sha`, exit code, evidence locator), or `not_applicable` with a reason. A `fail` or
+  `not_run` stays as written and needs a waiver from a named authority; never invent a pass,
+  and never waive a classification because it is `false`.
+- [ ] Reuse an observed result only when its inputs are unchanged, and mark it `reused: true`.
+- [ ] For bug fixes: `classification.is_bug_fix: true`, `checks.regression_red` with the
+  behavioural assertion that failed on the test-present/fix-absent baseline,
+  `checks.regression_green` on `head_sha`, `repro_recipe_path` populated,
   `observability_added` set honestly.
+- [ ] `checks.docs_contract` and `checks.ui_visual` recorded per 4.1 — `pass` with the owning
+  document or the visual check, or `not_applicable` with a reason.
 - [ ] `git.no_no_verify: true` and `git.branch_starts_with_ticket_key: true` for ticket-driven work.
-- [ ] `git.single_jira_issue_scope: true`, `git.primary_jira_key` set, and
-  `git.related_jira_keys` containing context-only linked issues, not independent bundled work.
+- [ ] `git.single_jira_issue_scope: true`, `primary_jira_key` set, and
+  `related_jira_keys` containing context-only linked issues, not independent bundled work.
 - [ ] `git.open_pr_checked_for_existing_work: true` when Jira is in scope.
-- [ ] `git.pushed_to_remote: true` and `git.pr_url` populated before reporting the work as PR-ready.
-- [ ] `scope.shared_library_changed` truthful; if `true`, list affected downstream consumers.
+- [ ] `git.pushed_to_remote: true` and `pr_url` populated before reporting the work as PR-ready.
+- [ ] `classification.shared_library_changed` truthful; if `true`, list affected downstream
+  consumers.
+- [ ] Run `agent-skills dod-check` on the file and put its one-line result in the lifecycle
+  receipt. `NOT verified` means the change is not PR-ready, whatever the summary says.
 - [ ] **`safety_acknowledgement` block written truthfully.** Required whenever the change
   introduces or performs any mutating action against a deployed environment, or touches
   credentials / IAM / secrets / backups / monitoring / network policy. Capture the

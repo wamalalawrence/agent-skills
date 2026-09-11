@@ -131,6 +131,15 @@ jobs:
       - name: Adaptive execution, concurrency, and watchdog
         run: bash scripts/test-adaptive-execution.sh
 
+      # The boundary between "an agent said so" and recorded knowledge:
+      # confidence rises only on a distinct observation, a contradiction
+      # disputes rather than refreshes, decay is idempotent, recall honours
+      # its budget frame included, lesson updates hold their lock, a closeout
+      # is not verified delivery, and the stop-hook fallback is a no-op after
+      # a normal finish. Three mutation probes remove one guarantee each.
+      - name: Memory integrity
+        run: bash scripts/test-knowledge.sh
+
       # A pack must never carry a credential into the model's context. Probed
       # here as well as in the suite, because this is the property whose failure
       # is silent: nothing breaks, the secret is simply in the transcript.

@@ -6,10 +6,13 @@ implementers with reviewers, requirements with testers, and tests with code revi
 document defines how those loops are wired across the repo and, more importantly, how they
 **terminate** so the agent never spins forever.
 
-> **TL;DR.** Every cross-skill review loop in this repo is **bounded to one revision round** by
-> default. The producing skill proposes, the reviewer skill validates, the producer revises
-> at most once, and then the artifact ships with any remaining issues recorded as
-> `Open Questions` / `Follow-ups` rather than triggering another round.
+> **TL;DR.** Every cross-skill review loop in this repo is **bounded** — to one revision round
+> by default, to `${CODE_REVIEWER_MAX_ROUNDS}` for the engineer↔reviewer loops. The producing
+> skill proposes, the reviewer skill validates, the producer revises within the bound, and then
+> the loop stops. **A bound ends autonomous iteration; it does not end the obligation to resolve
+> a blocking finding.** What survives the last round ships as `Open Questions` / `Follow-ups`
+> only when it is explicitly non-blocking (`minor`, `nit`, an open product question). A
+> surviving `blocker` or `major` stops the workflow and goes to the user.
 
 ## Why this exists
 
@@ -23,7 +26,9 @@ Without explicit bounds, two failure modes are common in multi-skill agents:
    "review" was decorative.
 
 Both are avoided by the same rule: **each loop has a producer, one reviewer pass, one revision
-window, and a written "ship with follow-ups" exit.**
+window, and a written exit** — either "converged", or "stopped with these unresolved items, of
+which these are blocking". The exit names the severity boundary every time, because a
+"ship with follow-ups" exit that does not is how a blocker becomes a TODO.
 
 ## Wired loops
 
@@ -57,8 +62,10 @@ Each entry: producer → reviewer (mode), trigger, exit rule.
 - **`test-automation-engineer` → `code-reviewer` (`manual` mode, `test-quality`
   profile — shared fundamentals plus the automation and system-test layer).** Trigger:
   after step 6 "Review automation value", before merging the new tests. Exit: one revision
-  round on the new test files; surviving findings ship as inline TODOs with linked
-  follow-up issues.
+  round on the new test files; surviving `minor` / `nit` findings ship as inline TODOs with
+  linked follow-up issues. A surviving `blocker` or `major` — a test that asserts the wrong
+  behaviour, a flaky assertion, a production credential in a fixture — does not ship; the
+  engineer stops and surfaces it.
 - **Developer tests are reviewed inside the existing engineer↔reviewer loops, not by a
   separate one.** `code-reviewer` applies the same `test-quality` profile — shared
   fundamentals plus the developer-test layer — to any inner-, outer-, or PR-mode diff that

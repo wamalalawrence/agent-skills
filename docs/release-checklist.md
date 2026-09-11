@@ -11,11 +11,14 @@ One command runs the mechanical half of this list, so the evidence recorded in
 bash scripts/test-release-readiness.sh
 ```
 
-It covers the structural validators, syntax across every shipped artifact, all nine test suites,
+It covers the structural validators, syntax across every shipped artifact, all ten test suites,
 the CLI surface, a clean-`HOME` install with drift and uninstall, an upgrade from the previous
 release tag in both the legacy-workspace and global-install shapes, cloud/in-repo mode, the
 public-safety sweep, README and link integrity, the telemetry report, and version consistency.
-Section 3 runs all nine test suites, including
+Section 3 runs all ten test suites, including
+[`test-knowledge.sh`](../scripts/test-knowledge.sh) (added in `1.0.0`: observation integrity,
+contradiction and decay, budget accounting, lock serialisation, `dod-check`, the idempotent
+stop-hook fallback, and promotion provenance, with three mutation probes),
 [`test-context-optimizer.sh`](../scripts/test-context-optimizer.sh) and its five mutation probes,
 [`test-guard.sh`](../scripts/test-guard.sh) with its adversarial corpus, false-positive
 corpus, host-adapter checks, and seven mutation probes, and the three added in `1.0.0-rc.2`:
@@ -64,16 +67,21 @@ adapters, or any rule the guard enforces.
 - [ ] Grep the release diff for any new output path that could carry a raw command line into a
       log, an error message, or telemetry.
 
-## Adaptive Execution, Watchdog, and Secret Boundary
+## Adaptive Execution, Watchdog, Secret Boundary, and Memory Integrity
 
 Required whenever this release changes `scripts/execution-profile.py`,
-`scripts/execution-watchdog.py`, `scripts/redact.py`, `scripts/guard_audit.py`'s pattern set, or
+`scripts/execution-watchdog.py`, `scripts/redact.py`, `scripts/guard_audit.py`'s pattern set,
+`scripts/durable.py`, `scripts/knowledge.py`, `scripts/dod-check.py`, the lifecycle wrappers, or
 the durable write paths that redact.
 
 - [ ] Run `bash scripts/test-adaptive-execution.sh` and confirm it exits `0`. Record the pass
       count in `eval-runs/<release>/summary.md`.
 - [ ] Run `bash scripts/test-secret-boundary.sh` and confirm it exits `0`.
 - [ ] Run `bash scripts/test-lifecycle-fs.sh` and confirm it exits `0`.
+- [ ] Run `bash scripts/test-knowledge.sh` and confirm it exits `0`. Confirm its three mutation
+      probes report the weakened build giving the weaker answer: repeated evidence must inflate
+      confirmations, a contradiction must refresh `verified_at`, and payload-only accounting
+      must overrun the budget.
 - [ ] Confirm every mutation probe in all three reports that the weakened build gives the weaker
       answer. In particular: emptying the escalation table must drop a migration to `LIGHT`,
       removing the mutation-target overlap check must group two writers to one file, and marking
@@ -91,6 +99,9 @@ the durable write paths that redact.
       `AGENT_SKILLS_MAX_PARALLEL` rather than trusting it.
 - [ ] Confirm a plan index written before the appended columns existed still parses and still
       defaults to `STANDARD`. Build one by hand; do not infer it.
+- [ ] Confirm `parallel_group` still refuses a parent beside its child and a dot-segment alias
+      beside its target, and still admits genuinely disjoint siblings. The suite asserts all
+      three; read the assertions.
 
 ## Engineering Tool Capability Framework
 

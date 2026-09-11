@@ -89,6 +89,10 @@ Start here when reading the repository outside GitHub's main README.
 - [Skill boundaries](skill-boundaries.md) - ownership, handoffs, and nested-skill rationale.
 - [Skill review loops](review-loops.md) - how producer skills hand off to reviewer skills
   with **bounded** revision rounds so the agent never spins forever.
+- [Evidence discipline](evidence-discipline.md) - the shared rules for what counts as
+  evidence: completion versus verified delivery, what RED actually proves, the
+  shortcut/response table, recorded knowledge as evidence rather than authority, scope, and
+  the conditional UI and documentation contracts.
 - [Severity and confidence](severity-and-confidence.md) - shared review, defect, and investigation
   vocabulary.
 - [Known limitations](known-limitations.md) - what the skills cannot guarantee.

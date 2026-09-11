@@ -25,7 +25,7 @@ compatibility: >-
   `local-workspace`. See docs/execution-modes.md.
 metadata:
   author: wamalalawrence
-  version: "1.0.0-rc.4"
+  version: "1.0.0"
   homepage: "https://github.com/wamalalawrence/agent-skills"
 argument-hint: "<the request — a ticket key, a PR link, a bug report, or plain prose>"
 user-invocable: true
@@ -57,7 +57,7 @@ it detects the project and task id, then prints org memory, project memory, the 
 knowledge base, and a capability report:
 
 ```bash
-agent-skills start-task --skill wamala
+agent-skills start-task --skill wamala --brief "<one-line task brief>"
 ```
 
 **The output IS your starting context.** Do not re-discover what it just told you. Treat every
@@ -315,8 +315,11 @@ Never invent a destination. If no row matches, go to
 
 ### 4. Verify the owner skill resolves
 
-Before dispatching, read the target's `SKILL.md` from the resolved canonical skill source with
-a file-read tool and confirm its `name:` field matches. Follow the
+Before dispatching, confirm the target's `SKILL.md` exists at the resolved canonical skill
+source and that its frontmatter `name:` field matches — read **only the frontmatter** (the
+first block between `---` lines, under 40 lines), never the workflow body. The owner loads its
+own instructions in the fresh context; loading them here puts a thousand-line specialist into the
+dispatcher's context for nothing and is the cost this design exists to avoid. Follow the
 [owner-skill verification recipe](../../docs/skill-source-resolution.md#owner-skill-verification-recipe).
 
 The host's skill panel is **not** authoritative. A skill missing from an IDE listing is not
@@ -352,9 +355,13 @@ costs a corrupted working tree and a debugging session that starts with "which a
 
 When the agent returns, decide what happened from disk, not from its chat:
 
-- **Done.** The expected artifact exists and is populated — an evidence pack with a plan and
-  validation, a refinement with acceptance criteria, a test plan with scenarios, a PR URL. Record
-  one line and continue.
+- **Done.** The expected artifact exists, is populated, **and its own status says so** — a
+  refinement with acceptance criteria and a `READY` readiness decision, a test plan with executed
+  scenarios and results, an investigation with a root-cause status. For an engineering step the
+  bar is higher: a `definition-of-done.json` that `agent-skills dod-check` verifies, and a PR URL.
+  An evidence pack that exists but records `fail` / `not_run` checks without a waiver, or a
+  closeout line that says `NOT verified`, is not done — it is the next bullet. Record one line
+  and continue.
 - **Blocked or needs-context.** Stop the chain. Surface the reason and the artifact paths. A
   blocker is not retried autonomously.
 - **No artifact.** The step did not complete regardless of what the chat said. Retry **once**

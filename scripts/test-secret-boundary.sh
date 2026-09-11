@@ -332,6 +332,32 @@ if ! grep -rqF "$LONG" "$KBREPO" 2>/dev/null; then
 else
   bad "the committed knowledge base does not retain a credential value"
 fi
+# The lesson's evidence field was merged and stored verbatim while trigger and
+# action were redacted, so a token-shaped locator reached the committed file.
+# Every field now passes through one boundary in `Lesson.write`.
+(
+  cd "$KBREPO" || exit 0
+  "$PYTHON3" "$KB" lesson add --id evidence-probe --trigger "before the deploy" \
+    --action "export the socket path" --domain build-runtime \
+    --evidence "run 12: PGPASSWORD=${SHORT} was exported" \
+    --evidence "api_key=${LONG}" >/dev/null 2>&1
+  "$PYTHON3" "$KB" lesson confirm evidence-probe \
+    --evidence "run 13 with password: \"${SHORT}\"" >/dev/null 2>&1
+  "$PYTHON3" "$KB" lesson contradict evidence-probe \
+    --evidence "run 14 token=${LONG}" >/dev/null 2>&1
+)
+LESSON_FILE="$KBREPO/.agent-skills/knowledge/lessons/evidence-probe.md"
+if [ -f "$LESSON_FILE" ] && ! grep -qF "$SHORT" "$LESSON_FILE" && ! grep -qF "$LONG" "$LESSON_FILE"; then
+  ok "lesson evidence — add, confirm, and contradict — does not retain a credential value"
+else
+  bad "lesson evidence — add, confirm, and contradict — does not retain a credential value" \
+      "see $LESSON_FILE"
+fi
+if grep -q "run 12" "$LESSON_FILE" 2>/dev/null && grep -q "run 14" "$LESSON_FILE" 2>/dev/null; then
+  ok "the evidence locators survive redaction"
+else
+  bad "the evidence locators survive redaction"
+fi
 # Org memory is the widest-reaching tier of the four: `start-task` prints it into
 # every future task in every project, so a secret here is re-read indefinitely
 # and across project boundaries. It was the one durable path with no redaction.
@@ -487,6 +513,39 @@ then
   fi
 else
   bad "probe: org-memory redaction call" "the redact call could not be removed"
+fi
+
+# The knowledge base redacts every input at the one point it is cleaned and
+# again at the one point a lesson is serialised. Remove the redactor from the
+# module and the evidence field must leak, or neither layer is being tested.
+KB_PROBE="$(mktemp -d "$BOX/kbprobe.XXXX")"
+cp "$REPO/scripts/knowledge.py" "$REPO/scripts/durable.py" "$REPO/scripts/guard_audit.py" "$KB_PROBE/"
+"$PYTHON3" - "$KB_PROBE/knowledge.py" <<'PY'
+import pathlib
+import sys
+path = pathlib.Path(sys.argv[1])
+text = path.read_text(encoding="utf-8")
+needle = "from guard_audit import redact\n"
+if needle not in text:
+    sys.exit(3)
+path.write_text(text.replace(needle, "redact = lambda text: text\n", 1), encoding="utf-8")
+PY
+if [ $? -ne 0 ]; then
+  bad "probe: knowledge-base field redaction" "the redactor import could not be replaced"
+else
+  KB_PROBE_REPO="$(mktemp -d "$BOX/kbproberepo.XXXX")"
+  git -C "$KB_PROBE_REPO" init -q >/dev/null 2>&1
+  (
+    cd "$KB_PROBE_REPO" || exit 0
+    "$PYTHON3" "$KB_PROBE/knowledge.py" lesson add --id leak-probe --trigger t --action a \
+      --evidence "api_key=${LONG}" >/dev/null 2>&1
+  )
+  if grep -rqF "$LONG" "$KB_PROBE_REPO/.agent-skills" 2>/dev/null; then
+    ok "probe: without the serialisation boundary the evidence field retains the value"
+  else
+    bad "probe: without the serialisation boundary the evidence field retains the value" \
+        "the weakened build still redacted it, so the boundary is untested"
+  fi
 fi
 
 # ---------------------------------------------------------------------------

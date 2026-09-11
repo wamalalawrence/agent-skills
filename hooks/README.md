@@ -59,14 +59,19 @@ with respect to knowledge; it never writes a fact.
 On session stop:
 
 ```bash
-agent-skills finish-task --skill "${AGENT_SKILLS_ACTIVE_SKILL:-unknown}" \
-  --summary "session ended" --status needs-context --no-cleanup
+agent-skills finish-task --if-open --skill "${AGENT_SKILLS_ACTIVE_SKILL:-unknown}" \
+  --summary "session stopped before an explicit finish-task call" --status needs-context --no-cleanup
 ```
 
-Deliberately conservative. A hook cannot know whether the work actually finished, so it records
-`needs-context`, which **preserves** the per-task scratch and the working branch. The agent's own
-`agent-skills finish-task` call, with a real summary and a real status, is still the one that matters — this
-is a floor that stops a crashed or abandoned session losing everything, not a replacement.
+Deliberately conservative, and idempotent. A hook cannot know whether the work actually finished,
+so it records `needs-context`, which **preserves** the per-task scratch and the working branch.
+`--if-open` makes it a no-op when the task `start-task` recorded has already been closed out by
+the agent's own `finish-task` call, and when there is no task in flight at all: a host's `Stop`
+event fires at the end of every turn, not only when a task is abandoned, and before `1.0.0` the
+fallback recorded a false "stopped" after every normal finish. The agent's own
+`agent-skills finish-task` call, with a real summary and a real status, is still the one that
+matters — this is a floor that stops a crashed or abandoned session losing everything, not a
+replacement.
 
 Set `AGENT_SKILLS_ACTIVE_SKILL` in your environment if you want honest per-skill attribution in
 telemetry rather than `unknown`.

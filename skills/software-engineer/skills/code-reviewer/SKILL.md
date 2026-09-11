@@ -16,7 +16,7 @@ compatibility: >-
   .agent-skills.yml). See docs/execution-modes.md.
 metadata:
   author: wamalalawrence
-  version: "1.0.0-rc.4"
+  version: "1.0.0"
   homepage: "https://github.com/wamalalawrence/agent-skills"
 argument-hint: >-
   optional: mode inner|outer, base branch, issue key/URL, PR URL, or task description
@@ -39,7 +39,7 @@ it detects the project and task id, then prints org memory, project memory, the 
 knowledge base, and a capability report:
 
 ```bash
-agent-skills start-task --skill code-reviewer
+agent-skills start-task --skill code-reviewer --brief "<one-line task brief>"
 ```
 
 **The output IS your starting context.** Do not re-discover what it just told you. Treat every
@@ -328,12 +328,20 @@ Surface a `major` finding when any of the following is missing or empty:
   absent.
 - `plan` (the engineer's 5-line plan: problem · hypothesis · smallest change · risk · validation).
 - `risk_areas`.
-- For bug fixes: a referenced **failing-regression-test commit** that fails on the commit's parent
-  and passes on HEAD (`--repro-verify` mode). Cross-check with `repro-recipe.yml` if present.
+- For bug fixes: a referenced **test-only commit** (or isolated baseline) on which the regression
+  test exists and the fix does not. In `--repro-verify` mode, run the named test there and confirm
+  it ran and failed for the expected behavioural assertion — a missing test, zero collected tests,
+  a setup error, or an unrelated failure is not RED — then run it on HEAD and confirm it passes.
+  Checking out the *parent* of the test commit runs a revision where the test does not exist and
+  proves nothing. Cross-check with `repro-recipe.yml` if present.
 - For outer-loop or PR review:
   `${AGENT_SKILLS_CACHE_DIR:-${WORKSPACE_ROOT:-$REPO_ROOT}/.cache/agent-skills}/<issue-key>/definition-of-done.json`
-  per the [Definition of Done schema](../../references/definition-of-done.md). Any `false` flag
-  without a written waiver is itself a `blocker`.
+  per the [Definition of Done schema](../../references/definition-of-done.md). Run
+  `agent-skills dod-check` on it yourself; do not trust the engineer's line. A required check
+  that is `fail` or `not_run` without a waiver from a named authority, a `pass` with no execution
+  record, or a `pass` recorded on a revision other than `head_sha` is a `blocker`. A
+  classification that is `false` is a fact, not a finding, and a waiver naming one is itself a
+  finding. Full rules: [evidence discipline](../../../../docs/evidence-discipline.md).
 - **`safety_acknowledgement` block in `definition-of-done.json` whenever the diff touches a
   deployed environment, credentials, IAM, secrets, backups, monitoring, or network policy.**
   The reviewer must refuse to advance — surface a `blocker` finding — when any of:
@@ -576,8 +584,9 @@ H2 / database / flake / environment issue", or "pre-existing failure on `main`".
 those is a hypothesis, not evidence. To dismiss a failure the reviewer must show at least
 one of:
 
-- The same test fails on the parent commit (run it; record the SHA), **and** the diff does
-  not touch the failing component or its dependencies.
+- The same test fails on the base revision the diff was built from (run it there; record the
+  SHA and confirm the test exists on that revision), **and** the diff does not touch the
+  failing component or its dependencies.
 - A linked open ticket / known-flaky-test entry that pre-dates the diff.
 - A clean rerun on a clean checkout of the diff (recorded with command + result), proving
   the failure was transient.
