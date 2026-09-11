@@ -19,9 +19,13 @@ survives `dod-check`; the stop-hook fallback is a no-op after a normal finish; t
 mutation targets are a parent and a child are no longer "provably independent". See the
 changelog and [evidence discipline](./docs/evidence-discipline.md).
 
-Published as a GitHub release and as the npm bootstrap `@wamalalawrence/agent-skills@1.0.0` on
-the `latest` dist-tag. From here the bootstrap and the runtime move in lockstep: one version
-number, published together.
+Published as a GitHub release. The npm bootstrap `@wamalalawrence/agent-skills@1.0.0` goes to the
+`latest` dist-tag, which resolves the stable-line question this roadmap carried through the
+candidate series: `latest` had been pinned at `0.43.0` while the newest stable runtime was
+`0.44.0`. The registry account requires a one-time password, so that publish is the one release
+step no automation performs — the maintainer runs `npm publish` after the tag, against the
+audited tarball. From here the bootstrap and the runtime move in lockstep: one version number,
+published together.
 
 ## 1.x
 
