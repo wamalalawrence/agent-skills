@@ -680,5 +680,208 @@ if case_start "vendor"; then
 fi
 
 # ==============================================================================
+banner "15. The release line a machine follows survives its next update"
+# ==============================================================================
+# A machine that opted into `rc` must keep being offered release candidates
+# without re-typing `--channel rc` on every command. Two distinct faults are
+# covered here, both of which shipped:
+#
+#   - the effective channel was resolved from the flags of the current
+#     invocation only, so a bare `update` on an rc machine resolved `stable`;
+#   - the manifest recorded the channel the installed *version* belongs to, so
+#     an rc machine that took the stable release superseding its candidate
+#     recorded `stable` and fell off the rc line permanently.
+#
+# The git provider is used rather than the local one because only it implements
+# the superset rule, and the superset is where the second fault lives.
+if case_start "channel-persistence"; then
+  if ! command -v git > /dev/null 2>&1; then
+    printf '  --    git unavailable; channel-persistence cases skipped\n'
+  else
+    BOX="$(new_sandbox)"
+    CP_REMOTE="${BOX}/releases.git"
+    CP_WORK="${BOX}/releases"
+    git init -q --bare "${CP_REMOTE}"
+    mkdir -p "${CP_WORK}" "${BOX}/nohooks-cp"
+    for entry in VERSION bin lib scripts skills docs hooks README.md LICENSE; do
+      [ -e "${REPO_ROOT}/${entry}" ] && cp -R "${REPO_ROOT}/${entry}" "${CP_WORK}/${entry}"
+    done
+    cpgit() {
+      git -c "core.hooksPath=${BOX}/nohooks-cp" \
+        -c user.email=t@example.invalid -c user.name=test "$@"
+    }
+    # Publish one more release onto the fixture remote.
+    cp_publish() {
+      local v="$1"
+      (cd "${CP_WORK}" && printf '%s\n' "${v}" > VERSION \
+        && cpgit add -A \
+        && cpgit commit -qm "release ${v}" \
+        && cpgit tag -a "v${v}" -m "v${v}" \
+        && cpgit push -q box HEAD:refs/heads/as-fixture --tags) > /dev/null 2>&1
+    }
+    cp_manifest() {
+      python3 -c "import json,sys;print(json.load(open(sys.argv[1])).get(sys.argv[2],''))" \
+        "${BOX}/home/.agent-skills/install.json" "$1"
+    }
+
+    (cd "${CP_WORK}" && cpgit -c init.defaultBranch=as-fixture init -q \
+      && cpgit remote add box "${CP_REMOTE}") > /dev/null 2>&1
+    cp_publish "2.0.0-rc.1"
+
+    cli "${BOX}" install --repo "${CP_REMOTE}" --channel rc > "${BOX}/cp-install.log" 2>&1
+    RC=$?
+    [ "${RC}" -eq 0 ] || tail -20 "${BOX}/cp-install.log" >&2
+    assert_eq "${RC}" "0" "installing with --channel rc succeeds"
+    assert_eq "$(installed_cli "${BOX}" version)" "2.0.0-rc.1" "the candidate is active"
+    assert_eq "$(cp_manifest follow_channel)" "rc" \
+      "the manifest records the release line the machine follows"
+
+    # --- the reported fault: a bare check-updates on an rc machine -----------
+    cp_publish "2.0.0-rc.2"
+    installed_cli "${BOX}" check-updates --repo "${CP_REMOTE}" > "${BOX}/cp-check.log" 2>&1
+    assert_eq "$?" "10" "a bare check-updates offers the next candidate to an rc machine"
+    assert "grep -q '2.0.0-rc.2' '${BOX}/cp-check.log'" "it names the candidate"
+    assert_not "grep -q 'ahead' '${BOX}/cp-check.log'" \
+      "an rc machine is not told it is ahead of its own line"
+
+    # The apply line has to be a command that actually performs that update.
+    CP_APPLY="$(sed -n 's/^ *apply *: *//p' "${BOX}/cp-check.log" | head -n 1)"
+    assert_eq "${CP_APPLY}" "agent-skills update" \
+      "the apply hint is the command that will do it"
+
+    installed_cli "${BOX}" update --repo "${CP_REMOTE}" > "${BOX}/cp-update.log" 2>&1
+    assert_eq "$?" "0" "a bare update on an rc machine succeeds"
+    assert_eq "$(installed_cli "${BOX}" version)" "2.0.0-rc.2" \
+      "a bare update moves an rc machine along its own line"
+
+    # --- the superset fault: taking the stable release must not drop the line
+    cp_publish "2.0.0"
+    installed_cli "${BOX}" update --repo "${CP_REMOTE}" > /dev/null 2>&1
+    assert_eq "$(installed_cli "${BOX}" version)" "2.0.0" \
+      "an rc machine is offered the stable release that supersedes its candidate"
+    assert_eq "$(cp_manifest channel)" "stable" \
+      "the manifest still records the channel the installed version belongs to"
+    assert_eq "$(cp_manifest follow_channel)" "rc" \
+      "taking a stable release does not move the machine off the rc line"
+
+    cp_publish "2.0.1-rc.1"
+    installed_cli "${BOX}" check-updates --repo "${CP_REMOTE}" > "${BOX}/cp-check2.log" 2>&1
+    assert_eq "$?" "10" "the next candidate after a stable release is still offered"
+
+    # --- an explicit flag still wins over the recorded line ------------------
+    installed_cli "${BOX}" check-updates --repo "${CP_REMOTE}" --channel stable \
+      > "${BOX}/cp-check3.log" 2>&1
+    assert_eq "$?" "0" "--channel stable overrides the recorded line"
+    assert_not "grep -q '2.0.1-rc.1' '${BOX}/cp-check3.log'" \
+      "the override narrows what the rc machine is offered"
+
+    # --- rollback does not choose a channel, so it must not change one -------
+    installed_cli "${BOX}" rollback > /dev/null 2>&1
+    assert_eq "$(cp_manifest follow_channel)" "rc" "rollback leaves the followed line alone"
+
+    # --- a manifest written before this field existed still resolves rc ------
+    python3 - "${BOX}/home/.agent-skills/install.json" <<'PY'
+import json, sys
+path = sys.argv[1]
+with open(path) as handle:
+    data = json.load(handle)
+data.pop("follow_channel", None)
+data["channel"] = "rc"
+with open(path, "w") as handle:
+    json.dump(data, handle, indent=2, sort_keys=True)
+PY
+    CP_LEGACY="$(installed_cli "${BOX}" check-updates --repo "${CP_REMOTE}" --json 2>/dev/null \
+      | python3 -c "import json,sys;print(json.load(sys.stdin)['requested_channel'])")"
+    assert_eq "${CP_LEGACY}" "rc" "a pre-field manifest still resolves the rc line"
+
+    # --- and an unrecognised value fails closed onto stable ------------------
+    python3 - "${BOX}/home/.agent-skills/install.json" <<'PY'
+import json, sys
+path = sys.argv[1]
+with open(path) as handle:
+    data = json.load(handle)
+data["follow_channel"] = "../../etc"
+data["channel"] = "nonsense"
+with open(path, "w") as handle:
+    json.dump(data, handle, indent=2, sort_keys=True)
+PY
+    installed_cli "${BOX}" check-updates --repo "${CP_REMOTE}" > "${BOX}/cp-bad.log" 2>&1
+    CP_BAD="$(installed_cli "${BOX}" check-updates --repo "${CP_REMOTE}" --json 2>/dev/null \
+      | python3 -c "import json,sys;print(json.load(sys.stdin)['requested_channel'])")"
+    assert_eq "${CP_BAD}" "stable" "an unrecognised recorded channel falls back to stable"
+    assert_not "grep -q '2.0.1-rc.1' '${BOX}/cp-bad.log'" \
+      "a malformed manifest cannot widen the channel"
+
+    # --- a stable machine is unaffected in either direction ------------------
+    BOX2="$(new_sandbox)"
+    cli "${BOX2}" install --repo "${CP_REMOTE}" --channel stable > "${BOX2}/cp-install.log" 2>&1
+    assert_eq "$(installed_cli "${BOX2}" version)" "2.0.0" "a stable machine installs the release"
+    installed_cli "${BOX2}" check-updates --repo "${CP_REMOTE}" > "${BOX2}/cp-check.log" 2>&1
+    assert_eq "$?" "0" "a stable machine is not offered a candidate"
+    assert_not "grep -q 'rc' '${BOX2}/cp-check.log'" "no candidate is named to a stable machine"
+
+    # Opting in from a stable machine is the one case where the apply hint has
+    # to carry a flag, because a bare update there would resolve stable. This
+    # is the exact wall a user hits when they go looking for a candidate.
+    installed_cli "${BOX2}" check-updates --repo "${CP_REMOTE}" --channel rc \
+      > "${BOX2}/cp-optin.log" 2>&1
+    assert_eq "$?" "10" "asking a stable machine about rc offers the candidate"
+    CP_APPLY2="$(sed -n 's/^ *apply *: *//p' "${BOX2}/cp-optin.log" | head -n 1)"
+    assert_eq "${CP_APPLY2}" "agent-skills update --channel rc" \
+      "the apply hint carries the flag when the check overrode the machine's line"
+    # And that hint, run verbatim, does what the check said it would.
+    installed_cli "${BOX2}" ${CP_APPLY2#agent-skills } --repo "${CP_REMOTE}" > /dev/null 2>&1
+    assert_eq "$(installed_cli "${BOX2}" version)" "2.0.1-rc.1" \
+      "running the printed hint performs the update it described"
+
+    # --- mutation probe: the fix has to be what makes this pass -------------
+    # A copy of the engine with the manifest lookup removed from channel
+    # resolution must fail the bare-update case. A probe that passes against a
+    # build with the property removed proves nothing.
+    # Put the manifest back on the rc line the malformed-manifest case left.
+    python3 - "${BOX}/home/.agent-skills/install.json" <<'PY'
+import json, sys
+path = sys.argv[1]
+with open(path) as handle:
+    data = json.load(handle)
+data["follow_channel"] = "rc"
+data["channel"] = "rc"
+with open(path, "w") as handle:
+    json.dump(data, handle, indent=2, sort_keys=True)
+PY
+    CP_PROBE="${BOX}/probe"
+    mkdir -p "${CP_PROBE}"
+    cp -R "${REPO_ROOT}/lib" "${CP_PROBE}/lib"
+    cp "${REPO_ROOT}/scripts/install.py" "${CP_PROBE}/install.py"
+    python3 - "${CP_PROBE}/install.py" <<'PY'
+import sys
+path = sys.argv[1]
+text = open(path).read()
+start = text.index("def resolve_channel(")
+end = text.index("\ndef ", start + 1)
+weakened = (
+    "def resolve_channel(args, layout=None) -> str:\n"
+    '    """The pre-fix resolution: this invocation\'s flags and nothing else."""\n'
+    '    if getattr(args, "channel", None):\n'
+    "        return args.channel\n"
+    '    return "any" if getattr(args, "dev", False) else "stable"\n'
+)
+if weakened == text[start:end]:
+    raise SystemExit("probe did not change resolve_channel")
+open(path, "w").write(text[:start] + weakened + text[end:])
+PY
+    assert_eq "$?" "0" "the probe build actually removed the manifest lookup"
+    in_box "${BOX}" python3 "${CP_PROBE}/install.py" check-updates \
+      --home "${BOX}/home/.agent-skills" --repo "${CP_REMOTE}" > "${BOX}/cp-probe.log" 2>&1
+    PROBE_RC=$?
+    assert_not "[ '${PROBE_RC}' = '10' ] && grep -q '2.0.1-rc.1' '${BOX}/cp-probe.log'" \
+      "without the manifest lookup, an rc machine is not offered its own line"
+    # And the real engine, against that same manifest, is.
+    installed_cli "${BOX}" check-updates --repo "${CP_REMOTE}" > "${BOX}/cp-real.log" 2>&1
+    assert_eq "$?" "10" "the engine under test does offer it against the same manifest"
+  fi
+fi
+
+# ==============================================================================
 printf '\n%s passed, %s failed\n' "${PASS}" "${FAIL}"
 [ "${FAIL}" -eq 0 ] || exit 1

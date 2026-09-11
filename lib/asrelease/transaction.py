@@ -26,6 +26,7 @@ import sys
 from .exits import Exit, ExitError
 from .layout import Layout, LINKED_TREES, MANIFEST_SCHEMA
 from .release import (
+    FOLLOWABLE_CHANNELS,
     MIN_INSTALLABLE_VERSION,
     ReleaseRef,
     compare_versions,
@@ -81,11 +82,15 @@ class InstallTransaction:
         self.mode = mode
         self.allow_downgrade = allow_downgrade
         self.keep_versions = keep_versions
+        # The release line this operation was asked to follow. Set by `run`;
+        # left empty by `rollback`, which does not choose one.
+        self.follow_channel = ""
 
     # --------------------------------------------------------------------------
     def run(self, version: str = "", channel: str = "stable") -> dict:
         layout = self.layout
         previous = layout.active_version()
+        self.follow_channel = channel or ""
 
         # RESOLVE. Nothing is created on disk until a release has been resolved:
         # a failed `install` against an unreachable source must not leave an
@@ -367,12 +372,38 @@ class InstallTransaction:
             sys.stderr.write(done.stdout.decode("utf-8", "replace"))
         return done.returncode
 
+    def _followed_channel(self) -> str:
+        """The release line this machine follows.
+
+        Distinct from ``channel``, which records the channel the installed
+        *version* belongs to. The two diverge exactly where the superset rule
+        applies: a machine following ``rc`` that takes the stable release
+        superseding its candidate installs a ``stable`` version but is still on
+        the ``rc`` line. Recording only the version's channel there would move
+        the machine onto ``stable`` silently and it would never be offered a
+        candidate again.
+
+        An operation that does not choose a line — rollback — carries the
+        recorded one forward rather than inventing one. Installations written
+        before this field existed fall back to ``channel``, which for them was
+        the requested channel in every case that could produce ``rc``.
+        """
+        if self.follow_channel:
+            return self.follow_channel
+        existing = self.layout.read_manifest()
+        for key in ("follow_channel", "channel"):
+            value = existing.get(key)
+            if isinstance(value, str) and value in FOLLOWABLE_CHANNELS:
+                return value
+        return ""
+
     def _write_manifest(self, ref, payload_manifest: dict, hosts_result: dict, previous: str) -> dict:
         layout = self.layout
         record = {
             "schema": MANIFEST_SCHEMA,
             "version": ref.version,
             "channel": ref.channel,
+            "follow_channel": self._followed_channel(),
             "mode": self.mode,
             "home": layout.home,
             "config_dir": layout.config_dir,

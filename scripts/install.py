@@ -29,7 +29,12 @@ for _candidate in (os.path.join(_HERE, "..", "lib"), os.path.join(_HERE, "vendor
 from asrelease.exits import Exit, ExitError  # noqa: E402
 from asrelease.layout import Layout  # noqa: E402
 from asrelease.providers import AuthState, build_provider  # noqa: E402
-from asrelease.release import CHANNELS, compare_versions, normalise_version  # noqa: E402
+from asrelease.release import (  # noqa: E402
+    CHANNELS,
+    FOLLOWABLE_CHANNELS,
+    compare_versions,
+    normalise_version,
+)
 from asrelease.transaction import InstallTransaction, Reporter  # noqa: E402
 
 
@@ -87,22 +92,64 @@ def make_transaction(args, layout, provider) -> InstallTransaction:
 # ------------------------------------------------------------------------------
 # Commands
 # ------------------------------------------------------------------------------
-def resolve_channel(args) -> str:
+def recorded_channel(layout: Layout) -> str:
+    """The release line this machine is already following, if any.
+
+    Read from the install manifest, which is machine-local and written only by
+    this engine. ``follow_channel`` is the field that means "the line this
+    machine follows"; ``channel`` is consulted only as a migration path for
+    installations written before that field existed, where it was the requested
+    channel in every case that could produce ``rc``.
+
+    Anything that is not a recognised channel is ignored rather than passed
+    through: resolution then falls back to ``stable``, which is the narrow
+    choice. A manifest cannot widen a machine's channel by containing junk.
+    """
+    try:
+        manifest = layout.read_manifest()
+    except Exception:  # pragma: no cover - read_manifest already fails soft
+        return ""
+    for key in ("follow_channel", "channel"):
+        value = manifest.get(key)
+        if isinstance(value, str) and value in FOLLOWABLE_CHANNELS:
+            return value
+    return ""
+
+
+def resolve_channel(args, layout: Layout = None) -> str:
     """The effective release channel.
 
-    An explicit ``--channel`` always wins. Otherwise a ``--dev`` install of a
-    working tree falls back to ``any`` — a development install is not a
-    release-channel choice and must not be refused just because the checkout is
-    a pre-release. Every other install falls back to ``stable``.
+    In order:
+
+    1. An explicit ``--channel`` always wins. It is this invocation's decision.
+    2. A ``--dev`` install of a working tree falls back to ``any`` — a
+       development install is not a release-channel choice and must not be
+       refused just because the checkout is a pre-release.
+    3. The line the machine already follows, from the install manifest. Opting
+       into ``rc`` is a property of the machine, not of one command: a machine
+       that asked for release candidates must keep being offered them without
+       re-typing the flag, or it silently stops receiving the very releases it
+       opted in to test.
+    4. ``stable``.
+
+    Step 3 can only ever resolve to a line the machine itself opted into
+    earlier, so it cannot expose a candidate to a machine that never asked for
+    one. Every unrecognised value falls through to ``stable``.
     """
     if getattr(args, "channel", None):
         return args.channel
-    return "any" if getattr(args, "dev", False) else "stable"
+    if getattr(args, "dev", False):
+        return "any"
+    if layout is not None:
+        following = recorded_channel(layout)
+        if following:
+            return following
+    return "stable"
 
 
 def cmd_install(args) -> int:
-    args.channel = resolve_channel(args)
     layout = make_layout(args)
+    args.channel = resolve_channel(args, layout)
     provider = make_provider(args)
     transaction = make_transaction(args, layout, provider)
     if not args.quiet:
@@ -117,8 +164,8 @@ def cmd_install(args) -> int:
 
 
 def cmd_update(args) -> int:
-    args.channel = resolve_channel(args)
     layout = make_layout(args)
+    args.channel = resolve_channel(args, layout)
     active = layout.active_version()
     if not active:
         raise ExitError(
@@ -166,12 +213,18 @@ def cmd_rollback(args) -> int:
 def cmd_check_updates(args) -> int:
     layout = make_layout(args)
     active = layout.active_version() or "unknown"
+    requested = resolve_channel(args, layout)
+    # What a bare `agent-skills update` on this machine would resolve to. Used
+    # only to decide whether the apply hint needs to carry a flag.
+    implicit = resolve_channel(argparse.Namespace(channel=None, dev=False), layout)
+    args.channel = requested
     provider = make_provider(args)
-    ref = provider.resolve_latest(args.channel)
+    ref = provider.resolve_latest(requested)
     payload = {
         "installed": active,
         "latest": ref.version,
         "channel": ref.channel,
+        "requested_channel": requested,
         "provider": provider.id,
     }
     comparison = compare_versions(active, ref.version)
@@ -187,7 +240,12 @@ def cmd_check_updates(args) -> int:
         print("  latest   : {}  ({} channel, via {})".format(ref.version, ref.channel, provider.id))
         print("  status   : {}".format(payload["status"]))
         if payload["status"] == "update-available":
-            print("  apply    : agent-skills update")
+            # The hint has to be a command that performs the update just
+            # described. A bare `update` resolves the machine's own line, so it
+            # is correct unless this check overrode that line with a flag, in
+            # which case the flag has to travel with the hint.
+            suffix = "" if requested == implicit else " --channel {}".format(requested)
+            print("  apply    : agent-skills update{}".format(suffix))
     return Exit.UPDATE_AVAILABLE if payload["status"] == "update-available" else Exit.OK
 
 
@@ -244,6 +302,7 @@ def cmd_provider_info(args) -> int:
         "provider": described,
         "installed_provider": manifest.get("provider", {}),
         "channel": manifest.get("channel", ""),
+        "follow_channel": recorded_channel(layout),
     }
     if args.json:
         json.dump(payload, sys.stdout, indent=2)
@@ -258,6 +317,7 @@ def cmd_provider_info(args) -> int:
                 manifest.get("provider", {}).get("id", "?"),
                 manifest.get("channel", "?"),
             ))
+            print("  following   : {} channel".format(recorded_channel(layout) or "stable"))
     return Exit.OK if described["auth"] != AuthState.REQUIRED else Exit.AUTH_REQUIRED
 
 
@@ -319,7 +379,10 @@ def build_parser() -> argparse.ArgumentParser:
 
     check = sub.add_parser("check-updates")
     add_common(check)
-    check.add_argument("--channel", default="stable", choices=list(CHANNELS) + ["any"])
+    # Default None, not "stable": resolve_channel needs to tell "the caller
+    # asked for stable" apart from "the caller said nothing", because only the
+    # second may fall back to the line the machine already follows.
+    check.add_argument("--channel", default=None, choices=list(CHANNELS) + ["any"])
     check.add_argument("--json", action="store_true")
     check.set_defaults(handler=cmd_check_updates)
 

@@ -4,6 +4,71 @@ All notable project changes should be recorded here.
 
 ## Unreleased
 
+## 1.0.0-rc.3 - Release candidate: a machine keeps the release line it chose
+
+One defect, found by an RC tester who updated and got a stable release instead of the candidate
+they had opted into. Additive against the frozen contracts; nothing renamed, renumbered, or
+retyped.
+
+### Fixes
+
+- **`--channel` was not remembered, so an rc machine silently fell back to `stable`.**
+  `resolve_channel` in `scripts/install.py` read the channel from the flags of the current
+  invocation only. The recorded channel was read for display and never consulted, so on a machine
+  installed with `--channel rc`:
+
+  - a bare `agent-skills check-updates` resolved `stable` and reported `ahead` — an rc machine was
+    never told a newer candidate existed;
+  - a bare `agent-skills update` resolved `stable` and refused as a downgrade, suggesting
+    `--allow-downgrade`, which would have moved the tester *backwards* off the line they were
+    testing;
+  - `check-updates --channel rc` printed `apply: agent-skills update`, a command that provably
+    would not perform the update it had just described, because the hint dropped the flag.
+
+  The effect was that every RC tester had to re-type `--channel rc` on every command, and their
+  tooling actively told them they were up to date when they were not. Shipped in `0.44.0` and
+  `1.0.0-rc.2`; not introduced by either.
+
+  Channel resolution now falls back to the line recorded in `install.json` when no `--channel` is
+  given, and the `apply:` hint carries the flag whenever the check asked about a line other than
+  the one the machine follows. An explicit `--channel` still wins everywhere it is passed.
+
+- **Taking a stable release dropped a machine off the `rc` line.** The manifest's `channel` field
+  records `channel_of(version)` — the channel the installed *version* belongs to — so a machine
+  following `rc` that took the stable release superseding its candidate recorded `stable` and was
+  never offered a candidate again. This is exactly the superset case the channel design exists to
+  support, and it defeated it. A second additive field, `follow_channel`, now records the line the
+  machine follows, separately from the channel of what is installed. `rollback` carries it forward
+  rather than choosing one.
+
+### Added
+
+- `follow_channel` in `install.json`, `requested_channel` in `check-updates --json`,
+  `follow_channel` in `provider --json` and `doctor --json`. All optional and additive; no
+  existing field changed name, type, or meaning.
+- `agent-skills provider` prints the line being followed; `agent-skills doctor` prints it when it
+  differs from the channel of the installed version.
+
+### Safety
+
+- Resolution fails closed. An `install.json` holding a value that is not a recognised channel
+  resolves to `stable`, so a manifest cannot widen a machine's channel. The lookup can only ever
+  resolve to a line the machine itself opted into earlier, so it cannot expose a candidate to a
+  machine that never asked for one — asserted in both directions.
+- Installations written before `follow_channel` existed fall back to `channel`, which for them was
+  the requested channel in every case that could produce `rc`.
+
+### Validation
+
+`scripts/test-cli-install.sh` gains section 15 — 28 assertions over a real git remote publishing
+`2.0.0-rc.1`, `2.0.0-rc.2`, `2.0.0`, and `2.0.1-rc.1` in sequence, covering both faults, the
+explicit-flag override, rollback, the pre-field manifest, the malformed manifest, and a stable
+machine in both directions. It includes a mutation probe: a copy of the engine with the manifest
+lookup removed must fail the bare-update case, and does. The printed `apply:` hint is executed
+verbatim and asserted to perform the update it described. Suite total 135, exit 0.
+
+### Recorded
+
 - **Correction to the v0.44.0 npm-deferral note.** That entry states the public bootstrap "still
   points at `0.43.1`". It does not, and never did: `0.43.1` was never published to the registry.
   `latest` points at `0.43.0`, so the stable-line deferral began one release earlier than the
