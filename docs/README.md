@@ -21,6 +21,8 @@ Start here when reading the repository outside GitHub's main README.
   install manifest is consulted for drift.
 - [Release providers](release-providers.md) - where releases come from, how they are verified,
   and how distribution access differs from project access.
+- [Commercial plan](commercial-roadmap.md) - the decided €11-per-developer subscription: stack,
+  billing and seat policies, private distribution, operating costs, and the build order to launch.
 - [Updates, rollback, and channels](updates.md) - how a user notices a new release and applies it without losing
   credentials or bindings (`agent-skills check-updates`, `agent-skills update`, `git pull`).
 - [Lifecycle preflight](lifecycle-preflight.md) - the full contract behind the two commands

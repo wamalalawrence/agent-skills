@@ -4,6 +4,18 @@ All notable project changes should be recorded here.
 
 ## Unreleased
 
+### Added
+
+- **Commercial subscription and distribution plan** ([`docs/commercial-roadmap.md`](docs/commercial-roadmap.md)).
+  A final, decided plan for selling Agent Skills as one subscription at €11 per named developer
+  per month, with individual and company seat purchasing, an account portal, and private release
+  distribution that needs no customer GitHub access. Nothing in it is left open: Stripe with
+  Managed Payments as merchant of record, licensing enforced at the distribution boundary only,
+  a browser-approved CLI token instead of an OAuth device flow, one Cloudflare Worker over Neon
+  PostgreSQL and private R2, and a fourteen-phase build order through controlled beta to launch.
+  No implementation yet; the commercial line ships as `2.0` and every `1.x` contract is untouched.
+  `ROADMAP.md` and `docs/README.md` point at it.
+
 ## 1.0.0 - Stable: the runtime records what it can verify, and says so when it cannot
 
 The first stable release. Everything in [the 1.0 contract](docs/one-point-oh.md) is frozen for
