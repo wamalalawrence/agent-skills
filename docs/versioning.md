@@ -1,10 +1,10 @@
 # Versioning
 
-`agent-skills` is at `1.0.0-rc.4` — the release candidate for `1.0.0`. From `1.0.0` the contracts
-enumerated in [the 1.0 contract](one-point-oh.md) are stable within the `1.x` line: names do not
-change, exit codes are not renumbered, and machine-readable shapes stay compatible. The
-pre-`1.0.0` rules below still describe every release up to and including `0.44.0`, and a release
-candidate is offered only to machines on the `rc` channel.
+`agent-skills` is at `1.0.0`, the first stable release. From here the contracts enumerated in
+[the 1.0 contract](one-point-oh.md) are stable within the `1.x` line: names do not change, exit
+codes are not renumbered, and machine-readable shapes stay compatible. The pre-`1.0.0` rules
+below describe every release up to and including `0.44.0` and the four release candidates; a
+release candidate is offered only to machines on the `rc` channel.
 
 ## Before `v1.0.0`
 

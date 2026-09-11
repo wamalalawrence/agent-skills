@@ -274,8 +274,11 @@ the system stays broken.
 | An agreement between a producer and a consumer | Contract |
 | A defect that reached production | A regression test at whichever level above reproduces it |
 
-For bug fixes the regression test comes first and must fail on the parent commit — that expectation
-is unchanged, and it applies at whichever level actually reproduces the defect.
+For bug fixes the regression test comes first and must be shown failing against the unfixed
+implementation with the test present — that expectation is unchanged, and it applies at whichever
+level actually reproduces the defect. See
+[evidence discipline](../../../docs/evidence-discipline.md#red-means-the-test-ran-and-failed-for-the-right-reason)
+for what counts as RED.
 
 ## Coverage
 

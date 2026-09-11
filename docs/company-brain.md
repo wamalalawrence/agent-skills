@@ -121,8 +121,10 @@ days, revert, hotfix, blocked, abandoned),
 - a telemetry `outcome` event,
 - (for `reverted` / `hotfixed`) a `Lesson` line under project memory's
   `Common gotchas`,
-- (with `--promote-to-org --confirmed-in N>=2`) a copy in org memory under
-  `Outcomes` with provenance.
+- (with `--promote-to-org --confirmed-in <project,project>`) a copy in org memory under
+  `Outcomes`, with every named project as provenance. Each named project must have a
+  project memory on disk under the cache root — the count is derived from stores that exist,
+  not from a number the caller typed.
 
 Without this step, the loop is decorative.
 

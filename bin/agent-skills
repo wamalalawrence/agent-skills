@@ -63,6 +63,7 @@ Installation and releases
 Task lifecycle
   start-task [args]     Mandatory preflight: memory, knowledge, capability report
   finish-task [args]    Write durable memory, then clean up per-task scratch
+  dod-check <file>      Verify a definition-of-done.json as evidence (0 verified, 1 not)
 
 Context and access
   project [--json]      Show the project context inferred from this repository
@@ -365,6 +366,7 @@ SELFTEST
 
   start-task) run_script "scripts/start-task.sh" "$@" ;;
   finish-task) run_script "scripts/finish-task.sh" "$@" ;;
+  dod-check) run_script "scripts/dod-check.py" "$@" ;;
   doctor) run_script "scripts/doctor.sh" "$@" ;;
   access) run_script "scripts/access.py" "$@" ;;
   guard) run_script "scripts/guard.py" "$@" ;;

@@ -86,9 +86,26 @@ resolve_cache_root() {
 # ---------------------------------------------------------------------------
 PYTHON3="${PYTHON3:-python3}"
 
-# Character budget for the repo knowledge read. Keep it small: this tier is a
-# starting context, not a document to load wholesale.
-KNOWLEDGE_BUDGET_CHARS="${AGENT_SKILLS_KNOWLEDGE_BUDGET_CHARS:-4000}"
+# One startup budget across every memory tier, in characters. Each tier's read
+# is capped and says what it left out, so the whole preflight has a ceiling
+# instead of one bounded tier sitting behind two unbounded ones. The split is
+# a default; each tier can be pinned with its own variable.
+#
+#   AGENT_SKILLS_STARTUP_BUDGET_CHARS   total, default 16000
+#   AGENT_SKILLS_ORG_BUDGET_CHARS       org memory, default 3/16 of the total
+#   AGENT_SKILLS_KNOWLEDGE_BUDGET_CHARS repo knowledge, default 1/4 of the total
+#   project memory gets the remainder after ~600 chars of wrappers and notices
+STARTUP_BUDGET_CHARS="${AGENT_SKILLS_STARTUP_BUDGET_CHARS:-16000}"
+case "${STARTUP_BUDGET_CHARS}" in
+  ''|*[!0-9]*) STARTUP_BUDGET_CHARS=16000 ;;
+esac
+WRAPPER_RESERVE_CHARS=600
+ORG_BUDGET_CHARS="${AGENT_SKILLS_ORG_BUDGET_CHARS:-$(( STARTUP_BUDGET_CHARS * 3 / 16 ))}"
+KNOWLEDGE_BUDGET_CHARS="${AGENT_SKILLS_KNOWLEDGE_BUDGET_CHARS:-$(( STARTUP_BUDGET_CHARS / 4 ))}"
+PROJECT_BUDGET_CHARS=$(( STARTUP_BUDGET_CHARS - ORG_BUDGET_CHARS - KNOWLEDGE_BUDGET_CHARS - WRAPPER_RESERVE_CHARS ))
+if [[ "${PROJECT_BUDGET_CHARS}" -lt 1000 ]]; then
+  PROJECT_BUDGET_CHARS=1000
+fi
 BRIEF=""
 
 print_separator() {
@@ -121,6 +138,12 @@ Arguments:
                files do not hardcode a version. Repeat for multiple skills.
   --brief TEXT One-line description of the task. Used to rank the repo knowledge
                base so the most relevant lessons are shown within the budget.
+               Without it, ranking falls back to confidence and recency alone.
+
+Environment:
+  AGENT_SKILLS_STARTUP_BUDGET_CHARS
+               Total character budget across org memory, project memory, and
+               the repo knowledge base, notices included. Default 16000.
 
 Examples:
   ./start-task.sh
@@ -257,6 +280,10 @@ echo "  cache-root: ${CACHE_ROOT}"
 if [[ ${#SKILLS[@]} -gt 0 ]]; then
   echo "  skills:     ${SKILLS[*]}"
 fi
+echo "  budget:     ${STARTUP_BUDGET_CHARS} chars total (org ${ORG_BUDGET_CHARS}, project ${PROJECT_BUDGET_CHARS}, knowledge ${KNOWLEDGE_BUDGET_CHARS}, wrappers ${WRAPPER_RESERVE_CHARS})"
+if [[ -z "${BRIEF}" ]]; then
+  echo "  brief:      (none — pass --brief \"<one line>\" so recall is ranked for this task)"
+fi
 print_separator
 
 mkdir -p "${CACHE_ROOT}"
@@ -274,8 +301,9 @@ HAD_ERRORS=0
 if [[ "${SKIP_ORG}" == "true" ]]; then
   echo "[1/5] org-memory: SKIPPED (--no-org)"
 else
-  echo "[1/5] org-memory: reading..."
-  if ${PYTHON3} "${OM_SCRIPT}" --cache-root "${CACHE_ROOT}" read 2>/dev/null; then
+  echo "[1/5] org-memory: reading (budget ${ORG_BUDGET_CHARS} chars)..."
+  if ${PYTHON3} "${OM_SCRIPT}" --cache-root "${CACHE_ROOT}" read \
+       --budget-chars "${ORG_BUDGET_CHARS}" 2>/dev/null; then
     echo "[1/5] org-memory: read OK"
   else
     echo "[1/5] org-memory: none yet (this is fine — org memory builds up over time)"
@@ -287,14 +315,16 @@ print_separator
 # ---------------------------------------------------------------------------
 # Step 2: Project memory (fatal if cannot init)
 # ---------------------------------------------------------------------------
-echo "[2/5] project-memory: reading ${PROJECT}..."
-PM_OUTPUT="$(${PYTHON3} "${PM_SCRIPT}" --cache-root "${CACHE_ROOT}" read "${PROJECT}" 2>&1)" && PM_OK=0 || PM_OK=$?
+echo "[2/5] project-memory: reading ${PROJECT} (budget ${PROJECT_BUDGET_CHARS} chars)..."
+PM_OUTPUT="$(${PYTHON3} "${PM_SCRIPT}" --cache-root "${CACHE_ROOT}" read "${PROJECT}" \
+  --budget-chars "${PROJECT_BUDGET_CHARS}" 2>&1)" && PM_OK=0 || PM_OK=$?
 
 if [[ ${PM_OK} -ne 0 ]]; then
   echo "[2/5] project-memory: no memory file yet — initialising skeleton..."
   if ${PYTHON3} "${PM_SCRIPT}" --cache-root "${CACHE_ROOT}" init "${PROJECT}" 2>&1; then
     echo "[2/5] project-memory: skeleton created — reading it back..."
-    ${PYTHON3} "${PM_SCRIPT}" --cache-root "${CACHE_ROOT}" read "${PROJECT}" 2>&1 || {
+    ${PYTHON3} "${PM_SCRIPT}" --cache-root "${CACHE_ROOT}" read "${PROJECT}" \
+      --budget-chars "${PROJECT_BUDGET_CHARS}" 2>&1 || {
       echo "FATAL: project-memory init succeeded but read failed." >&2
       exit 1
     }

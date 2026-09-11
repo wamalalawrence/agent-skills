@@ -192,11 +192,15 @@ Binding recipe:
 1. Resolve the canonical source per the order above. Under a global install that is
    `${AGENT_SKILLS_HOME}/skills`.
 2. Construct `<canonical>/<recommended_owner>/SKILL.md`.
-3. Confirm it exists and is readable (`test -r <path>`, or a `Read` tool plus a frontmatter parse).
-4. Confirm the loaded `name` field equals `recommended_owner`. A mismatch is a blocker, not a
-   substitution opportunity.
+3. Confirm it exists and is readable (`test -r <path>`, or a `Read` tool limited to the
+   frontmatter — the block between the opening `---` lines, under 40 lines). A dispatcher never
+   reads the body: the owner loads its own workflow in the fresh context, and a specialist
+   `SKILL.md` runs to a thousand lines.
+4. Confirm the frontmatter `name` field equals `recommended_owner`. A mismatch is a blocker, not
+   a substitution opportunity.
 
-If steps 1-4 succeed, load that file directly and follow its workflow. Do **not** downgrade to
+If steps 1-4 succeed, the **executing** agent loads that file and follows its workflow; a
+dispatcher passes the verified path on. Do **not** downgrade to
 "execute the phase directly" because a host UI did not list the name, and do **not** substitute a
 related skill — `software-engineer` is not an acceptable stand-in for `test-automation-engineer`.
 

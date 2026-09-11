@@ -33,6 +33,8 @@ bash scripts/test-context-optimizer.sh             # if you touched Context Opti
 bash scripts/test-access-resolution.sh             # if you touched the Access Resolver
 bash scripts/test-cli-install.sh                   # if you touched installation
 python3 scripts/test-release-engine.py             # if you touched the release engine
+bash scripts/test-knowledge.sh                     # if you touched the memory tiers, durable.py, or the lifecycle wrappers
+bash scripts/test-secret-boundary.sh               # if you touched anything that writes durable state
 ```
 
 Before tagging a release, work through [docs/release-checklist.md](docs/release-checklist.md) and

@@ -4,6 +4,165 @@ All notable project changes should be recorded here.
 
 ## Unreleased
 
+## 1.0.0 - Stable: the runtime records what it can verify, and says so when it cannot
+
+The first stable release. Everything in [the 1.0 contract](docs/one-point-oh.md) is frozen for
+the `1.x` line. Four release candidates and three independent reviews preceded it. The last of
+those — a pre-1.0 architecture review that probed the memory tiers, the dispatcher, and the
+lifecycle with inputs no suite had sent — is what this release answers. Its finding, in one
+sentence: the weakest boundary was the transition from an agent's claim to trusted completion or
+durable knowledge. Every finding below was reproduced against `1.0.0-rc.4` before it was fixed,
+and every fix ships with a case that fails without it.
+
+### Fixes — memory integrity (`scripts/knowledge.py`, `scripts/durable.py`)
+
+- **Lesson evidence bypassed redaction.** `trigger` and `action` were redacted; `evidence` was
+  merged and stored verbatim, and a token-shaped locator reached the committed lesson file.
+  Every field a lesson holds — evidence, provenance, the body — now passes through one boundary
+  in `Lesson.write`, and every input is cleaned before it is compared. The secret-boundary suite
+  carries the evidence case through `add`, `confirm`, and `contradict`, plus a probe that
+  removes the redactor and asserts the leak returns.
+- **"Independent confirmation" was repeated submission.** Five `lesson add` calls citing the same
+  task took a lesson from 0.5 to 0.9 with one piece of evidence; a re-add with a *different*
+  action kept the old action and reinforced it anyway. Evidence is now an observation identity:
+  the same locator twice is one observation and changes nothing; a re-add whose trigger or
+  action differs is a conflict, writes nothing, and says so; `confirm` requires `--evidence`
+  and is idempotent on a locator already recorded. `lesson add` requires `--evidence` — a lesson
+  with nothing behind it was an assertion — and `doctor` now reports an active lesson with no
+  evidence as an error rather than a warning, so a knowledge base carrying one fails its CI check
+  until the lesson is given a locator or archived.
+- **A contradiction refreshed the lesson and left it in recall.** `contradict` set `verified_at`
+  to today and the lesson stayed recallable at full weight. It now records
+  `last_contradicted_at`, leaves `verified_at` alone, and marks the lesson `disputed` once
+  contradictions reach confirmations: kept, listed, reported by `doctor`, withheld from `read`.
+  A further distinct confirmation reactivates it; `superseded` and `archived` are set by hand in
+  a reviewed change. A lesson written before this release parses unchanged as `active`.
+- **Decay took a step on every run.** Three `decay --apply` runs on one afternoon took a lesson
+  from 0.8 to 0.5. It now records `last_decay_at` and decays once per 90-day window.
+- **Recall preferred the oldest verification among equals.** The ISO date sorted ascending in a
+  key whose other terms were negated. Now relevance, then confidence, then most recent first.
+- **The budget counted the payload but not the frame.** A 4,000-character read rendered 4,258.
+  The budget is now the length of the rendered text — header, separators, withheld notices,
+  trust line — and a budget too small to hold the frame renders one line saying so rather than
+  overrunning. `start-task` reads all three memory tiers within one startup budget
+  (`AGENT_SKILLS_STARTUP_BUDGET_CHARS`, default 16,000); `memory read` and `org-memory read`
+  gained `--budget-chars` and say what they left out and where to read it. Every skill's
+  preflight now passes `--brief`, so the repo tier is ranked for the task rather than by
+  confidence alone.
+- **Lesson updates ran outside their lock.** Atomic replacement prevented a torn file; nothing
+  prevented two confirmations reading the same count and one overwriting the other. The whole
+  read-modify-write for `add`, `confirm`, `contradict`, `decay --apply`, and `note` now holds the
+  file's lock. Pinned deterministically: a helper holds the lock, a confirm waits, and lands
+  when it is released.
+- **`durable.locked` ran the body unlocked after a timeout and masked body errors.** A lock
+  that could not be taken in twenty seconds yielded `False` and the caller — none of which
+  inspected it — proceeded to exactly the lost update the lock exists to prevent. And the
+  `except OSError` wrapped the `yield`, so an error inside the body re-entered the generator and
+  surfaced as `RuntimeError: generator didn't stop after throw()`. Contention past the timeout
+  now raises `LockTimeout` before the body runs (the CLIs print "nothing was written, retry" and
+  exit 1; `AGENT_SKILLS_LOCK_TIMEOUT_SECONDS` tunes it); a filesystem that cannot lock at all is
+  reported once and proceeds; body errors propagate intact. `update_json` distinguishes a
+  missing store from a corrupt one: the corrupt file is moved to `<name>.corrupt-<timestamp>` and
+  reported, then the tier continues from the default — the evidence is kept, not overwritten.
+
+### Fixes — completion and dispatch
+
+- **Completion was an unverified claim.** `finish-task --status complete` with nothing but a
+  summary was recorded as `completed`, indistinguishable from a change with a verified definition
+  of done. A closeout still records what happened — it must stay usable for reviews, planning,
+  blocked work, and recovery — but for `complete` / `pr-opened` it now reports whether a
+  `definition-of-done.json` exists for the task and whether the new `agent-skills dod-check`
+  accepts it, prints `NOT verified` when it does not, and carries `evidence` and
+  `verified_delivery` into telemetry. Reported, not enforced there.
+- **The definition of done's "every `false` needs a waiver" rule was wrong.** The schema
+  intentionally contained `shared_library_changed: false` and `safety_acknowledgement.applies:
+  false` — classifications and safe states — so the rule invited pointless waivers and
+  normalised waiving. The artifact is now three kinds of field: **checks** (`pass` · `fail` ·
+  `not_run` · `not_applicable`, a pass carrying the command, working directory, revision, exit
+  code, and evidence locator that produced it), **classifications** (facts, never waived), and
+  the safety acknowledgement. `dod-check` refuses a pass without an execution record, a pass
+  recorded on a revision other than `head_sha`, a `fail` or `not_run` without a waiver from a
+  named authority — `agent` is not one — a waiver naming a classification, and the pre-1.0
+  boolean shape.
+- **The prescribed RED check could run a revision where the test did not exist.** The
+  engineer wrote the failing test as the first commit and the reviewer was told to check out
+  that commit's *parent* and expect failure — a revision with no test, where "test not found" or
+  zero collected tests read as RED. RED is now demonstrated against the unfixed implementation
+  **with the test present** (the test-only commit, or an isolated baseline with the test
+  transplanted), and must record the behavioural assertion that failed. Corrected at every place
+  the old instruction appeared: `software-engineer` 1.5, 2.4, and 2.5; `code-reviewer`'s handoff
+  contract and its failure-dismissal rule; the developer-testing reference; the definition of
+  done.
+- **Overlapping mutation targets were "provably independent".** `plan-next` compared targets
+  by string-set intersection, so `src/api` beside `src/api/handler.ts` — and `./src/api` beside
+  `src/api` — formed a parallel group. Targets are now normalised; a path overlaps by
+  containment, a named resource (`db:orders`) by identity; an absolute or repository-escaping
+  target disqualifies its phase rather than being compared as text. Genuinely disjoint siblings
+  still group. The mutation probe now removes the containment check.
+- **The stop hook recorded a false "unfinished" after every normal finish.** Every hook template
+  called `finish-task --status needs-context` unconditionally on `Stop`, which fires at the end
+  of every turn. `finish-task --if-open` closes out only the task the last `start-task` recorded
+  and `finish-task` has not yet closed; otherwise it prints one line and writes nothing. A
+  fallback that does run is attributed `closeout=fallback` in telemetry.
+- **Promotion counts were typed, not derived.** `outcome record --promote-to-org --confirmed-in
+  2` promoted on the number alone. `--confirmed-in` now takes project names, each of which must
+  have a project memory on disk under the cache root, and the org-memory bullet names them all
+  as provenance. The integer form exits `2` with a message naming the new one.
+- **The dispatcher loaded the specialist it meant to isolate.** Wamala's step 4 read the whole
+  owner `SKILL.md` to confirm its `name:` field, then the fresh agent read it again. The
+  dispatcher now reads only the frontmatter; the owner-skill verification recipe says the same.
+  Wamala's "Done" now requires the artifact's own status to say so — a readiness decision, an
+  executed test plan, a `dod-check`-verified definition of done — not merely that a file exists.
+- **Symbol spans in a context pack are marked as what they are.** Spans are inferred from
+  indentation and capped at 400 lines; the pack now includes decorators directly above a
+  declaration, flags a capped fragment `[span-capped]`, and carries a note saying spans are
+  inferred and the exact target should be expanded before editing.
+
+### Fixes — instructions that contradicted their own detailed rules
+
+- `docs/lifecycle-preflight.md` called every gotcha "a verified constraint" and every build
+  command "authoritative", then said they were claims to verify. It now says one thing:
+  recorded, revision-scoped evidence, a place to start and never authority.
+- `docs/review-loops.md` said the artifact "ships with any remaining issues recorded as
+  follow-ups" while the engineer rules forbade shipping a surviving `major`. A bound now ends
+  autonomous iteration, not the obligation to resolve a blocking finding; only explicitly
+  non-blocking items ship as follow-ups, and the automation entry names its severity boundary.
+- One shared reference, [`docs/evidence-discipline.md`](docs/evidence-discipline.md), now holds
+  the rules each entry point used to carry in slightly different words: completion versus
+  verified delivery, what RED proves, a shortcut/required-response table, recorded knowledge as
+  evidence rather than authority, scope, and the conditional UI and documentation contracts. The
+  `software-engineer` self-review gained two conditional checks — `docs_contract` and
+  `ui_visual` — recorded in the definition of done as `pass` or `not_applicable` with a reason.
+
+### Added
+
+- `scripts/dod-check.py` and `agent-skills dod-check`: `0` verified, `1` not verified with one
+  reason per line, `2` unreadable or not the schema.
+- `scripts/test-knowledge.sh`, the tenth suite, in CI and in release readiness: 53 checks over
+  observation integrity, contradiction and decay, recency, budget accounting, lock
+  serialisation and timeout, `durable` error handling, `dod-check`, the closeout signal and the
+  idempotent fallback, promotion provenance, and three mutation probes.
+- Five new concurrency cases in `test-adaptive-execution.sh`; the evidence-field case and a
+  redactor-removal probe in `test-secret-boundary.sh`.
+
+### Not changed, and why
+
+- **No mandatory interrogation.** The requirement gate already blocks on a load-bearing unknown
+  and asks only when the answer changes behaviour, authorization, scope, or an irreversible
+  decision. Adding a grilling step to every task would cost more than it catches.
+- **No universal RED–GREEN–REFACTOR.** A review, a refinement, or a context pack has different
+  evidence obligations. The RED rule applies to bug fixes.
+- **No vector store.** Keyword and source-based recall is right for code identifiers and a small
+  committed knowledge base. Budgets, evidence identity, and invalidation had to be fixed first;
+  retrieval misses have not been measured.
+- **No behavioural eval run.** `run-evals.py` still validates scenarios, not a model's actions,
+  and [known limitations](docs/known-limitations.md#memory-and-evidence) says so. A
+  release-level behavioural suite is the first `1.x` roadmap item.
+
+Nothing in the 1.0 contract was renamed, renumbered, or retyped. Two inputs were tightened
+before the freeze took effect — `lesson add` / `lesson confirm` require `--evidence`, and
+`--confirmed-in` takes names — and both are recorded in [the contract](docs/one-point-oh.md).
+
 ## 1.0.0-rc.4 - Release candidate: the gates now cover the gaps two reviews found
 
 Two independent pre-1.0 reviews ran every documented gate — all of which passed — and then found

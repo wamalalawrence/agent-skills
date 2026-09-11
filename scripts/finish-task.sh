@@ -32,8 +32,10 @@ LESSONS=()
 REPO_FACTS=()
 RECENT_TASK_ONLY="false"
 SHOW_CANDIDATES="true"
+IF_OPEN="false"
 KB_SCRIPT="${SCRIPT_DIR}/knowledge.py"
 BB_SCRIPT="${SCRIPT_DIR}/blackboard.py"
+DOD_SCRIPT="${SCRIPT_DIR}/dod-check.py"
 
 usage() {
   cat <<'EOF'
@@ -74,7 +76,18 @@ Options:
   --no-cleanup Keep per-task scratch even for complete runs.
   --recent-task-only
                Write only the Recent tasks bullet and telemetry.
+  --if-open    Fallback closeout for a session-stop hook. Runs ONLY when the
+               task recorded by the last start-task has not already been
+               closed out; otherwise prints one line and exits 0 without
+               writing. A hook cannot know whether work finished, so this is
+               what makes the fallback idempotent instead of a second, false
+               "unfinished" record after a normal finish.
   --help       Show this help.
+
+Closeout is not verified delivery. This command records what happened. For
+complete / pr-opened it also reports whether a definition-of-done.json exists
+for the task and whether `dod-check.py` verifies it; that result goes into
+telemetry as verified_delivery=yes|no|n/a and is printed, never enforced here.
 
 Examples:
   ./finish-task.sh --summary "PR opened for SonarQube cleanup"
@@ -173,6 +186,10 @@ while [[ $# -gt 0 ]]; do
       RECENT_TASK_ONLY="true"
       shift
       ;;
+    --if-open)
+      IF_OPEN="true"
+      shift
+      ;;
     --help|-h)
       usage
       exit 0
@@ -209,6 +226,31 @@ if [[ -z "${SUMMARY}" ]]; then
   echo "ERROR: --summary is required so project memory gets a useful Recent tasks bullet." >&2
   usage >&2
   exit 3
+fi
+
+# ---------------------------------------------------------------------------
+# --if-open: the session-stop fallback. A host's Stop event is a turn ending,
+# not proof a task was abandoned, so the fallback closes out only a task that
+# start-task recorded and finish-task has not yet closed. Anything else is a
+# session event with no task identity behind it, and recording it as a task
+# outcome would put a false "stopped" into history and telemetry.
+# ---------------------------------------------------------------------------
+if [[ "${IF_OPEN}" == "true" ]]; then
+  CTX_ISSUE="$(agent_skills_last_context_value issue_key || true)"
+  CTX_CLOSED="$(agent_skills_last_context_value closed || true)"
+  if [[ -z "${CTX_ISSUE}" ]]; then
+    echo "== agent-skills finish-task: no task in flight; nothing to close out =="
+    exit 0
+  fi
+  if [[ "${CTX_CLOSED}" == "${CTX_ISSUE}" ]]; then
+    echo "== agent-skills finish-task: ${CTX_ISSUE} already closed out; fallback skipped =="
+    exit 0
+  fi
+  if [[ -z "${ISSUE_KEY}" && "$(agent_skills_active_task_count)" -gt 1 ]]; then
+    echo "== agent-skills finish-task: several tasks in flight; fallback cannot pick one =="
+    exit 0
+  fi
+  ISSUE_KEY="${ISSUE_KEY:-${CTX_ISSUE}}"
 fi
 
 if [[ -z "${PROJECT}" ]]; then
@@ -380,8 +422,44 @@ PYEOF
     echo "  Anything above that will still be true next month belongs in the"
     echo "  COMMITTED repo knowledge base, not just the local cache:"
     echo "    ${PYTHON3} ${KB_SCRIPT} note --section Gotchas --text \"<fact>\""
-    echo "    ${PYTHON3} ${KB_SCRIPT} lesson add --id <slug> --trigger \"<when>\" --action \"<do>\""
+    echo "    ${PYTHON3} ${KB_SCRIPT} lesson add --id <slug> --trigger \"<when>\" --action \"<do>\" --evidence ${ISSUE_KEY}"
     echo "  Reject the rest — a task log is not knowledge."
+  fi
+fi
+
+# ---------------------------------------------------------------------------
+# Delivery evidence. A closeout records what happened; it does not establish
+# that delivery checks passed. Before this, `--status complete` with nothing
+# but a summary was recorded as `completed` and nothing distinguished it from
+# a change with a verified definition of done. The distinction is now carried
+# into telemetry and printed. It is reported, not enforced: closeout must stay
+# usable for reviews, planning, blocked work, and recovery.
+# ---------------------------------------------------------------------------
+TASK_DIR="${CACHE_ROOT}/${ISSUE_KEY}"
+EVIDENCE="none"
+VERIFIED="n/a"
+if [[ "${STATUS}" == "complete" || "${STATUS}" == "pr-opened" ]]; then
+  if [[ -f "${TASK_DIR}/definition-of-done.json" ]]; then
+    EVIDENCE="definition-of-done"
+    if [[ -f "${DOD_SCRIPT}" ]]; then
+      DOD_OUT="$("${PYTHON3}" "${DOD_SCRIPT}" "${TASK_DIR}/definition-of-done.json" 2>&1)" \
+        && VERIFIED="yes" || VERIFIED="no"
+      echo "[2/3] delivery evidence: definition-of-done.json present — ${DOD_OUT##*$'\n'}"
+      if [[ "${VERIFIED}" == "no" ]]; then
+        printf '%s\n' "${DOD_OUT}" | grep '^FAIL' | sed 's/^/        /'
+      fi
+    fi
+  elif [[ -f "${TASK_DIR}/evidence-pack.yml" ]]; then
+    EVIDENCE="evidence-pack"
+    VERIFIED="no"
+    echo "[2/3] delivery evidence: evidence-pack.yml present, no definition-of-done.json"
+  else
+    VERIFIED="no"
+    echo "[2/3] delivery evidence: none on disk for ${ISSUE_KEY}"
+  fi
+  if [[ "${VERIFIED}" != "yes" ]]; then
+    echo "        closeout recorded as '${STATUS}', but delivery is NOT verified —"
+    echo "        an engineering handoff needs a definition-of-done.json that dod-check.py accepts."
   fi
 fi
 
@@ -390,10 +468,26 @@ event="completed"
 if [[ "${STATUS}" == "blocked" || "${STATUS}" == "needs-context" ]]; then
   event="stopped"
 fi
+TELEMETRY_ARGS=(
+  --field "skill=${SKILL}"
+  --field "issue_key=${ISSUE_KEY}"
+  --field "status=${STATUS}"
+  --field "evidence=${EVIDENCE}"
+  --field "verified_delivery=${VERIFIED}"
+)
+if [[ "${IF_OPEN}" == "true" ]]; then
+  TELEMETRY_ARGS+=(--field "closeout=fallback")
+fi
 "${PYTHON3}" "${TELEMETRY_SCRIPT}" --cache-root "${CACHE_ROOT}" emit "${PROJECT}" "${event}" \
-  --field "skill=${SKILL}" \
-  --field "issue_key=${ISSUE_KEY}" \
-  --field "status=${STATUS}" >/dev/null
+  "${TELEMETRY_ARGS[@]}" >/dev/null
+
+# Mark the task closed so a later `--if-open` fallback is a no-op. The marker
+# lives beside the project/issue lines start-task writes, and start-task
+# overwrites the file, so a new task clears it.
+LAST_CONTEXT="$(agent_skills_last_context_path)"
+if [[ -n "${LAST_CONTEXT}" && -f "${LAST_CONTEXT}" ]]; then
+  printf 'closed=%s\n' "${ISSUE_KEY}" >> "${LAST_CONTEXT}"
+fi
 
 if [[ "${CLEANUP}" == "auto" ]]; then
   case "${STATUS}" in

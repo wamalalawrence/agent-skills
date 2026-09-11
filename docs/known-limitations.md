@@ -166,3 +166,33 @@ See [engineering-tools.md](engineering-tools.md#known-limitations) for the full 
   runners, and web agents differ in what they can read, write, or preserve between turns.
 - **No warranty or SLA.** This project offers no guaranteed correctness, availability, response time,
   support commitment, or fitness for a particular purpose.
+
+## Memory and evidence
+
+- **Recorded knowledge is evidence, not authority, and the runtime can only enforce shape.**
+  `knowledge.py` makes repeated evidence idempotent, disputes a contradicted lesson, and redacts
+  every field it writes. It cannot tell whether a locator such as `ABC-123` really supports the
+  lesson, or whether two different task keys are two independent observations. A human reviewing
+  the pull request that adds the lesson is still the control that matters.
+- **A verified definition of done is an auditable claim, not an attestation.** `dod-check`
+  refuses a pass without an execution record, a stale revision, a waiver signed by the agent, and
+  a boolean schema. It cannot prove the recorded command ran, because the agent that wrote the
+  artifact could also have written the log it cites. Protected CI running the same checks on the
+  same revision is the stronger boundary; the local artifact makes the claim checkable, not
+  unforgeable.
+- **The eval corpus validates scenarios, not behaviour.** `run-evals.py` checks that every
+  scenario file is well-formed and references real skills. It does not run a model, so a green
+  corpus says nothing about whether an agent honours the requirement gate, produces genuine RED
+  evidence, or resists an instruction planted in a memory file. Those properties are asserted
+  by the deterministic suites where the runtime can hold them and are otherwise documented
+  obligations. A release-level behavioural suite with recorded tool trajectories is the item
+  named in the roadmap for `1.1`.
+- **Symbol spans in a context pack are inferred, not parsed.** `context pack` finds declarations
+  by pattern and ends a span at the next declaration at the same or lower indentation, capped
+  at 400 lines. Decorators directly above a declaration are included; a span may still end early
+  or run into the next symbol, and a `[span-capped]` fragment was cut. The pack says so in its
+  notes. Expand the exact target before editing or drawing a conclusion from it.
+- **The stop-hook fallback needs a task identity.** `finish-task --if-open` recognises the task
+  the last `start-task` recorded. Two agents in one repository, or a session that never ran
+  `start-task`, give it nothing to close and it records nothing — which is the correct outcome,
+  and also means a genuinely abandoned task in that situation leaves no `stopped` record.

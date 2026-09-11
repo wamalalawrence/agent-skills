@@ -30,6 +30,7 @@ from __future__ import annotations
 
 import json
 import os
+import posixpath
 import re
 import sys
 from pathlib import Path
@@ -164,6 +165,61 @@ def normalise_phase_id(token: str) -> str:
     return token if token.startswith("phase-") else f"phase-{token.zfill(2)}"
 
 
+# A mutation target is either a filesystem path relative to the repository or
+# a named resource (`db:orders`, `port:8080`, `cache://sessions`). The two are
+# compared differently: paths overlap when one contains the other; resources
+# overlap only when they are the same name.
+RESOURCE_RE = re.compile(r"^[a-z][a-z0-9+.-]*:(?://)?\S+$", re.IGNORECASE)
+
+
+def normalise_target(raw: object) -> tuple[str, str] | None:
+    """Return `("path", normalised)` or `("resource", name)`, or None when ambiguous.
+
+    None means the target cannot be proven independent of anything — an
+    absolute path, a path that escapes the repository, or an empty value — and
+    the phase declaring it runs sequentially.
+    """
+    text = str(raw).strip().strip("'\"")
+    if not text:
+        return None
+    if RESOURCE_RE.match(text) and not text.startswith(("./", "../")):
+        return ("resource", text.lower())
+    if text.startswith("/") or text.startswith("~"):
+        return None
+    normalised = posixpath.normpath(text.replace("\\", "/"))
+    if normalised in {".", ""} or normalised == ".." or normalised.startswith("../"):
+        return None
+    return ("path", normalised.lower())
+
+
+def targets_overlap(a: tuple[str, str], b: tuple[str, str]) -> bool:
+    """Two targets overlap when they name the same thing or one contains the other.
+
+    Set intersection on the raw strings admitted `src/api` beside
+    `src/api/handler.ts`, and `./src/api` beside `src/api`. A parent and a child
+    are the same write, and an alias is the same path.
+    """
+    if a[0] != b[0]:
+        return False
+    if a[0] == "resource":
+        return a[1] == b[1]
+    left, right = a[1], b[1]
+    return left == right or left.startswith(right + "/") or right.startswith(left + "/")
+
+
+def declared_targets(header: dict[str, object]) -> tuple[list[tuple[str, str]], list[str]]:
+    """Normalise a phase's mutation targets. Returns (targets, ambiguous-raw-values)."""
+    targets: list[tuple[str, str]] = []
+    ambiguous: list[str] = []
+    for raw in header.get("mutation_targets") or []:
+        norm = normalise_target(raw)
+        if norm is None:
+            ambiguous.append(str(raw))
+        else:
+            targets.append(norm)
+    return targets, ambiguous
+
+
 def parallel_group(
     index_path: Path,
     pointer_row: dict[str, str],
@@ -190,7 +246,12 @@ def parallel_group(
     # "writes nothing" made every untouched phase eligible to run beside
     # anything — the opposite of the rule stated above, and the one mistake this
     # gate exists to prevent.
-    head_targets = set(head.get("mutation_targets") or [])
+    head_targets, head_ambiguous = declared_targets(head)
+    if head_ambiguous:
+        return [], [
+            f"{pointer_row['id']} declares a mutation target that cannot be proven "
+            f"independent ({', '.join(head_ambiguous)}): absolute, escaping, or empty"
+        ]
     if not head_targets:
         return [], [
             f"{pointer_row['id']} declares no mutation_targets, so it is treated as "
@@ -199,7 +260,7 @@ def parallel_group(
     head_with = {normalise_phase_id(x) for x in (head.get("parallel_with") or [])}
 
     chosen: list[str] = []
-    claimed = set(head_targets)
+    claimed: list[tuple[str, str]] = list(head_targets)
 
     for row in rows:
         if len(chosen) + 1 >= limit:
@@ -217,7 +278,14 @@ def parallel_group(
         if str(other.get("parallel_safe", "")).lower() != "true":
             notes.append(f"{row['id']} is not marked parallel_safe")
             continue
-        if not set(other.get("mutation_targets") or []):
+        targets, ambiguous = declared_targets(other)
+        if ambiguous:
+            notes.append(
+                f"{row['id']} declares a mutation target that cannot be proven "
+                f"independent ({', '.join(ambiguous)}): absolute, escaping, or empty"
+            )
+            continue
+        if not targets:
             notes.append(
                 f"{row['id']} declares no mutation_targets, so it is treated as "
                 f"writing everything"
@@ -245,17 +313,24 @@ def parallel_group(
             notes.append(f"{row['id']} and {pointer_row['id']} have a dependency edge")
             continue
 
-        targets = set(other.get("mutation_targets") or [])
-        overlap = targets & claimed
+        overlap = sorted(
+            {
+                t[1]
+                for t in targets
+                for c in claimed
+                if targets_overlap(t, c)
+            }
+        )
         if overlap:
             notes.append(
-                f"{row['id']} writes {', '.join(sorted(overlap))}, already claimed by "
-                f"another phase in the group"
+                f"{row['id']} writes {', '.join(overlap)}, which overlaps a target "
+                f"already claimed by another phase in the group (same path, parent, "
+                f"child, or alias)"
             )
             continue
 
         chosen.append(row["id"])
-        claimed |= targets
+        claimed.extend(targets)
 
     if not chosen and not notes:
         notes.append("no other phase is both ready and declared parallel-safe with it")

@@ -19,7 +19,7 @@ compatibility: >-
   docs/execution-modes.md.
 metadata:
   author: wamalalawrence
-  version: "1.0.0-rc.4"
+  version: "1.0.0"
   homepage: "https://github.com/wamalalawrence/agent-skills"
 argument-hint: >-
   issue URL/key, bug report, incident, support ticket, feature request, or task
@@ -45,7 +45,7 @@ it detects the project and task id, then prints org memory, project memory, the 
 knowledge base, and a capability report:
 
 ```bash
-agent-skills start-task --skill issue-investigator
+agent-skills start-task --skill issue-investigator --brief "<one-line task brief>"
 ```
 
 **The output IS your starting context.** Do not re-discover what it just told you. Treat every

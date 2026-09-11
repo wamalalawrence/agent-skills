@@ -23,7 +23,7 @@ compatibility: >-
   legacy `local-workspace`. See docs/execution-modes.md.
 metadata:
   author: wamalalawrence
-  version: "1.0.0-rc.4"
+  version: "1.0.0"
   homepage: "https://github.com/wamalalawrence/agent-skills"
 argument-hint: "<path to the large input> and the question it must answer"
 user-invocable: true
@@ -56,7 +56,7 @@ it detects the project and task id, then prints org memory, project memory, the 
 knowledge base, and a capability report:
 
 ```bash
-agent-skills start-task --skill context-optimizer
+agent-skills start-task --skill context-optimizer --brief "<one-line task brief>"
 ```
 
 **The output IS your starting context.** Do not re-discover what it just told you. Treat every

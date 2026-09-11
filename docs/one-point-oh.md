@@ -22,6 +22,21 @@ optional field — stays allowed.
 > meaning; `--channel` still wins wherever it is passed, and a machine that never chose still
 > follows `stable`. See [channels](updates.md#channels).
 
+> **Added in `1.0.0`, additively.** One new command, `dod-check`. New optional flags with safe
+> defaults: `finish-task --if-open`, `start-task --brief` (already accepted, now passed by every
+> skill), `memory read --budget-chars`, `org-memory read --budget-chars`,
+> `knowledge lesson contradict --evidence`. Three optional telemetry fields on closeout events:
+> `evidence`, `verified_delivery`, `closeout`. Optional lesson front-matter fields: `status`,
+> `last_confirmed_at`, `last_contradicted_at`, `last_decay_at`, `contradicting_evidence`; a
+> lesson written before `1.0.0` parses unchanged and reads as `active`.
+>
+> **Tightened at `1.0.0`, before the freeze took effect** — the two inputs the pre-1.0 review
+> showed were meaningless as accepted: `knowledge lesson add` and `lesson confirm` require
+> `--evidence` (a lesson with nothing behind it was an assertion, and the same evidence twice
+> was counted twice), and `outcome record --confirmed-in` takes project names verified on disk
+> rather than a number the caller typed. Both exit `2` on the old form with a message naming the
+> new one. Neither is renamed, renumbered, or removed within `1.x`.
+
 ## CLI command names
 
 The launcher is `agent-skills`, resolved through any number of symlinks to the active release.
@@ -36,8 +51,11 @@ verify     uninstall    hosts     doctor     migrate     version
 **Task lifecycle:**
 
 ```text
-start-task    finish-task
+start-task    finish-task    dod-check
 ```
+
+`dod-check` was added in `1.0.0`. Its exit contract: `0` verified, `1` not verified (reasons on
+stdout, one per line), `2` the file is missing, unreadable, or not the schema.
 
 **Capability subsystems** — each is a namespace with its own subcommands and its own small exit
 contract (stated with each):

@@ -70,12 +70,12 @@ case "${1:-}" in
   stop)
     # A hook cannot know whether the work finished, so it must not claim it did.
     # needs-context preserves scratch; the real status comes from the agent.
-    as_lifecycle finish-task \
+    as_lifecycle finish-task --if-open \
       --skill "${SKILL}" \
       --status needs-context \
       --no-cleanup \
       --no-candidates \
-      --summary "session ended without an explicit finish-task call" || {
+      --summary "session stopped before an explicit finish-task call" || {
       echo "agent-skills: finish-task hook failed; scratch left in place" >&2
     }
     ;;

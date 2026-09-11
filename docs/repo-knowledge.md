@@ -98,16 +98,24 @@ confidence: 0.5
 evidence:
   - "ABC-123"
 verified_at: "2026-09-04"
+last_confirmed_at: "2026-09-04"
 confirmations: 1
+contradictions: 0
+status: "active"
 ---
 ```
 
 Domains: `architecture`, `build-runtime`, `conventions`, `testing`, `tooling`, `process`.
 
+`--evidence` is required. A lesson with nothing behind it is an assertion, and the evidence
+locator — a task key, a run id, an artifact path — is also the lesson's **observation identity**,
+which is what the confidence rules below are built on. Every field is redacted at the one point a
+lesson is written, so a token-shaped locator never reaches the committed file.
+
 ### Confidence
 
 Range `0.3` to `0.9`, clamped. Never `1.0` — a lesson is a claim, and claims do not reach
-certainty.
+certainty. The number is an ordinal heuristic for ranking, not a calibrated probability.
 
 | Score | Meaning |
 | --- | --- |
@@ -116,20 +124,33 @@ certainty.
 | 0.7 | Independently re-confirmed. Act on it. |
 | 0.9 | Confirmed repeatedly. Treat as a project constraint. |
 
-It moves with evidence:
+It moves only with **distinct** evidence:
 
 ```bash
-agent-skills knowledge lesson confirm <id>      # +0.1, another confirmation
-agent-skills knowledge lesson contradict <id>   # -0.1, this run disproved it
-agent-skills knowledge decay --apply            # -0.1 for anything unconfirmed 90 days
+agent-skills knowledge lesson confirm <id> --evidence ABC-456    # +0.1 on a NEW observation
+agent-skills knowledge lesson contradict <id> --evidence ABC-789 # -0.1; disputed when outweighed
+agent-skills knowledge decay --apply                             # -0.1 per 90-day window unconfirmed
 ```
 
-Re-adding an existing id reconfirms it rather than overwriting: confidence rises, evidence
-merges, and the recorded wording stays. Edit the file directly to reword a lesson, so the
-change shows up in review.
+The rules the runtime enforces, each pinned by `scripts/test-knowledge.sh`:
 
-A lesson sitting at the floor is not deleted automatically. Deletion is a reviewed change,
-because "this turned out to be wrong" is itself worth seeing in the history.
+- **Repeated submission is idempotent.** Re-adding an id with evidence it already holds, or
+  confirming with an already-recorded locator, changes nothing and says so. Before `1.0.0` five
+  closeouts citing the same task took a lesson from 0.5 to 0.9 with one piece of evidence.
+- **A changed proposition is a conflict, not a confirmation.** Re-adding an id whose trigger or
+  action differs from the recorded wording writes nothing and reports the difference. Reword a
+  lesson by editing the file in a reviewed change, or contradict it.
+- **A contradiction never refreshes.** It records `last_contradicted_at` and leaves `verified_at`
+  alone. When contradictions reach the confirmation count the lesson becomes `disputed`: kept,
+  listed by `lesson list`, reported by `doctor`, and **withheld from `read`** until a further
+  distinct confirmation outweighs it or a reviewed change revises or removes it.
+- **Decay is idempotent within its window.** It records `last_decay_at`, so running it three
+  times on one afternoon is one step, and it skips anything not `active`.
+- **`superseded` and `archived`** are set by hand in a reviewed change. The runtime never deletes
+  a lesson; "this turned out to be wrong" is worth seeing in the history.
+
+`status` is one of `active` · `disputed` · `superseded` · `archived`. Only `active` lessons are
+recalled.
 
 ## Reading it back
 
@@ -140,19 +161,25 @@ not dumped:
 agent-skills knowledge read --brief "<task brief>" --budget-chars 4000
 ```
 
-Ranking is relevance to the brief first, then confidence, then recency. Relevance outranks
-confidence deliberately: a 0.6 lesson about the thing you are touching beats a 0.9 lesson about
-a module you are not.
+Ranking is relevance to the brief first, then confidence, then recency — most recently verified
+first. Relevance outranks confidence deliberately: a 0.6 lesson about the thing you are touching
+beats a 0.9 lesson about a module you are not. Without `--brief` the first key is empty and
+ranking falls back to confidence and recency, which is why every skill's preflight passes one.
 
-Whatever does not fit is reported rather than silently dropped:
+The budget is the length of the **rendered** output — header, separators, notices, and the
+trust line included — so `--budget-chars 4000` renders at most 4,000 characters. Whatever does
+not fit is reported rather than silently dropped:
 
 ```text
--- Withheld: 4 more lesson(s) did not fit the character budget; 2 below the
-   confidence floor of 0.3. Raise --budget-chars or lower --min-confidence to see them.
+-- Withheld: project.md truncated; read <path> for the rest; 4 more lesson(s) did not
+   fit the character budget; 2 below the confidence floor of 0.3; 1 disputed/superseded/
+   archived (see 'lesson list'). Raise --budget-chars or lower --min-confidence to see more.
 ```
 
 An agent that does not know more exists cannot ask for it. The budget exists because the tier
-built to save context must not become the thing consuming it.
+built to save context must not become the thing consuming it. `start-task` gives this tier its
+share of one startup budget across all three memory tiers
+(`AGENT_SKILLS_STARTUP_BUDGET_CHARS`).
 
 ## This file is untrusted input
 
@@ -177,8 +204,9 @@ agent-skills knowledge doctor
 
 It reports, per finding: entries that read as instructions, possible secrets, schema
 violations, confidence values outside the range, ids that do not match their filename,
-duplicate ids, missing evidence, and lessons stale past the decay window. Non-zero exit on any
-error, so it can run in CI for the target repository.
+duplicate ids, an active lesson with no evidence (an error), a disputed lesson (a warning naming
+the counts), and lessons stale past the decay window. Non-zero exit on any error, so it can run
+in CI for the target repository.
 
 See the [destructive-action safety policy](destructive-action-safety.md#untrusted-recorded-context)
 for how this sits alongside the discovered-credential rules.

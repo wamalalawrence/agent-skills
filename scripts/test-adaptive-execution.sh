@@ -399,6 +399,75 @@ else
   bad "a limit of 1 disables grouping entirely" "got $COUNT_ONE"
 fi
 
+# Case 7: a parent and a child path. Set intersection on the raw strings called
+# `src/api` and `src/api/handler.ts` disjoint; they are the same write.
+DIR="$(make_plan parentchild phase-02)"
+add_phase "$DIR" phase-02 Dir software-engineer S ready none STANDARD yes
+add_phase "$DIR" phase-03 File software-engineer S ready none STANDARD yes
+write_phase "$DIR" phase-02 dir STANDARD true "[03]" "[src/api]"
+write_phase "$DIR" phase-03 file STANDARD true "[02]" "[src/api/handler.ts]"
+GROUP="$(group_of "$DIR")"
+if [ "$GROUP" = "" ]; then
+  ok "a phase writing a directory is not grouped with one writing a file inside it"
+else
+  bad "a phase writing a directory is not grouped with one writing a file inside it" "got '$GROUP'"
+fi
+
+# Case 8: the same path spelled differently. Aliases are one path.
+DIR="$(make_plan alias phase-02)"
+add_phase "$DIR" phase-02 A software-engineer S ready none STANDARD yes
+add_phase "$DIR" phase-03 B software-engineer S ready none STANDARD yes
+write_phase "$DIR" phase-02 a STANDARD true "[03]" "[src/api/handler.ts]"
+write_phase "$DIR" phase-03 b STANDARD true "[02]" "[./src/./api/../api/handler.ts]"
+GROUP="$(group_of "$DIR")"
+if [ "$GROUP" = "" ]; then
+  ok "a dot-segment alias of a claimed path is not grouped"
+else
+  bad "a dot-segment alias of a claimed path is not grouped" "got '$GROUP'"
+fi
+
+# Case 9: a target that cannot be proven independent — absolute, or escaping
+# the repository — disqualifies the phase rather than being compared as text.
+DIR="$(make_plan escaping phase-02)"
+add_phase "$DIR" phase-02 A software-engineer S ready none STANDARD yes
+add_phase "$DIR" phase-03 B software-engineer S ready none STANDARD yes
+write_phase "$DIR" phase-02 a STANDARD true "[03]" "[src/a.ts]"
+write_phase "$DIR" phase-03 b STANDARD true "[02]" "[../elsewhere/b.ts]"
+GROUP="$(group_of "$DIR")"
+if [ "$GROUP" = "" ]; then
+  ok "a target that escapes the repository is never proven independent"
+else
+  bad "a target that escapes the repository is never proven independent" "got '$GROUP'"
+fi
+write_phase "$DIR" phase-03 b STANDARD true "[02]" "[/tmp/b.ts]"
+GROUP="$(group_of "$DIR")"
+if [ "$GROUP" = "" ]; then
+  ok "an absolute target is never proven independent"
+else
+  bad "an absolute target is never proven independent" "got '$GROUP'"
+fi
+
+# Case 10: genuinely disjoint paths and distinct named resources still group,
+# so the overlap rule is not a blanket refusal.
+DIR="$(make_plan disjoint phase-02)"
+add_phase "$DIR" phase-02 A software-engineer S ready none STANDARD yes
+add_phase "$DIR" phase-03 B software-engineer S ready none STANDARD yes
+write_phase "$DIR" phase-02 a STANDARD true "[03]" "[src/api/handler.ts, db:orders]"
+write_phase "$DIR" phase-03 b STANDARD true "[02]" "[src/api-client/index.ts, db:sessions]"
+GROUP="$(group_of "$DIR")"
+if [ "$GROUP" = "phase-02,phase-03" ]; then
+  ok "sibling paths with a shared prefix and distinct resources are still grouped"
+else
+  bad "sibling paths with a shared prefix and distinct resources are still grouped" "got '$GROUP'"
+fi
+write_phase "$DIR" phase-03 b STANDARD true "[02]" "[src/api-client/index.ts, DB:orders]"
+GROUP="$(group_of "$DIR")"
+if [ "$GROUP" = "" ]; then
+  ok "the same named resource in a different case is one resource"
+else
+  bad "the same named resource in a different case is one resource" "got '$GROUP'"
+fi
+
 # ---------------------------------------------------------------------------
 sec "Phase profiles are read, and cannot be downgraded by a stale index"
 # ---------------------------------------------------------------------------
@@ -670,8 +739,8 @@ import sys
 path = pathlib.Path(sys.argv[1])
 text = path.read_text(encoding="utf-8")
 weakened, count = re.subn(
-    r"        overlap = targets & claimed\n",
-    "        overlap = set()\n",
+    r'    return left == right or left\.startswith\(right \+ "/"\) or right\.startswith\(left \+ "/"\)\n',
+    "    return False\n",
     text,
     count=1,
 )

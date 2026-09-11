@@ -46,7 +46,7 @@ from pathlib import Path
 # memory outlives the task that wrote it and is read back into every later
 # agent's starting context, so a credential landing here is a credential that
 # keeps arriving.
-from durable import update_json, update_text, write_json, write_text
+from durable import LockTimeout, update_json, update_text, write_json, write_text
 from guard_audit import redact
 
 DEFAULT_SECTIONS = (
@@ -346,13 +346,31 @@ def cmd_init(args: argparse.Namespace) -> int:
     return 0
 
 
+def budgeted(text: str, budget_chars: int, path: Path) -> str:
+    """Cut ``text`` to ``budget_chars`` including the notice that says so.
+
+    Zero means unlimited. `start-task` passes its share of the startup budget;
+    before this the whole file was printed, so a project with a long history
+    spent the context the budgeted tiers were saving.
+    """
+    if budget_chars <= 0 or len(text) <= budget_chars:
+        return text
+    notice = f"\n-- truncated: {{shown}} of {len(text)} chars shown; read {path} for the rest"
+    room = max(0, budget_chars - len(notice.format(shown=len(text))))
+    cut = text[:room]
+    newline = cut.rfind("\n")
+    if newline > room // 2:
+        cut = cut[:newline]
+    return cut.rstrip() + notice.format(shown=len(cut.rstrip()))
+
+
 def cmd_read(args: argparse.Namespace) -> int:
     pdir = project_dir(resolve_cache_root(args.cache_root), args.project)
     md = pdir / "memory.md"
     if not md.exists():
         print(f"-- no project memory yet at {md}", file=sys.stderr)
         return 1
-    print(md.read_text(encoding="utf-8"))
+    print(budgeted(md.read_text(encoding="utf-8"), args.budget_chars, md))
     return 0
 
 
@@ -529,6 +547,12 @@ def main(argv: list[str] | None = None) -> int:
 
     sp = sub.add_parser("read")
     sp.add_argument("project")
+    sp.add_argument(
+        "--budget-chars",
+        type=int,
+        default=0,
+        help="Cap the output at N chars including the truncation notice (0 = unlimited).",
+    )
     sp.set_defaults(func=cmd_read)
 
     sp = sub.add_parser("note")
@@ -562,7 +586,11 @@ def main(argv: list[str] | None = None) -> int:
     sp.set_defaults(func=cmd_search)
 
     args = parser.parse_args(argv)
-    return args.func(args)
+    try:
+        return args.func(args)
+    except LockTimeout as exc:
+        print(f"FAIL {exc}", file=sys.stderr)
+        return 1
 
 
 if __name__ == "__main__":

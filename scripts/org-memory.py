@@ -60,7 +60,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parent))
 # secret re-read indefinitely and across project boundaries. It was also the one
 # durable tier that did not redact, which made `--promote-to-org` a path for a
 # value to travel from a single project's notes into everyone's.
-from durable import update_json, update_text, write_json, write_text  # noqa: E402
+from durable import LockTimeout, update_json, update_text, write_json, write_text  # noqa: E402
 from guard_audit import redact  # noqa: E402
 
 DEFAULT_SECTIONS = (
@@ -248,12 +248,30 @@ def cmd_init(args: argparse.Namespace) -> int:
     return 0
 
 
+def budgeted(text: str, budget_chars: int, path: Path) -> str:
+    """Cut ``text`` to ``budget_chars`` including the notice that says so.
+
+    Zero means unlimited. The read used to print the whole file, so the tier
+    that every task loads first had no ceiling at all; a startup budget that
+    the first tier can blow through is not a budget.
+    """
+    if budget_chars <= 0 or len(text) <= budget_chars:
+        return text
+    notice = f"\n-- truncated: {{shown}} of {len(text)} chars shown; read {path} for the rest"
+    room = max(0, budget_chars - len(notice.format(shown=len(text))))
+    cut = text[:room]
+    newline = cut.rfind("\n")
+    if newline > room // 2:
+        cut = cut[:newline]
+    return cut.rstrip() + notice.format(shown=len(cut.rstrip()))
+
+
 def cmd_read(args: argparse.Namespace) -> int:
     md = org_dir(resolve_cache_root(args.cache_root)) / "memory.md"
     if not md.exists():
         print(f"-- no org memory yet at {md}", file=sys.stderr)
         return 1
-    print(md.read_text(encoding="utf-8"))
+    print(budgeted(md.read_text(encoding="utf-8"), args.budget_chars, md))
     return 0
 
 
@@ -310,6 +328,12 @@ def main(argv: list[str] | None = None) -> int:
     sp.set_defaults(func=cmd_init)
 
     sp = sub.add_parser("read")
+    sp.add_argument(
+        "--budget-chars",
+        type=int,
+        default=0,
+        help="Cap the output at N chars including the truncation notice (0 = unlimited).",
+    )
     sp.set_defaults(func=cmd_read)
 
     sp = sub.add_parser("note")
@@ -337,7 +361,11 @@ def main(argv: list[str] | None = None) -> int:
     sp.set_defaults(func=cmd_promote)
 
     args = parser.parse_args(argv)
-    return args.func(args)
+    try:
+        return args.func(args)
+    except LockTimeout as exc:
+        print(f"FAIL {exc}", file=sys.stderr)
+        return 1
 
 
 if __name__ == "__main__":
