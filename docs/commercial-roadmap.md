@@ -132,14 +132,21 @@ entry points, revision-aware memory, measured capability expansion. Commercial w
 consume that budget. [1.0 contracts](one-point-oh.md), [product roadmap](../ROADMAP.md),
 [current install behaviour](../README.md#install), [npm bootstrap](../npm/README.md).
 
-Three licence files exist after phase 00:
+Four legal documents exist after phase 00, drafted in the repository and reviewed by German
+counsel before anything is published:
 
 - `LICENSE` - the repository licence, unchanged, no usage rights granted.
-- `LICENSE-BOOTSTRAP` - a permissive licence covering only the public npm package, so anyone may
-  run `npx @wamalalawrence/agent-skills install` before they have bought anything.
-- `TERMS.md` - the subscription agreement: use rights, the named-human seat, the no-redistribution
-  rule, generated-work ownership, contractor and remote-agent rules, refunds, cancellation,
-  price changes, and service discontinuation.
+- [`LICENSE-BOOTSTRAP`](../LICENSE-BOOTSTRAP) - a permissive licence covering only the public npm
+  package, so anyone may run `npx @wamalalawrence/agent-skills install` before buying anything.
+  It replaces `npm/LICENSE`, which today grants the public installer's users no right to run it.
+- [`docs/legal/terms.md`](legal/terms.md) - the subscription agreement: use rights, the
+  named-human seat, the no-redistribution rule, generated-work ownership, contractor and
+  remote-agent rules, refunds, cancellation, price changes, and service discontinuation.
+- [`docs/legal/privacy.md`](legal/privacy.md) and [`docs/legal/imprint.md`](legal/imprint.md) -
+  the GDPR notice and the § 5 DDG imprint Germany requires on every page of the portal.
+
+Each draft ends with the specific questions to put to counsel, so the single booked session is
+spent on judgement rather than on reading.
 
 ## 3. Architecture
 
