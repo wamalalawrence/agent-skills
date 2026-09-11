@@ -93,7 +93,8 @@ Other
 
 Install and update options:
   --version X           Install or update to this exact release
-  --channel stable|rc   Which release line to follow (default: stable)
+  --channel stable|rc   Which release line to follow. Remembered: pass it once,
+                        later commands stay on that line (default: stable)
   --source DIR          Install from a local source tree instead of the remote
   --repo URL            Use a different git remote as the release source
   --provider local|git  Choose the release provider explicitly

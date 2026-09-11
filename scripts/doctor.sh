@@ -262,6 +262,7 @@ probe_install() {
   INSTALL_ROLLBACK=""
   INSTALL_SKILLS=""
   INSTALL_HOSTS=""
+  INSTALL_FOLLOW=""
   INSTALL_PATH_STATE="no"
   INSTALL_PATH_DETAIL="agent-skills is not on PATH"
   INSTALL_DRIFT=""
@@ -305,12 +306,18 @@ print(data.get("channel", ""))
 print(provider.get("id", ""))
 print(provider.get("description", ""))
 print(" ".join(data.get("hosts", []) or []))
+# The line this machine follows, which is what decides what the next update
+# offers. It differs from "channel" whenever an rc machine is running the
+# stable release that superseded its candidate.
+follow = data.get("follow_channel") or data.get("channel") or ""
+print(follow if follow in ("stable", "rc", "any") else "stable")
 ' 2>/dev/null || true)"
     INSTALL_MODE="$(printf '%s\n' "${fields}" | sed -n '1p')"
     INSTALL_CHANNEL="$(printf '%s\n' "${fields}" | sed -n '2p')"
     INSTALL_PROVIDER="$(printf '%s\n' "${fields}" | sed -n '3p')"
     INSTALL_PROVIDER_SOURCE="$(printf '%s\n' "${fields}" | sed -n '4p')"
     INSTALL_HOSTS="$(printf '%s\n' "${fields}" | sed -n '5p')"
+    INSTALL_FOLLOW="$(printf '%s\n' "${fields}" | sed -n '6p')"
   fi
 
   local active source_version
@@ -494,6 +501,9 @@ render_full() {
   printf '  %sinstalled — %s\n' "$(mark "${INSTALL_STATE}")" "${INSTALL_DETAIL}"
   [[ -n "${INSTALL_MODE}" ]] && printf '  --  install kind — %s\n' "${INSTALL_MODE}"
   [[ -n "${INSTALL_CHANNEL}" ]] && printf '  --  release channel — %s\n' "${INSTALL_CHANNEL}"
+  if [[ -n "${INSTALL_FOLLOW}" && "${INSTALL_FOLLOW}" != "${INSTALL_CHANNEL}" ]]; then
+    printf '  --  following — %s channel (what the next update offers)\n' "${INSTALL_FOLLOW}"
+  fi
   if [[ -n "${INSTALL_PROVIDER}" ]]; then
     printf '  --  release source — %s (%s)\n' "${INSTALL_PROVIDER}" "${INSTALL_PROVIDER_SOURCE}"
   fi
@@ -576,6 +586,7 @@ render_json() {
   printf '  "install_root": "%s",\n' "$(json_escape "${INSTALL_ROOT}")"
   printf '  "install_kind": "%s",\n' "$(json_escape "${INSTALL_MODE}")"
   printf '  "release_channel": "%s",\n' "$(json_escape "${INSTALL_CHANNEL}")"
+  printf '  "follow_channel": "%s",\n' "$(json_escape "${INSTALL_FOLLOW}")"
   printf '  "release_provider": "%s",\n' "$(json_escape "${INSTALL_PROVIDER}")"
   printf '  "release_source": "%s",\n' "$(json_escape "${INSTALL_PROVIDER_SOURCE}")"
   printf '  "skills_installed": "%s",\n' "$(json_escape "${INSTALL_SKILLS}")"

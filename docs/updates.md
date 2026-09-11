@@ -42,10 +42,15 @@ agent-skills check-updates
 agent-skills check-updates --json
 ```
 
-Asks the release provider for the latest release on your channel and compares it against the active
-version. Exit codes: `0` up to date or ahead, `10` update available, `2` usage error, `3`
-authentication required, `4` the source was unreachable. The distinct `10` makes it scriptable in a
-shell prompt or CI check without being confused with a failure.
+Asks the release provider for the latest release on the line this machine follows (see
+[Channels](#channels)) and compares it against the active version. Exit codes: `0` up to date or
+ahead, `10` update available, `2` usage error, `3` authentication required, `4` the source was
+unreachable. The distinct `10` makes it scriptable in a shell prompt or CI check without being
+confused with a failure.
+
+When an update is available it prints an `apply:` line, which is the command that performs that
+update — including `--channel` when the check asked about a line other than the one the machine
+follows.
 
 Read-only. It downloads nothing and touches no installation.
 
@@ -108,16 +113,35 @@ Two releases are retained by default. `--keep N` on install or update changes th
 ## Channels
 
 ```bash
-agent-skills update                  # stable
-agent-skills update --channel rc     # release candidates as well
+agent-skills update                  # the line this machine follows
+agent-skills update --channel rc     # switch to release candidates as well
 ```
 
 `stable` never offers a pre-release, so `1.0.0-rc.1` will not appear on a stable machine. `rc` is a
 superset: someone tracking release candidates is still offered the stable release that supersedes the
 last one.
 
-The channel a machine is on is recorded in the install manifest and reported by
-`agent-skills doctor`.
+**The choice is remembered.** `--channel` is a decision about the machine, not about one command,
+so it is recorded in the install manifest and every later `update` and `check-updates` resolves
+against it. Passing `--channel rc` once is enough; you do not re-type it to stay on the line, and a
+machine that opted into release candidates keeps being offered them. Passing the flag again
+overrides the recording for that one invocation.
+
+Taking a stable release does not end the opt-in. A machine following `rc` that installs the stable
+release superseding its candidate is still on `rc`, and is offered the next candidate after it.
+
+Two fields record this, because they answer different questions:
+
+| Field | Question |
+| --- | --- |
+| `channel` | Which channel does the installed version belong to? |
+| `follow_channel` | Which line does this machine follow? |
+
+They differ exactly in the superset case above. Both are in the install manifest;
+`agent-skills provider` reports them, and `agent-skills doctor` reports the line being followed.
+
+A machine that has never chosen follows `stable`. So does one whose manifest holds a value that is
+not a channel — resolution falls back to the narrow line rather than trusting the file.
 
 ## Drift detection
 

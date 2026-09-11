@@ -1,6 +1,6 @@
 # Versioning
 
-`agent-skills` is at `1.0.0-rc.2` — the release candidate for `1.0.0`. From `1.0.0` the contracts
+`agent-skills` is at `1.0.0-rc.3` — the release candidate for `1.0.0`. From `1.0.0` the contracts
 enumerated in [the 1.0 contract](one-point-oh.md) are stable within the `1.x` line: names do not
 change, exit codes are not renumbered, and machine-readable shapes stay compatible. The
 pre-`1.0.0` rules below still describe every release up to and including `0.44.0`, and a release
@@ -26,15 +26,19 @@ candidate is offered only to machines on the `rc` channel.
 | Channel | Contains | Offered to |
 | --- | --- | --- |
 | `stable` | Releases with no pre-release suffix. | Everyone, by default. |
-| `rc` | Release candidates (`1.0.0-rc.2`) **and** stable releases. | Machines that opted in with `--channel rc`. |
+| `rc` | Release candidates (`1.0.0-rc.3`) **and** stable releases. | Machines that opted in with `--channel rc`. |
 
 `stable` never offers a pre-release, so a release candidate cannot reach a machine that did not ask
 for one. `rc` is deliberately a superset: a machine tracking release candidates must still be
 offered the stable release that supersedes the last candidate, or it would be pinned to
 pre-releases forever.
 
+The opt-in is a property of the machine and is recorded in the install manifest, so `--channel rc`
+is typed once rather than on every command, and taking a stable release under the superset rule
+does not end it. See [channels](updates.md#channels).
+
 Pre-release versions sort below their release and above the previous one, so `0.43.0` <
-`1.0.0-rc.1` < `1.0.0-rc.2` < `1.0.0`.
+`1.0.0-rc.1` < `1.0.0-rc.2` < `1.0.0-rc.3` < `1.0.0`.
 
 ## Exit codes
 

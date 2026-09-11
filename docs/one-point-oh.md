@@ -15,6 +15,13 @@ optional field — stays allowed.
 > and index templates, and optional new telemetry fields. Plan indexes written before that
 > release parse unchanged. See [adaptive execution](adaptive-execution.md).
 
+> **Added in `1.0.0-rc.3`, additively.** The release line a machine follows is now resolved from
+> the install manifest when no `--channel` is given, so an `rc` machine keeps being offered
+> release candidates. Two optional fields carry it: `follow_channel` in `install.json` and
+> `requested_channel` in `check-updates --json`. No existing field changed name, type, or
+> meaning; `--channel` still wins wherever it is passed, and a machine that never chose still
+> follows `stable`. See [channels](updates.md#channels).
+
 ## CLI command names
 
 The launcher is `agent-skills`, resolved through any number of symlinks to the active release.
@@ -124,7 +131,7 @@ AGENT_SKILLS_HOME            default ~/.agent-skills — the canonical installat
   versions/<v>/              a complete release: skills, scripts, lib, bin, docs, release.json
   state/                     install history; survives every upgrade
   cache/                     downloads; safe to delete
-  install.json               version, provider, channel, registered hosts, timestamps
+  install.json               version, provider, channel, followed channel, hosts, timestamps
   VERSION                    the active version as plain text
   skills|scripts|lib|bin|docs|hooks -> current/...
 
@@ -157,7 +164,11 @@ Frozen:
 - **Credentials live outside the install root**, so removing an installation cannot destroy an
   identity.
 - **Channels:** `stable` never offers a pre-release; `rc` is a superset that also offers the
-  stable release superseding the last candidate. The channel is recorded in `install.json`.
+  stable release superseding the last candidate. The line a machine follows is recorded in
+  `install.json` as `follow_channel` and resolved by `update` and `check-updates` when no
+  `--channel` is given, so the opt-in is typed once rather than per command. `channel` records
+  the channel the installed *version* belongs to; the two differ exactly in the superset case.
+  An unrecognised recorded value resolves to `stable` — a manifest cannot widen a channel.
 - **Nothing about installation asks for a project credential, a workspace, or a project key.**
 
 ## Release-provider interface

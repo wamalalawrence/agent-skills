@@ -59,6 +59,13 @@ SEMVER_RE = re.compile(
 
 CHANNELS = ("stable", "rc")
 
+# The values a machine may be recorded as following. `any` is not a channel a
+# release belongs to — `channel_of` never returns it — but it is a line a --dev
+# install follows, so it is accepted here and nowhere else. Anything outside
+# this set is not a channel: resolution falls back to `stable` rather than
+# trusting whatever the manifest happened to contain.
+FOLLOWABLE_CHANNELS = frozenset(CHANNELS) | {"any"}
+
 # The first release whose payload can be installed by this engine.
 #
 # A release payload is not just data: the installer runs its launcher for the

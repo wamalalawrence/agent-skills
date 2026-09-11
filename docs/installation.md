@@ -149,7 +149,7 @@ agent-skills verify | doctor | hosts | uninstall
 | Flag | Purpose |
 | --- | --- |
 | `--version X` | Install or update to this exact release rather than the latest. |
-| `--channel stable\|rc` | Which release line to follow. Default `stable`, which never offers a pre-release. |
+| `--channel stable\|rc` | Which release line to follow. Remembered, so one `--channel rc` keeps later commands on that line. Default `stable`, which never offers a pre-release. |
 | `--source DIR` | Install from a local source tree instead of the remote. Selects the `local` provider. |
 | `--repo URL` | Use a different git remote as the release source. |
 | `--provider local\|git` | Choose the release provider explicitly. |
