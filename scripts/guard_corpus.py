@@ -424,6 +424,62 @@ REDTEAM: list[tuple[str, str, str | None, str]] = [
      "s3api rather than s3"),
     ("kubectl delete pod x --context prod-eu", "DENY", "K8S_DELETE",
      "explicit production context"),
+    # --- wrapper option values (v1.0.0-rc.4) --------------------------------
+    # Every one of these reached ALLOW. The wrapper-stripping loop skipped
+    # option flags but not the values they consume, so the value became the
+    # inspected "command" — `sudo -u root rm -rf /` was read as a command called
+    # `root` — and a command no rule has heard of matches nothing.
+    ("sudo -u root %s /" % RMRF, "DENY", "FS_ROOT_RECURSIVE_DELETE",
+     "sudo with a separate user value"),
+    ("sudo --user root %s /" % RMRF, "DENY", "FS_ROOT_RECURSIVE_DELETE",
+     "sudo with a long user option"),
+    ("nice -n 10 %s /" % RMRF, "DENY", "FS_ROOT_RECURSIVE_DELETE",
+     "nice with a priority value"),
+    ("ionice -c 3 -n 7 %s /" % RMRF, "DENY", "FS_ROOT_RECURSIVE_DELETE",
+     "ionice with two option values"),
+    ("env -u PATH %s /" % RMRF, "DENY", "FS_ROOT_RECURSIVE_DELETE",
+     "env unsetting a variable"),
+    ("stdbuf -o 0 %s /" % RMRF, "DENY", "FS_ROOT_RECURSIVE_DELETE",
+     "stdbuf with a buffering mode"),
+    ("doas -u root %s /" % RMRF, "DENY", "FS_ROOT_RECURSIVE_DELETE",
+     "doas with a user value"),
+    # An option table can never be complete, so an unrecognised option followed
+    # by a bare word is read both ways and both readings are inspected.
+    ("sudo --frobnicate zzz %s /" % RMRF, "DENY", "FS_ROOT_RECURSIVE_DELETE",
+     "an option the guard has never seen"),
+    # --- argv boundaries lost in a re-parse (v1.0.0-rc.4) -------------------
+    # `find -exec` runs an argv directly, with no shell, so its words keep their
+    # boundaries. Re-joining them with plain spaces threw the quoting away and
+    # `sh -c 'rm -rf /'` re-parsed as `sh -c rm` with `-rf` as $0.
+    ("find . -exec sh -c '%s /' ;" % RMRF, "DENY", "FS_ROOT_RECURSIVE_DELETE",
+     "find -exec running a nested shell"),
+    ("find . -name x -execdir bash -c '%s /' ;" % RMRF, "DENY", "FS_ROOT_RECURSIVE_DELETE",
+     "find -execdir running a nested shell"),
+    # --- inline programs that shell out (v1.0.0-rc.4) -----------------------
+    # The destructive-pattern list covered native deletion calls (`rmtree`,
+    # `unlinkSync`) and could never cover every way to reach a shell. The command
+    # string is now extracted from the call and judged by the rules that know it.
+    ("python3 -c 'import os; os.system(\"%s /\")'" % RMRF, "DENY", "FS_ROOT_RECURSIVE_DELETE",
+     "python os.system"),
+    ("python3 -c 'import subprocess; subprocess.run([\"%s\",\"-rf\",\"/\"])'" % RM,
+     "DENY", "FS_ROOT_RECURSIVE_DELETE", "python subprocess with an argv list"),
+    ("node -e 'require(\"child_process\").execSync(\"%s /\")'" % RMRF,
+     "DENY", "FS_ROOT_RECURSIVE_DELETE", "node execSync"),
+    ("ruby -e 'system(\"%s /\")'" % RMRF, "DENY", "FS_ROOT_RECURSIVE_DELETE",
+     "ruby system"),
+    # --- writes to a credential path by copy (v1.0.0-rc.4) ------------------
+    # The redirection branch covered both system and home paths; the copy branch
+    # covered only system ones, so the likelier spelling of the same write was
+    # allowed. A credential path is not safe because the bytes arrived by `cp`.
+    ("cp attacker_key ~/.ssh/authorized_keys", "DENY", "FS_MOVE_OVER_SYSTEM",
+     "copy over an authorized_keys file"),
+    ("mv attacker_key ~/.ssh/authorized_keys", "DENY", "FS_MOVE_OVER_SYSTEM",
+     "move over an authorized_keys file"),
+    ("install -m 600 k ~/.aws/credentials", "DENY", "FS_MOVE_OVER_SYSTEM",
+     "install over a cloud credential file"),
+    # --- a program whose input is another command's output ------------------
+    ("sh < <(printf '%s /')" % RMRF, "ASK", "EXEC_OPAQUE_INPUT",
+     "shell reading a process substitution"),
 ]
 
 ALL = DANGEROUS + ASKABLE + BENIGN + BYPASS + REDTEAM

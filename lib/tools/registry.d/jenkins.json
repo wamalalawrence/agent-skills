@@ -38,7 +38,8 @@
   "auth_service": "jenkins",
   "docs": "docs/engineering-tools.md",
   "bounded_capabilities": [
-    "ci.logs.read"
+    "ci.logs.read",
+    "ci.artifact.read"
   ],
   "reference_status": "validated",
   "notes": "Proves a CI provider that shares no transport with GitHub. Console logs are bounded reads."

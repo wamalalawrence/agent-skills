@@ -78,7 +78,7 @@
     "database.schema.read":       {"action": "READ",        "summary": "Read schema: tables, columns, indexes, constraints."},
     "database.metadata.read":     {"action": "READ",        "summary": "Read catalog metadata, sizes, row estimates, activity."},
     "database.query.read":        {"action": "READ",        "summary": "Run a bounded read-only query (SELECT). Row-limited."},
-    "database.explain":           {"action": "READ",        "summary": "Run EXPLAIN / EXPLAIN ANALYZE without side effects."},
+    "database.explain":           {"action": "READ",        "summary": "Run EXPLAIN on a statement. Planning only: EXPLAIN ANALYZE executes the statement, including a DML one, so it is not covered here and needs database.write."},
     "database.write":             {"action": "WRITE",       "summary": "Run a mutating statement with a predicate. DROP / TRUNCATE / unqualified DELETE remain on the Guard hard-deny floor."},
 
     "data_pipeline.run.read":     {"action": "READ",        "summary": "Read pipeline / DAG / sync run status."},

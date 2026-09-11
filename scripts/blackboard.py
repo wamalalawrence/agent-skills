@@ -67,6 +67,7 @@ from pathlib import Path
 
 # One redaction implementation for the whole project, in guard_audit. A second
 # pattern set would drift from the first and the weaker one would decide.
+from durable import write_json
 from guard_audit import redact
 
 SECTIONS = ("facts", "assumptions", "unknowns", "decisions")
@@ -119,7 +120,10 @@ def load(path: Path) -> dict:
 def save(path: Path, data: dict) -> None:
     path.parent.mkdir(parents=True, exist_ok=True)
     data["updated_at"] = now_iso()
-    path.write_text(json.dumps(data, indent=2), encoding="utf-8")
+    # Temp file plus rename. A blackboard truncated by a crash is one no reader
+    # can parse, and the blackboard is how parallel agents find out what the
+    # others already claimed.
+    write_json(path, data)
 
 
 def cmd_path(args: argparse.Namespace) -> int:

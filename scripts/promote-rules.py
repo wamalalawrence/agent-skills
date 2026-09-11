@@ -54,7 +54,12 @@ def collect_section_bullets(memory_md: Path, section: str) -> list[tuple[str, st
         if line.startswith("## "):
             in_section = line[3:].strip() == section
             continue
-        if not in_section or not line.startswith("- ") or line.startswith("- _empty"):
+        # Any italic-marked placeholder, matching `project-memory.is_placeholder`.
+        # The narrower `- _empty` prefix matched nothing the skeleton actually
+        # writes — it says `- _No facts yet…_` — so every untouched section
+        # looked like it held one real bullet, and an empty project could be
+        # promoted on the strength of its own placeholder text.
+        if not in_section or not line.startswith("- ") or line.startswith("- _"):
             continue
         m = _BULLET_RE.match(line)
         payload = (m.group(1) if m else line).strip().lower()

@@ -85,6 +85,40 @@ def normalise_version(raw: str) -> str:
     return (raw or "").strip().lstrip("vV").strip()
 
 
+def is_version(raw: str) -> bool:
+    """Whether ``raw`` is a semantic version this engine will act on."""
+    return parse_version(raw) is not None
+
+
+def require_version(raw: str, what: str = "release version", code: int = Exit.USAGE) -> str:
+    """Return the normalised version, or refuse to carry the value any further.
+
+    Every version in this engine arrives from outside it: a ``--version``
+    argument, a git tag, a ``VERSION`` file in a directory somebody handed us.
+    Downstream, a version becomes a path — ``versions/<v>``,
+    ``cache/staging/<v>`` — and one of those paths is passed to ``rmtree``. So a
+    version that is not a version is not a cosmetic problem: ``../../x`` is a
+    delete primitive aimed wherever the caller likes.
+
+    Validation therefore happens at the boundary, before the value is used for
+    anything at all, and ``Layout`` enforces the path-shape invariant again on
+    its own account. Two independent checks, because the cost of the first one
+    being bypassed is unrecoverable.
+    """
+    normalised = normalise_version(raw)
+    if parse_version(normalised) is None:
+        shown = (raw or "").strip()
+        raise ExitError(
+            "{} {!r} is not a semantic version".format(what, shown[:120]),
+            code,
+            hint=(
+                "expected MAJOR.MINOR.PATCH with an optional -prerelease and +build,\n"
+                "  for example 1.0.0, 1.0.0-rc.4, or v0.43.0"
+            ),
+        )
+    return normalised
+
+
 def parse_version(raw: str):
     """Return a sort key for a semver string, or ``None`` when it is not semver.
 
@@ -111,7 +145,18 @@ def parse_version(raw: str):
 
 
 def compare_versions(left: str, right: str) -> int:
-    """-1 / 0 / 1. Unparseable versions compare as equal to avoid false alarms."""
+    """-1 / 0 / 1, ordering two versions this engine already trusts.
+
+    Unparseable input compares as equal, so that a machine carrying a version
+    string this build does not understand is reported as "nothing to do" rather
+    than as an upgrade or a downgrade it cannot reason about.
+
+    That fallback makes this the wrong function for asking "is this the release
+    the operator named". ``0`` here means "equal, or unknown", and an identity
+    test that reads unknown as a match will happily select some other release.
+    Use ``versions_equal`` for identity and ``require_version`` at the boundary
+    where the string arrives.
+    """
     a = parse_version(left)
     b = parse_version(right)
     if a is None or b is None:
@@ -121,6 +166,15 @@ def compare_versions(left: str, right: str) -> int:
     if a > b:
         return 1
     return 0
+
+
+def versions_equal(left: str, right: str) -> bool:
+    """Whether two strings name the same release. Unparseable is never equal."""
+    a = parse_version(left)
+    b = parse_version(right)
+    if a is None or b is None:
+        return False
+    return a == b
 
 
 def channel_of(version: str) -> str:
@@ -142,7 +196,14 @@ class ReleaseRef:
     """
 
     def __init__(self, version: str, provider: str, ref: str, channel: str = "", commit: str = ""):
-        self.version = normalise_version(version)
+        # A ReleaseRef is the point at which a version string stops being data
+        # and starts being something the installer acts on, so it is also the
+        # last place validation is cheap. Anything that reaches here unchecked —
+        # a hand-edited VERSION file, a provider that grew a new resolve path —
+        # is refused here rather than becoming a directory name.
+        self.version = require_version(
+            version, "release version from provider {}".format(provider or "?")
+        )
         self.provider = provider
         self.ref = ref
         self.channel = channel or channel_of(self.version)
@@ -322,6 +383,8 @@ def verify_payload(root: str, ref: ReleaseRef = None, manifest: dict = None) -> 
     payload_version = read_version_file(root)
     if not payload_version:
         raise ExitError("staged payload has no readable VERSION file", Exit.INTEGRITY)
+    require_version(payload_version, "payload VERSION", Exit.INTEGRITY)
+    require_version(declared, "manifest version", Exit.INTEGRITY)
     if declared != payload_version:
         raise ExitError(
             "version disagreement: manifest says {}, payload VERSION says {}".format(

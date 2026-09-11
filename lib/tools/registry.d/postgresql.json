@@ -37,7 +37,8 @@
   "auth_service": "postgresql",
   "docs": "docs/engineering-tools.md",
   "bounded_capabilities": [
-    "database.query.read"
+    "database.query.read",
+    "database.schema.read"
   ],
   "reference_status": "validated",
   "notes": "A production connection resolves READ capabilities only unless --allow-write is passed AND a write-capable profile is bound. Queries are wrapped for row limits and statement timeout. DROP / TRUNCATE / unqualified DELETE|UPDATE remain on the Guard hard-deny floor regardless of profile."

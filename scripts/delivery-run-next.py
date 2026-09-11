@@ -185,10 +185,17 @@ def parallel_group(
     head = phase_header(index_path, pointer_row["id"])
     if str(head.get("parallel_safe", "")).lower() != "true":
         return [], [f"{pointer_row['id']} is not marked parallel_safe"]
-    if "mutation_targets" not in head:
-        return [], [f"{pointer_row['id']} does not declare mutation_targets"]
-
+    # An empty list is not a claim, it is the absence of one. The phase template
+    # ships `mutation_targets: []`, so reading a present-but-empty list as
+    # "writes nothing" made every untouched phase eligible to run beside
+    # anything — the opposite of the rule stated above, and the one mistake this
+    # gate exists to prevent.
     head_targets = set(head.get("mutation_targets") or [])
+    if not head_targets:
+        return [], [
+            f"{pointer_row['id']} declares no mutation_targets, so it is treated as "
+            f"writing everything"
+        ]
     head_with = {normalise_phase_id(x) for x in (head.get("parallel_with") or [])}
 
     chosen: list[str] = []
@@ -210,8 +217,11 @@ def parallel_group(
         if str(other.get("parallel_safe", "")).lower() != "true":
             notes.append(f"{row['id']} is not marked parallel_safe")
             continue
-        if "mutation_targets" not in other:
-            notes.append(f"{row['id']} does not declare mutation_targets")
+        if not set(other.get("mutation_targets") or []):
+            notes.append(
+                f"{row['id']} declares no mutation_targets, so it is treated as "
+                f"writing everything"
+            )
             continue
         # Mutual. A one-sided claim means one of the two phases was written
         # without the other in mind, and that is exactly when they collide.

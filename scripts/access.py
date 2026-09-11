@@ -1567,8 +1567,17 @@ def cmd_set(args) -> int:
         key, sep, value = item.partition("=")
         key = key.strip().lower()
         if not sep or not FIELD_NAME_RE.match(key):
-            print("FAIL --field expects name=value with a simple name, got %r" % item,
-                  file=sys.stderr)
+            # The name only. Echoing the whole `name=value` here printed the
+            # value into the terminal and into whatever captured it, which is
+            # precisely the exposure `--secret-field` exists to avoid — and the
+            # likeliest reason the name was malformed is that somebody was
+            # passing a credential through the wrong flag.
+            shown = key or item.partition("=")[0]
+            print(
+                "FAIL --field expects name=value with a simple name; the name %r is not one"
+                % shown[:60],
+                file=sys.stderr,
+            )
             return 2
         if is_secret_field(key, set(args.secret_field or [])):
             print(

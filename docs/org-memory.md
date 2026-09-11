@@ -106,7 +106,11 @@ consistent.
 
 ## What does not belong
 
-- Secrets, tokens, PII — same rule as project memory.
+- Secrets, tokens, PII — same rule as project memory, and enforced the same way. Every
+  free-text value written by `note`, `promote`, or `--promote-to-org` is passed through
+  [the redaction filter](secret-boundary.md#redaction-on-write) before it lands, because
+  this tier is printed into the starting context of every later task in *every* project:
+  a value that reaches it does not stay in the project that produced it.
 - Per-project facts that have not been confirmed elsewhere — those live in
   the relevant `_projects/<slug>/memory.md`.
 - Per-task scratch — that lives in the [task blackboard](task-blackboard.md).

@@ -42,9 +42,10 @@ from ..release import (
     StagedRelease,
     build_manifest,
     channel_of,
-    compare_versions,
     normalise_version,
     parse_version,
+    require_version,
+    versions_equal,
     write_manifest,
 )
 from . import AuthState, ProviderError, ReleaseProvider
@@ -345,9 +346,17 @@ class GitReleaseProvider(ReleaseProvider):
         return ReleaseRef(version, self.id, ref, channel=channel_of(version), commit=sha)
 
     def resolve_version(self, version: str) -> ReleaseRef:
-        wanted = normalise_version(version)
+        """The release the operator named, or a refusal. Never a near miss.
+
+        The wanted version is validated before any comparison happens. It has
+        to be: ``compare_versions`` reports an unparseable operand as *equal*,
+        so a typo compared against every tag matched the first one and installed
+        whatever release happened to sort earliest. ``--version X`` means that
+        release or nothing.
+        """
+        wanted = require_version(version, "--version")
         for found, ref, sha in self._tags():
-            if compare_versions(found, wanted) == 0:
+            if versions_equal(found, wanted):
                 return ReleaseRef(found, self.id, ref, channel=channel_of(found), commit=sha)
         raise ProviderError(
             "no release {} at {}".format(wanted, self.repo),

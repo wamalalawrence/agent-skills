@@ -46,6 +46,7 @@ from pathlib import Path
 # memory outlives the task that wrote it and is read back into every later
 # agent's starting context, so a credential landing here is a credential that
 # keeps arriving.
+from durable import update_json, update_text, write_json, write_text
 from guard_audit import redact
 
 DEFAULT_SECTIONS = (
@@ -140,22 +141,19 @@ def ensure_skeleton(pdir: Path, project: str, repo: str | None) -> Path:
                 "outcomes — so the next agent skips re-discovery._"
             )
             body.append("")
-        md.write_text("\n".join(body), encoding="utf-8")
+        write_text(md, "\n".join(body))
     js = pdir / "memory.json"
     if not js.exists():
-        js.write_text(
-            json.dumps(
-                {
-                    "project": project,
-                    "slug": slugify(project),
-                    "repo": repo,
-                    "created_at": now_iso(),
-                    "updated_at": now_iso(),
-                    "sections": {s: [] for s in DEFAULT_SECTIONS},
-                },
-                indent=2,
-            ),
-            encoding="utf-8",
+        write_json(
+            js,
+            {
+                "project": project,
+                "slug": slugify(project),
+                "repo": repo,
+                "created_at": now_iso(),
+                "updated_at": now_iso(),
+                "sections": {s: [] for s in DEFAULT_SECTIONS},
+            },
         )
     else:
         warn_on_slug_collision(js, project)
@@ -192,31 +190,38 @@ def append_note(pdir: Path, section: str, text: str) -> None:
     md = pdir / "memory.md"
     if not md.exists():
         raise SystemExit(f"FAIL memory.md missing at {md}; run 'init' first")
-    content = md.read_text(encoding="utf-8")
     section_re = re.compile(rf"(^## {re.escape(section)}\s*\n)", re.MULTILINE)
     bullet = f"- ({now_iso()}) {text.strip()}\n"
-    if section_re.search(content):
-        # Replace the placeholder line if present, else insert just under the heading.
-        new_content, n = re.subn(
-            rf"(^## {re.escape(section)}\s*\n)(- _[^\n]*\n)",
-            rf"\1{bullet}",
-            content,
-            count=1,
-            flags=re.MULTILINE,
-        )
-        if n == 0:
-            new_content = section_re.sub(rf"\1{bullet}", content, count=1)
-    else:
-        new_content = content.rstrip() + f"\n\n## {section}\n\n{bullet}"
-    md.write_text(new_content, encoding="utf-8")
 
-    js = pdir / "memory.json"
-    data = json.loads(js.read_text(encoding="utf-8")) if js.exists() else {}
-    data.setdefault("sections", {}).setdefault(section, []).append(
-        {"at": now_iso(), "text": text.strip()}
-    )
-    data["updated_at"] = now_iso()
-    js.write_text(json.dumps(data, indent=2), encoding="utf-8")
+    def transform(content: str) -> str:
+        if section_re.search(content):
+            # Replace the placeholder line if present, else insert just under the heading.
+            replaced, n = re.subn(
+                rf"(^## {re.escape(section)}\s*\n)(- _[^\n]*\n)",
+                rf"\1{bullet}",
+                content,
+                count=1,
+                flags=re.MULTILINE,
+            )
+            if n:
+                return replaced
+            return section_re.sub(rf"\1{bullet}", content, count=1)
+        return content.rstrip() + f"\n\n## {section}\n\n{bullet}"
+
+    # The read and the write happen under one lock, and the write is a rename
+    # rather than a truncate. Two `finish-task` runs appending at once used to
+    # cost a bullet: both read the same file, and the second write replaced the
+    # first. A crash mid-write used to cost the whole file.
+    update_text(md, transform)
+
+    def bump(data: dict) -> dict:
+        data.setdefault("sections", {}).setdefault(section, []).append(
+            {"at": now_iso(), "text": text.strip()}
+        )
+        data["updated_at"] = now_iso()
+        return data
+
+    update_json(pdir / "memory.json", bump, default={"sections": {}})
 
 
 # Names directly under the cache root that are never task scratch. `_projects/`
@@ -396,7 +401,7 @@ def dedup_memory(pdir: Path) -> int:
                 continue
             seen.add(key)
         out.append(line)
-    md.write_text("\n".join(out).rstrip() + "\n", encoding="utf-8")
+    write_text(md, "\n".join(out).rstrip() + "\n")
     return removed
 
 
@@ -427,7 +432,7 @@ def compact_recent_tasks(pdir: Path, keep: int) -> int:
         text = trends_re.sub(rf"\1{trend}\n", text, count=1)
     else:
         text = text.rstrip() + f"\n\n## Trends\n\n{trend}\n"
-    md.write_text(text, encoding="utf-8")
+    write_text(md, text)
     return len(rolled)
 
 

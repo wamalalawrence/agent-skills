@@ -82,6 +82,18 @@ _PATTERNS: tuple[tuple[re.Pattern, str], ...] = (
         ),
         r"\1" + REDACTED + r"\2",
     ),
+    # `password: "value"` and `db_password = 'value'`. The unquoted rule below
+    # stops at the first quote character, so the quoted spellings — which are the
+    # ones a YAML file, a `.env`, and a config dump actually use — passed
+    # straight through it.
+    # PROBE_ANCHOR_QUOTED_CREDENTIAL_VALUE
+    (
+        re.compile(
+            r"(?i)\b((?:[a-z\d]+[_.\-])*(?:password|passwd|secret)s?)"
+            r"""(\s*[:=]\s*)(["'])[^"'\n]*(["'])"""
+        ),
+        r"\1\2\3" + REDACTED + r"\4",
+    ),
     # `password: value` and `db_password = value`. The rule above this one only
     # covers `=`, which left the YAML and libpq spellings intact.
     (
@@ -94,9 +106,16 @@ _PATTERNS: tuple[tuple[re.Pattern, str], ...] = (
     # `mysql -u root -phunter2` — the attached short flag. Anchored to the mysql
     # client family because a bare `-p` means something different almost
     # everywhere else (`mkdir -p`, `grep -p`, `ssh -p 22`).
+    #
+    # `mariadb` is the same client under its current name and takes the same
+    # flag; on a machine where `mysql` is a symlink to it, the name in the log is
+    # whichever one the operator typed.
     # PROBE_ANCHOR_ATTACHED_PASSWORD_FLAG
     (
-        re.compile(r"(?i)\b(mysql(?:dump|admin|sh|_config)?\b[^\n]*?\s-p)(?!\s)[^\s]+"),
+        re.compile(
+            r"(?i)\b((?:mysql|mariadb)(?:dump|admin|sh|_config|-dump|-admin|-check)?"
+            r"\b[^\n]*?\s-p)(?!\s)[^\s]+"
+        ),
         r"\1" + REDACTED,
     ),
     (

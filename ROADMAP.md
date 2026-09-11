@@ -3,7 +3,7 @@
 `agent-skills` is a private, solo-maintained project. It grows through proven usefulness in the
 maintainer's own delivery work, not through an up-front framework.
 
-## Now: v1.0.0-rc.3
+## Now: v1.0.0-rc.4
 
 v0.44.0 shipped the last substantial feature — the
 [Engineering Tool Capability Framework](./docs/engineering-tools.md). The work from here is
@@ -19,7 +19,7 @@ v0.44.0 shipped the last substantial feature — the
   of credentials, bindings, knowledge, and unrelated host state.
 - Re-run the full test, eval, and red-team harness; complete a security review.
 - Publish each release candidate as an npm bootstrap on the `rc` dist-tag — never moving
-  `latest` to a release candidate. `1.0.0-rc.1` and `1.0.0-rc.3` are both published there;
+  `latest` to a release candidate. `1.0.0-rc.1`, `1.0.0-rc.3`, and `1.0.0-rc.4` are published there;
   `latest` is untouched at `0.43.0`.
 
 ## Before 1.0.0

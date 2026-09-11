@@ -72,6 +72,15 @@ jobs:
           bash scripts/test-global-install.sh
           bash scripts/test-access-resolution.sh
 
+      # The Execution Guard corpus and the hook that enforces it. This is the
+      # safety-critical suite — it decides what a destructive command is — and it
+      # ran only from the local release-readiness script, which meant a change
+      # that opened a bypass could be merged and only found at release time. It
+      # runs on every pull request now, and early, because a guard regression is
+      # the one result that should stop everything else.
+      - name: Execution Guard corpus, bypasses, and hook enforcement
+        run: bash scripts/test-guard.sh
+
       # Integrity, hostile archives, and provider independence. These are the
       # parts of distribution where the failure mode is silent: a payload that
       # verified when it should not have, or an installer that quietly depends

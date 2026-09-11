@@ -320,6 +320,46 @@ PY
   assert_eq "$(installed_cli "${BOX}" version)" "${VERSION}" "the previous release is still active"
   installed_cli "${BOX}" verify > /dev/null 2>&1
   assert_eq "$?" "0" "verify still passes after two failed updates"
+
+  # (c) verify has to answer with the code it publishes, and it has to actually
+  # verify. Checking that release.json exists proved nothing about the tree it
+  # describes: "Installation verified" was printed over an edited release,
+  # because the payload hash was only ever re-computed at stage and rollback.
+  ACTIVE_ROOT="${BOX}/home/.agent-skills/versions/${VERSION}"
+  cp "${ACTIVE_ROOT}/skills/wamala/SKILL.md" "${BOX}/skill.orig"
+  printf '\n<!-- edited in place after installation -->\n' >> "${ACTIVE_ROOT}/skills/wamala/SKILL.md"
+  installed_cli "${BOX}" verify > "${BOX}/tampered-verify.log" 2>&1
+  assert_eq "$?" "7" "verify on a tampered release exits 7, the published code"
+  assert "grep -qi 'does not match its manifest' '${BOX}/tampered-verify.log'" \
+    "verify names the integrity failure rather than reporting success"
+  assert_not "grep -q 'Installation verified' '${BOX}/tampered-verify.log'" \
+    "verify does not report a tampered release as verified"
+  cp "${BOX}/skill.orig" "${ACTIVE_ROOT}/skills/wamala/SKILL.md"
+  installed_cli "${BOX}" verify > /dev/null 2>&1
+  assert_eq "$?" "0" "verify passes again once the tree is restored"
+
+  # Drift between the manifest and the active release is the case the exit-code
+  # contract calls out by name, and it used to fall out as the shell's default 1.
+  python3 - "${BOX}/home/.agent-skills/install.json" <<'PY'
+import json
+import sys
+
+path = sys.argv[1]
+with open(path) as handle:
+    data = json.load(handle)
+data["version"] = "0.0.1"
+with open(path, "w") as handle:
+    json.dump(data, handle, indent=2)
+PY
+  installed_cli "${BOX}" verify > "${BOX}/drift-verify.log" 2>&1
+  assert_eq "$?" "7" "verify on a drifted manifest exits 7, not 1"
+  assert "grep -qi 'version drift' '${BOX}/drift-verify.log'" "verify names the drift"
+
+  # And the codes are readable without grepping the source.
+  installed_cli "${BOX}" verify --explain-codes > "${BOX}/codes.log" 2>&1
+  assert_eq "$?" "0" "verify --explain-codes is the flag the engine documents"
+  assert "grep -q 'verification-failure' '${BOX}/codes.log'" \
+    "the explanation lists the frozen names"
 fi
 
 # ==============================================================================
@@ -744,12 +784,21 @@ if case_start "channel-persistence"; then
     assert_not "grep -q 'ahead' '${BOX}/cp-check.log'" \
       "an rc machine is not told it is ahead of its own line"
 
-    # The apply line has to be a command that actually performs that update.
+    # The apply line has to be a command that actually performs that update —
+    # including against the source this check was pointed at. A hint that drops
+    # `--repo` describes an update from the default remote, which is not the one
+    # whose answer is printed above it.
     CP_APPLY="$(sed -n 's/^ *apply *: *//p' "${BOX}/cp-check.log" | head -n 1)"
-    assert_eq "${CP_APPLY}" "agent-skills update" \
-      "the apply hint is the command that will do it"
+    assert "printf '%s' \"${CP_APPLY}\" | grep -q '^agent-skills update'" \
+      "the apply hint is an update command"
+    assert "printf '%s' \"${CP_APPLY}\" | grep -qF \"${CP_REMOTE}\"" \
+      "the apply hint carries the source this check looked at"
+    assert_not "printf '%s' \"${CP_APPLY}\" | grep -q -- '--channel'" \
+      "the apply hint adds no channel flag when the machine's own line was used"
 
-    installed_cli "${BOX}" update --repo "${CP_REMOTE}" > "${BOX}/cp-update.log" 2>&1
+    # Run it verbatim. The hint is shell-quoted, so eval is what a user pasting
+    # it into a terminal would get.
+    eval "installed_cli \"${BOX}\" ${CP_APPLY#agent-skills }" > "${BOX}/cp-update.log" 2>&1
     assert_eq "$?" "0" "a bare update on an rc machine succeeds"
     assert_eq "$(installed_cli "${BOX}" version)" "2.0.0-rc.2" \
       "a bare update moves an rc machine along its own line"
@@ -827,10 +876,14 @@ PY
       > "${BOX2}/cp-optin.log" 2>&1
     assert_eq "$?" "10" "asking a stable machine about rc offers the candidate"
     CP_APPLY2="$(sed -n 's/^ *apply *: *//p' "${BOX2}/cp-optin.log" | head -n 1)"
-    assert_eq "${CP_APPLY2}" "agent-skills update --channel rc" \
+    assert "printf '%s' \"${CP_APPLY2}\" | grep -q -- '--channel rc'" \
       "the apply hint carries the flag when the check overrode the machine's line"
-    # And that hint, run verbatim, does what the check said it would.
-    installed_cli "${BOX2}" ${CP_APPLY2#agent-skills } --repo "${CP_REMOTE}" > /dev/null 2>&1
+    assert "printf '%s' \"${CP_APPLY2}\" | grep -qF \"${CP_REMOTE}\"" \
+      "the apply hint carries the source alongside the channel"
+    # And that hint, run verbatim and with nothing added, does what the check
+    # said it would. Anything the test has to append is something the user would
+    # have had to work out for themselves.
+    eval "installed_cli \"${BOX2}\" ${CP_APPLY2#agent-skills }" > /dev/null 2>&1
     assert_eq "$(installed_cli "${BOX2}" version)" "2.0.1-rc.1" \
       "running the printed hint performs the update it described"
 

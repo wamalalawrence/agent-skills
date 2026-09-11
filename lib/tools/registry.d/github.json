@@ -46,7 +46,8 @@
   "auth_service": "github",
   "docs": "docs/github-access.md",
   "bounded_capabilities": [
-    "ci.logs.read"
+    "ci.logs.read",
+    "ci.artifact.read"
   ],
   "reference_status": "validated",
   "notes": "Reuses the existing GitHub access ladder (scripts/github-access.sh). GitHub Actions is not a separate tool: ci.* rides the same transports. See github-actions.json for the CI-provider view."

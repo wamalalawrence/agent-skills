@@ -38,10 +38,18 @@ user's identities.
 
 from __future__ import annotations
 
+import contextlib
 import json
 import os
+import re
 import shutil
+import time
 from datetime import datetime, timezone
+
+try:  # POSIX only; the installer supports macOS and Linux.
+    import fcntl
+except ImportError:  # pragma: no cover - non-POSIX
+    fcntl = None
 
 from .exits import Exit, ExitError
 from .release import normalise_version
@@ -52,6 +60,12 @@ from .release import normalise_version
 LINKED_TREES = ("skills", "scripts", "lib", "bin", "docs", "hooks")
 
 MANIFEST_SCHEMA = "agent-skills.install/v2"
+
+# What a release directory may be named. Deliberately wider than semver — a
+# directory that predates this check, or a fixture name a test chose, still has
+# to be addressable — and deliberately narrower than "any string": exactly one
+# path component, no separators, no leading dot, nothing that traverses.
+_SAFE_COMPONENT = re.compile(r"^[A-Za-z0-9][A-Za-z0-9._+-]*$")
 
 
 def default_home() -> str:
@@ -118,7 +132,35 @@ class Layout:
         return os.path.join(self.home, "bin", "agent-skills")
 
     def version_path(self, version: str) -> str:
-        return os.path.join(self.versions_dir, normalise_version(version))
+        return os.path.join(self.versions_dir, self.safe_component(version))
+
+    def staging_path(self, version: str) -> str:
+        return os.path.join(self.staging_dir, self.safe_component(version))
+
+    @staticmethod
+    def safe_component(version: str) -> str:
+        """The one directory name a version may become, or an error.
+
+        This is enforced here, independently of whether the caller validated the
+        version, because every path this class builds is eventually passed to
+        ``rmtree``, ``rename``, or ``symlink``. A version of ``../../x`` would
+        turn ``version_path`` into a delete primitive aimed anywhere on the
+        filesystem, and no amount of care at the call sites is worth relying on
+        for that. The check is about path shape only: whether the value is a
+        *release* version is ``release.require_version``'s question, asked at the
+        boundary where the string arrives.
+        """
+        name = normalise_version(version)
+        if not name or not _SAFE_COMPONENT.match(name) or name in (".", ".."):
+            raise ExitError(
+                "{!r} is not a usable release directory name".format((version or "")[:120]),
+                Exit.USAGE,
+                hint=(
+                    "a release version becomes one directory under versions/, so it may not\n"
+                    "  contain a path separator, start with a dot, or traverse upwards"
+                ),
+            )
+        return name
 
     # ---- state ---------------------------------------------------------------
     def ensure_dirs(self) -> None:
@@ -201,9 +243,22 @@ class Layout:
         active = self.active_version()
         for entry in reversed(self.read_history()):
             previous = entry.get("from", "")
-            if previous and previous != active and os.path.isdir(self.version_path(previous)):
+            if not previous or previous == active:
+                continue
+            # History is data on disk and may name something that is not a
+            # usable directory. A malformed entry makes that entry unusable as a
+            # rollback target, not this whole lookup.
+            path = self.installed_path(previous)
+            if path and os.path.isdir(path):
                 return previous
         return ""
+
+    def installed_path(self, version: str) -> str:
+        """``version_path`` for a name that may be junk. Empty when unusable."""
+        try:
+            return self.version_path(version)
+        except ExitError:
+            return ""
 
     # ---- mutation ------------------------------------------------------------
     def link(self, target: str, link_path: str) -> str:
@@ -289,7 +344,10 @@ class Layout:
         active = self.active_version()
         candidate = self.rollback_candidate()
         protected = {v for v in (active, candidate) if v}
-        versions = [v for v in self.installed_versions() if v not in protected]
+        versions = [
+            v for v in self.installed_versions()
+            if v not in protected and _SAFE_COMPONENT.match(v)
+        ]
         versions.sort(key=lambda v: parse_version(v) or (0, 0, 0, 0, ()))
         removed = []
         surplus = len(versions) + len(protected) - keep
@@ -304,6 +362,80 @@ class Layout:
             removed.append(version)
             surplus -= 1
         return removed
+
+    def clear_manifest(self) -> None:
+        """Remove the install manifest. Used when a first install is undone."""
+        for path in (self.manifest_path, self.manifest_path + ".tmp"):
+            try:
+                os.remove(path)
+            except OSError:
+                pass
+
+    @contextlib.contextmanager
+    def exclusive(self, action: str = "install", timeout: float = 120.0):
+        """Hold the install lock for the duration of a state-changing operation.
+
+        Everything in this class is careful about crash-safety and says nothing
+        about concurrency, which made "atomic, no mixed state" true of one
+        process and untrue of two. Two updates racing share
+        ``cache/staging/<v>`` and ``versions/<v>.incoming``, and the moment one
+        of them moves the running release aside is a moment the other can
+        activate into the gap.
+
+        One advisory lock per install root closes that. It is advisory on
+        purpose: a stale lock from a killed process is released by the kernel
+        when the file descriptor goes, so there is no lock file to clean up by
+        hand and no state in which the installer is permanently wedged.
+        """
+        if fcntl is None:  # pragma: no cover - non-POSIX
+            yield
+            return
+        os.makedirs(self.state_dir, exist_ok=True)
+        path = os.path.join(self.state_dir, "install.lock")
+        handle = open(path, "a+", encoding="utf-8")
+        deadline = time.monotonic() + max(0.0, timeout)
+        held = False
+        try:
+            while True:
+                try:
+                    fcntl.flock(handle.fileno(), fcntl.LOCK_EX | fcntl.LOCK_NB)
+                    held = True
+                    break
+                except OSError:
+                    if time.monotonic() >= deadline:
+                        try:
+                            handle.seek(0)
+                            holder = handle.read(200).strip()
+                        except OSError:
+                            holder = ""
+                        raise ExitError(
+                            "another agent-skills operation is already running against {}".format(
+                                self.home
+                            ),
+                            Exit.INSTALL_FAILED,
+                            hint=(
+                                "waited {:.0f}s for the install lock{}\n"
+                                "  nothing was changed; retry when it finishes".format(
+                                    timeout, " (held by {})".format(holder) if holder else ""
+                                )
+                            ),
+                        )
+                    time.sleep(0.2)
+            try:
+                handle.seek(0)
+                handle.truncate()
+                handle.write("pid {} {} at {}\n".format(os.getpid(), action, self.now()))
+                handle.flush()
+            except OSError:
+                pass
+            yield
+        finally:
+            if held:
+                try:
+                    fcntl.flock(handle.fileno(), fcntl.LOCK_UN)
+                except OSError:
+                    pass
+            handle.close()
 
     def now(self) -> str:
         return datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")

@@ -2868,6 +2868,23 @@ def fill_budget(pack: Pack, candidates: list[Fragment]) -> None:
       * every relevant candidate the budget excluded is reported, with the
         command that would include it.
     """
+    # The cache-reuse marker is part of the rendering, so it has to be part of
+    # the budget. It is added to the Metrics block only on a cache hit, which is
+    # a rendering that happens *after* this function has guaranteed the fit — so
+    # a pack that landed within one line of its budget rendered fine once and
+    # failed permanently from the second run onward, and tight packs are the
+    # normal case rather than the edge one. Reserving the line here costs about
+    # 75 characters on every pack and makes the budget true of both renderings.
+    # This is the same class of defect as the fixed-width timing field below.
+    reserved = pack.reused_from_cache
+    pack.reused_from_cache = True
+    try:
+        _fill_budget(pack, candidates)
+    finally:
+        pack.reused_from_cache = reserved
+
+
+def _fill_budget(pack: Pack, candidates: list[Fragment]) -> None:
     ordered = sorted(candidates, key=lambda item: (-item.score, item.start_line, item.identifier))
     pack.sync_metrics()
     overhead = len(render_pack(pack))

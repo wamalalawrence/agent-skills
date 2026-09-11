@@ -52,6 +52,7 @@ Installation and releases
   versions              List installed and available releases
   check-updates         Compare the installed version against the latest release
   verify                Check the installation and report problems (no writes)
+                        --quiet | --explain-codes
   doctor                Report what this environment can actually do
   hosts [--json]        List supported hosts and their global discovery paths
   provider              Where releases come from, and whether it is reachable
@@ -234,12 +235,21 @@ case "${COMMAND}" in
     # shellcheck source=lib/install.sh
     . "${AS_LIB_DIR}/install.sh"
     AS_VERIFY_QUIET="false"
+    AS_VERIFY_EXPLAIN="false"
     for arg in "$@"; do
       case "${arg}" in
         --quiet) AS_VERIFY_QUIET="true" ;;
+        --explain-codes) AS_VERIFY_EXPLAIN="true" ;;
         *) as_die "unknown option for verify: ${arg}" "${AS_EXIT_USAGE}" ;;
       esac
     done
+    if [ "${AS_VERIFY_EXPLAIN}" = "true" ]; then
+      # The exit codes are a frozen public contract, so they need a way to be
+      # read that is not "grep the source". This was documented in
+      # lib/asrelease/exits.py as an existing flag before it existed.
+      as_explain_exit_codes
+      exit 0
+    fi
     if [ "${AS_VERIFY_QUIET}" = "true" ]; then
       as_verify_install >/dev/null 2>&1
       exit $?

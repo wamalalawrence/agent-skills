@@ -48,6 +48,7 @@ and `zsh` do with the string, not what a full grammar would prefer.
 from __future__ import annotations
 
 import re
+import shlex
 from dataclasses import dataclass, field
 
 # Recursion and size ceilings. This runs before every shell command, so a
@@ -59,6 +60,13 @@ MAX_INPUT_CHARS = 200_000
 # Wrappers that pass their remaining arguments through to another command. The
 # guard must look past them: `sudo rm -rf /` is `rm -rf /` with more privilege,
 # not a `sudo` invocation.
+#
+# Every wrapper here is listed in PASSTHROUGH_WITH_OPTIONS below with the flags
+# that consume the token after them. That table is the whole difference between
+# seeing `rm -rf /` and seeing `root`: skipping `-u` but not its value makes the
+# value look like the command, and a "command" the rules have never heard of
+# matches nothing and reads as ALLOW. `sudo -u root rm -rf /` was allowed for
+# exactly that reason.
 PASSTHROUGH = {
     "sudo",
     "doas",
@@ -76,14 +84,36 @@ PASSTHROUGH = {
     "script",
 }
 
-# Wrappers that take options before the command they run. Options are skipped
-# until the first non-option token, which is the real command.
+# Wrappers that take options before the command they run, mapped to the options
+# that take a separate value. Options are skipped — with their values — until the
+# first token that is neither, which is the real command.
+#
+# `--flag=value` needs no entry: it is one token and the option loop skips it.
 PASSTHROUGH_WITH_OPTIONS = {
     "timeout": {"-s", "--signal", "-k", "--kill-after"},
     "xargs": {"-I", "-i", "-n", "-P", "-d", "-E", "-s", "-a", "--arg-file",
               "--max-args", "--max-procs", "--delimiter", "--replace"},
-    "env": set(),
+    "env": {"-u", "--unset", "-C", "--chdir", "-S", "--split-string",
+            "--block-signal", "--default-signal", "--ignore-signal"},
     "nohup": set(),
+    "sudo": {"-u", "--user", "-g", "--group", "-U", "--other-user", "-C",
+             "--close-from", "-p", "--prompt", "-r", "--role", "-t", "--type",
+             "-T", "--command-timeout", "-h", "--host", "-D", "--chdir",
+             "-R", "--chroot"},
+    "doas": {"-u", "-C", "-a"},
+    "nice": {"-n", "--adjustment"},
+    "ionice": {"-c", "--class", "-n", "--classdata", "-p", "--pid",
+               "-P", "--pgid", "-u", "--uid"},
+    "time": {"-o", "--output", "-f", "--format"},
+    "stdbuf": {"-i", "--input", "-o", "--output", "-e", "--error"},
+    "watch": {"-n", "--interval", "-d", "--differences"},
+    "script": {"-c", "--command", "-T", "--log-timing", "-I", "--log-in",
+               "-O", "--log-out", "-B", "--log-io"},
+    "setsid": set(),
+    "eatmydata": set(),
+    "command": set(),
+    "builtin": set(),
+    "exec": {"-a"},
 }
 
 # Leading positional arguments a wrapper consumes before the command starts.
@@ -135,6 +165,9 @@ class SimpleCommand:
     inline_language: str | None = None
     unresolved_name: bool = False
     here_string: str | None = None
+    #: Other readings of the same line that also have to be inspected. See
+    #: `_strip_wrappers` for why a single reading is not enough.
+    alternatives: list[str] = field(default_factory=list)
 
     @property
     def name(self) -> str:
@@ -395,14 +428,25 @@ def tokenize(text: str) -> list[tuple[str, str, bool]]:
 # ---------------------------------------------------------------------------
 # Assembly
 # ---------------------------------------------------------------------------
-def _strip_wrappers(argv: list[str], quoted: list[bool]) -> tuple[list[str], list[bool], dict]:
+def _strip_wrappers(
+    argv: list[str], quoted: list[bool]
+) -> tuple[list[str], list[bool], dict, list[str]]:
     """Remove env assignments and transparent wrappers from the front of argv.
 
-    Returns the real command, its quoting flags, and the environment assignments
-    that were stripped. The assignments are kept because they can themselves be
-    the payload (`LD_PRELOAD=...`, `AWS_PROFILE=production`).
+    Returns the real command, its quoting flags, the environment assignments
+    that were stripped, and any *alternative* readings of the same line. The
+    assignments are kept because they can themselves be the payload
+    (`LD_PRELOAD=...`, `AWS_PROFILE=production`).
+
+    The alternatives exist because a wrapper's option table can never be
+    complete. When an unrecognised option is followed by a bare word, that word
+    is either the option's value or the command, and guessing wrong in the
+    unsafe direction hides the command entirely. Both readings are returned and
+    both are inspected; a wrapper flag the guard has never seen therefore costs
+    a redundant check rather than a bypass.
     """
     env: dict[str, str] = {}
+    alternatives: list[str] = []
     index = 0
     guard = 0
     while index < len(argv) and guard < 32:
@@ -417,9 +461,9 @@ def _strip_wrappers(argv: list[str], quoted: list[bool]) -> tuple[list[str], lis
         if head in MULTICALL:
             index += 1
             continue
-        if head in PASSTHROUGH_WITH_OPTIONS:
+        if head in PASSTHROUGH_WITH_OPTIONS or head in PASSTHROUGH:
+            flags = PASSTHROUGH_WITH_OPTIONS.get(head, frozenset())
             index += 1
-            flags = PASSTHROUGH_WITH_OPTIONS[head]
             while index < len(argv):
                 candidate = argv[index]
                 if _ASSIGNMENT_RE.match(candidate):
@@ -427,27 +471,45 @@ def _strip_wrappers(argv: list[str], quoted: list[bool]) -> tuple[list[str], lis
                     env[key] = value
                     index += 1
                     continue
-                if candidate.startswith("-"):
+                if candidate == "--":
+                    index += 1
+                    break
+                if candidate.startswith("-") and candidate != "-":
                     takes_value = candidate in flags
                     index += 1
-                    if takes_value and index < len(argv):
-                        index += 1
+                    if takes_value:
+                        if index < len(argv):
+                            index += 1
+                        continue
+                    if (
+                        "=" not in candidate
+                        and index < len(argv)
+                        and not argv[index].startswith("-")
+                        and index + 1 < len(argv)
+                    ):
+                        alternatives.append(_requote(argv[index + 1:]))
                     continue
                 break
             index += PASSTHROUGH_SKIP_POSITIONAL.get(head, 0)
-            continue
-        if head in PASSTHROUGH:
-            index += 1
-            while index < len(argv) and argv[index].startswith("-"):
-                index += 1
             continue
         break
     if index >= len(argv) and argv:
         # Stripping consumed everything, which means the "wrapper" was the
         # command: bare `env`, bare `timeout`. Returning an empty argv would
         # erase the command from the analysis, so keep the original.
-        return argv, quoted, env
-    return argv[index:], quoted[index:], env
+        return argv, quoted, env, alternatives
+    return argv[index:], quoted[index:], env, alternatives
+
+
+def _requote(words: list[str]) -> str:
+    """Rebuild a shell string from words the tokenizer already unquoted.
+
+    Used wherever an argv slice has to be handed back to the parser as source.
+    Re-joining with plain spaces is what let `find . -exec sh -c 'rm -rf /' \\;`
+    through: the quotes vanished, the re-parse read `sh -c rm` with `-rf` as
+    `$0`, and the destructive body was never inspected.
+    """
+    return " ".join(shlex.quote(word) for word in words)
 
 
 def _split_on_operators(
@@ -505,6 +567,17 @@ def _build_simple_command(
     expecting_redirect: str | bool = False
     for kind, text, is_quoted in run:
         if kind == "subst-here":
+            if expecting_redirect:
+                # `sh < <(curl …)` and `sh <<< "$(…)"`: the program is known, its
+                # input is a command's output. Dropping the pending redirect here
+                # left the command looking like a bare `sh` that reads nothing,
+                # so the opaque-input rule never fired.
+                if expecting_redirect == "<<<":
+                    here_string = text
+                else:
+                    redirects.append("%s <(process substitution)" % expecting_redirect)
+                expecting_redirect = False
+                continue
             if not words:
                 name_from_substitution = True
             continue
@@ -532,7 +605,7 @@ def _build_simple_command(
                 origin=origin, depth=depth,
             )
         return None
-    argv, quoted, env = _strip_wrappers(words, quoted)
+    argv, quoted, env, alternatives = _strip_wrappers(words, quoted)
     if not argv:
         # Nothing but assignments: `FOO=bar`. Keep it, the env may be the payload.
         return SimpleCommand(
@@ -552,6 +625,7 @@ def _build_simple_command(
         quoted_argv=quoted,
         unresolved_name=unresolved,
         here_string=here_string,
+        alternatives=alternatives,
     )
 
 
@@ -651,10 +725,79 @@ def _find_exec_body(command: SimpleCommand) -> str | None:
             for follow in args[index + 1:]:
                 if follow in (";", "+", "\\;"):
                     break
-                body.append(substitution if follow == "{}" else follow)
+                if follow == "{}":
+                    # The stand-in can name several paths; each stays its own
+                    # argument so the path rules classify them individually.
+                    body.extend(substitution.split() or [substitution])
+                    continue
+                body.append(follow)
             if body:
-                return " ".join(body)
+                # `-exec` runs an argv directly, without a shell, so the words
+                # keep their boundaries. Re-quoting preserves them; joining with
+                # bare spaces did not, and `-exec sh -c 'rm -rf /'` re-parsed as
+                # `sh -c rm` with the payload lost to `$0` and `$1`.
+                return _requote(body)
     return None
+
+
+# Ways inline code in each supported language hands a string to a shell or to
+# exec. The guard does not interpret the program, but it does not need to: the
+# command that reaches the operating system is written in the source as a
+# literal, and that literal is shell.
+_SHELL_OUT_CALL_RE = re.compile(
+    r"\b(?:os\.system|os\.popen|os\.exec[lv]p?e?|subprocess\.(?:run|call|check_call|"
+    r"check_output|Popen|getoutput|getstatusoutput)|commands\.getoutput|"
+    r"child_process\.(?:exec|execSync|execFile|execFileSync|spawn|spawnSync)|"
+    r"execSync|spawnSync|execFileSync|shell_exec|passthru|proc_open|popen|"
+    r"IO\.popen|Open3\.\w+|Kernel\.system|system|exec|qx)\s*\(",
+)
+_STRING_LITERAL_RE = re.compile(
+    r"""'''(?P<a>[\s\S]*?)'''|\"\"\"(?P<b>[\s\S]*?)\"\"\"|'(?P<c>[^'\n]*)'|"(?P<d>[^"\n]*)\""""
+)
+MAX_INLINE_SHELL_STRINGS = 8
+
+
+def _inline_shell_strings(body: str) -> list[str]:
+    """Shell command strings handed to the OS from inside an inline program.
+
+    `python3 -c 'import os; os.system("rm -rf /")'` is a recursive delete of the
+    filesystem root wearing a Python costume. The behavioural patterns matched
+    against the body itself will never cover every spelling of "shell out", so
+    the argument is extracted and handed back to the normal shell rules — the
+    ones that already know what `rm -rf /` is.
+
+    Only literals in the call's own argument list are taken, and only the first
+    few, so a large program costs a bounded amount. A constructed string is not
+    recovered; that stays an unresolved element, which is what the inline-code
+    rules are for.
+    """
+    found: list[str] = []
+    for match in _SHELL_OUT_CALL_RE.finditer(body):
+        start = match.end() - 1
+        try:
+            inner, _ = _read_matching(body, start, "(", ")")
+        except TokenizeError:
+            continue
+        words: list[str] = []
+        for literal in _STRING_LITERAL_RE.finditer(inner):
+            value = next(
+                (literal.group(name) for name in ("a", "b", "c", "d")
+                 if literal.group(name) is not None),
+                None,
+            )
+            if value is None or not value.strip():
+                continue
+            words.append(value)
+        if not words:
+            continue
+        # A list form — `subprocess.run(["rm", "-rf", "/"])` — is one command
+        # split across literals. A single literal is already a command line.
+        candidate = words[0] if len(words) == 1 else _requote(words)
+        if candidate not in found:
+            found.append(candidate)
+        if len(found) >= MAX_INLINE_SHELL_STRINGS:
+            break
+    return found
 
 
 def _inline_code(command: SimpleCommand) -> tuple[str, str] | None:
@@ -744,6 +887,12 @@ def parse(command: str) -> ParsedCommand:
                 inline = _inline_code(built)
                 if inline is not None:
                     built.inline_language, built.inline_code = inline
+                    for shell_string in _inline_shell_strings(built.inline_code):
+                        queue.append(
+                            (shell_string, "%s -c body" % built.name, depth + 1)
+                        )
+                for alternative in built.alternatives:
+                    queue.append((alternative, "%s wrapper option" % built.name, depth + 1))
                 stages.append(built)
             if stages:
                 result.pipelines.append(Pipeline(commands=stages, raw=source))

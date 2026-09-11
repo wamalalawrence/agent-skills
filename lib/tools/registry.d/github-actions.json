@@ -41,7 +41,8 @@
   "delegates_to": "github",
   "docs": "docs/engineering-tools.md",
   "bounded_capabilities": [
-    "ci.logs.read"
+    "ci.logs.read",
+    "ci.artifact.read"
   ],
   "reference_status": "validated",
   "notes": "Proves the CI capability family reuses an existing SCM transport rather than a bespoke adapter."

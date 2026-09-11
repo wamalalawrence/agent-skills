@@ -21,6 +21,10 @@
 # Directories inside the source tree that the install exposes globally. `hooks`
 # is included so the optional hook templates have a stable absolute path too.
 AS_LINKED_TREES="skills scripts lib bin docs hooks"
+# Exit codes are a public contract, frozen in lib/asrelease/exits.py and in
+# docs/one-point-oh.md. Named here so the shell half cannot drift from the
+# Python half by returning whatever the last command happened to produce.
+AS_EXIT_VERIFY_FAILED="${AS_EXIT_VERIFY_FAILED:-7}"
 
 # ------------------------------------------------------------------------------
 # Registry access
@@ -526,6 +530,72 @@ EOF
 # ------------------------------------------------------------------------------
 # verify
 # ------------------------------------------------------------------------------
+# Re-hash an installed release and compare it with its own manifest.
+#
+#   0  the payload matches
+#   1  it does not
+#   3  the check could not run (no python3, no release engine reachable) — a
+#      missing tool is not evidence of tampering and must not read as one
+as_verify_payload_integrity() {
+  local root="$1"
+  local engine="${root}/lib"
+  [ -d "${engine}/asrelease" ] || return 3
+  command -v python3 >/dev/null 2>&1 || return 3
+  AS_VERIFY_ROOT="${root}" AS_VERIFY_ENGINE="${engine}" python3 - <<'PY'
+import os
+import sys
+
+sys.path.insert(0, os.environ["AS_VERIFY_ENGINE"])
+root = os.environ["AS_VERIFY_ROOT"]
+try:
+    from asrelease.release import verify_payload
+except Exception as exc:  # the engine is unreachable, not the payload wrong
+    sys.stderr.write("release engine unavailable: {}\n".format(exc))
+    raise SystemExit(3)
+try:
+    verify_payload(root)
+except SystemExit:
+    raise
+except Exception as exc:
+    sys.stderr.write("{}\n".format(getattr(exc, "message", None) or exc))
+    raise SystemExit(1)
+raise SystemExit(0)
+PY
+}
+# Print the frozen exit-code contract, read from its one definition.
+as_explain_exit_codes() {
+  local source_dir engine
+  source_dir="$(as_source_dir 2>/dev/null || true)"
+  engine="${source_dir:+${source_dir}/lib}"
+  if [ -n "${engine}" ] && [ -d "${engine}/asrelease" ] && command -v python3 >/dev/null 2>&1; then
+    AS_EXPLAIN_ENGINE="${engine}" python3 - <<'PY' && return 0
+import os
+import sys
+
+sys.path.insert(0, os.environ["AS_EXPLAIN_ENGINE"])
+from asrelease.exits import Exit
+
+MEANINGS = {
+    0: "the operation succeeded",
+    2: "the command was wrong; fix the invocation",
+    3: "the release source needs credentials; authenticate, then retry",
+    4: "the release source was unreachable; retry later",
+    5: "the payload was not what it claimed to be; do not retry blindly",
+    6: "the machine could not be changed; the previous version is still active",
+    7: "the machine is in a bad state; run: agent-skills doctor",
+    10: "an update is available; informational, not a failure",
+}
+print("agent-skills exit codes (frozen at 1.0; see docs/one-point-oh.md)")
+print("")
+for code in sorted(Exit.NAMES):
+    print("  {:<3} {:<26} {}".format(code, Exit.NAMES[code], MEANINGS.get(code, "")))
+PY
+  fi
+  printf 'agent-skills exit codes\n\n'
+  printf '  0   ok\n  2   usage-error\n  3   authentication-required\n'
+  printf '  4   network-failure\n  5   integrity-failure\n  6   installation-failure\n'
+  printf '  7   verification-failure\n  10  update-available\n'
+}
 as_verify_install() {
   local errors=0
   local home source_dir manifest
@@ -579,8 +649,26 @@ as_verify_install() {
     else
       as_ok "version coherence: manifest, current, and payload all v${source_version}"
     fi
+    # Integrity, not just presence. Checking that release.json exists proved
+    # nothing about the tree it describes: `verify` printed "Installation
+    # verified" over a release whose files had been edited, because the payload
+    # hash was only ever re-computed at stage and rollback time. This re-hashes
+    # the active tree and compares it against the manifest that shipped with it,
+    # which is the only check that can tell a tampered release from a good one.
     if [ -f "${source_dir}/release.json" ]; then
-      as_ok "release manifest present in the active release"
+      local integrity_out integrity_rc
+      integrity_out="$(as_verify_payload_integrity "${source_dir}" 2>&1)"
+      integrity_rc=$?
+      if [ "${integrity_rc}" -eq 0 ]; then
+        as_ok "release payload matches its manifest hash"
+      elif [ "${integrity_rc}" -eq 3 ]; then
+        as_warn "could not re-check the payload hash: ${integrity_out}"
+      else
+        as_fail "release payload does not match its manifest"
+        printf '        %s\n' "${integrity_out}" >&2
+        printf '        Run: agent-skills install   (re-stages a verified payload)\n' >&2
+        errors=$((errors + 1))
+      fi
     else
       as_warn "active release has no release.json; integrity cannot be re-checked"
     fi
@@ -729,7 +817,11 @@ EOF
   printf '\n'
   if [ "${errors}" -gt 0 ]; then
     printf '%s failure(s). See the FAIL lines above.\n' "${errors}" >&2
-    return 1
+    # 7, not 1. The exit-code contract in docs/one-point-oh.md freezes
+    # "verify failed" as 7 and says 1 never appears, and a caller branching on
+    # 7 to run doctor saw the drift case fall through as a generic failure. The
+    # only reason it was 1 was that this function returned the shell's default.
+    return "${AS_EXIT_VERIFY_FAILED}"
   fi
   printf 'Installation verified.\n'
   return 0
