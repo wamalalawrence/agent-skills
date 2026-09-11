@@ -23,7 +23,7 @@ reference. [CHANGELOG.md](../../CHANGELOG.md) has the full list; the short versi
 | Recall preferred the oldest verification | ascending ISO date among equals | most recent first |
 | Budget counted the payload only | 4,258 chars rendered for a 4,000 budget | rendered length is the budget, frame included |
 | Lesson updates ran unlocked | read-modify-write outside `locked` | every mutation under the lock; deterministic lock-hold case |
-| `durable.locked` proceeded after timeout; masked body errors | `RuntimeError: generator didn't stop after throw()` | `LockTimeout` before the body; body errors propagate; corrupt stores quarantined |
+| `durable.locked` ran unlocked after a timeout, and hid body errors | `generator didn't stop after throw()` | raises `LockTimeout`; errors propagate; corrupt stores kept |
 | Overlapping targets "provably independent" | `src/api` grouped with `src/api/handler.ts` | normalised, containment-aware, aliases and escapes refused |
 | Completion was an unverified claim | `--status complete` with only a summary → `completed` | `dod-check`; `verified_delivery` in telemetry; `NOT verified` printed |
 | "Every `false` needs a waiver" | classifications waived | checks vs classifications; waivers name an authority |
@@ -60,11 +60,11 @@ Every suite below was run on this checkout.
 | `scripts/test-tools.sh` | 43 passed, 0 failed | 43 |
 | `scripts/test-release-readiness.sh` | see below | 83 checks |
 
-The warning count is unchanged. `test-cli-install.sh` reports one case fewer: it is conditional on a
-pre-release `VERSION`, which `1.0.0` no longer has. The secret-boundary suite grew by three (the evidence-field case,
-the locator-survival case, and the redactor-removal probe); adaptive execution by six (parent
-and child, alias, escaping, absolute, disjoint siblings, resource identity). The new suite's 53
-checks are listed in its header.
+The warning count is unchanged. `test-cli-install.sh` reports one case fewer because that case is
+conditional on a pre-release `VERSION`, which `1.0.0` no longer has. The secret-boundary suite
+grew by three — the evidence-field case, the locator-survival case, and the redactor-removal
+probe — and adaptive execution by six: parent and child, alias, escaping, absolute, disjoint
+siblings, and resource identity. The new suite's 53 checks are listed in its header.
 
 Not re-measured: the Execution Guard benchmark. `scripts/guard_parse.py` and `scripts/guard_rules.py`
 are byte-identical to `1.0.0-rc.4`, whose numbers (p50 0.104 ms, p95 0.298 ms, cold call 74 ms)

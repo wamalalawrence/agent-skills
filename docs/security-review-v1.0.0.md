@@ -251,13 +251,35 @@ obligation, not a guarantee.
 
 ## Residual risks
 
-| Risk | Control offered | Why not the default |
-| --- | --- | --- |
-| A verified definition of done was written by the agent it verifies. | `dod-check` refuses passes without records or on the wrong revision; `code-reviewer` re-runs it; CI is the stronger boundary. | The project runs on many hosts without CI; a local checkable claim beats no claim. |
-| Two distinct task keys for one observation count as two. | Pull-request review of the lesson; `doctor` reports counts. | The runtime cannot know two locators are one run. |
-| A symlink makes two normalised targets one. | Sequential execution when independence is uncertain; the plan template asks for resources, not only paths. | The decision has no checkout to resolve against. |
-| The stop-hook fallback cannot choose between two in-flight tasks. | It records nothing rather than guessing; the agent's own `finish-task` is unaffected. | Guessing wrote memory under the wrong key before `1.0.0-rc.4`. |
-| Instruction-level rules (RED with the test present, frontmatter-only dispatch) depend on the model. | The definition of done records what was run; `dod-check` refuses RED without its assertion. | No runtime hook can observe what a host's read tool returned. |
+Each one names the control offered and why that control is not the default.
+
+**A verified definition of done was written by the agent it verifies.** `dod-check` refuses a
+pass with no execution record and a pass on the wrong revision, and `code-reviewer` re-runs it
+rather than reading the engineer's line. Protected CI running the same checks on the same
+revision is the stronger boundary and is not the default here because the project runs on many
+hosts that have none; a locally checkable claim beats an unfalsifiable one.
+
+**Two distinct task keys for one observation count as two.** The same run recorded under a
+ticket key and again under its PR URL raises confidence twice. The control is the pull-request
+review of the lesson, plus `doctor` printing the confirmation and contradiction counts. The
+runtime cannot know that two locators name one run, and guessing at it would reject legitimate
+independent evidence.
+
+**A symlink makes two normalised targets one.** `plan-next` normalises paths but does not
+resolve symlinks. The control is that anything unproven runs sequentially, and the phase
+template asks for named resources as well as paths. Resolution is not the default because the
+decision runs against the plan, on a machine that may not hold the checkout the phases will
+write.
+
+**The stop-hook fallback cannot choose between two in-flight tasks.** It records nothing rather
+than guessing, and the agent's own `finish-task` is unaffected. Guessing is not the default
+because it wrote memory under the wrong task's key before `1.0.0-rc.4`, and with cleanup on it
+deleted that task's scratch.
+
+**Instruction-level rules depend on the model.** RED with the test present, and frontmatter-only
+dispatch, are obligations in prose. The control is that the definition of done records what was
+actually run and `dod-check` refuses RED with no behavioural assertion. Nothing stronger is
+offered because no runtime hook can observe how much of a file a host's read tool returned.
 
 ## Related
 
