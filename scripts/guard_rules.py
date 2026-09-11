@@ -652,11 +652,16 @@ def check_system_write(command, workspace, context) -> list[Finding]:
                 target.display,
             ))
     if command.name in ("mv", "cp", "install", "ln", "dd", "tee", "truncate"):
+        # HOME_ROOT belongs here as much as SYSTEM_ROOT. The redirection branch
+        # above covers both, so `echo x > ~/.ssh/authorized_keys` was denied
+        # while `cp key ~/.ssh/authorized_keys` — the same write, and the more
+        # likely spelling — was allowed. A credential path does not become safe
+        # because the bytes arrived by copy.
         for target in _targets(command, workspace)[1:] or _targets(command, workspace):
-            if target.classification == gp.SYSTEM_ROOT:
+            if target.classification in (gp.SYSTEM_ROOT, gp.HOME_ROOT):
                 findings.append(Finding(
                     FS_MOVE_OVER_SYSTEM, DENY,
-                    "%s targets the system path %s" % (command.name, target.resolved),
+                    "%s targets %s" % (command.name, target.resolved),
                     target.display,
                 ))
                 break
@@ -1249,6 +1254,10 @@ def check_inline_code(command, workspace, context) -> list[Finding]:
             REMOTE_EXEC_INLINE, DENY,
             "%s -c body downloads content and executes it" % language,
         ))
+    # Native deletion calls. A shell-out — `os.system("rm -rf /")` — is not
+    # matched here on purpose: the parser extracts the command string from the
+    # call and re-parses it, so `rm -rf /` is judged by the rule that knows what
+    # `rm -rf /` is, with the right path classification and the right message.
     destructive = re.search(
         r"(?:\brmtree\b|os\.remove|os\.unlink|\bunlink\b|rmSync|unlinkSync|"
         r"fs\.rm\b|FileUtils\.rm_rf|File\.delete|\bremove_tree\b)",

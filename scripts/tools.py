@@ -75,6 +75,14 @@ BOUNDED_MARKERS = (
     "finding.read",
     "timeline.read",
     "traces.read",
+    # The three biggest payloads in practice, and the three this list used to
+    # omit: an 800-table schema dump, a CI artifact, and a Terraform state or
+    # plan. They are exactly the reads the Context Optimizer exists for, so a
+    # doctor that could not require a bound for them was not checking the cases
+    # that matter most.
+    "schema.read",
+    "artifact.read",
+    "state.read",
 )
 
 

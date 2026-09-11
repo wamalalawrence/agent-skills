@@ -166,8 +166,13 @@ Verdicts: `continue`, `narrow`, `split`, `restart`, `stop` (exit `0`, `10`, `10`
 **It measures stagnation, not elapsed time.** A hard timeout kills the careful work along with
 the stuck work and teaches everyone to pad their estimates. Work still writing milestones at
 three times its budget is not stuck — it is bigger than someone thought, and the useful response
-is to split it, not to shoot it. Work that has written nothing for twenty minutes is stuck
-whether its budget was five minutes or fifty.
+is to split it, not to shoot it.
+
+The stall window is proportional to the budget, with a floor: `max(5, budget_minutes × 0.5)`
+minutes of silence counts as stuck, and the first milestone gets `max(5, budget_minutes × 0.75)`.
+So a 20-minute budget tolerates 10 minutes of silence and a 5-minute budget tolerates 5. A single
+fixed window would either fire on careful work inside a long budget or never fire inside a short
+one.
 
 The first milestone gets a longer window than a mid-run gap, because an agent has to read the
 brief and orient before it has anything worth recording.

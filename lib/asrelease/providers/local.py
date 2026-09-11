@@ -27,6 +27,8 @@ from ..release import (
     StagedRelease,
     build_manifest,
     channel_of,
+    is_version,
+    normalise_version,
     read_manifest,
     read_version_file,
     write_manifest,
@@ -60,6 +62,19 @@ class LocalReleaseProvider(ReleaseProvider):
             raise ProviderError(
                 "no readable VERSION file in {}".format(self.source), Exit.USAGE
             )
+        # The VERSION file of a directory somebody handed us is untrusted input,
+        # and this value goes on to name a staging directory and a release
+        # directory. A source whose VERSION is not a version is a broken source;
+        # saying so here is the difference between a clear refusal and a path
+        # built out of whatever the file contained.
+        if not is_version(version):
+            raise ProviderError(
+                "VERSION in {} reads {!r}, which is not a semantic version".format(
+                    self.source, version[:120]
+                ),
+                Exit.USAGE,
+                hint="expected MAJOR.MINOR.PATCH with an optional -prerelease, e.g. 1.0.0-rc.4",
+            )
         return version
 
     def resolve_latest(self, channel: str = "stable") -> ReleaseRef:
@@ -81,7 +96,13 @@ class LocalReleaseProvider(ReleaseProvider):
 
     def resolve_version(self, version: str) -> ReleaseRef:
         actual = self._version()
-        wanted = (version or "").lstrip("vV")
+        wanted = normalise_version(version)
+        if wanted and not is_version(wanted):
+            raise ProviderError(
+                "{!r} is not a release version".format((version or "")[:120]),
+                Exit.USAGE,
+                hint="expected MAJOR.MINOR.PATCH with an optional -prerelease, e.g. 1.0.0-rc.4",
+            )
         if wanted and wanted != actual:
             raise ProviderError(
                 "source {} holds version {}, not {}".format(self.source, actual, wanted),

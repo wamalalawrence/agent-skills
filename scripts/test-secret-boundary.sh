@@ -47,6 +47,8 @@ BB="${REPO}/scripts/blackboard.py"
 PM="${REPO}/scripts/project-memory.py"
 KB="${REPO}/scripts/knowledge.py"
 TM="${REPO}/scripts/telemetry.py"
+OM="${REPO}/scripts/org-memory.py"
+OR="${REPO}/scripts/outcome-recorder.py"
 
 PASS=0
 FAIL=0
@@ -330,6 +332,52 @@ if ! grep -rqF "$LONG" "$KBREPO" 2>/dev/null; then
 else
   bad "the committed knowledge base does not retain a credential value"
 fi
+# Org memory is the widest-reaching tier of the four: `start-task` prints it into
+# every future task in every project, so a secret here is re-read indefinitely
+# and across project boundaries. It was the one durable path with no redaction.
+"$PYTHON3" "$OM" --cache-root "$CACHE" init >/dev/null 2>&1
+"$PYTHON3" "$OM" --cache-root "$CACHE" note --section "Common gotchas" \
+  --text "every project's staging DB uses password: \"${SHORT}\"" >/dev/null 2>&1
+"$PYTHON3" "$OM" --cache-root "$CACHE" promote --from demo --section "Org patterns" \
+  --text "CI needs PGPASSWORD=${LONG} exported" >/dev/null 2>&1
+if ! grep -rqF "$SHORT" "$CACHE/_org" 2>/dev/null \
+   && ! grep -rqF "$LONG" "$CACHE/_org" 2>/dev/null; then
+  ok "org memory does not retain a credential value"
+else
+  bad "org memory does not retain a credential value" "see $CACHE/_org"
+fi
+if grep -rq "staging DB" "$CACHE/_org" 2>/dev/null; then
+  ok "org memory keeps the surrounding fact"
+else
+  bad "org memory keeps the surrounding fact"
+fi
+# `--promote-to-org` is the route by which a value travels from one project's
+# notes into every project's, so it is checked on its own rather than assumed
+# to inherit the guarantee above.
+if [ -f "$OR" ]; then
+  "$PYTHON3" "$OR" --cache-root "$CACHE" record \
+    --project demo --issue proj-901 --outcome merged \
+    --skills software-engineer=1.0.0 \
+    --summary "shipped with db_password = '${SHORT}' in the staging config" \
+    --lesson "rotate db_password = '${SHORT}' after every deploy" \
+    --promote-to-org --confirmed-in 2 >/dev/null 2>&1
+  if ! grep -rqF "$SHORT" "$CACHE/_org" 2>/dev/null; then
+    ok "promoting an outcome to org memory does not carry a credential value"
+  else
+    bad "promoting an outcome to org memory does not carry a credential value" \
+        "see $CACHE/_org"
+  fi
+fi
+# A quoted value under a credential-shaped key is how a YAML file, a .env, and a
+# config dump all spell it, and the unquoted rule stopped at the first quote.
+for spelling in "password: \"${SHORT}\"" "db_password = '${SHORT}'" "mariadb -u root -p${SHORT}"; do
+  OUT="$(printf '%s\n' "$spelling" | "$PYTHON3" "$REDACT" 2>&1)"
+  if contains "$OUT" "$SHORT"; then
+    bad "redaction covers: ${spelling%%[:= ]*}" "$OUT"
+  else
+    ok "redaction covers: $spelling"
+  fi
+done
 
 # ---------------------------------------------------------------------------
 sec "Mutation probes"
@@ -403,6 +451,43 @@ probe "probe: without the assignment pattern PGPASSWORD leaks" \
 probe "probe: without the attached-flag pattern mysql -p leaks" \
   "PROBE_ANCHOR_ATTACHED_PASSWORD_FLAG" \
   "mysql -u root -p${SHORT} payments"
+probe "probe: without the quoted-value pattern a YAML password leaks" \
+  "PROBE_ANCHOR_QUOTED_CREDENTIAL_VALUE" \
+  "db_password = '${SHORT}'"
+
+# Org memory's guarantee is that it calls redact at all — a different failure
+# from a pattern that does not fire, and the one that actually shipped. This
+# probe removes the call and asserts the value then lands on disk.
+ORG_PROBE="$BOX/org-probe"
+mkdir -p "$ORG_PROBE"
+cp "$REPO/scripts/org-memory.py" "$ORG_PROBE/org-memory.py"
+cp "$REPO/scripts/guard_audit.py" "$ORG_PROBE/guard_audit.py"
+cp "$REPO/scripts/durable.py" "$ORG_PROBE/durable.py"
+if "$PYTHON3" - "$ORG_PROBE/org-memory.py" <<'PY'
+import pathlib
+import sys
+
+path = pathlib.Path(sys.argv[1])
+text = path.read_text(encoding="utf-8")
+weakened = text.replace("    text = redact(text)\n", "", 1)
+if weakened == text:
+    sys.exit(3)
+path.write_text(weakened, encoding="utf-8")
+PY
+then
+  ORG_CACHE="$BOX/org-probe-cache"
+  "$PYTHON3" "$ORG_PROBE/org-memory.py" --cache-root "$ORG_CACHE" init >/dev/null 2>&1
+  "$PYTHON3" "$ORG_PROBE/org-memory.py" --cache-root "$ORG_CACHE" note \
+    --section "Common gotchas" --text "PGPASSWORD=${SHORT} is needed" >/dev/null 2>&1
+  if grep -rqF "$SHORT" "$ORG_CACHE" 2>/dev/null; then
+    ok "probe: without the redact call org memory retains the value"
+  else
+    bad "probe: without the redact call org memory retains the value" \
+        "the weakened build still redacted it, so the call is untested"
+  fi
+else
+  bad "probe: org-memory redaction call" "the redact call could not be removed"
+fi
 
 # ---------------------------------------------------------------------------
 printf '\n== summary ==\n'

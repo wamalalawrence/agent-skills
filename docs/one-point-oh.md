@@ -109,7 +109,9 @@ Rules that hold across all of them:
   output, an evidence pack, telemetry, or a context pack. Only whether a secret *resolves*.
   From `1.0.0-rc.2` this is also enforced on the durable write paths — the blackboard, project
   memory, telemetry, and the committed knowledge base redact on write rather than trusting the
-  caller. See [the secret boundary](secret-boundary.md).
+  caller. From `1.0.0-rc.4` org memory does too; it was the one durable tier that did not, and
+  it is the widest-reaching, since `start-task` prints it into every later task in every project.
+  See [the secret boundary](secret-boundary.md).
 - New fields may be **added**. Existing field names and their types do not change within `1.x`.
 - A `--json` invocation that fails still exits with the code from the tables above; the error
   goes to stderr.
@@ -148,7 +150,22 @@ Frozen:
   user state. Both are honoured everywhere.
 - **A version directory is complete and self-consistent.** Skills, runtime, and docs of one
   release are never mixed. `verify` fails (`7`) if the manifest, `current`, and the payload's own
-  `VERSION` disagree.
+  `VERSION` disagree, and also if the active tree no longer hashes to the `tree_sha256` in its own
+  `release.json` — presence of a manifest is not integrity. `verify --explain-codes` prints the
+  table below without running a check.
+- **A version is validated before it becomes a path.** Every version arriving from outside the
+  engine — a `--version` argument, a git tag, a `VERSION` file in a directory handed to
+  `--source` — must be semantic-version text, and a release directory name must be exactly one
+  safe path component. `--version X` installs release X or exits `2`; it never resolves to a
+  neighbouring release.
+- **Every state-changing operation holds one lock per install root.** `install`, `update`, and
+  `rollback` serialise against each other, so "atomic, no mixed state" holds for two processes
+  and not only for one. The lock is advisory and released by the kernel, so a killed installer
+  leaves nothing to clean up.
+- **A failure after staging restores everything it changed.** Activation pointer, host
+  registrations, `install.json`, and — when a release replaced a same-named one — the displaced
+  release directory. "Rolled back to X" is printed only after the restored machine verifies;
+  otherwise the message says the machine is in a mixed state and names `doctor`.
 - **`current` is the only activation lever.** Every host registration and every Execution Guard
   hook points through it, so one atomic symlink swap moves the whole machine.
 - **`update` never downgrades as a side effect.** Going back is `rollback`. `--allow-downgrade`

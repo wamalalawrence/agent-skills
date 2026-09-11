@@ -177,6 +177,19 @@ def copy_payload(source: str, dest: str, entries) -> int:
                     Exit.INTEGRITY,
                 )
             continue
+        # The escape check inside `_copy_tree` only sees links on files it walks
+        # past, so a payload entry that is *itself* a link — `skills -> ~/.ssh` —
+        # was resolved by `isdir` and then walked as if it were part of the
+        # checkout. Every entry is checked before it is read, at the top too.
+        resolved_origin = os.path.realpath(origin)
+        if not _inside(source, resolved_origin):
+            raise ExitError(
+                "source tree entry {} resolves outside the checkout: {} -> {}".format(
+                    name, origin, resolved_origin
+                ),
+                Exit.INTEGRITY,
+                hint="a release payload must be self-contained; move the real content in-tree",
+            )
         target = os.path.join(dest, name)
         if os.path.isdir(origin):
             written += _copy_tree(origin, target, source)
@@ -193,6 +206,19 @@ def _copy_tree(origin: str, target: str, source_root: str) -> int:
     os.makedirs(target, exist_ok=True)
     for current, dirnames, filenames in os.walk(origin):
         dirnames[:] = sorted(d for d in dirnames if d not in PAYLOAD_EXCLUDE_NAMES)
+        # `os.walk` does not descend into a symlinked directory, so one pointing
+        # outside the checkout would be dropped from the payload without a word.
+        # Silence is the wrong answer: either the release is missing content it
+        # expects, or the checkout is trying to reach outside itself.
+        for name in list(dirnames):
+            candidate = os.path.join(current, name)
+            if os.path.islink(candidate) and not _inside(source_root, os.path.realpath(candidate)):
+                raise ExitError(
+                    "source tree link escapes the checkout: {} -> {}".format(
+                        candidate, os.path.realpath(candidate)
+                    ),
+                    Exit.INTEGRITY,
+                )
         relative = os.path.relpath(current, origin)
         here = target if relative == "." else os.path.join(target, relative)
         os.makedirs(here, exist_ok=True)

@@ -74,15 +74,25 @@ Exit codes: `0` processed, or `--check` found nothing · `1` `--check` found som
 
 ### Redaction on write
 
-Four paths redact whether or not anyone remembered to pipe, because they are where a forgotten
+Five paths redact whether or not anyone remembered to pipe, because they are where a forgotten
 value comes to rest and gets read back into the *next* agent's starting context:
 
 | Path | Why it redacts on write |
 | --- | --- |
 | [Blackboard](task-blackboard.md) (`append`, `artifact`, `progress`, `handoff`) | Where skills paste tool output, and it is re-read by design |
 | [Project memory](project-memory.md) (`note`, and every `finish-task` flag that reaches it) | Outlives the task; loaded by every later `start-task` |
+| [Org memory](org-memory.md) (`note`, `promote`, and `--promote-to-org`) | The widest reach of the five: printed into every later task in *every* project |
 | [Telemetry](telemetry.md) | Append-only, so a mistaken value cannot be edited out |
 | [Repo knowledge base](repo-knowledge.md) (`note`, `lesson add`) | **Committed.** A credential written here is a credential published |
+
+Org memory was the one durable tier with no redaction until `1.0.0-rc.4`, and the one where the
+consequence is largest: a value promoted there travels out of the project that recorded it. The
+redaction now happens in `append_note`, so `note`, `promote`, and every future writer inherit it
+rather than each remembering to ask.
+
+All five write through `scripts/durable.py`: a temporary file plus `os.replace` under an advisory
+lock, so two agents appending at once cannot lose a bullet and a crash cannot leave a store no
+reader can parse.
 
 The Execution Guard's decision log uses the same implementation from the other direction — it
 inspects the commands most likely to carry a secret and must not become the store that keeps

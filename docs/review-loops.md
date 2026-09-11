@@ -35,9 +35,12 @@ Each entry: producer → reviewer (mode), trigger, exit rule.
   with strictly-decreasing `blocker`+`major` count per round. Remaining `minor` items
   become PR review notes.
 - **`software-engineer` → `code-reviewer` (`outer`).** Trigger: after Phase 3
-  Validation, before PR/commit. Exit: engineer fixes `blocker` findings and reruns
-  the reviewer within `${CODE_REVIEWER_MAX_ROUNDS}` (default `3`) with
-  strictly-decreasing finding counts. Surviving `major` / `minor` ship as PR notes.
+  Validation, before PR/commit. Exit: `Loop: converged` — no `blocker` or `major`
+  findings remain — within `${CODE_REVIEWER_MAX_ROUNDS}` (default `3`) with
+  strictly-decreasing finding counts. Surviving `minor` / `nit` items ship as PR notes;
+  a surviving `major` does not. Any other signal stops the workflow and surfaces to the
+  user, per
+  [`software-engineer` § 3.5](../skills/software-engineer/SKILL.md#35-outer-loop-code-review-call-code-reviewer).
 - **`issue-investigator` → self-validation against the
   [investigation-quality checklist](#investigation-quality-checklist).** Trigger: before
   emitting the final `Investigation Result`. Exit: one revision pass; items not closed

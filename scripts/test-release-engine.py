@@ -40,8 +40,11 @@ from asrelease.release import (  # noqa: E402
     build_manifest,
     compare_versions,
     compute_tree_hash,
+    is_version,
     parse_version,
+    require_version,
     verify_payload,
+    versions_equal,
     write_manifest,
 )
 from asrelease.transaction import InstallTransaction, Reporter  # noqa: E402
@@ -488,6 +491,274 @@ def _(box):
         assert forbidden not in names, forbidden
     for required in ("VERSION", "bin", "lib", "scripts", "skills"):
         assert required in names, required
+
+
+# ------------------------------------------------------------------------------
+# Version validation
+#
+# A version is not a label here: it becomes a directory name, and one of the
+# paths built from it is passed to rmtree before the release has been verified.
+# So every source a version can arrive from is checked, and the path builder is
+# checked again on its own account.
+# ------------------------------------------------------------------------------
+@check("versions: a path-shaped version is refused before it becomes a path")
+def _(box):
+    for hostile in ("../../victim", "..", "/etc", "1.0.0/../../x", "", "  ", "not-a-version"):
+        exc = assert_raises(ExitError, lambda v=hostile: require_version(v))
+        assert exc.code == Exit.USAGE, (hostile, exc.code)
+    assert require_version("v1.0.0-rc.4") == "1.0.0-rc.4"
+    assert is_version("0.43.0") and not is_version("../x")
+
+
+@check("versions: identity is not satisfied by an unparseable version")
+def _(box):
+    # compare_versions reports unknown as equal so a machine on an unreadable
+    # version is "nothing to do"; versions_equal must not inherit that, or every
+    # typo matches every release.
+    assert compare_versions("definitely-not-a-version", "0.43.0") == 0
+    assert not versions_equal("definitely-not-a-version", "0.43.0")
+    assert not versions_equal("unknown", "1.0.0")
+    assert versions_equal("v1.0.0", "1.0.0")
+
+
+@check("layout: version_path refuses anything that is not one safe component")
+def _(box):
+    layout = Layout(home=os.path.join(box, "home"), config_dir=os.path.join(box, "cfg"))
+    for hostile in ("../../victim", "a/b", "..", ".hidden", "", "x\\y"):
+        exc = assert_raises(ExitError, lambda v=hostile: layout.version_path(v))
+        assert exc.code == Exit.USAGE, (hostile, exc.code)
+        assert_raises(ExitError, lambda v=hostile: layout.staging_path(v))
+    assert layout.version_path("1.0.0-rc.4").endswith(os.path.join("versions", "1.0.0-rc.4"))
+
+
+@check("layout: a traversing version cannot reach outside the install root")
+def _(box):
+    """The reported blocker, end to end.
+
+    A VERSION file of `../../victim` produced a staging path outside the install
+    root, and the first thing the transaction does with that path is delete it.
+    """
+    home = os.path.join(box, "home", ".agent-skills")
+    victim = os.path.join(box, "home", "victim")
+    os.makedirs(victim)
+    with open(os.path.join(victim, "keepme.txt"), "w", encoding="utf-8") as handle:
+        handle.write("data that must survive\n")
+
+    source = os.path.join(box, "src")
+    make_fixture_release(source, version="9.9.9")
+    with open(os.path.join(source, "VERSION"), "w", encoding="utf-8") as handle:
+        handle.write("../../victim\n")
+
+    from asrelease.providers.local import LocalReleaseProvider
+
+    provider = LocalReleaseProvider(source=source)
+    exc = assert_raises(ExitError, provider.resolve_latest, "not a semantic version")
+    assert exc.code == Exit.USAGE, exc.code
+    assert_raises(ExitError, lambda: provider.resolve_version("../../victim"))
+
+    layout = Layout(home=home, config_dir=os.path.join(box, "cfg"))
+    transaction = InstallTransaction(layout, provider, reporter=Reporter(quiet=True))
+    assert_raises(ExitError, lambda: transaction.run(channel="stable"))
+
+    assert os.path.isfile(os.path.join(victim, "keepme.txt")), "the victim directory was deleted"
+
+
+@check("providers: an invalid --version is a usage error, not the nearest release")
+def _(box):
+    """`--version X` means that release or nothing.
+
+    The git provider matched with `compare_versions(found, wanted) == 0`, which
+    reports an unparseable `wanted` as equal to everything — so a typo silently
+    selected whichever tag sorted first, on a fresh machine the oldest one.
+    """
+    from asrelease.providers.git import GitReleaseProvider
+
+    provider = GitReleaseProvider(repo="https://example.invalid/none.git")
+    tags = [("0.43.0", "refs/tags/v0.43.0", "a" * 40), ("1.0.0", "refs/tags/v1.0.0", "b" * 40)]
+    provider._tags = lambda: tags
+
+    exc = assert_raises(ExitError, lambda: provider.resolve_version("definitely-not-a-version"))
+    assert exc.code == Exit.USAGE, exc.code
+    exc = assert_raises(ExitError, lambda: provider.resolve_version("../../victim"))
+    assert exc.code == Exit.USAGE, exc.code
+    exc = assert_raises(ExitError, lambda: provider.resolve_version("2.0.0"))
+    assert exc.code == Exit.USAGE, exc.code
+    assert provider.resolve_version("v1.0.0").version == "1.0.0"
+
+
+@check("payload: a local source entry that links outside the checkout is refused")
+def _(box):
+    from asrelease.archive import copy_payload
+
+    secrets = os.path.join(box, "secrets")
+    os.makedirs(secrets)
+    with open(os.path.join(secrets, "id_rsa"), "w", encoding="utf-8") as handle:
+        handle.write("PRIVATE KEY\n")
+
+    source = os.path.join(box, "src")
+    make_fixture_release(source, version="9.9.9")
+    shutil.rmtree(os.path.join(source, "skills"))
+    os.symlink(secrets, os.path.join(source, "skills"))
+
+    dest = os.path.join(box, "dest")
+    exc = assert_raises(ExitError, lambda: copy_payload(source, dest, PAYLOAD_ENTRIES))
+    assert exc.code == Exit.INTEGRITY, exc.code
+    assert not os.path.exists(os.path.join(dest, "skills", "id_rsa"))
+
+
+# ------------------------------------------------------------------------------
+# Undo
+# ------------------------------------------------------------------------------
+@check("transaction: a failed verification restores the manifest it found")
+def _(box):
+    """Undo has to cover the manifest, not just the activation pointer.
+
+    Rollback re-activated the previous release and reconciled hosts, but left
+    install.json describing the release that failed — a machine whose `current`
+    said one version and whose manifest said another, reported as a clean
+    rollback.
+    """
+    register_provider(
+        "fake-registry", lambda **kw: FakeRegistryProvider(source_release=REPO_ROOT, **kw)
+    )
+    home = os.path.join(box, "home", ".agent-skills")
+    config = os.path.join(box, "cfg")
+    saved_home = os.environ.get("HOME")
+    os.environ["HOME"] = os.path.join(box, "home")
+    os.environ["AGENT_SKILLS_HOME"] = home
+    os.environ["AGENT_SKILLS_CONFIG_DIR"] = config
+    os.environ.pop("AGENT_SKILLS_SOURCE", None)
+    try:
+        layout = Layout(home=home, config_dir=config)
+        InstallTransaction(
+            layout, build_provider("fake-registry"), reporter=Reporter(quiet=True)
+        ).run(channel="stable")
+        assert layout.read_manifest().get("version") == "0.43.0"
+
+        second = InstallTransaction(
+            Layout(home=home, config_dir=config),
+            build_provider(
+                "fake-registry", **{}
+            ),
+            reporter=Reporter(quiet=True),
+        )
+        second.provider.catalogue = ["0.43.0", "0.44.0"]
+        # Fail the machine check that runs after the manifest has been written.
+        second._verify_machine = lambda: 1
+        exc = assert_raises(ExitError, lambda: second.run(channel="stable"))
+        assert exc.code == Exit.VERIFY_FAILED, exc.code
+    finally:
+        if saved_home is not None:
+            os.environ["HOME"] = saved_home
+        os.environ.pop("AGENT_SKILLS_HOME", None)
+        os.environ.pop("AGENT_SKILLS_CONFIG_DIR", None)
+
+    layout = Layout(home=home, config_dir=config)
+    active = layout.active_version()
+    recorded = layout.read_manifest().get("version")
+    assert active == "0.43.0", active
+    assert recorded == "0.43.0", "manifest says {} while current says {}".format(recorded, active)
+
+
+@check("transaction: a same-version repair failure restores the known-good tree")
+def _(box):
+    """The second half of the same defect.
+
+    Re-installing the active version moves the running tree to `<v>.replaced`.
+    Rollback re-activated `<v>` — which by then held the new, failing tree — and
+    reported success over it. The displaced directory is transaction state and
+    has to be restored.
+    """
+    register_provider(
+        "fake-registry", lambda **kw: FakeRegistryProvider(source_release=REPO_ROOT, **kw)
+    )
+    home = os.path.join(box, "home", ".agent-skills")
+    config = os.path.join(box, "cfg")
+    saved_home = os.environ.get("HOME")
+    os.environ["HOME"] = os.path.join(box, "home")
+    os.environ["AGENT_SKILLS_HOME"] = home
+    os.environ["AGENT_SKILLS_CONFIG_DIR"] = config
+    os.environ.pop("AGENT_SKILLS_SOURCE", None)
+    marker = "known-good.txt"
+    try:
+        layout = Layout(home=home, config_dir=config)
+        InstallTransaction(
+            layout, build_provider("fake-registry"), reporter=Reporter(quiet=True)
+        ).run(channel="stable")
+        # Mark the tree that is currently running, so "restored" can be checked
+        # against the actual directory rather than against its name.
+        with open(os.path.join(layout.version_path("0.43.0"), marker), "w") as handle:
+            handle.write("this is the tree that was working\n")
+
+        repair = InstallTransaction(
+            Layout(home=home, config_dir=config),
+            build_provider("fake-registry"),
+            reporter=Reporter(quiet=True),
+        )
+        repair._verify_machine = lambda: 1
+        exc = assert_raises(ExitError, lambda: repair.run(channel="stable"))
+        assert exc.code == Exit.VERIFY_FAILED, exc.code
+    finally:
+        if saved_home is not None:
+            os.environ["HOME"] = saved_home
+        os.environ.pop("AGENT_SKILLS_HOME", None)
+        os.environ.pop("AGENT_SKILLS_CONFIG_DIR", None)
+
+    layout = Layout(home=home, config_dir=config)
+    assert layout.active_version() == "0.43.0", layout.active_version()
+    restored = os.path.join(layout.version_path("0.43.0"), marker)
+    assert os.path.isfile(restored), "the active tree is the one that failed, not the known-good one"
+
+
+@check("transaction: a rollback is not claimed unless the machine verifies")
+def _(box):
+    """"rolled back" is a statement about the machine, so it is checked."""
+    register_provider(
+        "fake-registry", lambda **kw: FakeRegistryProvider(source_release=REPO_ROOT, **kw)
+    )
+    home = os.path.join(box, "home", ".agent-skills")
+    config = os.path.join(box, "cfg")
+    saved_home = os.environ.get("HOME")
+    os.environ["HOME"] = os.path.join(box, "home")
+    os.environ["AGENT_SKILLS_HOME"] = home
+    os.environ["AGENT_SKILLS_CONFIG_DIR"] = config
+    os.environ.pop("AGENT_SKILLS_SOURCE", None)
+    try:
+        layout = Layout(home=home, config_dir=config)
+        InstallTransaction(
+            layout, build_provider("fake-registry"), reporter=Reporter(quiet=True)
+        ).run(channel="stable")
+
+        failing = InstallTransaction(
+            Layout(home=home, config_dir=config),
+            build_provider("fake-registry"),
+            reporter=Reporter(quiet=True),
+        )
+        failing._verify_machine = lambda: 1
+        exc = assert_raises(ExitError, lambda: failing.run(channel="stable"))
+        assert "could not be undone" in exc.message, exc.message
+        assert exc.code == Exit.VERIFY_FAILED, exc.code
+    finally:
+        if saved_home is not None:
+            os.environ["HOME"] = saved_home
+        os.environ.pop("AGENT_SKILLS_HOME", None)
+        os.environ.pop("AGENT_SKILLS_CONFIG_DIR", None)
+
+
+@check("transaction: two concurrent operations cannot interleave")
+def _(box):
+    layout = Layout(home=os.path.join(box, "home"), config_dir=os.path.join(box, "cfg"))
+    layout.ensure_dirs()
+    other = Layout(home=os.path.join(box, "home"), config_dir=os.path.join(box, "cfg"))
+    with layout.exclusive("install"):
+        exc = assert_raises(
+            ExitError, lambda: other.exclusive("update", timeout=0.2).__enter__()
+        )
+        assert exc.code == Exit.INSTALL_FAILED, exc.code
+        assert "already running" in exc.message, exc.message
+    # Released on exit, so the next operation proceeds.
+    with other.exclusive("update", timeout=1.0):
+        pass
 
 
 def main():

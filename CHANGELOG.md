@@ -4,6 +4,188 @@ All notable project changes should be recorded here.
 
 ## Unreleased
 
+## 1.0.0-rc.4 - Release candidate: the gates now cover the gaps two reviews found
+
+Two independent pre-1.0 reviews ran every documented gate — all of which passed — and then found
+seven defects the gates could not see. That is the finding behind this candidate: the suites were
+green because their corpora did not contain the shapes that break. Every fix below ships with a
+regression case, and where a guarantee had no test that fails when the guarantee is removed, a
+mutation probe was added. Nothing was renamed, renumbered, or retyped.
+
+### Fixes — release engine
+
+- **A `VERSION` file could delete an arbitrary directory.** Nothing validated that a version was
+  a version. The value from `providers/local.py` became a path in `Layout.version_path` and
+  `cache/staging/<version>`, and the first thing `InstallTransaction.run` does with the staging
+  path is `shutil.rmtree` it — before the release is verified. A source whose `VERSION` read
+  `../../victim` deleted `victim`, then reported "staged release failed its self-test; nothing was
+  activated", which was untrue by then. Fixed in two independent places, because one check being
+  bypassed is unrecoverable: `release.require_version` refuses non-semver at every boundary a
+  version arrives from (`--version`, a git tag, a `VERSION` file), and `Layout.safe_component`
+  independently refuses anything that is not one safe path component.
+- **A malformed `--version` installed a real but different release.** `providers/git.py` matched
+  tags with `compare_versions(found, wanted) == 0`, and `compare_versions` deliberately reports an
+  unparseable operand as *equal* so that a machine on an unreadable version reads as "nothing to
+  do". Used for identity, that made every typo match the first tag: `--version
+  definitely-not-a-version` resolved `0.43.0`. `resolve_version` now validates first and compares
+  with the new `versions_equal`, which never treats unknown as a match. An invalid `--version` is
+  exit `2`.
+- **Automatic rollback reported success over a machine it had not fully restored.** An install
+  changes four things — the activation pointer, host registrations, `install.json`, and, when the
+  new release replaces a same-named one, the release directory itself. Rollback restored the first
+  two. So a failed update left `current` at `1.0.0` and `install.json` at `1.1.0`, and a failed
+  *repair* of the active version re-activated the new broken tree under the old name while
+  printing "rolled back to 1.0.0". The displaced directory and the entry manifest are now
+  transaction state, restored on every post-staging failure, and the restored machine is verified
+  before the word "rolled back" is used. When it cannot be, the message says the machine is mixed
+  and names `doctor`.
+- **`verify` broke its own frozen exit code, and did not verify.** Drift between the manifest,
+  `current`, and the payload's `VERSION` returned `1` — the shell's default — while
+  [the 1.0 contract](docs/one-point-oh.md) freezes verification failure as `7` and says `1` never
+  appears. Separately, `verify` only checked that `release.json` *existed*, so "Installation
+  verified" was printed over a tree whose files had been edited; the payload hash was recomputed
+  at stage and rollback only. `verify` now re-hashes the active release against its own manifest,
+  and returns `7`. A missing `python3` or release engine is reported as "could not re-check",
+  not as tampering.
+- **No locking anywhere in the installer.** Two concurrent updates shared `cache/staging/<v>` and
+  `versions/<v>.incoming`, and the moment one moved the running release aside was a moment the
+  other could activate into the gap: "atomic, no mixed state" held for one process only.
+  `install`, `update`, and `rollback` now hold one advisory lock per install root. It is advisory
+  so a killed installer leaves nothing wedged.
+- **A local source could copy files from outside itself into a release.** `copy_payload` checked
+  for escaping symlinks on files it walked past, but resolved each top-level payload entry with
+  `isdir` first — so a checkout containing `skills -> ~/.ssh` had those files copied into the
+  installed release. Every entry is now checked before it is read, and a directory symlink
+  escaping the checkout is an error rather than silently dropped from the payload.
+
+### Fixes — Execution Guard
+
+The guard is the product's core promise, and its suite passed because the corpus did not contain
+these shapes. All of them are now permanent `REDTEAM` cases.
+
+- **Wrapper option values hid the command.** The wrapper-stripping loop skipped option flags but
+  not the values they consume, so the value became the inspected command — `sudo -u root rm -rf /`
+  was read as a command called `root` — and a command no rule has heard of matches nothing and
+  reads as ALLOW. Affected `sudo`, `doas`, `nice`, `ionice`, `env`, `stdbuf`, `time`, `watch`,
+  `script`, and `exec`. Each now carries its value-taking flags. Because an option table can never
+  be complete, an *unrecognised* option followed by a bare word is now read both ways and both
+  readings are inspected: an unknown wrapper flag costs a redundant check, not a bypass.
+- **`find -exec` lost its argv boundaries.** The extracted body was re-joined with plain spaces,
+  so `find . -exec sh -c 'rm -rf /' \;` re-parsed as `sh -c rm` with `-rf` as `$0` and the payload
+  gone. `-exec` runs an argv without a shell, so the words are now re-quoted.
+- **Inline programs could shell out unseen.** The destructive-pattern list named native deletion
+  calls (`rmtree`, `unlinkSync`) and could never enumerate every route to a shell, so
+  `python3 -c 'import os; os.system("rm -rf /")'` was allowed. The command string is now extracted
+  from the shell-out call — including the `subprocess.run(["rm","-rf","/"])` list form — and judged
+  by the rules that already know what `rm -rf /` is, with the right path classification and the
+  right message.
+- **A credential path was protected against `>` but not against `cp`.** The redirection branch
+  covered system *and* home paths; the copy branch covered only system ones. So
+  `echo x > ~/.ssh/authorized_keys` was denied and `cp key ~/.ssh/authorized_keys` — the likelier
+  spelling of the same write — was allowed.
+- **A pending redirect was dropped when its target was a substitution**, so `sh < <(...)` looked
+  like a bare `sh` that reads nothing. It is now visible as an opaque input.
+- **`scripts/test-guard.sh` was not in CI.** The safety-critical suite ran only from the local
+  release-readiness script, so a change opening a bypass could merge and be found at release time.
+  It now runs on every pull request, early.
+
+### Fixes — memory tiers and Context Optimizer
+
+- **A cached pack failed permanently from its second run.** `fill_budget` guarantees the render
+  fits the budget; the `cache: reused` marker is appended to the Metrics block afterwards, on a
+  cache hit only. Any pack within ~75 characters of its budget therefore rendered fine once and
+  then failed forever — and a tight budget, including the documented 2,000-char floor, is the
+  normal case. The marker is now reserved during the fill, so the budget is true of both
+  renderings.
+- **Org memory was the one durable tier with no redaction**, and the widest-reaching one:
+  `start-task` prints it into the starting context of every later task in *every* project, and
+  `outcome-recorder --promote-to-org` feeds it from a single project's notes. It now redacts in
+  `append_note`, so `note`, `promote`, and every future writer inherit the guarantee.
+- **Redaction survivors.** A quoted value under a credential-shaped key
+  (`password: "…"`, `db_password = '…'`) passed through, because the unquoted rule stopped at the
+  first quote — the spelling every YAML file, `.env`, and config dump uses. `mariadb -p…` passed
+  through because the attached-flag rule named only the `mysql` spellings of the same client.
+- **Durable writes were not atomic and did not serialise.** Project memory, org memory, the
+  knowledge base, and the blackboard all wrote with `Path.write_text`: two agents appending at once
+  lost a bullet, and a crash mid-write left JSON no reader could parse. All now go through
+  `scripts/durable.py` — temporary file plus `os.replace`, under an advisory lock covering the
+  whole read-modify-write.
+- **Org memory never replaced its own placeholder**, because the substitution looked for
+  `- _empty` while the skeleton writes `- _No facts yet…_`. The same narrow prefix in
+  `promote-rules.py` meant an untouched section looked like it held one real bullet, so an empty
+  project could be promoted on the strength of its placeholder text.
+
+### Fixes — CLI and workflow
+
+- **`update --channel rc` was silently dropped** when the resolved version already equalled the
+  active one, contradicting rc.3's own note that an explicit `--channel` wins everywhere it is
+  passed. The followed line is now recorded even when no release moves.
+- **`check-updates` reported an uninstalled machine as up to date and exited `0`**, because
+  `"unknown"` compares equal to everything. It now reports `not-installed` and exits `2`.
+- **The `apply:` hint dropped `--repo` / `--source` / `--provider`**, so it could print a command
+  that would update from a different source than the one the answer above it came from. Every flag
+  that changed which release was examined now travels with the hint, shell-quoted.
+- **The parallel-phase gate read an empty `mutation_targets` as "writes nothing"**, when the
+  documented rule — and the phase template's own default — is that silence means "writes
+  everything". Two undeclared writers could be grouped.
+- **A bare `finish-task` could write to the wrong project and delete another live task's
+  scratch.** `start-task` rewrites one `.last-task-context` per cache root, so with two agents in
+  one repository the most recent marker is not necessarily yours. Implicit resolution now refuses
+  when more than one task is in flight, and lists them.
+- **`finish-task` wrote the Recent-tasks bullet before validating `--fact`, `--repo-knowledge`,
+  and `--lesson`**, so a typo in the third flag exited after the bullet had landed and the obvious
+  retry duplicated it. All shapes are validated before anything is written.
+- **`--field name=value` echoed the whole pair on a malformed name**, printing the value into the
+  terminal — the exact exposure `--secret-field` exists to prevent, and a malformed name is most
+  often somebody passing a credential through the wrong flag. Only the name is shown now.
+
+### Added
+
+- `agent-skills verify --explain-codes` prints the frozen exit-code table. `lib/asrelease/exits.py`
+  had documented this flag as existing since 1.0.0-rc.1; it did not.
+- `scripts/durable.py` — atomic, lock-serialised writes for every durable tier.
+- `release.require_version`, `release.is_version`, `release.versions_equal`,
+  `Layout.safe_component`, `Layout.staging_path`, `Layout.exclusive`, and `Layout.installed_path`.
+- `BOUNDED_MARKERS` now covers `schema.read`, `artifact.read`, and `state.read` — an 800-table
+  schema dump, a CI artifact, and a Terraform state are the three biggest payloads in practice and
+  were the three `doctor` could not require a bound for. The reference tools that own those
+  capabilities now declare them under `bounded_capabilities`.
+
+### Documentation
+
+- `database.explain` no longer claims to be side-effect free: `EXPLAIN ANALYZE` executes the
+  statement, DML included, and needs `database.write`.
+- The watchdog's stall window is documented as `max(5, budget × 0.5)` rather than a fixed twenty
+  minutes, which is what the code has always computed.
+- `docs/review-loops.md` no longer says a surviving `major` ships as a PR note; only
+  `Loop: converged` advances, which `software-engineer` has always required.
+
+### Publication
+
+- **The GitHub release is deliberately deferred.** The tag `v1.0.0-rc.4` is pushed and the
+  changelog and [security review](docs/security-review-v1.0.0-rc.4.md) are complete, but no GitHub
+  release page is created for it. The only publication channel for this candidate is the npm
+  bootstrap on the `rc` dist-tag; `latest` is untouched. What remains outstanding is the GitHub
+  release page, and nothing depends on it — `agent-skills` resolves releases from git tags, not
+  from GitHub releases, so a machine on the `rc` line can install this candidate from the tag
+  alone.
+- Guard performance re-measured because this candidate changes `guard_parse.py`: p50 `0.104` ms,
+  p95 `0.298` ms, p99 `0.429` ms, max `0.559` ms, cold call `74` ms — unchanged against rc.3's
+  p50 `0.109` / p95 `0.330`. No benign command moved from `ALLOW` to `ASK`.
+- `scripts/audit-npm-package.sh` re-run against the exact `1.0.0-rc.4` tarball: 14 files, no
+  product content, no credential-shaped file, no absolute developer paths, no lifecycle scripts,
+  and the vendored engine byte-identical to `lib/asrelease/` and `scripts/install.py`.
+
+### Test coverage added
+
+Guard: 19 new `REDTEAM` corpus cases plus 8 CLI-path checks (266 corpus cases, 116 checks).
+Release engine: 10 new tests including the traversal end to end, both halves of the rollback
+defect, and lock contention (31 tests). CLI install: `verify` exit `7` on tamper and on drift,
+`--explain-codes`, and self-contained apply hints (146 assertions). Context Optimizer: the
+cache-reuse budget case plus a mutation probe (107 checks). Secret boundary: org memory across
+`note`, `promote`, and `--promote-to-org`, the two new redaction patterns, and a probe that
+removes org memory's `redact` call (43 checks).
+
 ## 1.0.0-rc.3 - Release candidate: a machine keeps the release line it chose
 
 One defect, found by an RC tester who updated and got a stable release instead of the candidate

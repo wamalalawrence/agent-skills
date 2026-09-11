@@ -82,7 +82,7 @@ cat > "${SYN}/registry.d/synth-db.json" <<'EOF'
   "category": "database", "summary": "data resource for read/write gating",
   "capabilities": ["database.schema.read", "database.query.read", "database.explain", "database.write"],
   "transports": [{ "kind": "native-client", "command": "synth-db-bin", "probe": ["--version"] }],
-  "bounded_capabilities": ["database.query.read"], "reference_status": "validated",
+  "bounded_capabilities": ["database.query.read", "database.schema.read"], "reference_status": "validated",
   "notes": "DROP / TRUNCATE / unqualified DELETE stay on the Execution Guard hard-deny floor" }
 EOF
 

@@ -36,7 +36,11 @@ Rules:
     cleanup.
   * This script writes only inside `_org/` and `_org/index.json`. It never
     deletes anything and never runs git.
-  * No secrets, no PII, no per-task scratch.
+  * No secrets, no PII, no per-task scratch. Every free-text value written here
+    is redacted first, at the one choke point in `append_note`.
+  * Writes are atomic and serialised: a temporary file plus `os.replace` under an
+    advisory lock, so two agents appending at once cannot lose a bullet and a
+    crash cannot leave a half-written store.
 """
 from __future__ import annotations
 
@@ -47,6 +51,17 @@ import re
 import sys
 from datetime import datetime, timezone
 from pathlib import Path
+
+sys.path.insert(0, str(Path(__file__).resolve().parent))
+
+# One redaction implementation for the whole project, in guard_audit. Org memory
+# is the widest-reaching durable tier there is: `start-task` prints it into the
+# context of every future task in every project, so a secret written here is a
+# secret re-read indefinitely and across project boundaries. It was also the one
+# durable tier that did not redact, which made `--promote-to-org` a path for a
+# value to travel from a single project's notes into everyone's.
+from durable import update_json, update_text, write_json, write_text  # noqa: E402
+from guard_audit import redact  # noqa: E402
 
 DEFAULT_SECTIONS = (
     "Org patterns",
@@ -93,32 +108,22 @@ def ensure_skeleton(odir: Path) -> Path:
                 "promoted here so every project benefits from cross-project learning._"
             )
             body.append("")
-        md.write_text("\n".join(body), encoding="utf-8")
+        write_text(md, "\n".join(body))
     js = odir / "memory.json"
     if not js.exists():
-        js.write_text(
-            json.dumps(
-                {
-                    "created_at": now_iso(),
-                    "updated_at": now_iso(),
-                    "sections": {s: [] for s in DEFAULT_SECTIONS},
-                },
-                indent=2,
-            ),
-            encoding="utf-8",
+        write_json(
+            js,
+            {
+                "created_at": now_iso(),
+                "updated_at": now_iso(),
+                "sections": {s: [] for s in DEFAULT_SECTIONS},
+            },
         )
     idx = odir / "index.json"
     if not idx.exists():
-        idx.write_text(
-            json.dumps(
-                {
-                    "updated_at": now_iso(),
-                    "projects": {},
-                    "shared_libraries": {},
-                },
-                indent=2,
-            ),
-            encoding="utf-8",
+        write_json(
+            idx,
+            {"updated_at": now_iso(), "projects": {}, "shared_libraries": {}},
         )
     return md
 
@@ -127,30 +132,42 @@ def append_note(odir: Path, section: str, text: str, provenance: str | None = No
     md = odir / "memory.md"
     if not md.exists():
         ensure_skeleton(odir)
-    content = md.read_text(encoding="utf-8")
+    # Redacted at the choke point, so `note`, `promote`, and every future writer
+    # are covered by one guarantee rather than by each remembering to ask.
+    text = redact(text)
+    provenance = redact(provenance) if provenance else provenance
     suffix = f" (from: {provenance})" if provenance else ""
     bullet = f"- ({now_iso()}) {text.strip()}{suffix}\n"
     section_re = re.compile(rf"(^## {re.escape(section)}\s*\n)", re.MULTILINE)
-    if section_re.search(content):
-        new_content, n = re.subn(
-            rf"(^## {re.escape(section)}\s*\n)(- _empty[^\n]*\n)",
-            rf"\1{bullet}",
-            content,
-            count=1,
-            flags=re.MULTILINE,
+
+    def transform(content: str) -> str:
+        if section_re.search(content):
+            # Any placeholder bullet, not just one spelled `- _empty`. The
+            # skeleton says `- _No facts yet…`, so the narrower pattern never
+            # matched and every section kept its placeholder forever — which in
+            # turn made `promote-rules` treat a populated section as empty.
+            replaced, n = re.subn(
+                rf"(^## {re.escape(section)}\s*\n)(- _[^\n]*_\s*\n)",
+                rf"\1{bullet}",
+                content,
+                count=1,
+                flags=re.MULTILINE,
+            )
+            if n:
+                return replaced
+            return section_re.sub(rf"\1{bullet}", content, count=1)
+        return content.rstrip() + f"\n\n## {section}\n\n{bullet}"
+
+    update_text(md, transform)
+
+    def bump(data: dict) -> dict:
+        data.setdefault("sections", {}).setdefault(section, []).append(
+            {"at": now_iso(), "text": text.strip(), "provenance": provenance}
         )
-        if n == 0:
-            new_content = section_re.sub(rf"\1{bullet}", content, count=1)
-    else:
-        new_content = content.rstrip() + f"\n\n## {section}\n\n{bullet}"
-    md.write_text(new_content, encoding="utf-8")
-    js = odir / "memory.json"
-    data = json.loads(js.read_text(encoding="utf-8")) if js.exists() else {}
-    data.setdefault("sections", {}).setdefault(section, []).append(
-        {"at": now_iso(), "text": text.strip(), "provenance": provenance}
-    )
-    data["updated_at"] = now_iso()
-    js.write_text(json.dumps(data, indent=2), encoding="utf-8")
+        data["updated_at"] = now_iso()
+        return data
+
+    update_json(odir / "memory.json", bump, default={"created_at": now_iso(), "sections": {}})
 
 
 def search_all(cache_root: Path, query: str) -> list[tuple[str, int, str]]:
@@ -179,29 +196,32 @@ def search_all(cache_root: Path, query: str) -> list[tuple[str, int, str]]:
 
 def index_update(odir: Path, project: str, shared_libs: list[str]) -> dict:
     ensure_skeleton(odir)
-    idx_path = odir / "index.json"
-    data = json.loads(idx_path.read_text(encoding="utf-8"))
     pslug = slugify(project)
-    projects = data.setdefault("projects", {})
-    libs = data.setdefault("shared_libraries", {})
-    projects[pslug] = {
-        "name": project,
-        "shared_libraries": sorted(set(shared_libs)),
-        "updated_at": now_iso(),
-    }
-    for name, plist in list(libs.items()):
-        if pslug in plist and name not in shared_libs:
-            plist.remove(pslug)
-            if not plist:
-                del libs[name]
-    for name in shared_libs:
-        plist = libs.setdefault(name, [])
-        if pslug not in plist:
-            plist.append(pslug)
-            plist.sort()
-    data["updated_at"] = now_iso()
-    idx_path.write_text(json.dumps(data, indent=2), encoding="utf-8")
-    return data
+
+    def transform(data: dict) -> dict:
+        projects = data.setdefault("projects", {})
+        libs = data.setdefault("shared_libraries", {})
+        projects[pslug] = {
+            "name": project,
+            "shared_libraries": sorted(set(shared_libs)),
+            "updated_at": now_iso(),
+        }
+        for name, plist in list(libs.items()):
+            if pslug in plist and name not in shared_libs:
+                plist.remove(pslug)
+                if not plist:
+                    del libs[name]
+        for name in shared_libs:
+            plist = libs.setdefault(name, [])
+            if pslug not in plist:
+                plist.append(pslug)
+                plist.sort()
+        data["updated_at"] = now_iso()
+        return data
+
+    return update_json(
+        odir / "index.json", transform, default={"projects": {}, "shared_libraries": {}}
+    )
 
 
 def index_show(odir: Path, shared_lib: str | None) -> dict:

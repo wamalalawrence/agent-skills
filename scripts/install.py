@@ -14,6 +14,7 @@ from __future__ import annotations
 import argparse
 import json
 import os
+import shlex
 import sys
 
 _HERE = os.path.dirname(os.path.abspath(__file__))
@@ -178,8 +179,17 @@ def cmd_update(args) -> int:
     if not args.version:
         ref = provider.resolve_latest(args.channel)
         if compare_versions(ref.version, active) == 0:
+            # Nothing to install, but `--channel` may still have been an
+            # instruction. Returning here without recording it meant
+            # `update --channel rc` was silently dropped whenever the machine
+            # happened to be on the newest release, and the next bare `update`
+            # went back to resolving `stable`. An explicit channel is a decision
+            # about the machine; it takes effect even when no release moves.
+            switched = _record_followed_channel(layout, args, explicit=bool(args.channel))
             if not args.quiet:
                 print("Agent Skills {} is already the latest {} release.".format(active, args.channel))
+                if switched:
+                    print("This machine now follows the {} line.".format(args.channel))
             return Exit.OK
     if not args.quiet:
         print("Updating Agent Skills from {}".format(active))
@@ -189,6 +199,29 @@ def cmd_update(args) -> int:
     if not args.quiet:
         print_success(record, layout, updated=True)
     return Exit.OK
+
+
+def _record_followed_channel(layout: Layout, args, explicit: bool) -> bool:
+    """Persist an explicit ``--channel`` when no release is being installed.
+
+    Returns whether the recorded line actually changed. Only the one field is
+    rewritten: the rest of the manifest describes an installation this call is
+    not performing, and inventing values for it would be a worse lie than the
+    dropped flag this fixes.
+    """
+    if not explicit:
+        return False
+    wanted = getattr(args, "channel", "") or ""
+    if wanted not in FOLLOWABLE_CHANNELS:
+        return False
+    manifest = layout.read_manifest()
+    if not manifest:
+        return False
+    if manifest.get("follow_channel") == wanted:
+        return False
+    manifest["follow_channel"] = wanted
+    layout.write_manifest(manifest)
+    return True
 
 
 def cmd_rollback(args) -> int:
@@ -212,8 +245,32 @@ def cmd_rollback(args) -> int:
 
 def cmd_check_updates(args) -> int:
     layout = make_layout(args)
-    active = layout.active_version() or "unknown"
+    active = layout.active_version()
     requested = resolve_channel(args, layout)
+    if not active:
+        # "unknown" used to be compared against the remote version, and
+        # `compare_versions` reports an unparseable operand as equal, so a
+        # machine with nothing installed was told it was up to date and exited
+        # 0. A monitor built on that reports a fleet of bare machines as healthy.
+        if args.json:
+            json.dump(
+                {
+                    "installed": "",
+                    "latest": "",
+                    "channel": "",
+                    "requested_channel": requested,
+                    "provider": getattr(args, "provider", "") or "",
+                    "status": "not-installed",
+                },
+                sys.stdout,
+                indent=2,
+            )
+            sys.stdout.write("\n")
+        raise ExitError(
+            "nothing is installed on this machine yet",
+            Exit.USAGE,
+            hint="install it first: agent-skills install",
+        )
     # What a bare `agent-skills update` on this machine would resolve to. Used
     # only to decide whether the apply hint needs to carry a flag.
     implicit = resolve_channel(argparse.Namespace(channel=None, dev=False), layout)
@@ -244,8 +301,22 @@ def cmd_check_updates(args) -> int:
             # described. A bare `update` resolves the machine's own line, so it
             # is correct unless this check overrode that line with a flag, in
             # which case the flag has to travel with the hint.
-            suffix = "" if requested == implicit else " --channel {}".format(requested)
-            print("  apply    : agent-skills update{}".format(suffix))
+            # Every flag that changed *which release this check looked at* has to
+            # travel with the hint, or the hint describes a different command
+            # from the one that produced the answer above it. `--repo` and
+            # `--source` were dropped, so a check against a private mirror
+            # printed a command that would update from the public default.
+            hint = ["agent-skills update"]
+            if requested != implicit:
+                hint.append("--channel {}".format(requested))
+            for flag, value in (
+                ("--provider", getattr(args, "provider", "")),
+                ("--repo", getattr(args, "repo", "")),
+                ("--source", getattr(args, "source", "")),
+            ):
+                if value:
+                    hint.append("{} {}".format(flag, shlex.quote(str(value))))
+            print("  apply    : {}".format(" ".join(hint)))
     return Exit.UPDATE_AVAILABLE if payload["status"] == "update-available" else Exit.OK
 
 

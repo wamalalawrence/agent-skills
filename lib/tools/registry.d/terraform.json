@@ -10,6 +10,9 @@
     "infrastructure.apply",
     "infrastructure.destroy"
   ],
+  "bounded_capabilities": [
+    "infrastructure.state.read"
+  ],
   "transports": [
     {
       "kind": "native-client",

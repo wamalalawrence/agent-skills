@@ -55,6 +55,7 @@ from pathlib import Path
 # One redaction implementation for the whole project, in guard_audit. This
 # tier is COMMITTED: it lands in the repository, survives a fresh clone, and
 # is pushed. A credential written here is a credential published.
+from durable import update_text, write_text
 from guard_audit import redact
 
 KNOWLEDGE_DIRNAME = Path(".agent-skills") / "knowledge"
@@ -272,18 +273,18 @@ def ensure_skeleton(repo_root: Path) -> Path:
 
     readme = kdir / "README.md"
     if not readme.exists():
-        readme.write_text(README_TEXT, encoding="utf-8")
+        write_text(readme, README_TEXT)
 
     project = kdir / "project.md"
     if not project.exists():
         body = [PROJECT_HEADER]
         for section in DEFAULT_SECTIONS:
             body.append(f"## {section}\n")
-        project.write_text("\n".join(body), encoding="utf-8")
+        write_text(project, "\n".join(body))
 
     keep = lessons_dir(repo_root) / ".gitkeep"
     if not any(lessons_dir(repo_root).glob("*.md")) and not keep.exists():
-        keep.write_text("", encoding="utf-8")
+        write_text(keep, "")
     return kdir
 
 
@@ -355,7 +356,7 @@ class Lesson:
         text = render_front_matter(self.data)
         if self.body.strip():
             text += "\n" + self.body.rstrip() + "\n"
-        self.path.write_text(text, encoding="utf-8")
+        write_text(self.path, text)
 
     def one_line(self) -> str:
         trigger = self.trigger.strip()

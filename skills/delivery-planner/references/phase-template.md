@@ -24,7 +24,9 @@ independent_review_required: true | false
 expected_effort_minutes: 20
 parallel_safe: true | false
 parallel_with: []        # phase ids it can run alongside, when parallel_safe
-mutation_targets: []     # every path or resource this phase WRITES
+mutation_targets: []     # every path or resource this phase WRITES; an empty
+                         # list means "unstated", which is read as "writes
+                         # everything" and rules the phase out of any group
 prerequisites: [02]      # phase ids that must be complete first
 created_at: 2026-05-06
 updated_at: 2026-05-06

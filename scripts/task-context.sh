@@ -116,6 +116,35 @@ agent_skills_last_context_value() {
   sed -n "s/^${key}=//p" "${path}" | tail -n 1
 }
 
+# Every per-task scratch directory in this cache root, one per line.
+#
+# `.last-task-context` records one task, and `start-task` rewrites it on every
+# run. That is right for one agent in one repository and wrong for two: the
+# second `start-task` overwrites the marker, and a bare `finish-task` from the
+# first agent then resolves to the second agent's issue key — writing its memory
+# under the wrong task and, with cleanup on, deleting the wrong scratch.
+#
+# Rather than invent a session identity that nothing else has, the ambiguity is
+# made visible: a caller resolving a task implicitly can ask how many there are
+# and refuse to guess.
+agent_skills_active_tasks() {
+  local root=""
+  root="$(agent_skills_resolve_cache_root)"
+  [[ -d "${root}" ]] || return 0
+  local entry name
+  for entry in "${root}"/*; do
+    [[ -d "${entry}" ]] || continue
+    name="$(basename "${entry}")"
+    # `_projects` and `_org` are the durable tiers, not tasks.
+    case "${name}" in _*) continue ;; esac
+    printf '%s\n' "${name}"
+  done
+}
+
+agent_skills_active_task_count() {
+  agent_skills_active_tasks | grep -c . || true
+}
+
 agent_skills_project_from_in_repo_config() {
   local python_cmd="${PYTHON3:-python3}"
   command -v "${python_cmd}" >/dev/null 2>&1 || return 1

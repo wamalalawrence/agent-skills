@@ -37,7 +37,8 @@
   "auth_service": "mysql",
   "docs": "docs/engineering-tools.md",
   "bounded_capabilities": [
-    "database.query.read"
+    "database.query.read",
+    "database.schema.read"
   ],
   "reference_status": "fixture",
   "notes": "Not claimed as supported. Extensibility fixture only."

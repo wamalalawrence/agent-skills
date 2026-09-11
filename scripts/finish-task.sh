@@ -218,12 +218,58 @@ if [[ -z "${PROJECT}" ]]; then
   fi
 fi
 if [[ -z "${ISSUE_KEY}" ]]; then
+  # Resolved implicitly. That is only safe while there is one task in flight:
+  # `.last-task-context` holds whichever task started most recently, which for
+  # two agents in one repository is not necessarily this one. Guessing here
+  # writes memory under another task's key and, with cleanup on, deletes its
+  # scratch — so when the answer is ambiguous, say so instead.
+  ACTIVE_TASK_COUNT="$(agent_skills_active_task_count)"
+  if [[ "${ACTIVE_TASK_COUNT}" -gt 1 ]]; then
+    echo "ERROR: --issue-key is required here: ${ACTIVE_TASK_COUNT} tasks are in flight" >&2
+    echo "       under ${CACHE_ROOT}, so the most recent start-task is not necessarily" >&2
+    echo "       yours. Nothing was written." >&2
+    echo "       In flight:" >&2
+    agent_skills_active_tasks | sed 's/^/         - /' >&2
+    exit 3
+  fi
   ISSUE_KEY="$(agent_skills_last_context_value issue_key || true)"
   if [[ -z "${ISSUE_KEY}" ]]; then
     ISSUE_KEY="$(agent_skills_detect_issue_key)"
   fi
 fi
 ISSUE_KEY="$(agent_skills_normalise_issue_key "${ISSUE_KEY}")"
+# ---------------------------------------------------------------------------
+# Validate every structured flag BEFORE writing anything.
+#
+# The Recent tasks bullet used to be written first and the `Section::text` shapes
+# checked as each one was reached, so a typo in the third `--fact` exited 3 after
+# the bullet had already landed. The obvious response is to fix the typo and
+# rerun, which appends the bullet a second time. Memory writes are not
+# transactional, so the shapes are checked while nothing has been written yet.
+# ---------------------------------------------------------------------------
+for raw in "${FACTS[@]+"${FACTS[@]}"}"; do
+  if [[ "${raw}" != *"::"* ]]; then
+    echo "ERROR: --fact expects Section::text, got: ${raw}" >&2
+    echo "       Nothing was written; fix the flag and rerun." >&2
+    exit 3
+  fi
+done
+for raw in "${REPO_FACTS[@]+"${REPO_FACTS[@]}"}"; do
+  if [[ "${raw}" != *"::"* ]]; then
+    echo "ERROR: --repo-knowledge expects Section::text, got: ${raw}" >&2
+    echo "       Nothing was written; fix the flag and rerun." >&2
+    exit 3
+  fi
+done
+for raw in "${LESSONS[@]+"${LESSONS[@]}"}"; do
+  lesson_rest="${raw#*::}"
+  if [[ "${raw}" != *"::"* || -z "${raw%%::*}" || -z "${lesson_rest%%::*}" \
+        || "${lesson_rest}" != *"::"* || -z "${lesson_rest#*::}" ]]; then
+    echo "ERROR: --lesson expects id::trigger::action[::domain], got: ${raw}" >&2
+    echo "       Nothing was written; fix the flag and rerun." >&2
+    exit 3
+  fi
+done
 
 note() {
   local section="$1"
@@ -254,10 +300,6 @@ if [[ "${RECENT_TASK_ONLY}" != "true" ]]; then
     note "Common gotchas" "${text}"
   done
   for raw in "${FACTS[@]+"${FACTS[@]}"}"; do
-    if [[ "${raw}" != *"::"* ]]; then
-      echo "ERROR: --fact expects Section::text, got: ${raw}" >&2
-      exit 3
-    fi
     section="${raw%%::*}"
     text="${raw#*::}"
     note "${section}" "${text}"
@@ -266,10 +308,6 @@ if [[ "${RECENT_TASK_ONLY}" != "true" ]]; then
   # Committed tier. Unlike project memory this lands in the repository, so it
   # appears in the diff and a human approves it.
   for raw in "${REPO_FACTS[@]+"${REPO_FACTS[@]}"}"; do
-    if [[ "${raw}" != *"::"* ]]; then
-      echo "ERROR: --repo-knowledge expects Section::text, got: ${raw}" >&2
-      exit 3
-    fi
     "${PYTHON3}" "${KB_SCRIPT}" note --section "${raw%%::*}" --text "${raw#*::}" \
       || echo "  WARN: could not write repo knowledge (is this a git repo?)" >&2
   done
@@ -283,10 +321,6 @@ if [[ "${RECENT_TASK_ONLY}" != "true" ]]; then
     lesson_domain="process"
     if [[ "${lesson_rest}" == *"::"* ]]; then
       lesson_domain="${lesson_rest##*::}"
-    fi
-    if [[ -z "${lesson_id}" || -z "${lesson_trigger}" || -z "${lesson_action}" ]]; then
-      echo "ERROR: --lesson expects id::trigger::action[::domain], got: ${raw}" >&2
-      exit 3
     fi
     "${PYTHON3}" "${KB_SCRIPT}" lesson add \
       --id "${lesson_id}" \

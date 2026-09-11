@@ -30,8 +30,8 @@ from .release import (
     MIN_INSTALLABLE_VERSION,
     ReleaseRef,
     compare_versions,
-    normalise_version,
     read_manifest,
+    require_version,
     verify_payload,
 )
 
@@ -85,12 +85,28 @@ class InstallTransaction:
         # The release line this operation was asked to follow. Set by `run`;
         # left empty by `rollback`, which does not choose one.
         self.follow_channel = ""
+        # Transaction state that undo needs. Re-activating the previous release
+        # is not enough on its own: the manifest has already been rewritten by
+        # then, and when the new release replaces a directory of the same name
+        # the known-good tree has been moved aside. Both are recorded here the
+        # moment they change, because after a failure there is no other way to
+        # find out what they used to be.
+        self._entry_manifest = None
+        self._displaced_path = ""
+        self._displaced_version = ""
 
     # --------------------------------------------------------------------------
     def run(self, version: str = "", channel: str = "stable") -> dict:
+        with self.layout.exclusive("install"):
+            return self._run(version=version, channel=channel)
+
+    def _run(self, version: str = "", channel: str = "stable") -> dict:
         layout = self.layout
         previous = layout.active_version()
         self.follow_channel = channel or ""
+        self._entry_manifest = layout.read_manifest() or None
+        self._displaced_path = ""
+        self._displaced_version = ""
 
         # RESOLVE. Nothing is created on disk until a release has been resolved:
         # a failed `install` against an unreachable source must not leave an
@@ -120,7 +136,9 @@ class InstallTransaction:
             self.report.note("{} is already active; re-staging to repair the install".format(ref.version))
 
         # DOWNLOAD + STAGE (into a scratch directory, never the live tree)
-        staging = os.path.join(layout.staging_dir, ref.version)
+        # `staging_path` re-checks that the version is one safe path component,
+        # because the next line deletes whatever that path names.
+        staging = layout.staging_path(ref.version)
         shutil.rmtree(staging, ignore_errors=True)
         os.makedirs(staging, exist_ok=True)
         try:
@@ -162,8 +180,17 @@ class InstallTransaction:
             elif os.path.isdir(target):
                 # Never in place. Move the running release aside, put the new one
                 # where it was, and let the `current` swap below do the switching.
+                #
+                # The displaced directory is the only remaining copy of a
+                # known-good release that this operation is about to shadow with
+                # a same-named one, so it is recorded as transaction state. An
+                # undo that re-activates `versions/<v>` without restoring it
+                # would re-activate the new, broken tree under the old name and
+                # report success.
                 shutil.rmtree(target + ".replaced", ignore_errors=True)
                 os.rename(target, target + ".replaced")
+                self._displaced_path = target + ".replaced"
+                self._displaced_version = ref.version
             os.rename(pending, target)
             self.report.step("stage", target)
         finally:
@@ -174,7 +201,7 @@ class InstallTransaction:
             layout.activate(ref.version)
             self.report.step("activate", "current -> versions/{}".format(ref.version))
         except Exception as exc:
-            self._rollback(previous, "activation failed: {}".format(exc))
+            self._rollback(previous, "activation failed: {}".format(exc), failed=ref.version)
             raise
 
         # RECONCILE HOSTS
@@ -185,7 +212,7 @@ class InstallTransaction:
                 ", ".join(result["hosts"]) if result["hosts"] else "none detected on this machine",
             )
         except Exception as exc:
-            self._rollback(previous, "host reconciliation failed: {}".format(exc))
+            self._rollback(previous, "host reconciliation failed: {}".format(exc), failed=ref.version)
             raise
 
         payload_manifest = read_manifest(layout.version_path(ref.version))
@@ -194,10 +221,21 @@ class InstallTransaction:
         # VERIFY MACHINE
         code = self._verify_machine()
         if code != 0:
-            self._rollback(previous, "post-install verification failed")
+            restored = self._rollback(
+                previous, "post-install verification failed", failed=ref.version
+            )
+            # The message says what is true of the machine now. Claiming a
+            # rollback that did not complete is worse than reporting the failure,
+            # because it tells the operator to stop looking.
+            if restored:
+                raise ExitError(
+                    "installation verification failed; rolled back to {}".format(previous),
+                    Exit.VERIFY_FAILED,
+                )
             raise ExitError(
-                "installation verification failed; rolled back to {}".format(previous or "nothing"),
+                "installation verification failed and could not be undone",
                 Exit.VERIFY_FAILED,
+                hint="this machine is in a mixed state; run: agent-skills doctor",
             )
         self.report.step("verified", "installation is consistent")
 
@@ -205,7 +243,11 @@ class InstallTransaction:
         if removed:
             self.report.note("removed superseded release(s): {}".format(", ".join(removed)))
 
-        shutil.rmtree(layout.version_path(ref.version) + ".replaced", ignore_errors=True)
+        # The transaction succeeded, so neither the displaced known-good tree nor
+        # any tree kept from an earlier failed attempt at this version is needed.
+        for suffix in (".replaced", ".failed"):
+            shutil.rmtree(layout.version_path(ref.version) + suffix, ignore_errors=True)
+        self._displaced_path = ""
         layout.append_history(
             {
                 "action": "install" if not previous else "update",
@@ -221,9 +263,13 @@ class InstallTransaction:
     # --------------------------------------------------------------------------
     def rollback(self, version: str = "") -> dict:
         """Return to a previously installed release, hosts and hooks included."""
+        with self.layout.exclusive("rollback"):
+            return self._rollback_to(version)
+
+    def _rollback_to(self, version: str = "") -> dict:
         layout = self.layout
         active = layout.active_version()
-        target = normalise_version(version) if version else layout.rollback_candidate()
+        target = require_version(version, "--version") if version else layout.rollback_candidate()
         if not target:
             raise ExitError(
                 "no previous release is available to roll back to",
@@ -429,23 +475,98 @@ class InstallTransaction:
         layout.write_manifest(record)
         return record
 
-    def _rollback(self, previous: str, reason: str) -> None:
-        self.report.warn(reason)
-        if not previous or not os.path.isdir(self.layout.version_path(previous)):
-            self.report.warn("no previous release to fall back to; run: agent-skills doctor")
-            return
+    def _restore_displaced(self, previous: str) -> bool:
+        """Put the known-good release directory back where it was.
+
+        Only relevant when the new release carried the same version as the one
+        already installed — a repair, or a re-install of the active release. In
+        that case ``versions/<v>`` now holds the new tree and the tree that was
+        working is at ``versions/<v>.replaced``. Re-activating ``<v>`` without
+        undoing that swap re-activates the broken tree under a trusted name.
+        """
+        path = self._displaced_path
+        if not path or not os.path.isdir(path):
+            return False
+        if self._displaced_version != previous:
+            return False
+        target = self.layout.version_path(previous)
+        failed = target + ".failed"
+        shutil.rmtree(failed, ignore_errors=True)
         try:
+            if os.path.isdir(target):
+                # Kept, not deleted: whatever went wrong is diagnosable from it,
+                # and it is removed on the next successful install of this
+                # version. Deleting the only copy of the tree that just failed
+                # makes the failure unreproducible.
+                os.rename(target, failed)
+            os.rename(path, target)
+        except OSError as exc:
+            self.report.warn("could not restore the previous {} tree: {}".format(previous, exc))
+            return False
+        self._displaced_path = ""
+        self.report.warn("restored the previous {} release directory".format(previous))
+        return True
+
+    def _restore_manifest(self) -> None:
+        """Put install.json back to what it said before this operation."""
+        if self._entry_manifest:
+            self.layout.write_manifest(self._entry_manifest)
+        else:
+            # There was no manifest on entry, so this was a first install. An
+            # install.json naming a release that is no longer active is worse
+            # than none: `verify` reads it as drift and `update` as a baseline.
+            self.layout.clear_manifest()
+
+    def _rollback(self, previous: str, reason: str, failed: str = "") -> bool:
+        """Undo everything this transaction changed. Returns what is now active.
+
+        Undo covers four things, because an install changes four: the activation
+        pointer, the host registrations that resolve through it, the install
+        manifest, and — in the same-version repair case — the release directory
+        itself. Restoring only the first two is what produced a machine whose
+        ``current`` said 1.0.0 while its manifest said 1.1.0, and a "rolled back"
+        message over a still-broken tree.
+        """
+        self.report.warn(reason)
+        target_dir = self.layout.installed_path(previous) if previous else ""
+        if not previous or not target_dir:
+            self.report.warn("no previous release to fall back to; run: agent-skills doctor")
+            self._restore_manifest()
+            return False
+        try:
+            self._restore_displaced(previous)
+            if not os.path.isdir(target_dir):
+                self.report.warn(
+                    "the previous release {} is no longer on disk; run: agent-skills doctor".format(
+                        previous
+                    )
+                )
+                return False
             self.layout.activate(previous)
             self._reconcile_hosts()
-            self.report.warn("rolled back to {}".format(previous))
-            self.layout.append_history(
-                {
-                    "action": "auto-rollback",
-                    "from": self.layout.active_version(),
-                    "to": previous,
-                    "reason": reason,
-                    "at": self.layout.now(),
-                }
-            )
+            self._restore_manifest()
         except Exception as exc:  # pragma: no cover - the last-resort path
             self.report.warn("rollback to {} also failed: {}".format(previous, exc))
+            return False
+        # Verified before it is claimed. "Rolled back" is a statement about the
+        # machine, and the only way to know it is true is to ask the machine.
+        if self._verify_machine() != 0:
+            self.report.warn(
+                "rolled back to {} but the machine still does not verify; "
+                "run: agent-skills doctor".format(previous)
+            )
+            return False
+        self.report.warn("rolled back to {}".format(previous))
+        self.layout.append_history(
+            {
+                "action": "auto-rollback",
+                # The release that failed, not the one now active. Reading the
+                # active version here recorded from == to on every auto-rollback,
+                # which made the history entry say nothing happened.
+                "from": failed,
+                "to": previous,
+                "reason": reason,
+                "at": self.layout.now(),
+            }
+        )
+        return True

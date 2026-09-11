@@ -848,6 +848,37 @@ else
   bad "a changed brief produces a different pack id"
 fi
 
+# A cache hit adds a line to the Metrics block, and that line is part of the
+# rendering, so it has to be part of the budget. It was appended after
+# fill_budget had already guaranteed the fit, so any pack that landed within
+# ~75 chars of its budget succeeded once and then failed on every later run —
+# and a tight budget is the normal case, not the edge one. Run it at the
+# documented 2,000-char floor, three times, because the failure only appears
+# from the second run onward.
+REUSE_CACHE="$BOX/reuse-cache"
+REUSE_LOG="$BOX/reuse.log"
+cp "$FX/dense.log" "$REUSE_LOG"
+REUSE_OK=1
+for attempt in 1 2 3; do
+  OUT="$("$PYTHON3" "$CONTEXT" --cache-root "$REUSE_CACHE" pack "$REUSE_LOG" \
+    --brief "order 55231 rejected" --budget-chars 2000 2>&1)"
+  RC=$?
+  BODY="$(printf '%s\n' "$OUT" | grep -v '^-- pack cached at ')"
+  SIZE="$(printf '%s\n' "$BODY" | wc -c | tr -d ' ')"
+  if [ "$RC" -ne 0 ]; then
+    bad "a cached pack is served on run $attempt" "exit $RC: $(printf '%s' "$OUT" | tail -2)"
+    REUSE_OK=0
+    break
+  fi
+  if [ "$SIZE" -gt 2001 ]; then
+    bad "run $attempt fits the 2000-char budget" "rendered $SIZE chars"
+    REUSE_OK=0
+    break
+  fi
+done
+[ "$REUSE_OK" -eq 1 ] \
+  && ok "a pack at the budget floor is served from cache on every later run, still inside budget"
+
 # `explain` must notice a source that moved on after the pack was built.
 STALE="$(ctx explain "$FIRST_ID" 2>&1)"
 contains "$STALE" "STALE" \
@@ -1038,6 +1069,41 @@ probe "budget" \
   '        if len(render_pack(pack)) <= pack.budget_chars or not pack.fragments:||>        if True:  # PROBE: budget guarantee removed' \
   "ci.log" "Why did the build fail?" 2000 \
   "over the 2000-char budget" present
+
+# Probe 6 — remove the reservation for the cache-reuse marker. Needs two runs,
+# because the overrun only exists on a cache hit, so it cannot use the helper
+# above. With the reservation gone, the second run must overrun and fail.
+MARKER_PROBE="$BOX/probe-cache-marker.py"
+cp "$CONTEXT" "$MARKER_PROBE"
+if "$PYTHON3" - "$MARKER_PROBE" <<'PY'
+import sys
+from pathlib import Path
+
+path = Path(sys.argv[1])
+text = path.read_text(encoding="utf-8")
+old = "    pack.reused_from_cache = True\n    try:\n        _fill_budget(pack, candidates)"
+new = "    try:\n        _fill_budget(pack, candidates)"
+if old not in text:
+    raise SystemExit(3)
+path.write_text(text.replace(old, new, 1), encoding="utf-8")
+PY
+then
+  MARKER_CACHE="$BOX/probe-marker-cache"
+  cp "$FX/dense.log" "$BOX/marker.log"
+  "$PYTHON3" "$MARKER_PROBE" --cache-root "$MARKER_CACHE" pack "$BOX/marker.log" \
+    --brief "order 55231 rejected" --budget-chars 2000 >/dev/null 2>&1
+  MARKER_OUT="$("$PYTHON3" "$MARKER_PROBE" --cache-root "$MARKER_CACHE" pack "$BOX/marker.log" \
+    --brief "order 55231 rejected" --budget-chars 2000 2>&1)"
+  if contains "$MARKER_OUT" "over the 2000-char budget"; then
+    ok "probe cache-marker: without the reservation the reused pack overruns its budget"
+  else
+    bad "probe cache-marker: without the reservation the reused pack overruns its budget" \
+      "the weakened build stayed inside the budget, so the reservation is untested"
+  fi
+  rm -rf "$MARKER_CACHE"
+else
+  bad "probe cache-marker could not be set up" "the reservation it removes no longer exists"
+fi
 
 # Probe 3 needs its own assertion: the id must stop depending on the source.
 BROKEN_KEY="$BOX/probe-cache-key.py"
