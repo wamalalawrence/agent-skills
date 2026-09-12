@@ -29,6 +29,8 @@
   },
   "files": [
     "bin/agent-skills-bootstrap.js",
+    "lib/verify.js",
+    "lib/trust-bundle.json",
     "vendor/install.py",
     "vendor/asrelease/*.py",
     "vendor/asrelease/providers/*.py",

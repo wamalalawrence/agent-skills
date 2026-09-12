@@ -155,12 +155,19 @@ disagreement is an integrity failure (exit `5`), not a warning.
 `signature` is reserved. Signed releases will add a field, not a schema. No custom cryptography is
 used or planned.
 
+A release that arrives from a registry carries a second, detached document: an Ed25519-signed
+manifest, verified by the Node bootstrap before the Python engine is started at all. That is a
+different artifact from `release.json` and does not change it — see
+[release signing and verification](release-signing.md).
+
 ### Archive safety
 
 Anything unpacked from an archive is treated as hostile input. Absolute paths, `..` components,
 symlinks or hardlinks pointing outside the extraction root, device nodes, and setuid bits are all
 rejected — and rejected before a single byte is written, so a hostile archive cannot half-extract.
-The adversarial cases are in `scripts/test-release-engine.py`.
+Size, expanded size, compression ratio, file count and path length are bounded as well, and
+duplicate or case-colliding member paths are refused. The adversarial cases are in
+`scripts/test-release-engine.py`.
 
 ## Release channels
 

@@ -34,6 +34,7 @@ bash scripts/test-access-resolution.sh             # if you touched the Access R
 python3 scripts/test-access-discovery.py           # if you touched Access Discovery (scripts/access_*.py)
 bash scripts/test-cli-install.sh                   # if you touched installation
 python3 scripts/test-release-engine.py             # if you touched the release engine
+node scripts/test-release-signing.js               # if you touched signing, the verifier, or the bootstrap
 bash scripts/test-knowledge.sh                     # if you touched the memory tiers, durable.py, or the lifecycle wrappers
 bash scripts/test-secret-boundary.sh               # if you touched anything that writes durable state
 python3 scripts/test-meeting.py                    # if you touched Meeting Intelligence (scripts/meeting*.py)

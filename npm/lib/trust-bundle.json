@@ -1,0 +1,25 @@
+{
+  "schema": "agent-skills.trust-bundle/v1",
+  "note": "Public Ed25519 release keys. See docs/release-signing.md for the rotation procedure. Both slots are 'reserved': the bootstrap accepts no signed release until the first signing ceremony replaces slot one with the key held in the protected release environment.",
+  "states": {
+    "active": "signs new releases and verifies them",
+    "retiring": "no longer signs; still verifies, so releases signed before the rotation keep installing",
+    "reserved": "a published slot with no live key behind it; never verifies anything"
+  },
+  "keys": [
+    {
+      "keyId": "ed25519-dadce7093ba27e92",
+      "algorithm": "ed25519",
+      "state": "reserved",
+      "publicKey": "MCowBQYDK2VwAyEAPpLa4yGqHiGL5jp113hdzMaz6OI6FFKQFKLFlhJZzDM=",
+      "comment": "slot one: replaced by the launch signing key at the first ceremony"
+    },
+    {
+      "keyId": "ed25519-a2b880c88e78dd00",
+      "algorithm": "ed25519",
+      "state": "reserved",
+      "publicKey": "MCowBQYDK2VwAyEAKdHjsyVxYNURJfo4XJcDiBsP6+KwhWbfHTCWj8I+xX4=",
+      "comment": "slot two: the successor, published one bootstrap version before it starts signing"
+    }
+  ]
+}

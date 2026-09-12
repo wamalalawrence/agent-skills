@@ -284,6 +284,14 @@ REQUIRED_FILES = [
     "npm/package.json",
     "npm/bin/agent-skills-bootstrap.js",
     "docs/release-providers.md",
+    # Release signing. The verifier and the trust bundle are the gate a signed
+    # release passes before anything opens it, so their absence is a failure
+    # rather than a missing optional feature.
+    "npm/lib/verify.js",
+    "npm/lib/trust-bundle.json",
+    "scripts/sign-release.js",
+    "scripts/test-release-signing.js",
+    "docs/release-signing.md",
 ]
 
 # Setup-managed environment keys. They MUST appear inside the

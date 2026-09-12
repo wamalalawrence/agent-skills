@@ -65,6 +65,17 @@ else
   fail "the installation engine is missing; the package would not work"
 fi
 
+# The verifier and the trust bundle are the gate a signed release passes
+# before anything opens it. A package that ships without them cannot verify a
+# release at all, which is a worse outcome than failing to publish.
+for required in package/lib/verify.js package/lib/trust-bundle.json; do
+  if printf '%s\n' "${LISTING}" | grep -q "${required}\$"; then
+    pass "${required#package/} is present"
+  else
+    fail "${required#package/} is missing; a signed release could not be verified"
+  fi
+done
+
 # Absolute developer paths inside the shipped files. A packed tarball that
 # names someone's home directory both leaks and breaks.
 EXTRACT="$(mktemp -d)"
