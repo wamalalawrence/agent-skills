@@ -20,7 +20,10 @@ Resolution order, identical to `agent_skills_resolve_cache_root` in
 Step 4 exists for workspaces that are not git repositories. Without it, running
 from a subdirectory created a second cache and a second project name for the
 same task. `$HOME` itself is never an anchor: a stray `~/.cache/agent-skills`
-would otherwise capture every non-git directory underneath it.
+would otherwise capture every non-git directory underneath it. An anchor must
+also belong to the current user: in a shared directory such as `/tmp`, another
+account could otherwise plant one and have this task's memory written where it
+can read it.
 """
 from __future__ import annotations
 
@@ -47,6 +50,16 @@ def git_toplevel(cwd: Path) -> Path | None:
     return Path(top) if out.returncode == 0 and top else None
 
 
+def _owned(path: Path) -> bool:
+    getuid = getattr(os, "getuid", None)
+    if getuid is None:  # no ownership model to check against
+        return True
+    try:
+        return path.stat().st_uid == getuid()
+    except OSError:
+        return False
+
+
 def anchor_root(cwd: Path) -> Path | None:
     """Nearest parent below `$HOME` that already anchors an agent-skills workspace."""
     home = Path(os.environ.get("HOME", "/nonexistent")).resolve()
@@ -54,9 +67,13 @@ def anchor_root(cwd: Path) -> Path | None:
     for candidate in (current, *current.parents):
         if candidate == home or candidate == Path(candidate.anchor):
             return None
-        if (candidate / ".agent-skills.yml").is_file():
+        if not _owned(candidate):
+            continue
+        config = candidate / ".agent-skills.yml"
+        if config.is_file() and _owned(config):
             return candidate
-        if (candidate.joinpath(*CACHE_PARTS) / ".last-task-context").is_file():
+        cache = candidate.joinpath(*CACHE_PARTS)
+        if (cache / ".last-task-context").is_file() and _owned(cache):
             return candidate
     return None
 

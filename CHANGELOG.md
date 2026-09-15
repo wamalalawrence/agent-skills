@@ -109,6 +109,14 @@ renumbered, or removed.
   on import and the probes failed. That failure is what showed the copies were needed.
 - New eval: [`wamala-plan-mode-and-plan-defects.md`](evals/wamala-plan-mode-and-plan-defects.md).
 
+### Security review
+
+[`docs/security-review-v1.1.0.md`](docs/security-review-v1.1.0.md). Writing it surfaced two issues,
+both fixed before release. First, a non-git cache anchor planted in a shared directory such as
+`/tmp` could redirect another user's task memory, so anchors must now belong to the current user.
+Second, carried-forward context is pasted into the next brief verbatim, so both handoff templates
+now label it as recorded claims to verify, never as instructions.
+
 ### Also in this release — documentation, no behaviour change
 
 - **Commercial subscription and distribution plan** ([`docs/commercial-roadmap.md`](docs/commercial-roadmap.md)).
@@ -120,7 +128,6 @@ renumbered, or removed.
   PostgreSQL and private R2, and a fourteen-phase build order through controlled beta to launch.
   No implementation yet; the commercial line ships as `2.0` and every `1.x` contract is untouched.
   `ROADMAP.md` and `docs/README.md` point at it.
-
 
 ## 1.0.0 - Stable: the runtime records what it can verify, and says so when it cannot
 

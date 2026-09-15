@@ -50,13 +50,16 @@ agent_skills_resolve_skill_name() {
 # produced one cache and one project name per working directory, so an agent that
 # changed into a subdirectory started a second, unrelated task. $HOME itself is
 # never an anchor: a stray ~/.cache/agent-skills would otherwise capture every
-# non-git directory beneath it.
+# non-git directory beneath it. An anchor must also belong to the current user:
+# in a shared directory such as /tmp, another account could otherwise plant one
+# and have this task's memory and blackboard written where it can read them.
 agent_skills_anchor_root() {
   local dir home
   dir="$(pwd -P)"
   home="$(cd "${HOME:-/nonexistent}" 2>/dev/null && pwd -P || printf '/nonexistent')"
   while [[ -n "${dir}" && "${dir}" != "/" && "${dir}" != "${home}" ]]; do
-    if [[ -f "${dir}/.agent-skills.yml" || -f "${dir}/.cache/agent-skills/.last-task-context" ]]; then
+    if [[ -O "${dir}" ]] && { [[ -f "${dir}/.agent-skills.yml" && -O "${dir}/.agent-skills.yml" ]] \
+         || [[ -f "${dir}/.cache/agent-skills/.last-task-context" && -O "${dir}/.cache/agent-skills" ]]; }; then
       printf '%s\n' "${dir}"
       return 0
     fi

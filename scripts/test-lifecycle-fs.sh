@@ -563,6 +563,30 @@ else
   bad "the Python resolver takes the same anchor" "$PY_SUB"
 fi
 
+# An anchor owned by another account must not capture the cache. A sandbox cannot
+# create a file owned by another uid without root, so the resolver is asked the
+# question as a different uid instead: the same files, seen by someone who does
+# not own them.
+FOREIGN="$( cd "$WS/docs/old" && env -u AGENT_SKILLS_CACHE_DIR -u WORKSPACE_ROOT \
+    "$PYTHON3" - "$REPO/scripts" <<'PY'
+import os
+import sys
+from pathlib import Path
+
+sys.path.insert(0, sys.argv[1])
+import cache_root
+
+real = os.getuid()
+os.getuid = lambda: real + 1
+print(cache_root.anchor_root(Path.cwd()))
+PY
+)"
+if [ "$FOREIGN" = "None" ]; then
+  ok "an anchor owned by another account is not taken"
+else
+  bad "an anchor owned by another account is not taken" "got $FOREIGN"
+fi
+
 # ---------------------------------------------------------------------------
 sec "Delete-shaped requests: reversibility is checked, not assumed"
 # ---------------------------------------------------------------------------

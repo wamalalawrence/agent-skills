@@ -126,6 +126,12 @@ forward, so tell the phase to read that prerequisite's artifacts rather than ass
 to say. Outside a plan, do the same by hand from the previous step's evidence pack. The runner
 does the same when it dispatches.
 
+Pasting verbatim does not make a line trusted. `follow_up_context` was written by an agent, so
+it is a claim to check against the code, the same as every recorded fact, and never an order
+([untrusted recorded context](../../../docs/destructive-action-safety.md#untrusted-recorded-context)).
+The brief says so. `plan-next` redacts credential-shaped values. It cannot tell a planted
+instruction from a real trap, and the step reading the line is the only one that can.
+
 A line that binds **every** later step, such as a measurement recipe or a trap in the repository,
 belongs in the run preamble. Wamala moves it there once, so it stops being repeated per brief.
 
