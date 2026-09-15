@@ -4,13 +4,13 @@ Reusable [Agent Skills](https://agentskills.io/) for software-engineering work �
 role-shaped workflows your AI assistant can load on demand so the same model produces
 senior-engineer, product-owner, tester, or reviewer output instead of generic answers.
 
-> **Status:** `1.0.0` — stable, private. The [1.0 contracts](docs/one-point-oh.md) — CLI names
+> **Status:** `1.1.0` — stable, private. The [1.0 contracts](docs/one-point-oh.md) — CLI names
 > and exit codes, the install layout, the release-provider interface, the skill names, and the
-> Engineering Tool Capability Framework — are frozen for the `1.x` line. Four release candidates
-> and three independent reviews preceded it; the last of those,
-> [recorded in the changelog](CHANGELOG.md), hardened the boundary between what an agent claims
-> and what the runtime records. `stable` machines receive it by default; machines on the `rc`
-> line are offered it too.
+> Engineering Tool Capability Framework — are frozen for the `1.x` line, and `1.1.0` only adds to
+> them. It answers a field report from an agent that ran Wamala on a real multi-phase delivery:
+> Wamala now runs a plan itself when dispatched agents cannot dispatch, routes a defective plan to
+> its planner, restores independent review, and checks a delete before it happens. The details
+> are [in the changelog](CHANGELOG.md).
 
 ## Start here
 
@@ -103,18 +103,18 @@ Requirements: Python 3.8+, bash, and git. macOS or Linux; on Windows use WSL or 
 with every supported agent host it finds, and makes the runtime invocable from anywhere:
 
 ```text
-  resolve    1.0.0 (stable, via git)
+  resolve    1.1.0 (stable, via git)
   download   164 files staged
   verify     payload hash and version agree
   self-test  staged runtime answers correctly
-  activate   current -> versions/1.0.0
+  activate   current -> versions/1.1.0
   hosts      claude-code, agents-standard, cursor, codex
   verified   installation is consistent
 
-Agent Skills 1.0.0 is installed.
+Agent Skills 1.1.0 is installed.
 
   install root : ~/.agent-skills
-  active release: ~/.agent-skills/versions/1.0.0
+  active release: ~/.agent-skills/versions/1.1.0
   hosts        : claude-code, agents-standard, cursor, codex
   command      : ~/.local/bin/agent-skills
 

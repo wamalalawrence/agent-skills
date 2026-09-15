@@ -16,7 +16,7 @@ compatibility: >-
   .agent-skills.yml). See docs/execution-modes.md.
 metadata:
   author: wamalalawrence
-  version: "1.0.0"
+  version: "1.1.0"
   homepage: "https://github.com/wamalalawrence/agent-skills"
 argument-hint: >-
   optional: mode inner|outer, base branch, issue key/URL, PR URL, or task description
@@ -610,8 +610,12 @@ When this skill is invoked iteratively in the engineer↔reviewer pair-programmi
   major_count, verdict}`, mapping the top-level `open_blocker_count` → `blocker_count` and
   `open_major_count` → `major_count`; (b) increments `review.round` by 1 (or initialises it to `1`
   if absent); (c) writes the new top-level `open_blocker_count`, `open_major_count`, and `verdict`
-  for this round. The engineer must not mutate this block — it only re-stages the fix and
-  re-invokes the reviewer. This avoids double-increments and stale counts.
+  for this round; (d) writes `review.independence` for this round — `fresh-context` only when
+  this review runs in an agent context that did not write the diff, `same-context` otherwise,
+  including when the engineer could not open a fresh agent and loaded this skill inline. The
+  engineer must not mutate this block — it only re-stages the fix and re-invokes the reviewer.
+  This avoids double-increments and stale counts, and stops an inline review from reading as an
+  independent one.
 - Track the round number in the evidence pack (`round: 1`, `round: 2`, ...).
 - **Round 1 has no prior round.** Strict-decrease is not applicable on round 1 — there is no
   baseline to compare against. A round-1 result with actionable findings always produces

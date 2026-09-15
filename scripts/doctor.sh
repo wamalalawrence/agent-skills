@@ -235,9 +235,14 @@ probe_mcp() {
   fi
 }
 
+# Directories that commonly hold a project's own knowledge base. Checked only to
+# report honestly: agent-skills does not read, rank, or write any of them.
+OTHER_KNOWLEDGE_CANDIDATES="knowledge docs/knowledge kb docs/kb .kb .knowledge knowledge-base"
+
 probe_memory() {
   KNOWLEDGE_STATE="no"
-  KNOWLEDGE_DETAIL="no committed knowledge base in this repository"
+  KNOWLEDGE_DETAIL="no agent-skills knowledge base (.agent-skills/knowledge), and no other knowledge base found"
+  KNOWLEDGE_OTHER=""
   local root
   root="$(git rev-parse --show-toplevel 2>/dev/null || pwd)"
   if [[ -d "${root}/.agent-skills/knowledge" ]]; then
@@ -245,6 +250,29 @@ probe_memory() {
     lessons="$(find "${root}/.agent-skills/knowledge/lessons" -name '*.md' 2>/dev/null | wc -l | tr -d ' ')"
     KNOWLEDGE_STATE="yes"
     KNOWLEDGE_DETAIL="${root}/.agent-skills/knowledge (${lessons} lesson(s))"
+  fi
+
+  # The line used to read "NO repo knowledge — no committed knowledge base" in a
+  # repository carrying a 650-fact knowledge base under `knowledge/`, because
+  # the probe only knew its own path. An agent planning from that line skips
+  # the one source that would have told it the project's traps.
+  local candidate files
+  for candidate in ${OTHER_KNOWLEDGE_CANDIDATES}; do
+    [[ -d "${root}/${candidate}" ]] || continue
+    files="$(find "${root}/${candidate}" -maxdepth 4 -type f \
+      \( -name '*.md' -o -name '*.yml' -o -name '*.yaml' -o -name '*.json' -o -name '*.txt' \) \
+      2>/dev/null | wc -l | tr -d ' ')"
+    [[ "${files:-0}" -gt 0 ]] || continue
+    KNOWLEDGE_OTHER="${KNOWLEDGE_OTHER}${candidate}/ (${files} file(s)) "
+  done
+  KNOWLEDGE_OTHER="${KNOWLEDGE_OTHER% }"
+  if [[ -n "${KNOWLEDGE_OTHER}" ]]; then
+    if [[ "${KNOWLEDGE_STATE}" == "yes" ]]; then
+      KNOWLEDGE_DETAIL="${KNOWLEDGE_DETAIL}; also found: ${KNOWLEDGE_OTHER}"
+    else
+      KNOWLEDGE_STATE="other"
+      KNOWLEDGE_DETAIL="no agent-skills knowledge base, but the project has its own: ${KNOWLEDGE_OTHER} — read it directly; agent-skills does not load it"
+    fi
   fi
 }
 
@@ -609,7 +637,10 @@ render_json() {
   printf '  "github": "%s",\n' "${GITHUB_STATE}"
   printf '  "github_detail": "%s",\n' "$(json_escape "${GITHUB_DETAIL}")"
   printf '  "mcp": "%s",\n' "${MCP_STATE}"
-  printf '  "repo_knowledge": "%s",\n' "${KNOWLEDGE_STATE}"
+  # `repo_knowledge` keeps its 1.0 meaning — is there an agent-skills knowledge
+  # base — and its yes/no values; another knowledge base is reported beside it.
+  printf '  "repo_knowledge": "%s",\n' "$([[ "${KNOWLEDGE_STATE}" == "yes" ]] && echo yes || echo no)"
+  printf '  "repo_knowledge_other": "%s",\n' "$(json_escape "${KNOWLEDGE_OTHER}")"
   printf '  "execution_guard": "%s",\n' "${GUARD_STATE}"
   printf '  "execution_guard_detail": "%s"\n' "$(json_escape "${GUARD_DETAIL}")"
   printf '}\n'

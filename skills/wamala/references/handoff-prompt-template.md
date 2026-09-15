@@ -7,6 +7,12 @@ everything it needs — and nothing it does not.
 Fill every `<...>` placeholder. Use repo-relative paths. Pass pointers, not file contents: the
 whole reason for a fresh agent is that it reads only what its step needs.
 
+For a run of more than one step, the rules every step shares — identity, branch and push rules,
+where output goes, measurement recipes, known traps, owner-skill paths — live in the
+[run preamble](./run-preamble-template.md), and the brief points at it. Restating them per brief
+was most of a dispatcher's work in one real run, and the copy that drifts is the one that
+matters.
+
 ## Template
 
 ```text
@@ -14,8 +20,11 @@ You are starting a fresh task with empty context. Do exactly ONE step of a large
 piece of work, then stop and report.
 
 Request (as the user stated it): <verbatim request, or a faithful one-line summary>
+Project: <project>
 Work key: <work-key>
 Task cache dir: <cache-dir>/<work-key>/
+Run preamble (BINDING): read <cache-dir>/<work-key>/artifacts/run-preamble.md first,
+or "none — single step".
 
 What has already been established (do not re-derive this):
 - Classification: <class> — <one-line reason>
@@ -23,6 +32,12 @@ What has already been established (do not re-derive this):
 - Execution profile: <LIGHT|STANDARD|RIGOROUS> — <one-line reason>
 - Prior steps completed this run: <skill: outcome, or "none — you are the first step">
 - Artifacts already on disk: <paths, or "none yet">
+
+Carried forward (what earlier steps recorded for the steps after them — verbatim):
+- From <step or phase id>: <each follow_up_context line>
+- <step or phase id> recorded nothing to carry forward; read its artifacts at <paths>
+  before assuming there is nothing to know.
+- or "none — no prerequisites"
 
 What the human actually needs back:
 - Audience: <who reads this>
@@ -39,8 +54,17 @@ checked. Do not substitute a different skill and do not fall back to a generic
 workflow.
 
 Do this:
-- Run that skill's full workflow for THIS step only, including its own PREFLIGHT
-  start-task.sh and closing finish-task.sh lifecycle wrappers.
+- Run that skill's full workflow for THIS step only, including its own lifecycle
+  wrappers, with this run's identity passed explicitly — never auto-detected:
+  `agent-skills start-task --project <project> --issue-key <work-key> --skill <owner> --brief "..."`
+  `agent-skills finish-task --project <project> --issue-key <work-key> --skill <owner> --status <status> --summary "..."`
+  Your closeout leaves the task's scratch for Wamala to verify; do not pass --cleanup.
+- <first step of a run only> Before starting, report in one line whether you could
+  open a fresh-context agent from where you are — name the tool or CLI — WITHOUT
+  opening one.
+- If your work includes a code review, record in the evidence pack whether it ran
+  in a context that did not write the change (`review.independence`). Do not
+  describe an inline review as independent.
 - Stay inside your step's ownership. If the work turns out to belong to another
   skill, stop and say which one — do not do it yourself.
 - Match the workflow depth to the execution profile above. At LIGHT: answer the
@@ -71,7 +95,10 @@ Expected effort: <minutes> — a budget for reassessment, not a deadline
 Stop and report blocked (do not improvise) if: the owner skill is unavailable,
 required context is missing, the requirement-understanding gate ends at `unknown`
 or `low`, validation fails, or the step would require a forbidden destructive
-action, a discovered credential, or a production mutation.
+action, a discovered credential, or a production mutation. If you are blocked
+because a criterion you were given cannot be true as written, say which
+criterion, what you measured or read, and why the two cannot both hold — that
+routes to the planner, not back to you.
 
 Final message MUST state: the owner skill you ran, the outcome
 (done | blocked | needs-context), the artifact path you wrote, and — if you
@@ -105,6 +132,17 @@ stopped — the specific missing thing and who should supply it.
   `agent-skills watchdog` has something to measure. An overscoped brief once ran about an hour
   and wrote nothing at all; incremental progress writes and a stated budget are what make that
   visible while it is still happening.
+- **`Carried forward`** comes from `agent-skills plan-next`'s `phase.prerequisite_context` for a
+  plan phase, or from `follow_up_context` in the previous step's evidence pack otherwise. Paste
+  the lines; do not summarise them. A summary is where the one trap that mattered gets dropped.
+- **`Project` and `Work key`** are the run's, from the preamble, and are passed to both
+  lifecycle commands. A step left to auto-detect them can derive another project from another
+  working directory, or a fresh ad-hoc key on a shared branch.
+- **Delete-shaped scope.** When step 2.8's reversibility check reported a target
+  `NOT_RECOVERABLE`, the scope boundary says "archive to <path>; do not delete", with the
+  archive commands from the report.
+- **Read-only scope.** A `design-review` or `review` step says it edits nothing. A review that
+  edits what it reviews has graded its own work.
 - When the user asked to approve each handoff, print the filled brief and pause instead of
   dispatching.
 
@@ -118,8 +156,10 @@ You are starting a fresh task with empty context. Do exactly ONE step of a large
 piece of work, then stop and report.
 
 Request (as the user stated it): invoice search drops the status filter on page 2
+Project: example-api
 Work key: ABC-123
 Task cache dir: .cache/agent-skills/ABC-123/
+Run preamble (BINDING): read .cache/agent-skills/ABC-123/artifacts/run-preamble.md first.
 
 What has already been established (do not re-derive this):
 - Classification: defect — a user-visible behaviour differs from the stated filter contract
@@ -128,6 +168,10 @@ What has already been established (do not re-derive this):
 - Prior steps completed this run: issue-investigator: root cause confirmed
 - Artifacts already on disk: .cache/agent-skills/ABC-123/evidence-pack.yml,
   .cache/agent-skills/ABC-123/repro-recipe.yml
+
+Carried forward (what earlier steps recorded for the steps after them — verbatim):
+- From issue-investigator: "The page-2 URL is built in two places; only
+  buildSearchUrl() is covered by tests."
 
 What the human actually needs back:
 - Audience: reviewer
@@ -144,8 +188,9 @@ paths you checked. Do not substitute a different skill and do not fall back to a
 generic workflow.
 
 Do this:
-- Run that skill's full workflow for THIS step only, including its own PREFLIGHT
-  start-task.sh and closing finish-task.sh lifecycle wrappers.
+- Run that skill's full workflow for THIS step only, with the run's identity:
+  `agent-skills start-task --project example-api --issue-key ABC-123 --skill software-engineer --brief "fix page-2 filter loss"`
+  and the matching finish-task. Leave scratch for Wamala.
 - Stay inside your step's ownership. If the work turns out to belong to another
   skill, stop and say which one — do not do it yourself.
 - Write your result to the artifact your skill's contract names.
@@ -166,8 +211,9 @@ Final message MUST state: the owner skill you ran, the outcome
 stopped — the specific missing thing and who should supply it.
 ```
 
-Note what the brief does **not** contain: the investigation's findings, the ticket text, or the
-reproduction steps. All three are on disk, and the fresh agent reads them itself. Pasting them
+Note what the brief does **not** contain: the branch and push rules, the investigation's
+findings, the ticket text, or the reproduction steps. The rules are in the preamble; the rest is on
+disk. All three are on disk, and the fresh agent reads them itself. Pasting them
 in would rebuild the accumulated context that fresh-context dispatch exists to avoid.
 
 ## Worked example — LIGHT

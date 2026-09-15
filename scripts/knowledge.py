@@ -60,7 +60,6 @@ from __future__ import annotations
 
 import argparse
 import json
-import os
 import re
 import subprocess
 import sys
@@ -946,11 +945,10 @@ def run_decay(repo_root: Path, apply: bool) -> list[str]:
 # promote: cache tier -> repo tier
 # ---------------------------------------------------------------------------
 def cache_root() -> Path:
-    env = os.environ.get("AGENT_SKILLS_CACHE_DIR")
-    if env:
-        return Path(env).resolve()
-    base = os.environ.get("WORKSPACE_ROOT") or os.getcwd()
-    return (Path(base) / ".cache" / "agent-skills").resolve()
+    # Imported here rather than at the top: only `promote` reads the cache tier.
+    from cache_root import default_cache_root
+
+    return default_cache_root()
 
 
 def slugify(name: str) -> str:

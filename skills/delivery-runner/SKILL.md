@@ -22,7 +22,7 @@ compatibility: >-
   docs/execution-modes.md.
 metadata:
   author: wamalalawrence
-  version: "1.0.0"
+  version: "1.1.0"
   homepage: "https://github.com/wamalalawrence/agent-skills"
 argument-hint: "<the work key or plan cache dir to execute end to end>"
 user-invocable: true
@@ -109,6 +109,13 @@ Skipping the wrappers is the #1 failure mode and task size does not waive them.
 - The host cannot open a fresh-context agent and the user is not available to
   paste handoffs into new chats — there is then no way to honor the
   empty-context contract, and running phases inline would defeat the purpose.
+- **You were dispatched as a step and cannot open an agent from here.** Many
+  hosts register the sub-agent tool only at the top level of a session, and an
+  agent CLI can be absent or signed out. Stop at step 0 with
+  `BLOCKED: nested dispatch unavailable` before touching the plan. The caller
+  does not need to improvise: [`wamala`](../wamala/SKILL.md) runs this same loop
+  at its own depth in
+  [plan mode](../wamala/references/dispatch-topology.md#plan-mode).
 - Mass-targeting, supply-chain, or any other malicious work — the
   destructive-action safety floor is not waivable by prompt.
 
@@ -131,10 +138,13 @@ This distinction is load-bearing and keeps the runner consistent with the
   the agent's chat summary as proof. "Persistent artifacts, not chat" is the
   same handoff contract every skill in this repo uses.
 - **The index is the durable pointer.** Between phases the lifecycle cleanup
-  wrapper preserves `phased-plan/README.md` and `destination.md` but may clear
-  `evidence-pack.yml` (a fresh phase reconstructs it). So the runner reads the
-  **index header and phase table** as source of truth for `current_dispatch_pointer`
-  and per-phase `State`, using `scripts/delivery-run-next.py`.
+  wrapper preserves `phased-plan/`, `destination.md`, `evidence-pack.yml`, and
+  `artifacts/`. The runner still reads the **index header and phase table** as
+  source of truth for `current_dispatch_pointer` and per-phase `State`, using
+  `scripts/delivery-run-next.py`. The evidence pack is where each phase's
+  `follow_up_context` lives, and `plan-next` returns it for the prerequisites of
+  the phase being dispatched. Before `1.1.0` cleanup cleared the pack between
+  phases, so that context existed only until the phase that wrote it closed out.
 
 How the fresh agent is opened, in order of preference:
 
@@ -161,9 +171,14 @@ How the fresh agent is opened, in order of preference:
   [`test-automation-engineer`](../test-automation-engineer/SKILL.md): the phase
   owners. The runner dispatches a fresh agent that loads the phase's
   `recommended_owner` skill; it does not invoke these skills in its own context.
-- [`code-reviewer`](../software-engineer/skills/code-reviewer/SKILL.md): never
-  dispatched directly. It runs inside a `software-engineer` phase as that phase's
-  own review loop, which is why the runner stays out of the call chain.
+- [`code-reviewer`](../software-engineer/skills/code-reviewer/SKILL.md): runs
+  inside a `software-engineer` phase as that phase's own review loop, which is why
+  the runner stays out of the call chain while a phase runs. The one direct
+  dispatch is a **sibling review after** a phase that required independent review
+  and recorded `review.independence` as anything but `fresh-context`: the phase
+  agent could not open a fresh reviewer, so the runner opens one over the
+  committed diff. Cadence and shape are in
+  [dispatch topology](../wamala/references/dispatch-topology.md#independent-review).
 
 The runner **drives** execution; it does not perform any phase's work. This
 preserves the [depth cap of two skills](../../docs/review-loops.md#universal-loop-bounds)
@@ -207,9 +222,16 @@ branch context.
 
 ### 0. Preflight and locate the plan
 
-Run `start-task.sh` (above). Resolve the task cache dir and confirm both
-`phased-plan/README.md` and `destination.md` exist. If either is missing, stop
-with `BLOCKED: no phased plan found` and route to `delivery-planner`.
+Run `start-task.sh` (above), with the work key passed explicitly when you were
+dispatched with one. Then confirm you can actually open a fresh-context agent
+from here — a sub-agent tool in your own tool list, or an agent CLI that answers a
+non-interactive call — or that a human is relaying handoffs. If none holds, stop
+now with `BLOCKED: nested dispatch unavailable`: a runner that finds this out at
+`phase-01` has already spent its caller a dispatch.
+
+Resolve the task cache dir and confirm both `phased-plan/README.md` and
+`destination.md` exist. If either is missing, stop with
+`BLOCKED: no phased plan found` and route to `delivery-planner`.
 
 ### 1. Pre-run plan check (once)
 
@@ -268,7 +290,9 @@ Repeat until a stop condition fires:
    [handoff-prompt template](./references/handoff-prompt-template.md) with the
    work key, the plan branch from step 1, the pointer phase id and file path,
    the destination path, the evidence-pack path, the resolved owner skill path,
-   and the binding instructions (run the owner skill's full workflow including
+   the decision's `phase.prerequisite_context` pasted verbatim under
+   **Carried forward** (a prerequisite listed in `missing` is named, with its
+   artifacts, rather than left out), and the binding instructions (run the owner skill's full workflow including
    its own start-task/finish-task wrappers, write the phase-continuity
    checkpoint and regenerate the index, do ONLY this phase, do not touch other
    phases).
@@ -320,6 +344,16 @@ checkpoint — **not** from the agent's chat:
   failing validation, missing dependency) → **stop the loop.** A blocker is not
   retried autonomously; surface `blocked_reason` and artifacts and hand to the
   user. This mirrors "blocker findings stop the loop."
+- **Blocked by the plan.** The `blocked_reason` shows the phase's own acceptance
+  or exit criterion cannot be satisfied as written — naming the criterion, what
+  was measured or read, and why both cannot hold. Still stop, and still do not
+  edit the plan, but stop with reason `plan-defect` and the evidence path, so the
+  caller routes it to `delivery-planner` as an amendment rather than asking the
+  user a question the planner owns.
+- **Review owed.** The phase is `done`, required independent review, and its
+  evidence pack's `review.independence` is not `fresh-context`. The phase is done;
+  its review is not. Dispatch a sibling `code-reviewer` over the committed range on
+  the documented cadence, and report the requirement as owed until one lands.
 - **No checkpoint (crash / transient).** The phase is still `ready` /
   `in-progress` and the pointer did not move → the agent failed to write its
   checkpoint. Retry **this** phase **once** with a fresh agent and an explicit
@@ -359,6 +393,9 @@ the suite. Stop — do not retry, do not re-plan, do not improvise — on any of
   (`total_phases + retry_budget`) is reached.
 - **Concurrency suspected.** A phase is already `in-progress` with a recent checkpoint that
   this runner did not write. Ask before dispatching a duplicate.
+- **A phase is blocked by the plan itself.** Stop with `plan-defect`; the amendment
+  belongs to `delivery-planner`.
+- **Nested dispatch unavailable.** Found at step 0, before the plan is read.
 - **The watchdog asked for a reassessment.** `narrow`, `split`, or `restart` means the phase
   needs re-scoping, and re-scoping belongs to `delivery-planner`. Stop and hand back the
   verdict.
@@ -381,6 +418,9 @@ reason. The detection signal and response for each case are in the table below.
 | Phase running long with nothing written | `watchdog` verdict `restart` | stop; the brief is too broad to produce anything |
 | Phase long but still producing | `watchdog` verdict `narrow` / `split` | stop, route to planner to re-scope; do NOT kill it |
 | Plan superseded mid-run | index `state: superseded` | stop, route to planner |
+| Cannot open a fresh agent from here | step 0 capability check | stop `BLOCKED: nested dispatch unavailable`; caller runs plan mode |
+| Phase criterion contradicted by evidence | `blocked_reason` names criterion, measurement, and conflict | stop `plan-defect`; caller routes to planner as an amendment |
+| Phase review ran in the writer's context | `review.independence` not `fresh-context` on a phase that required independent review | dispatch a sibling `code-reviewer`; report as owed until it lands |
 
 Recovery is always: **stop cleanly, preserve scratch (`finish-task --status
 blocked`), and report exactly which phase and why.** The runner never silently
@@ -414,14 +454,16 @@ or memory write ran unless it actually ran.
 - Phases dispatched this run: <ids, in order; group concurrent ones as [a, b]>
 - Phases completed: <n> / <total>
 - Final dispatch pointer: <phase id or "none — plan complete">
-- Stop reason: complete | blocked | needs-human | no-progress | superseded
+- Stop reason: complete | blocked | plan-defect | needs-human | no-progress | superseded |
+  nested-dispatch-unavailable
 - Outcome: COMPLETE | STOPPED_BLOCKED | STOPPED_NEEDS_HUMAN
 
 ## Phase Results
 
 - **<phase-id> — <title>** (owner: <skill>, profile: <LIGHT|STANDARD|RIGOROUS>) —
   <done | blocked | skipped>. Verified by: <index State + checkpoint validation,
-  or "retry then stalled">.
+  or "retry then stalled">. Review: <in-phase fresh-context | sibling review
+  <base>..<head> | owed — reason>.
 
 ## Blocked Phase
 
@@ -461,7 +503,13 @@ or memory write ran unless it actually ran.
   dispatch; an unresolved owner stopped the run.
 - [ ] Every phase result was verified from the index / checkpoint, not from the
   dispatched agent's chat.
-- [ ] A blocked phase stopped the loop; no genuine blocker was auto-retried.
+- [ ] A blocked phase stopped the loop; no genuine blocker was auto-retried. A
+  phase blocked by its own criterion stopped with `plan-defect` and its evidence.
+- [ ] The runner confirmed it could open a fresh agent before reading the plan.
+- [ ] Every dispatched phase's brief carried its prerequisites'
+  `follow_up_context` verbatim.
+- [ ] No phase's independent review was reported satisfied by a same-context
+  review.
 - [ ] A crashed phase was retried at most once before stopping.
 - [ ] The loop honored the hard iteration cap and the no-progress guard.
 - [ ] No phase requiring a forbidden destructive action was dispatched.

@@ -49,6 +49,10 @@ Arguments:
   issue-key    Optional. Auto-detected when omitted.
 
 Options:
+  --project P  Same as positional project.
+  --issue-key K, --task K
+               Same as positional issue-key. The same flags start-task takes, so
+               the two commands of one task can be written the same way.
   --summary T  Required. One-sentence outcome for Recent tasks.
   --status S   complete | pr-opened | blocked | needs-context | abandoned
                Default: complete.
@@ -72,7 +76,8 @@ Options:
                Repeatable.
   --no-candidates
                Skip the durable-fact suggestions drawn from the blackboard.
-  --cleanup    Force cleanup even for blocked/needs-context runs.
+  --cleanup    Force cleanup even for blocked/needs-context runs, and for a
+               step inside a coordinated run.
   --no-cleanup Keep per-task scratch even for complete runs.
   --recent-task-only
                Write only the Recent tasks bullet and telemetry.
@@ -83,6 +88,12 @@ Options:
                what makes the fallback idempotent instead of a second, false
                "unfinished" record after a normal finish.
   --help       Show this help.
+
+Cleanup never removes `artifacts/`, and around a phased plan it keeps
+`phased-plan/`, `destination.md`, and `evidence-pack.yml`. Inside a coordinated
+run — a task whose blackboard records wamala or delivery-runner — a step's
+closeout leaves scratch alone: the coordinator still has to verify what the
+step wrote, and it cleans up once, at the end of the run.
 
 Closeout is not verified delivery. This command records what happened. For
 complete / pr-opened it also reports whether a definition-of-done.json exists
@@ -98,6 +109,22 @@ EOF
 
 while [[ $# -gt 0 ]]; do
   case "$1" in
+    --project)
+      PROJECT="${2:-}"
+      shift 2
+      ;;
+    --project=*)
+      PROJECT="${1#*=}"
+      shift
+      ;;
+    --issue-key|--task)
+      ISSUE_KEY="${2:-}"
+      shift 2
+      ;;
+    --issue-key=*|--task=*)
+      ISSUE_KEY="${1#*=}"
+      shift
+      ;;
     --summary)
       SUMMARY="${2:-}"
       shift 2
@@ -267,9 +294,11 @@ if [[ -z "${ISSUE_KEY}" ]]; then
   # scratch — so when the answer is ambiguous, say so instead.
   ACTIVE_TASK_COUNT="$(agent_skills_active_task_count)"
   if [[ "${ACTIVE_TASK_COUNT}" -gt 1 ]]; then
-    echo "ERROR: --issue-key is required here: ${ACTIVE_TASK_COUNT} tasks are in flight" >&2
-    echo "       under ${CACHE_ROOT}, so the most recent start-task is not necessarily" >&2
+    echo "ERROR: name the task explicitly: ${ACTIVE_TASK_COUNT} tasks are in flight under" >&2
+    echo "       ${CACHE_ROOT}, so the most recent start-task is not necessarily" >&2
     echo "       yours. Nothing was written." >&2
+    echo "       Pass --issue-key <key> (or give it as the second positional argument):" >&2
+    echo "         agent-skills finish-task --issue-key <key> --summary \"...\"" >&2
     echo "       In flight:" >&2
     agent_skills_active_tasks | sed 's/^/         - /' >&2
     exit 3
@@ -489,6 +518,21 @@ if [[ -n "${LAST_CONTEXT}" && -f "${LAST_CONTEXT}" ]]; then
   printf 'closed=%s\n' "${ISSUE_KEY}" >> "${LAST_CONTEXT}"
 fi
 
+# A coordinated run. Wamala and delivery-runner dispatch each step into a fresh
+# agent that shares the coordinator's work key, and then verify the step from
+# what it left on disk. Before this check, a step's own `complete` closeout
+# deleted the task directory — its evidence pack, its definition of done, its
+# report — before the coordinator could read any of it, and the next step started
+# without the continuity record. The coordinator owns the run's scratch and
+# cleans it once, when the run ends. `--cleanup` still forces it.
+COORDINATOR=""
+if [[ "${CLEANUP}" == "auto" ]] && ! agent_skills_is_coordinator "${SKILL}"; then
+  COORDINATOR="$(agent_skills_task_coordinator "${TASK_DIR}/blackboard.json" || true)"
+  if [[ -n "${COORDINATOR}" ]]; then
+    CLEANUP="false"
+  fi
+fi
+
 if [[ "${CLEANUP}" == "auto" ]]; then
   case "${STATUS}" in
     blocked|needs-context) CLEANUP="false" ;;
@@ -513,6 +557,9 @@ if [[ "${CLEANUP}" == "true" ]]; then
     echo "        Remove it by its exact name once you have checked it:"
     echo "          ${PYTHON3} ${PM_SCRIPT} cleanup-task <exact-directory-name>"
   fi
+elif [[ -n "${COORDINATOR}" ]]; then
+  echo "[3/3] cleanup: skipped; this step is part of a ${COORDINATOR} run, which verifies"
+  echo "        the step from its artifacts and cleans the task's scratch when the run ends."
 else
   echo "[3/3] cleanup: skipped; per-task scratch preserved for resumption."
 fi

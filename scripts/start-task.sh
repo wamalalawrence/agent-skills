@@ -32,9 +32,6 @@ REPO_ROOT="$(cd "${SCRIPT_DIR}/.." && pwd)"
 source "${SCRIPT_DIR}/task-context.sh"
 
 # ---------------------------------------------------------------------------
-# Resolve the cache root (same logic as the Python scripts)
-# ---------------------------------------------------------------------------
-# ---------------------------------------------------------------------------
 # Resolve a `--skill` spec. The name is mapped through the deprecated-name table
 # first; an explicit `=version` is then kept as given, and a bare `name` is
 # completed from this repo's VERSION file.
@@ -61,24 +58,10 @@ resolve_skill_version() {
 }
 
 resolve_cache_root() {
-  if [[ -n "${AGENT_SKILLS_CACHE_DIR:-}" ]]; then
-    echo "${AGENT_SKILLS_CACHE_DIR}"
-    return
-  fi
-  if [[ -n "${WORKSPACE_ROOT:-}" ]]; then
-    echo "${WORKSPACE_ROOT}/.cache/agent-skills"
-    return
-  fi
-  # Global install, no legacy workspace: the cache belongs to the repository
-  # being worked on. Anchor it at the git root rather than $PWD so running this
-  # from a nested directory does not scatter .cache folders through the tree.
-  local git_root=""
-  git_root="$(git rev-parse --show-toplevel 2>/dev/null || true)"
-  if [[ -n "${git_root}" ]]; then
-    echo "${git_root}/.cache/agent-skills"
-    return
-  fi
-  echo "${PWD}/.cache/agent-skills"
+  # One implementation, shared with finish-task and mirrored by
+  # scripts/cache_root.py. This file used to carry its own copy, and the Python
+  # helpers a third, and the three disagreed about a nested working directory.
+  agent_skills_resolve_cache_root
 }
 
 # ---------------------------------------------------------------------------
@@ -280,6 +263,25 @@ echo "  cache-root: ${CACHE_ROOT}"
 if [[ ${#SKILLS[@]} -gt 0 ]]; then
   echo "  skills:     ${SKILLS[*]}"
 fi
+if [[ "${PROJECT_SOURCE}" == "auto" && "${PROJECT}" == "$(agent_skills_repo_name)" ]] \
+   && ! git rev-parse --show-toplevel >/dev/null 2>&1; then
+  echo "  note:       project name taken from a directory name, not a repository or"
+  echo "              .agent-skills.yml. Another working directory can derive another"
+  echo "              name for the same work; pass --project ${PROJECT} to pin it."
+fi
+# A generated key is new by construction. When other tasks are already in flight
+# in this cache, the likeliest reason is a dispatched agent that was meant to join
+# one of them and was not told its key — which is how one piece of work ends up
+# with several keys, several blackboards, and memory split between them.
+if [[ "${ISSUE_SOURCE}" == auto* && "${ISSUE_KEY}" == ad-hoc-* ]]; then
+  IN_FLIGHT="$(agent_skills_active_tasks 2>/dev/null || true)"
+  if [[ -n "${IN_FLIGHT}" ]]; then
+    echo "  note:       generated a new task key while other tasks are in flight here:"
+    printf '%s\n' "${IN_FLIGHT}" | head -n 5 | sed 's/^/                - /'
+    echo "              If this work belongs to one of them, rerun with"
+    echo "              --project ${PROJECT} --issue-key <that key>."
+  fi
+fi
 echo "  budget:     ${STARTUP_BUDGET_CHARS} chars total (org ${ORG_BUDGET_CHARS}, project ${PROJECT_BUDGET_CHARS}, knowledge ${KNOWLEDGE_BUDGET_CHARS}, wrappers ${WRAPPER_RESERVE_CHARS})"
 if [[ -z "${BRIEF}" ]]; then
   echo "  brief:      (none — pass --brief \"<one line>\" so recall is ranked for this task)"
@@ -356,9 +358,10 @@ if [[ -f "${KB_SCRIPT}" ]]; then
   if ${PYTHON3} "${KB_ARGS[@]}" 2>/dev/null; then
     echo "[3/5] repo-knowledge: read OK"
   else
-    echo "[3/5] repo-knowledge: none in this repository yet."
+    echo "[3/5] repo-knowledge: no agent-skills knowledge base (.agent-skills/knowledge) here."
+    echo "        That says nothing about other knowledge bases: the capability report"
+    echo "        below names any it found, and those are read directly, not through this."
     echo "        Create one with: ${PYTHON3} ${KB_SCRIPT} init"
-    echo "        It is committed and reviewed, so it survives a fresh clone."
   fi
 else
   echo "[3/5] repo-knowledge: SKIPPED (knowledge.py not found)"
@@ -410,7 +413,7 @@ echo "  2. Append facts to project memory AS you verify them:"
 echo "     ${PYTHON3} ${PM_SCRIPT} note ${PROJECT} --section \"Build & runtime\" --text \"...\""
 echo "  3. Append a Recent tasks bullet when the task finishes."
 echo "  4. Prefer the finish wrapper so memory is written before cleanup:"
-echo "     bash ${SCRIPT_DIR}/finish-task.sh ${PROJECT} ${ISSUE_KEY} --summary \"...\""
+echo "     agent-skills finish-task --project ${PROJECT} --issue-key ${ISSUE_KEY} --summary \"...\""
 echo "     # or manually, after writing memory:"
 echo "     ${PYTHON3} ${PM_SCRIPT} cleanup-task ${ISSUE_KEY}"
 echo ""

@@ -42,8 +42,31 @@ agent_skills_resolve_skill_name() {
   printf '%s\n' "${requested}"
 }
 
+# The nearest parent directory, below $HOME, that already anchors an
+# agent-skills workspace: it holds `.agent-skills.yml`, or a cache that a
+# previous start-task wrote. Mirrors `anchor_root` in scripts/cache_root.py.
+#
+# Only consulted outside a git repository. Without it a workspace with no `.git`
+# produced one cache and one project name per working directory, so an agent that
+# changed into a subdirectory started a second, unrelated task. $HOME itself is
+# never an anchor: a stray ~/.cache/agent-skills would otherwise capture every
+# non-git directory beneath it.
+agent_skills_anchor_root() {
+  local dir home
+  dir="$(pwd -P)"
+  home="$(cd "${HOME:-/nonexistent}" 2>/dev/null && pwd -P || printf '/nonexistent')"
+  while [[ -n "${dir}" && "${dir}" != "/" && "${dir}" != "${home}" ]]; do
+    if [[ -f "${dir}/.agent-skills.yml" || -f "${dir}/.cache/agent-skills/.last-task-context" ]]; then
+      printf '%s\n' "${dir}"
+      return 0
+    fi
+    dir="$(dirname "${dir}")"
+  done
+  return 1
+}
+
 agent_skills_git_root() {
-  git rev-parse --show-toplevel 2>/dev/null || pwd
+  git rev-parse --show-toplevel 2>/dev/null || agent_skills_anchor_root || pwd
 }
 
 agent_skills_repo_name() {
@@ -61,13 +84,7 @@ agent_skills_resolve_cache_root() {
   fi
   # Under the global install the cache belongs to the repository, anchored at
   # its root so a nested working directory does not create a second cache.
-  local git_root=""
-  git_root="$(git rev-parse --show-toplevel 2>/dev/null || true)"
-  if [[ -n "${git_root}" ]]; then
-    printf '%s\n' "${git_root}/.cache/agent-skills"
-    return 0
-  fi
-  printf '%s\n' "${PWD}/.cache/agent-skills"
+  printf '%s\n' "$(agent_skills_git_root)/.cache/agent-skills"
 }
 
 # Keep the cache out of the user's `git status` without touching their repo.
@@ -137,8 +154,56 @@ agent_skills_active_tasks() {
     name="$(basename "${entry}")"
     # `_projects` and `_org` are the durable tiers, not tasks.
     case "${name}" in _*) continue ;; esac
+    # A task is in flight while its blackboard exists: start-task creates it and
+    # a clean closeout removes it. A directory holding only what cleanup kept on
+    # purpose — a phased plan between phases, an `artifacts/` directory — is not
+    # a task anyone is running, and counting it made an implicit finish-task in a
+    # long-lived cache refuse because "15 tasks are in flight".
+    [[ -f "${entry}/blackboard.json" ]] || continue
     printf '%s\n' "${name}"
   done
+}
+
+# The coordinator skills. They dispatch other skills into fresh agents that share
+# the coordinator's work key, so the coordinator — not each step — owns the
+# task's scratch. See the coordinated-run check in finish-task.sh.
+AGENT_SKILLS_COORDINATOR_SKILLS="wamala delivery-runner"
+
+agent_skills_is_coordinator() {
+  local candidate
+  for candidate in ${AGENT_SKILLS_COORDINATOR_SKILLS}; do
+    [[ "$1" == "${candidate}" ]] && return 0
+  done
+  return 1
+}
+
+# Print the coordinator skill recorded on a task's blackboard, if any. The JSON
+# is parsed rather than grepped, so a note that merely mentions "wamala" cannot
+# pass for a participant.
+agent_skills_task_coordinator() {
+  local blackboard="$1"
+  local python_cmd="${PYTHON3:-python3}"
+  [[ -f "${blackboard}" ]] || return 1
+  AGENT_SKILLS_COORDINATORS="${AGENT_SKILLS_COORDINATOR_SKILLS}" \
+    "${python_cmd}" - "${blackboard}" <<'PY' 2>/dev/null
+import json
+import os
+import sys
+
+try:
+    with open(sys.argv[1], encoding="utf-8") as handle:
+        data = json.load(handle)
+except (OSError, ValueError):
+    raise SystemExit(1)
+versions = data.get("skill_versions") if isinstance(data, dict) else None
+if not isinstance(versions, dict):
+    raise SystemExit(1)
+for name in os.environ["AGENT_SKILLS_COORDINATORS"].split():
+    if name in versions:
+        print(name)
+        raise SystemExit(0)
+raise SystemExit(1)
+PY
 }
 
 agent_skills_active_task_count() {

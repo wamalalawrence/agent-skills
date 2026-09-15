@@ -364,6 +364,47 @@ else
   ok "developer tests route to software-engineer, above the automation catch-all"
 fi
 
+# Added in v1.1.0 from field use: a front door that could route only to a runner
+# that could not run, stop on a plan it knew was wrong, and leave review owed
+# without saying so. Each guarantee is pinned on its own.
+assert_contract "nested dispatch is probed, and unknown is treated as unavailable" \
+  '\*\*`unknown` is treated as `unavailable`\*\*'
+assert_contract "plan mode exists as the fallback when dispatch does not nest" \
+  '^#### Plan mode'
+assert_contract "plan mode keeps a cap rather than dropping one" \
+  'The cap is the runner'"'"'s: `total_phases + retry_budget`'
+assert_contract "the run preamble is written once and referenced" \
+  'artifacts/run-preamble.md'
+assert_contract "prerequisites' follow_up_context is carried into the brief" \
+  'phase.prerequisite_context'
+assert_contract "delete-shaped requests are checked for reversibility" \
+  'agent-skills reversibility <path>'
+assert_contract "a plan defect has an owner other than the user" \
+  '\*\*Blocked because the plan is wrong.\*\*'
+assert_contract "owed independent review is restored or reported, never silently dropped" \
+  'Never mark the'
+assert_class_owners "design reviews route by whether a standard exists" \
+  '`design-review`' '`manual-tester` `product-owner`'
+assert_class_owners "a plan amendment is the planner's" \
+  '`plan-amendment`' '`delivery-planner`'
+
+# The three plan rows are first-match-wins in exactly this order: a plan that must
+# change is amended before anything runs it, and the runner is reached only after
+# the row that catches a host where it cannot run.
+AMEND_ROW="$(routing_table_rows | grep -n -F -- '`plan-amendment`' | head -n 1 | cut -d: -f1)"
+PLANMODE_ROW="$(routing_table_rows | grep -n -F -- 'nested dispatch unavailable or unproven' | cut -d: -f1)"
+RUNNER_ROW="$(routing_table_rows | grep -n -F -- '| A phased plan already exists on disk |' | cut -d: -f1)"
+if [ -n "${AMEND_ROW}" ] && [ -n "${PLANMODE_ROW}" ] && [ -n "${RUNNER_ROW}" ] \
+   && [ "${AMEND_ROW}" -lt "${PLANMODE_ROW}" ] && [ "${PLANMODE_ROW}" -lt "${RUNNER_ROW}" ]; then
+  ok "plan rows order amendment, then plan mode, then the runner"
+else
+  bad "plan rows order amendment, then plan mode, then the runner" \
+    "amend=${AMEND_ROW:-none} plan-mode=${PLANMODE_ROW:-none} runner=${RUNNER_ROW:-none}"
+fi
+for reference in dispatch-topology.md run-preamble-template.md verification-bars.md; do
+  check "reference ${reference} exists" test -s "${SKILL_DIR}/references/${reference}"
+done
+
 # ------------------------------------------------------------------------------
 section "lifecycle CLI accepts the skill"
 # ------------------------------------------------------------------------------

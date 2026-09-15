@@ -30,6 +30,13 @@ The repository root is resolved from `git rev-parse --show-toplevel`, falling ba
 current directory. It is never the workspace parent, so unlike `.env` this file is always where
 the code is.
 
+**A project's own knowledge base is not this one, and is not ignored either.** Many repositories
+already keep a knowledge base of their own, under `knowledge/`, `docs/knowledge/`, `kb/`, or
+similar, with their own format and lint. agent-skills does not read, rank, or write it. The
+capability report names it anyway, marked `?` with its path and file count, because an agent told
+"no knowledge base" skips the one source that lists the project's traps. Read it directly.
+`doctor --json` reports it as `repo_knowledge_other`.
+
 ## Where each tier belongs
 
 Four tiers, and the only interesting question about each one is who reviews it.

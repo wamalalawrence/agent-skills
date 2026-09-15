@@ -14,7 +14,9 @@ phase. They never trigger their own review loop and never re-plan.
       there is nothing to run autonomously.
 - [ ] No phase is `in-progress` from another active agent/runner (concurrency
       guard). If one is, confirm with the user before resuming.
-- [ ] The dispatch mechanism is known (sub-agent, CLI, or human-relayed).
+- [ ] The dispatch mechanism is known (sub-agent, CLI, or human-relayed), and it
+      works from **here**: a runner that was itself dispatched confirmed it can
+      open a fresh agent, or stopped with `BLOCKED: nested dispatch unavailable`.
 
 ## Per iteration (per phase)
 
@@ -26,12 +28,17 @@ phase. They never trigger their own review loop and never re-plan.
       discovered-credential use, not an operator runbook).
 - [ ] The handoff prompt was built from the
       [handoff-prompt template](./handoff-prompt-template.md) with correct
-      pointers and the single-phase constraint.
+      pointers and the single-phase constraint, and with
+      `phase.prerequisite_context` pasted under **Carried forward**.
 - [ ] A fresh-context agent was dispatched (the runner did not do phase work in
       its own context).
 - [ ] The result was verified from the index + checkpoint, not from chat:
       - done/skipped + pointer advanced + non-empty validation → continue;
       - `blocked` → stop the loop, surface the reason, no auto-retry;
+      - `blocked` because the phase's own criterion cannot hold → stop with
+        `plan-defect` and the evidence, for the planner;
+      - `done` with independent review required and `review.independence` not
+        `fresh-context` → schedule a sibling `code-reviewer`; report it owed;
       - no checkpoint / pointer unchanged → retry this phase once, then stop;
       - index ↔ evidence-pack mismatch → stop `BLOCKED: phase index out of sync`.
 - [ ] One line of progress was recorded; the runner's context stayed lean.

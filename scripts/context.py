@@ -59,6 +59,8 @@ from dataclasses import dataclass, field
 from datetime import datetime, timezone
 from pathlib import Path
 
+from cache_root import default_cache_root
+
 PACK_SCHEMA = "agent-skills.context-pack/v1"
 INSPECT_SCHEMA = "agent-skills.context-inspect/v1"
 
@@ -3434,27 +3436,8 @@ def pack_from_dict(data: dict) -> Pack:
 # file edited in place can never be served from a stale pack.
 # ---------------------------------------------------------------------------
 def resolve_cache_root(explicit: str | None) -> Path:
-    if explicit:
-        return Path(explicit).expanduser().resolve()
-    environment = os.environ.get("AGENT_SKILLS_CACHE_DIR")
-    if environment:
-        return Path(environment).expanduser().resolve()
-    workspace = os.environ.get("WORKSPACE_ROOT")
-    if workspace:
-        return (Path(workspace) / ".cache" / "agent-skills").resolve()
-    try:
-        result = subprocess.run(
-            ["git", "rev-parse", "--show-toplevel"],
-            capture_output=True,
-            text=True,
-            timeout=10,
-            check=False,
-        )
-        if result.returncode == 0 and result.stdout.strip():
-            return (Path(result.stdout.strip()) / ".cache" / "agent-skills").resolve()
-    except (OSError, subprocess.SubprocessError):
-        pass
-    return (Path.cwd() / ".cache" / "agent-skills").resolve()
+    # One resolution order for every helper and both wrappers; see cache_root.py.
+    return default_cache_root(explicit)
 
 
 def pack_dir(cache_root: Path) -> Path:

@@ -100,6 +100,8 @@ review:
   open_blocker_count: 0
   open_major_count: 0
   verdict: null # current round's verdict: PASS | PASS_WITH_NOTES | REQUEST_CHANGES | NEEDS_CONTEXT | NOT_REVIEWABLE
+  independence: same-context # fresh-context | same-context; absent reads as same-context (added 1.1.0)
+  reviewed_range: null # <base-sha>..<head-sha> when the review covered committed history
   history:
     - round: 1
       blocker_count: 2
@@ -325,6 +327,13 @@ reviewer. On each invocation, before emitting the verdict, the reviewer:
    `open_major_count` → `major_count`.
 2. Increments `review.round` by 1 (or initialises it to `1` if absent).
 3. Writes the new `open_blocker_count`, `open_major_count`, and `verdict` for this round.
+4. Writes `independence`: `fresh-context` only when the review ran in an agent context that did
+   not write the diff, otherwise `same-context`. A review loaded inline because the host could not
+   open a fresh agent is `same-context`, and says so. An evidence pack from before `1.1.0` with no
+   `independence` field reads as `same-context`. Unproven independence is not independence, and a
+   phase that requires independent review is not satisfied by it: the dispatcher restores it with
+   a sibling review
+   ([dispatch topology](../../wamala/references/dispatch-topology.md#independent-review)).
 
 This single-owner rule prevents double-increments, stale counts, and wrong `max-rounds` / round-1
 decisions.

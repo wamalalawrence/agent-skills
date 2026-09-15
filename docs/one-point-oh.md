@@ -37,6 +37,17 @@ optional field — stays allowed.
 > rather than a number the caller typed. Both exit `2` on the old form with a message naming the
 > new one. Neither is renamed, renumbered, or removed within `1.x`.
 
+> **Added in `1.1.0`, additively.** One new command, `reversibility`: exit `0` every target
+> recoverable from git, `1` at least one is not, `2` usage. New optional flags with safe defaults:
+> `finish-task --project`, `--issue-key`, and `--task`, the same forms `start-task` already
+> accepted. New optional output fields: `phase.prerequisite_context` in `plan-next`, and
+> `repo_knowledge_other` in `doctor --json` (`repo_knowledge` keeps its meaning and its `yes`/`no`
+> values). New optional evidence-pack fields: `review.independence` and `review.reviewed_range`.
+> One behaviour change inside an existing contract: cleanup now keeps `artifacts/` always, and
+> `evidence-pack.yml` around a phased plan. A step's `complete` closeout inside a Wamala or
+> delivery-runner run leaves scratch for the coordinator, and `--cleanup` still forces it. No
+> command, flag, exit code, or field was renamed, renumbered, or removed.
+
 ## CLI command names
 
 The launcher is `agent-skills`, resolved through any number of symlinks to the active release.
@@ -51,8 +62,11 @@ verify     uninstall    hosts     doctor     migrate     version
 **Task lifecycle:**
 
 ```text
-start-task    finish-task    dod-check
+start-task    finish-task    dod-check    reversibility
 ```
+
+`reversibility` was added in `1.1.0`. Its exit contract: `0` every target is recoverable from git
+(or absent), `1` at least one is not, `2` usage. It never modifies anything.
 
 `dod-check` was added in `1.0.0`. Its exit contract: `0` verified, `1` not verified (reasons on
 stdout, one per line), `2` the file is missing, unreadable, or not the schema.

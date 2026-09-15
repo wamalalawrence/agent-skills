@@ -25,16 +25,16 @@ Rules:
   * Project memory is **never** deleted by this script.
   * Cleanup only removes `<issue-key>/` directories. Branch deletion is the
     caller's responsibility — this script will not run git commands.
-  * When `<issue-key>/phased-plan/README.md` exists, cleanup preserves
-    `phased-plan/` and `destination.md` so delivery-planner artifacts survive
-    across executor phase boundaries.
+  * Cleanup always preserves `<issue-key>/artifacts/`. When
+    `<issue-key>/phased-plan/README.md` exists it also preserves `phased-plan/`,
+    `destination.md`, and `evidence-pack.yml`, so the plan and each phase's
+    continuity record survive across executor phase boundaries.
   * The script writes to disk only inside the resolved cache root.
 """
 from __future__ import annotations
 
 import argparse
 import json
-import os
 import re
 import shutil
 import subprocess
@@ -46,6 +46,7 @@ from pathlib import Path
 # memory outlives the task that wrote it and is read back into every later
 # agent's starting context, so a credential landing here is a credential that
 # keeps arriving.
+from cache_root import default_cache_root
 from durable import LockTimeout, update_json, update_text, write_json, write_text
 from guard_audit import redact
 
@@ -102,17 +103,7 @@ def resolve_cache_root(explicit: str | None) -> Path:
     second, empty memory store, so the agent read nothing and wrote somewhere
     the next run would not look.
     """
-    if explicit:
-        return Path(explicit).resolve()
-    env = os.environ.get("AGENT_SKILLS_CACHE_DIR")
-    if env:
-        return Path(env).resolve()
-    workspace = os.environ.get("WORKSPACE_ROOT")
-    if workspace:
-        return (Path(workspace) / ".cache" / "agent-skills").resolve()
-    top = git_toplevel()
-    base = top if top is not None else Path.cwd()
-    return (base / ".cache" / "agent-skills").resolve()
+    return default_cache_root(explicit)
 
 
 def project_dir(cache_root: Path, project: str) -> Path:
@@ -309,27 +300,47 @@ def _resolve_task_dir(cache_root: Path, issue_key: str) -> Path | None:
     return target
 
 
+# What cleanup keeps, by name, inside a task directory.
+#
+# `artifacts/` is where a step writes what someone else still has to read: a
+# report, an audit, a run preamble, a review. It is kept whatever the status,
+# because a `complete` closeout used to delete it along with the scratch, and a
+# dispatched agent that had finished its work lost its output before the agent
+# that dispatched it could verify anything.
+ALWAYS_KEPT = ("artifacts",)
+
+# Around a phased plan the plan itself survives, and so does the evidence pack:
+# it carries each finished phase's `follow_up_context`, which is exactly what the
+# next phase is supposed to be told. Clearing it meant every phase started without
+# the continuity record and re-derived — or silently missed — what the previous
+# one had learned.
+KEPT_WITH_PLAN = ("phased-plan", "destination.md", "evidence-pack.yml")
+
+
+def kept_names(target: Path) -> tuple[str, ...]:
+    if (target / "phased-plan" / "README.md").exists():
+        return ALWAYS_KEPT + KEPT_WITH_PLAN
+    return ALWAYS_KEPT
+
+
 def cleanup_task(cache_root: Path, issue_key: str) -> Path | None:
     target = _resolve_task_dir(cache_root, issue_key)
     if target is None:
         return None
 
-    # Preserve delivery-planner artifacts (destination.md + phased-plan/)
-    # when a phased plan is present. The plan must survive across executor
-    # phase boundaries so each phase can load destination.md + its
-    # phase-NN.md from a fresh agent session.
-    plan_index = target / "phased-plan" / "README.md"
-    if plan_index.exists():
-        for child in sorted(target.iterdir()):
-            if child.name in ("phased-plan", "destination.md"):
-                continue
-            if child.is_dir():
-                shutil.rmtree(child)
-            else:
-                child.unlink()
+    keep = kept_names(target)
+    present = [name for name in keep if (target / name).exists()]
+    if not present:
+        shutil.rmtree(target)
         return target
 
-    shutil.rmtree(target)
+    for child in sorted(target.iterdir()):
+        if child.name in keep:
+            continue
+        if child.is_dir() and not child.is_symlink():
+            shutil.rmtree(child)
+        else:
+            child.unlink()
     return target
 
 
@@ -383,7 +394,10 @@ def cmd_note(args: argparse.Namespace) -> int:
 
 def cmd_cleanup(args: argparse.Namespace) -> int:
     removed = cleanup_task(resolve_cache_root(args.cache_root), args.issue_key)
-    if removed:
+    if removed and removed.exists():
+        kept = ", ".join(sorted(child.name for child in removed.iterdir()))
+        print(f"cleaned: {removed} (kept: {kept})")
+    elif removed:
         print(f"removed: {removed}")
     else:
         print(f"absent: {args.issue_key}")
