@@ -19,6 +19,10 @@ must hand off when the task moves outside that surface.
   never appears in that chain.
 - Never mandatory. Direct invocation of any skill remains first-class and is preferable
   whenever the owner is already known.
+- When dispatched agents cannot open agents of their own, Wamala owns walking an existing plan
+  one phase per dispatch (plan mode) and restoring an owed independent review with a sibling
+  `code-reviewer` dispatch. Both are the same dispatch model it already uses, run from the depth
+  where dispatch works. Neither makes it an executor.
 
 ### `delivery-planner`
 
@@ -64,6 +68,8 @@ must hand off when the task moves outside that surface.
 ### `product-owner`
 
 - Owns: product goal, user value, scope, acceptance criteria, UX notes, and tracker-ready handoff.
+  A `design-review` of an existing page or flow with no stated standard lands here. The output is
+  UX notes and refinement input, never edits to the page.
 - Does not own: technical architecture, code review, test implementation, or deciding bug root
   cause.
 - Typical handoff: to `issue-investigator` for bug-flavored input, to `software-engineer` for
@@ -72,7 +78,9 @@ must hand off when the task moves outside that surface.
 ### `manual-tester`
 
 - Owns: manual test scope, scenarios, execution results, defect evidence, retest guidance, and
-  automation candidates.
+  automation candidates. A `design-review` measured against a stated standard (a design system,
+  acceptance criteria, an accessibility level, target viewports) lands here, with usability
+  observations kept apart from defects.
 - Does not own: root-cause analysis, product intent invention, or automation implementation.
 - Typical handoff: to `issue-investigator` for reproducible defects, to `product-owner` for unclear
   expected behavior, and to `test-automation-engineer` for stable regression candidates.
@@ -123,7 +131,11 @@ must hand off when the task moves outside that surface.
   work itself. When a request needs several specialists it dispatches them in sequence,
   re-running the requirement-understanding gate against each completed step before dispatching
   the next. When no routing row matches it asks one focused question rather than inventing a
-  destination. When a phased plan already exists it routes to `delivery-runner` and stops.
+  destination. When a phased plan already exists it routes to `delivery-runner` and stops, or runs
+  plan mode when dispatch does not nest. A plan that must change — decision-gate answers, or a
+  phase criterion an executor showed to be unsatisfiable — goes to `delivery-planner` as a
+  `plan-amendment`, never to the user by default and never into the next brief. A request with no
+  canonical owner is named as a known gap rather than routed.
 - All relevant skills must run the
   [requirement-understanding workflow](requirement-understanding.md) before implementing,
   reviewing, testing, or automating. When the gate ends at `unknown` / `low` confidence, the

@@ -4,7 +4,120 @@ All notable project changes should be recorded here.
 
 ## Unreleased
 
-### Added
+## 1.1.0 - Field report: Wamala finishes the run it starts
+
+An agent used Wamala for a long, real delivery run: fourteen phases, design-system work, on a
+host where sub-agents could not open sub-agents. It filed a report listing everything that had
+cost it time, ordered by cost. Every item was reproduced against `1.0.0` before it was fixed.
+Where the runtime can hold a fix, a test holds it, with a mutation probe showing that test fails
+when the fix is removed. Where only an instruction can hold one, the instruction now exists at
+every site that needed it. Nothing in [the 1.0 contract](docs/one-point-oh.md) was renamed,
+renumbered, or removed.
+
+### Wamala: routing a run that the host cannot nest
+
+- **Wamala routed plans to a runner that could not run.** Its chain table and its stopping
+  condition both sent an existing plan to `delivery-runner`. The runner's whole mechanism is
+  nested dispatch, so dispatched as a step it stopped before `phase-01`, correctly. Wamala now
+  records `nested_dispatch` in a new step 2.6, from evidence, and treats `unknown` as
+  unavailable. When nesting is unavailable, it walks the plan in **plan mode**: one phase per
+  dispatch, following the runner's run-loop checklist and handoff template as written, under the
+  runner's cap. `delivery-runner` checks at step 0 that it can dispatch, and stops with
+  `BLOCKED: nested dispatch unavailable` before touching the plan.
+- **"The plan itself is wrong" had no route.** A phase blocked because its own acceptance
+  criterion contradicted a measurement could only stop or go to the user. When the blocked
+  artifact names the criterion, the evidence, and the conflict, it now goes to
+  `delivery-planner` as a `plan-amendment`, once per phase. A second contradiction goes to the
+  user. `delivery-runner` stops with a new `plan-defect` reason so its caller can route it.
+  `delivery-planner`'s "when the plan goes stale" now covers unsatisfiable criteria and
+  decision-gate answers.
+- **Independent review was unachievable, and nothing noticed.** On a host that cannot nest, an
+  executor's `code-reviewer` runs in the context that wrote the change. `code-reviewer` now
+  records `review.independence` (`fresh-context` or `same-context`, absent reads as
+  `same-context`). When a step required independent review and did not get it, Wamala or the
+  runner dispatches `code-reviewer` as a sibling step over the committed diff. That happens
+  after every `RIGOROUS` step, and at `STANDARD` every three steps or before anything is pushed.
+  The run report states, per step, which review satisfied the requirement.
+- **Brief boilerplate was most of the work.** A new step 2.7 writes a **run preamble** once, to
+  `<cache>/<work-key>/artifacts/run-preamble.md`. It holds identity, explicit lifecycle commands,
+  branch and push rules, the output location, measurement recipes, known traps, and owner paths.
+  Every brief points at it. Template:
+  [`run-preamble-template.md`](skills/wamala/references/run-preamble-template.md).
+- **Continuity between phases depended on memory.** `plan-next` now returns
+  `phase.prerequisite_context`: each prerequisite's `completion_summary`, `follow_up_context`,
+  and `artifacts`, read from the evidence pack and redacted. Prerequisites that recorded
+  nothing are listed under `missing`. Wamala's and the runner's briefs paste it verbatim under
+  **Carried forward**.
+- **Delete-shaped verbs had no reversibility check.** New `agent-skills reversibility <path>...`
+  is read-only. `RECOVERABLE` (exit `0`) means every file is tracked and committed.
+  `NOT_RECOVERABLE` (exit `1`) covers content outside git, untracked, ignored, or uncommitted, and
+  a target holding its own `.git`. That result comes with shell-quoted archive commands and the
+  user's delete command. Wamala's new step 2.8 runs it for every delete-shaped request, turns
+  the delete into an archive, and hands the delete to the user. The policy is in
+  [destructive-action safety](docs/destructive-action-safety.md#delete-shaped-requests-check-reversibility-first).
+- **Classifier gaps.** Two new classes. `design-review` covers an existing page or flow with no
+  diff: it goes to `manual-tester` against a stated standard, or to `product-owner` without one,
+  read-only either way. `plan-amendment` goes to `delivery-planner`. A **known gaps** list in
+  the routing table records what no canonical skill owns, such as authoring a visual design, so
+  the next dispatcher does not re-derive it or route to a skill that edits what it reviews.
+- **"Verify from artifacts" was under-specified outside engineering.** New
+  [verification bars](skills/wamala/references/verification-bars.md) give a checkable definition
+  of done for each class: investigation, refinement, question, design review, diff review, manual
+  validation, automation, planning, plan amendment, terminology, and context packs. A step that
+  misses its bar is retried once, like a missing artifact.
+
+### Fixes — lifecycle wrappers (`scripts/finish-task.sh`, `scripts/start-task.sh`, `scripts/project-memory.py`)
+
+- **The ambiguity error named a flag that did not exist.** `finish-task` refused with
+  "`--issue-key` is required here", and accepted the key only as a positional argument. It now
+  takes `--project`, `--issue-key`, and `--task`, the same forms as `start-task`, and the error
+  shows the working command.
+- **A `complete` closeout deleted the step's own output.** Cleanup now always keeps `artifacts/`.
+  Around a phased plan it also keeps `evidence-pack.yml`, which carries `follow_up_context`, and
+  it names what it kept. Inside a coordinated run, where the blackboard records `wamala` or
+  `delivery-runner`, any other skill's closeout leaves scratch for the coordinator to verify and
+  clean. `--cleanup` still forces it.
+- **"15 tasks are in flight."** A task counts as in flight only while its `blackboard.json`
+  exists. Directories that hold only what cleanup kept on purpose no longer block an implicit
+  closeout.
+- **One task got several keys and two projects.** The wrappers resolved the cache at the git
+  root while most Python helpers used the working directory, and outside git the wrappers used
+  the working directory too. Every helper now shares one resolver (`scripts/cache_root.py`,
+  mirrored in `task-context.sh`). Outside git it uses the nearest parent below `$HOME` that
+  already holds `.agent-skills.yml` or a cache. `start-task` says when it generated a fresh key
+  while other tasks are in flight, lists them, and says when the project name came only from a
+  directory name.
+- **The capability report said "NO repo knowledge" in a repository with a 650-fact knowledge
+  base.** The probe only knew `.agent-skills/knowledge`. It now also reports a project's own
+  knowledge base (`knowledge/`, `docs/knowledge/`, `kb/`, and similar). The text shows this as
+  `?` with the path and file count, and says the knowledge base is read directly.
+  `doctor --json` keeps `repo_knowledge` as `yes` or `no` and adds `repo_knowledge_other`.
+
+### Tests
+
+- `scripts/test-lifecycle-fs.sh` gained 28 checks: artifact and evidence-pack preservation,
+  `finish-task` flags, the in-flight count, coordinated-run deferral (including a note that
+  merely mentions a coordinator), one cache across the shell and Python resolvers inside and
+  outside git, and reversibility. It also gained three mutation probes: remove the keep rule,
+  the coordinated-run check, or the untracked-content check, and the matching test fails.
+- `scripts/test-adaptive-execution.sh` gained six `prerequisite_context` checks, including a nested
+  mapping that must not overwrite a phase's keys and a credential-shaped value that must not
+  reach the decision. It also gained a probe that removes the redaction and watches the value leak.
+- `scripts/test-front-door-skill.sh` pins the new guarantees and the order of the three plan
+  rows: amendment, then plan mode, then the runner.
+- Probe sandboxes in three suites now copy `cache_root.py`. Without it the weakened builds died
+  on import and the probes failed. That failure is what showed the copies were needed.
+- New eval: [`wamala-plan-mode-and-plan-defects.md`](evals/wamala-plan-mode-and-plan-defects.md).
+
+### Security review
+
+[`docs/security-review-v1.1.0.md`](docs/security-review-v1.1.0.md). Writing it surfaced two issues,
+both fixed before release. First, a non-git cache anchor planted in a shared directory such as
+`/tmp` could redirect another user's task memory, so anchors must now belong to the current user.
+Second, carried-forward context is pasted into the next brief verbatim, so both handoff templates
+now label it as recorded claims to verify, never as instructions.
+
+### Also in this release — documentation, no behaviour change
 
 - **Commercial subscription and distribution plan** ([`docs/commercial-roadmap.md`](docs/commercial-roadmap.md)).
   A final, decided plan for selling Agent Skills as one subscription at €11 per named developer

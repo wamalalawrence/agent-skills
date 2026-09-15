@@ -22,6 +22,18 @@ Usage:
   * the phased-plan dir               (.cache/agent-skills/PROJ-123/phased-plan)
   * the index file itself             (.cache/agent-skills/PROJ-123/phased-plan/README.md)
 
+A dispatch decision also carries `phase.prerequisite_context`: for each
+prerequisite of the phase being dispatched, the `completion_summary`,
+`follow_up_context`, and `artifacts` its executor recorded in the evidence pack.
+That is the read side of the phase-continuity checkpoint. Before it existed the
+checkpoint was written faithfully and read by whoever happened to remember it,
+so "what later phases need to know" reached the next brief only when a
+dispatcher copied it across by hand. The evidence pack is read best-effort and
+never decides anything: the index stays the source of truth for dispatch, and a
+missing or unparseable pack is reported in the field rather than failing the
+decision. Every string passes through the shared redactor, because it is about to
+be pasted into another agent's brief.
+
 Exit codes:
   0  a decision was produced (see JSON `action`); this includes "stop" actions
   2  the index could not be found or parsed (caller must surface, not loop)
@@ -34,6 +46,10 @@ import posixpath
 import re
 import sys
 from pathlib import Path
+
+sys.path.insert(0, str(Path(__file__).resolve().parent))
+
+from guard_audit import redact  # noqa: E402
 
 DONE_STATES = {"done", "skipped"}
 DISPATCHABLE_STATES = {"ready", "in-progress"}
@@ -443,6 +459,9 @@ def decide(index_path: Path) -> dict[str, object]:
             "fresh_context_required": profile != "LIGHT",
             "independent_review_required": profile == "RIGOROUS",
             "expected_effort_minutes": _int_or_none(head.get("expected_effort_minutes")),
+            # Inject this into the brief. It is what the prerequisites' executors
+            # wrote for exactly this moment.
+            "prerequisite_context": prerequisite_context(index_path, target, rows),
         },
         "concurrency": {
             "limit": limit,
@@ -458,6 +477,128 @@ def decide(index_path: Path) -> dict[str, object]:
             f"alongside it: {', '.join(group)}."
         )
     return decision
+
+
+def _scalar(raw: str) -> str:
+    value = raw.strip()
+    if len(value) >= 2 and value[0] == value[-1] and value[0] in "'\"":
+        return value[1:-1]
+    return value.split(" #", 1)[0].strip()
+
+
+def evidence_pack_phases(pack_path: Path) -> dict[str, dict[str, object]] | None:
+    """Best-effort read of `delivery_plan.phases[]` from an evidence pack.
+
+    No YAML library is assumed, so this reads the documented shape only: list
+    items under `phases:` that open with `- id:`, whose keys are scalars or block
+    lists of `- item` lines. Anything else is skipped. Returns `None` when the
+    file is absent or unreadable, and `{}` when it holds no phases.
+    """
+    try:
+        lines = pack_path.read_text(encoding="utf-8").splitlines()
+    except OSError:
+        return None
+
+    phases: dict[str, dict[str, object]] = {}
+    in_plan = False
+    phases_indent = -1  # indent of the `phases:` key; -1 while outside the block
+    current: dict[str, object] | None = None
+    key_indent = -1  # the indent of a phase item's own keys
+    list_key = ""
+    for raw in lines:
+        if not raw.strip() or raw.lstrip().startswith("#"):
+            continue
+        indent = len(raw) - len(raw.lstrip(" "))
+        text = raw.strip()
+        if indent == 0:
+            in_plan = text.startswith("delivery_plan:")
+            phases_indent, current = -1, None
+            continue
+        if not in_plan:
+            continue
+        if phases_indent == -1:
+            if text == "phases:":
+                phases_indent = indent
+            continue
+        if indent <= phases_indent and not text.startswith("- "):
+            # A sibling of `phases:` ends the block.
+            phases_indent, current = -1, None
+            continue
+        if text.startswith("- id:"):
+            current = {"id": _scalar(text[len("- id:"):]).lower()}
+            phases[str(current["id"])] = current
+            key_indent, list_key = indent + 2, ""
+            continue
+        if current is None:
+            continue
+        if text.startswith("- "):
+            if list_key and isinstance(current.get(list_key), list):
+                current[list_key].append(_scalar(text[2:]))  # type: ignore[union-attr]
+            continue
+        key, sep, value = text.partition(":")
+        if not sep or indent != key_indent:
+            # A nested mapping inside a phase is not part of the continuity
+            # record, and reading its keys as the phase's own would overwrite them.
+            list_key = "" if indent < key_indent else list_key
+            continue
+        key, value = key.strip(), value.strip()
+        if value in {"", "|", ">"}:
+            list_key, current[key] = key, []
+        else:
+            list_key = ""
+            current[key] = [] if value == "[]" else _scalar(value)
+    return phases
+
+
+def prerequisite_ids(target: dict[str, str]) -> list[str]:
+    ids: list[str] = []
+    for token in re.split(r"[,\s]+", target.get("prereqs", "none").lower()):
+        token = token.strip()
+        if not token or token in {"none", "n/a", "-"}:
+            continue
+        ids.append(token if token.startswith("phase-") else f"phase-{token.zfill(2)}")
+    return ids
+
+
+def _clean(value: object) -> object:
+    if isinstance(value, list):
+        return [redact(str(item)) for item in value]
+    return redact(str(value)) if value is not None else None
+
+
+def prerequisite_context(index_path: Path, target: dict[str, str],
+                         rows: list[dict[str, str]]) -> dict[str, object]:
+    """What each prerequisite's executor left for the phases after it."""
+    pack_path = index_path.parent.parent / "evidence-pack.yml"
+    by_id = {r["id"]: r for r in rows}
+    wanted = prerequisite_ids(target)
+    result: dict[str, object] = {"evidence_pack": str(pack_path), "phases": [], "missing": []}
+    if not wanted:
+        return result
+    recorded = evidence_pack_phases(pack_path)
+    for phase_id in wanted:
+        entry = (recorded or {}).get(phase_id)
+        row = by_id.get(phase_id, {})
+        if entry is None:
+            result["missing"].append(phase_id)
+            continue
+        follow_up = entry.get("follow_up_context") or []
+        if not follow_up:
+            result["missing"].append(phase_id)
+        result["phases"].append({
+            "id": phase_id,
+            "state": row.get("state") or entry.get("state"),
+            "completion_summary": _clean(entry.get("completion_summary")),
+            "follow_up_context": _clean(follow_up if isinstance(follow_up, list) else [follow_up]),
+            "artifacts": _clean(entry.get("artifacts") or []),
+        })
+    if recorded is None:
+        result["note"] = ("No evidence pack on disk. Reconstruct continuity from the prerequisite "
+                          "phase files and their artifacts, and say in the brief that it was.")
+    elif result["missing"]:
+        result["note"] = ("These prerequisites recorded no follow_up_context. Read their phase "
+                          "files and artifacts before assuming there is nothing to carry forward.")
+    return result
 
 
 def _int_or_none(value: object) -> int | None:

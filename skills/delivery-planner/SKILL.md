@@ -20,7 +20,7 @@ compatibility: >-
   .agent-skills.yml). See docs/execution-modes.md.
 metadata:
   author: wamalalawrence
-  version: "1.0.0"
+  version: "1.1.0"
   homepage: "https://github.com/wamalalawrence/agent-skills"
 argument-hint: "<the large task to decompose — a feature, migration, or refactor>"
 user-invocable: true
@@ -578,6 +578,21 @@ A phased plan is a snapshot, not a contract. Re-run the planner (and update
 - An executor's review (typically
   [`code-reviewer`](../software-engineer/skills/code-reviewer/SKILL.md))
   surfaces a load-bearing assumption that turns out to be wrong.
+- **A phase's own acceptance or exit criterion is shown to be unsatisfiable.**
+  The executor stopped blocked and its artifact names the criterion, what it
+  measured or read, and why the two cannot both hold. Treat that artifact as
+  evidence, not as a request to negotiate: amend the criterion or the phase
+  shape, say in the phase file what the criterion used to be and why it
+  changed, and recompute the pointer. If you cannot amend it without a product
+  decision, set readiness to `NEEDS_CLARIFICATION` and name the decision.
+- **The user answers the plan's open decision gates.** Record each answer in
+  `destination.md` or the affected phase files, with the date, and remove the
+  gate from `Open Questions Or Provisional Items`. Answers that live only in a
+  later phase's brief bind that phase and no other.
+
+Arriving here from [`wamala`](../wamala/SKILL.md) or `delivery-runner` as a
+`plan-amendment` is a normal route, not recursion: the executor already stopped,
+and the dispatcher is handing the plan's defect to its owner.
 
 Update existing files in place (do not rewrite history). Bump the
 `updated_at:` timestamp on both `destination.md` and the index. Mark

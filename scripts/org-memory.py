@@ -46,7 +46,6 @@ from __future__ import annotations
 
 import argparse
 import json
-import os
 import re
 import sys
 from datetime import datetime, timezone
@@ -60,6 +59,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parent))
 # secret re-read indefinitely and across project boundaries. It was also the one
 # durable tier that did not redact, which made `--promote-to-org` a path for a
 # value to travel from a single project's notes into everyone's.
+from cache_root import default_cache_root  # noqa: E402
 from durable import LockTimeout, update_json, update_text, write_json, write_text  # noqa: E402
 from guard_audit import redact  # noqa: E402
 
@@ -82,13 +82,8 @@ def slugify(name: str) -> str:
 
 
 def resolve_cache_root(explicit: str | None) -> Path:
-    if explicit:
-        return Path(explicit).resolve()
-    env = os.environ.get("AGENT_SKILLS_CACHE_DIR")
-    if env:
-        return Path(env).resolve()
-    base = os.environ.get("WORKSPACE_ROOT") or os.getcwd()
-    return (Path(base) / ".cache" / "agent-skills").resolve()
+    # One resolution order for every helper and both wrappers; see cache_root.py.
+    return default_cache_root(explicit)
 
 
 def org_dir(cache_root: Path) -> Path:

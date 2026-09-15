@@ -20,7 +20,7 @@ compatibility: >-
   .agent-skills.yml). See docs/execution-modes.md.
 metadata:
   author: wamalalawrence
-  version: "1.0.0"
+  version: "1.1.0"
   homepage: "https://github.com/wamalalawrence/agent-skills"
 argument-hint: "<the change to make — a ticket key, a bug, or a described feature>"
 user-invocable: true
@@ -660,6 +660,10 @@ acceptance criteria, and intended behavior without reloading everything from scr
 behavior or root cause is unclear, use [`issue-investigator`](./skills/issue-investigator/SKILL.md)
 before treating the review as issue-aware.
 
+- Independence: open the reviewer in a fresh context when the host lets you. When it cannot —
+  many hosts do not register a sub-agent tool inside a dispatched agent — load it inline and let
+  it record `review.independence: same-context`. Never describe that review as independent; a
+  dispatcher restores independence with a sibling review after your step.
 - Diff scope: staged changes only (`git diff --staged`).
 - Severities surfaced: `${CODE_REVIEWER_INNER_LOOP_SEVERITIES}` (default `blocker,major`).
 - Blocking behaviour: respect `${CODE_REVIEWER_BLOCKING}` — when `true`, do not move to Phase 3

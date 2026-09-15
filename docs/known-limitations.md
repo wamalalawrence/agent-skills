@@ -13,6 +13,20 @@ runtime enforcement, or guaranteed outcomes.
   it. Recursion behaviour is not documented for every host.
 - **Generated output requires human review.** Plans, code, tests, acceptance criteria, defect
   reports, and reviews should be checked by a responsible human before use.
+- **Nested dispatch cannot be detected by a script.** Whether an agent dispatched by Wamala can
+  itself open a fresh agent depends on the host's tool registration inside that agent, which no
+  command run from outside can see. Wamala establishes it from what a dispatched step reports,
+  treats an unproven answer as unavailable, and walks a plan itself in plan mode. A host that can
+  nest but never says so pays for that caution with a slightly larger dispatcher context, not with
+  a broken run.
+- **Independent review depends on the reviewer recording its own context.** `review.independence`
+  is written by `code-reviewer`, which is the only party that knows whether it wrote the diff it
+  judges. A reviewer that records `fresh-context` falsely defeats the sibling-review fallback.
+  An absent field reads as `same-context`, so the failure mode is an extra review, not a missing one.
+- **Some requests have no owner.** Authoring a visual design or a new design direction is not
+  owned by any canonical skill. `product-owner` owns UX intent and `manual-tester` observes against
+  a standard, but neither creates one. Wamala says so rather than routing it. See
+  [known gaps](../skills/wamala/references/routing-table.md#known-gaps).
 - **Company-specific standards are not bundled.** Repository conventions, coding standards, ticket
   formats, review rules, deployment practices, and architecture constraints must come from the user,
   the target repository, or attached documentation.
@@ -192,6 +206,15 @@ See [engineering-tools.md](engineering-tools.md#known-limitations) for the full 
   at 400 lines. Decorators directly above a declaration are included; a span may still end early
   or run into the next symbol, and a `[span-capped]` fragment was cut. The pack says so in its
   notes. Expand the exact target before editing or drawing a conclusion from it.
+- **Reversibility is what git can prove, nothing more.** `agent-skills reversibility` sees tracked,
+  untracked, ignored, and uncommitted content. It cannot see a backup, a synced folder, a remote
+  that has or lacks the commits, or anything that is not a file. `RECOVERABLE` for a commit that
+  was never pushed is true only while the local repository survives.
+- **`plan-next` reads the evidence pack with a narrow parser.** No YAML library is assumed, so
+  `prerequisite_context` reads the documented `delivery_plan.phases[]` shape: scalar keys and block
+  lists. Inline flow mappings and multi-line block scalars are skipped rather than guessed at, and a
+  prerequisite whose context could not be read is listed under `missing`. The index, not the pack,
+  still decides dispatch.
 - **The stop-hook fallback needs a task identity.** `finish-task --if-open` recognises the task
   the last `start-task` recorded. Two agents in one repository, or a session that never ran
   `start-task`, give it nothing to close and it records nothing — which is the correct outcome,

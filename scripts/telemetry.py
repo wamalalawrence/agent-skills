@@ -41,13 +41,13 @@ from __future__ import annotations
 
 import argparse
 import json
-import os
 import re
 import sys
 from collections import defaultdict
 from datetime import datetime, timezone
 from pathlib import Path
 
+from cache_root import default_cache_root
 from guard_audit import redact
 
 KNOWN_EVENTS = {
@@ -72,13 +72,8 @@ def slugify(name: str) -> str:
 
 
 def resolve_cache_root(explicit: str | None) -> Path:
-    if explicit:
-        return Path(explicit).resolve()
-    env = os.environ.get("AGENT_SKILLS_CACHE_DIR")
-    if env:
-        return Path(env).resolve()
-    base = os.environ.get("WORKSPACE_ROOT") or os.getcwd()
-    return (Path(base) / ".cache" / "agent-skills").resolve()
+    # One resolution order for every helper and both wrappers; see cache_root.py.
+    return default_cache_root(explicit)
 
 
 def telemetry_path(cache_root: Path, project: str) -> Path:

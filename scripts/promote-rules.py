@@ -25,24 +25,20 @@ from __future__ import annotations
 
 import argparse
 import json
-import os
 import re
 import sys
 from collections import defaultdict
 from pathlib import Path
+
+from cache_root import default_cache_root
 
 DEFAULT_SECTION = "Common gotchas"
 _BULLET_RE = re.compile(r"^- (?:\([^)]+\)\s+)?(.*?)\s*$")
 
 
 def resolve_cache_root(explicit: str | None) -> Path:
-    if explicit:
-        return Path(explicit).resolve()
-    env = os.environ.get("AGENT_SKILLS_CACHE_DIR")
-    if env:
-        return Path(env).resolve()
-    base = os.environ.get("WORKSPACE_ROOT") or os.getcwd()
-    return (Path(base) / ".cache" / "agent-skills").resolve()
+    # One resolution order for every helper and both wrappers; see cache_root.py.
+    return default_cache_root(explicit)
 
 
 def collect_section_bullets(memory_md: Path, section: str) -> list[tuple[str, str]]:

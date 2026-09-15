@@ -548,6 +548,87 @@ else
 fi
 
 # ---------------------------------------------------------------------------
+sec "What a prerequisite learned reaches the next phase's brief"
+# ---------------------------------------------------------------------------
+# Each executor writes `follow_up_context` into the evidence pack for the phases
+# after it. Nothing read it back: a dispatcher carried the Tailwind scanner trap
+# and the duplicate colour token into the next brief only because it remembered
+# to. `plan-next` now returns it with the dispatch decision.
+
+SECRET_LIKE="$("$PYTHON3" -c "import secrets; print('Tok' + secrets.token_hex(20))")"
+DIR="$(make_plan continuity phase-03)"
+add_phase "$DIR" phase-01 Tokens software-engineer S done none STANDARD no
+add_phase "$DIR" phase-02 Scanner software-engineer S done 01 STANDARD no
+add_phase "$DIR" phase-03 Screens software-engineer M ready "01, 02" STANDARD no
+add_phase "$DIR" phase-04 Later software-engineer M ready 03 STANDARD no
+write_phase "$DIR" phase-03 screens STANDARD false "[]" "[src/screens]"
+cat > "$DIR/evidence-pack.yml" <<EOF
+issue_key: PROJ-900
+delivery_plan:
+  current_dispatch_pointer: phase-03
+  phases:
+    - id: phase-01
+      state: done
+      completion_summary: "Tokens moved to CSS variables."
+      artifacts:
+        - "src/tokens.css"
+      review:
+        verdict: PASS
+        state: nested-and-ignored
+      follow_up_context:
+        - "--tdx-text-muted is defined twice; the second definition wins"
+        - "api key used during the spike was ${SECRET_LIKE}"
+    - id: phase-02
+      state: done
+      completion_summary: "Scanner configured."
+      follow_up_context: []
+    - id: phase-04
+      state: ready
+review:
+  round: 0
+EOF
+CONT="$("$PYTHON3" "$PLANNEXT" "$DIR" 2>/dev/null)"
+cont_py() {
+  printf '%s' "$CONT" | "$PYTHON3" -c "import json,sys; d=json.load(sys.stdin)['phase']['prerequisite_context']; $1"
+}
+if [ "$(cont_py 'print([p["id"] for p in d["phases"]])')" = "['phase-01', 'phase-02']" ]; then
+  ok "the dispatch decision carries every prerequisite, in order"
+else
+  bad "the dispatch decision carries every prerequisite, in order" "$CONT"
+fi
+if contains "$(cont_py 'print(d["phases"][0]["follow_up_context"])')" "defined twice"; then
+  ok "a prerequisite's follow_up_context is returned for the brief"
+else
+  bad "a prerequisite's follow_up_context is returned for the brief" "$CONT"
+fi
+if [ "$(cont_py 'print(d["phases"][0]["state"])')" = "done" ]; then
+  ok "a nested mapping inside a phase does not overwrite the phase's own keys"
+else
+  bad "a nested mapping inside a phase does not overwrite the phase's own keys" "$CONT"
+fi
+if [ "$(cont_py 'print(d["missing"])')" = "['phase-02']" ]; then
+  ok "a prerequisite that recorded nothing to carry forward is named, not silently empty"
+else
+  bad "a prerequisite that recorded nothing to carry forward is named, not silently empty" "$CONT"
+fi
+if contains "$CONT" "$SECRET_LIKE"; then
+  bad "a credential-shaped value in the evidence pack never reaches the decision"
+else
+  ok "a credential-shaped value in the evidence pack never reaches the decision"
+fi
+
+DIR="$(make_plan continuity-nopack phase-02)"
+add_phase "$DIR" phase-01 A software-engineer S done none STANDARD no
+add_phase "$DIR" phase-02 B software-engineer S ready 01 STANDARD no
+NOPACK="$("$PYTHON3" "$PLANNEXT" "$DIR" 2>/dev/null)"
+NOPACK_ACTION="$(printf '%s' "$NOPACK" | "$PYTHON3" -c 'import json,sys; print(json.load(sys.stdin)["action"])')"
+if [ "$NOPACK_ACTION" = "dispatch" ] && contains "$NOPACK" "No evidence pack on disk"; then
+  ok "a missing evidence pack is reported and never blocks the decision"
+else
+  bad "a missing evidence pack is reported and never blocks the decision" "$NOPACK"
+fi
+
+# ---------------------------------------------------------------------------
 sec "Stagnation is detected by absence of progress, not elapsed time"
 # ---------------------------------------------------------------------------
 
@@ -693,6 +774,11 @@ sec "Mutation probes"
 
 PROBE="$BOX/probe"
 mkdir -p "$PROBE"
+# plan-next redacts what it reads from the evidence pack, so its sandboxed copy
+# needs the redactor beside it or every probe against it dies on import.
+cp "$REPO/scripts/guard_audit.py" "$PROBE/guard_audit.py"
+# The watchdog resolves its cache through the shared resolver.
+cp "$REPO/scripts/cache_root.py" "$PROBE/cache_root.py"
 
 # Probe 1: remove the escalating-domain table and confirm a migration is then
 # allowed down to LIGHT. This is the check that matters most in this file.
@@ -792,6 +878,33 @@ else
   else
     bad "probe 3: treating every run as stalled kills work that was still producing" \
         "got $GOT — the stagnation-not-elapsed property is untested"
+  fi
+fi
+
+# Probe 4: stop redacting what plan-next reads from the evidence pack, and a
+# credential-shaped value rides into the next agent's brief.
+cp "$PLANNEXT" "$PROBE/delivery-run-next.py"
+"$PYTHON3" - "$PROBE/delivery-run-next.py" <<'PY'
+import pathlib
+import sys
+
+path = pathlib.Path(sys.argv[1])
+text = path.read_text(encoding="utf-8")
+anchor = "        return [redact(str(item)) for item in value]\n"
+if anchor not in text:
+    sys.exit(3)
+path.write_text(text.replace(anchor, "        return [str(item) for item in value]\n", 1),
+                encoding="utf-8")
+PY
+if [ $? -ne 0 ]; then
+  bad "probe 4 could weaken the build" "the evidence-pack redaction was not found"
+else
+  LEAK="$("$PYTHON3" "$PROBE/delivery-run-next.py" "$PLANS/continuity" 2>/dev/null)"
+  if contains "$LEAK" "$SECRET_LIKE"; then
+    ok "probe 4: without redaction an evidence-pack credential reaches the brief"
+  else
+    bad "probe 4: without redaction an evidence-pack credential reaches the brief" \
+        "the weakened build still hid it, so the redaction test proves nothing"
   fi
 fi
 

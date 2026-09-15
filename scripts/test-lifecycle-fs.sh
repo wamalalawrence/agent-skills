@@ -358,6 +358,304 @@ else
 fi
 
 # ---------------------------------------------------------------------------
+sec "Cleanup keeps what someone still has to read"
+# ---------------------------------------------------------------------------
+# A dispatched agent wrote its report into the task directory, closed out as
+# `complete`, and the closeout deleted the report before the agent that
+# dispatched it could verify anything. And around a phased plan the evidence
+# pack — the only place each phase's `follow_up_context` lives — was cleared
+# between phases, so no later phase could be told what an earlier one learned.
+
+CACHE="$(new_cache keep-artifacts)"
+make_task_dir "$CACHE" "proj-820"
+mkdir -p "$CACHE/proj-820/artifacts"
+printf '# audit\n' > "$CACHE/proj-820/artifacts/ux-audit.md"
+clean "$CACHE" "proj-820"
+if [ -f "$CACHE/proj-820/artifacts/ux-audit.md" ]; then
+  ok "artifacts/ survives a clean closeout"
+else
+  bad "artifacts/ survives a clean closeout" "rc=$CLEAN_RC out=$CLEAN_OUT"
+fi
+if [ ! -f "$CACHE/proj-820/blackboard.json" ] && [ ! -f "$CACHE/proj-820/findings.md" ]; then
+  ok "the scratch around artifacts/ is still cleared"
+else
+  bad "the scratch around artifacts/ is still cleared" "rc=$CLEAN_RC out=$CLEAN_OUT"
+fi
+if contains "$CLEAN_OUT" "kept: artifacts"; then
+  ok "cleanup says what it kept"
+else
+  bad "cleanup says what it kept" "$CLEAN_OUT"
+fi
+
+CACHE="$(new_cache keep-pack)"
+mkdir -p "$CACHE/proj-821/phased-plan"
+printf '# index\n' > "$CACHE/proj-821/phased-plan/README.md"
+printf 'delivery_plan:\n  phases: []\n' > "$CACHE/proj-821/evidence-pack.yml"
+printf '{}\n' > "$CACHE/proj-821/blackboard.json"
+clean "$CACHE" "proj-821"
+if [ -f "$CACHE/proj-821/evidence-pack.yml" ] && [ ! -f "$CACHE/proj-821/blackboard.json" ]; then
+  ok "the evidence pack survives between phases of a plan; the blackboard does not"
+else
+  bad "the evidence pack survives between phases of a plan; the blackboard does not" \
+      "rc=$CLEAN_RC out=$CLEAN_OUT"
+fi
+
+CACHE="$(new_cache no-plan-pack)"
+make_task_dir "$CACHE" "proj-822"
+printf 'x: 1\n' > "$CACHE/proj-822/evidence-pack.yml"
+clean "$CACHE" "proj-822"
+if [ ! -d "$CACHE/proj-822" ]; then
+  ok "without a plan or artifacts the whole task directory still goes"
+else
+  bad "without a plan or artifacts the whole task directory still goes" "rc=$CLEAN_RC out=$CLEAN_OUT"
+fi
+
+# ---------------------------------------------------------------------------
+sec "finish-task names the task the way start-task does"
+# ---------------------------------------------------------------------------
+# The ambiguity refusal told agents to pass `--issue-key`, and finish-task had no
+# such option: the only form it accepted was positional. An agent that followed
+# the error message got a second error.
+
+FT="$REPO/scripts/finish-task.sh"
+CACHE="$(new_cache flags)"
+"$PYTHON3" "$BB" --cache-root "$CACHE" init --project demo proj-830 >/dev/null 2>&1
+"$PYTHON3" "$BB" --cache-root "$CACHE" init --project demo proj-831 >/dev/null 2>&1
+FT_OUT="$(AGENT_SKILLS_CACHE_DIR="$CACHE" bash "$FT" --project demo --no-candidates \
+  --summary "implicit closeout with two tasks in flight" 2>&1)"
+FT_RC=$?
+if [ "$FT_RC" -eq 3 ] && contains "$FT_OUT" "--issue-key <key>"; then
+  ok "the ambiguity refusal still refuses, and names a flag"
+else
+  bad "the ambiguity refusal still refuses, and names a flag" "rc=$FT_RC out=$FT_OUT"
+fi
+FT_OUT="$(AGENT_SKILLS_CACHE_DIR="$CACHE" bash "$FT" --project demo --issue-key proj-830 \
+  --no-candidates --summary "explicit closeout" 2>&1)"
+FT_RC=$?
+if [ "$FT_RC" -eq 0 ] && contains "$FT_OUT" "issue-key: proj-830"; then
+  ok "the flag the refusal names is accepted"
+else
+  bad "the flag the refusal names is accepted" "rc=$FT_RC out=$FT_OUT"
+fi
+FT_OUT="$(AGENT_SKILLS_CACHE_DIR="$CACHE" bash "$FT" --task=proj-831 --project=demo \
+  --no-candidates --summary "equals form" 2>&1)"
+FT_RC=$?
+if [ "$FT_RC" -eq 0 ] && contains "$FT_OUT" "issue-key: proj-831"; then
+  ok "--task and the = forms work too"
+else
+  bad "--task and the = forms work too" "rc=$FT_RC out=$FT_OUT"
+fi
+
+CACHE="$(new_cache leftovers)"
+mkdir -p "$CACHE/proj-832/artifacts" "$CACHE/proj-833/phased-plan"
+printf 'r\n' > "$CACHE/proj-832/artifacts/report.md"
+printf '# i\n' > "$CACHE/proj-833/phased-plan/README.md"
+"$PYTHON3" "$BB" --cache-root "$CACHE" init --project demo proj-834 >/dev/null 2>&1
+printf 'project=demo\nissue_key=proj-834\n' > "$CACHE/.last-task-context"
+FT_OUT="$(AGENT_SKILLS_CACHE_DIR="$CACHE" bash "$FT" --no-candidates \
+  --summary "one task running beside kept artifacts" 2>&1)"
+FT_RC=$?
+if [ "$FT_RC" -eq 0 ] && contains "$FT_OUT" "issue-key: proj-834"; then
+  ok "directories holding only kept artifacts are not counted as tasks in flight"
+else
+  bad "directories holding only kept artifacts are not counted as tasks in flight" "rc=$FT_RC out=$FT_OUT"
+fi
+
+# ---------------------------------------------------------------------------
+sec "A step inside a coordinated run leaves scratch to the coordinator"
+# ---------------------------------------------------------------------------
+
+CACHE="$(new_cache coordinated)"
+"$PYTHON3" "$BB" --cache-root "$CACHE" init --project demo proj-840 \
+  --skill wamala=1.1.0 >/dev/null 2>&1
+printf 'delivery_plan: {}\n' > "$CACHE/proj-840/evidence-pack.yml"
+FT_OUT="$(AGENT_SKILLS_CACHE_DIR="$CACHE" bash "$FT" demo proj-840 --skill software-engineer \
+  --no-candidates --summary "step one done" 2>&1)"
+FT_RC=$?
+if [ "$FT_RC" -eq 0 ] && [ -f "$CACHE/proj-840/evidence-pack.yml" ] && contains "$FT_OUT" "wamala run"; then
+  ok "a step's complete closeout keeps the evidence the coordinator verifies"
+else
+  bad "a step's complete closeout keeps the evidence the coordinator verifies" "rc=$FT_RC out=$FT_OUT"
+fi
+AGENT_SKILLS_CACHE_DIR="$CACHE" bash "$FT" demo proj-840 --skill wamala \
+  --no-candidates --summary "run finished" >/dev/null 2>&1
+if [ ! -d "$CACHE/proj-840" ]; then
+  ok "the coordinator's own closeout cleans the run's scratch"
+else
+  bad "the coordinator's own closeout cleans the run's scratch"
+fi
+
+CACHE="$(new_cache coordinated-force)"
+"$PYTHON3" "$BB" --cache-root "$CACHE" init --project demo proj-841 \
+  --skill delivery-runner=1.1.0 >/dev/null 2>&1
+AGENT_SKILLS_CACHE_DIR="$CACHE" bash "$FT" demo proj-841 --skill product-owner --cleanup \
+  --no-candidates --summary "forced" >/dev/null 2>&1
+if [ ! -d "$CACHE/proj-841" ]; then
+  ok "--cleanup still forces cleanup inside a coordinated run"
+else
+  bad "--cleanup still forces cleanup inside a coordinated run"
+fi
+
+CACHE="$(new_cache not-coordinated)"
+"$PYTHON3" "$BB" --cache-root "$CACHE" init --project demo proj-842 \
+  --skill software-engineer=1.1.0 >/dev/null 2>&1
+printf '{"issue_key": "proj-842", "skill_versions": {"software-engineer": "1.1.0"}, "facts": [{"text": "wamala routed this"}]}\n' \
+  > "$CACHE/proj-842/blackboard.json"
+AGENT_SKILLS_CACHE_DIR="$CACHE" bash "$FT" demo proj-842 --skill software-engineer \
+  --no-candidates --summary "ordinary" >/dev/null 2>&1
+if [ ! -d "$CACHE/proj-842" ]; then
+  ok "a note that mentions a coordinator does not make a run coordinated"
+else
+  bad "a note that mentions a coordinator does not make a run coordinated"
+fi
+
+# ---------------------------------------------------------------------------
+sec "Every helper finds the same cache"
+# ---------------------------------------------------------------------------
+# The wrappers anchored the cache at the git root and most Python helpers at the
+# current directory, so `agent-skills blackboard progress` run from `src/` could
+# not find the blackboard start-task had just created.
+
+WS="$BOX/ws-git"
+mkdir -p "$WS/src/deep"
+git -C "$WS" init -q >/dev/null 2>&1
+( cd "$WS" && env -u AGENT_SKILLS_CACHE_DIR -u WORKSPACE_ROOT \
+    "$PYTHON3" "$BB" init --project demo proj-850 >/dev/null 2>&1 )
+NESTED="$( cd "$WS/src/deep" && env -u AGENT_SKILLS_CACHE_DIR -u WORKSPACE_ROOT \
+    "$PYTHON3" "$BB" read proj-850 2>&1 )"
+if contains "$NESTED" '"issue_key": "proj-850"'; then
+  ok "a Python helper run from a nested directory reads the git-root cache"
+else
+  bad "a Python helper run from a nested directory reads the git-root cache" "$NESTED"
+fi
+SHELL_ROOT="$( cd "$WS/src/deep" && env -u AGENT_SKILLS_CACHE_DIR -u WORKSPACE_ROOT \
+    bash -c 'source "$1/scripts/task-context.sh"; agent_skills_resolve_cache_root' _ "$REPO" )"
+PY_ROOT="$( cd "$WS/src/deep" && env -u AGENT_SKILLS_CACHE_DIR -u WORKSPACE_ROOT \
+    "$PYTHON3" "$REPO/scripts/cache_root.py" )"
+SHELL_REAL="$(cd "$(dirname "$SHELL_ROOT")/.." 2>/dev/null && pwd -P)"
+PY_REAL="$(cd "$(dirname "$PY_ROOT")/.." 2>/dev/null && pwd -P)"
+if [ -n "$SHELL_REAL" ] && [ "$SHELL_REAL" = "$PY_REAL" ] \
+   && [ "$SHELL_REAL" = "$(cd "$WS" && pwd -P)" ]; then
+  ok "the shell and Python resolvers agree on the git root"
+else
+  bad "the shell and Python resolvers agree on the git root" "shell=$SHELL_ROOT python=$PY_ROOT"
+fi
+
+WS="$BOX/ws-plain"
+mkdir -p "$WS/docs/old" "$WS/.cache/agent-skills"
+printf 'project=ws-plain\nissue_key=proj-851\n' > "$WS/.cache/agent-skills/.last-task-context"
+SH_SUB="$( cd "$WS/docs/old" && env -u AGENT_SKILLS_CACHE_DIR -u WORKSPACE_ROOT \
+    bash -c 'source "$1/scripts/task-context.sh"; agent_skills_resolve_cache_root' _ "$REPO" )"
+SH_PROJECT="$( cd "$WS/docs/old" && env -u AGENT_SKILLS_CACHE_DIR -u WORKSPACE_ROOT \
+    -u AGENT_SKILLS_PROJECT -u PROJECTS_JSON \
+    bash -c 'source "$1/scripts/task-context.sh"; agent_skills_detect_project' _ "$REPO" )"
+if contains "$SH_SUB" "ws-plain/.cache/agent-skills" && [ "$SH_PROJECT" = "ws-plain" ]; then
+  ok "outside git, a subdirectory resolves the workspace that already has a cache"
+else
+  bad "outside git, a subdirectory resolves the workspace that already has a cache" \
+      "cache=$SH_SUB project=$SH_PROJECT"
+fi
+PY_SUB="$( cd "$WS/docs/old" && env -u AGENT_SKILLS_CACHE_DIR -u WORKSPACE_ROOT \
+    "$PYTHON3" "$REPO/scripts/cache_root.py" )"
+if contains "$PY_SUB" "ws-plain/.cache/agent-skills"; then
+  ok "the Python resolver takes the same anchor"
+else
+  bad "the Python resolver takes the same anchor" "$PY_SUB"
+fi
+
+# An anchor owned by another account must not capture the cache. A sandbox cannot
+# create a file owned by another uid without root, so the resolver is asked the
+# question as a different uid instead: the same files, seen by someone who does
+# not own them.
+FOREIGN="$( cd "$WS/docs/old" && env -u AGENT_SKILLS_CACHE_DIR -u WORKSPACE_ROOT \
+    "$PYTHON3" - "$REPO/scripts" <<'PY'
+import os
+import sys
+from pathlib import Path
+
+sys.path.insert(0, sys.argv[1])
+import cache_root
+
+real = os.getuid()
+os.getuid = lambda: real + 1
+print(cache_root.anchor_root(Path.cwd()))
+PY
+)"
+if [ "$FOREIGN" = "None" ]; then
+  ok "an anchor owned by another account is not taken"
+else
+  bad "an anchor owned by another account is not taken" "got $FOREIGN"
+fi
+
+# ---------------------------------------------------------------------------
+sec "Delete-shaped requests: reversibility is checked, not assumed"
+# ---------------------------------------------------------------------------
+
+REV="$REPO/scripts/reversibility.py"
+RV="$BOX/rev"
+mkdir -p "$RV/plain/old-docs" "$RV/repo/docs" "$RV/repo/notes"
+printf 'old\n' > "$RV/plain/old-docs/a.md"
+git -C "$RV/repo" init -q >/dev/null 2>&1
+printf 'a\n' > "$RV/repo/docs/a.md"
+printf 'n\n' > "$RV/repo/notes/n.md"
+printf '*.log\n' > "$RV/repo/.gitignore"
+git -C "$RV/repo" add . >/dev/null 2>&1
+git -C "$RV/repo" -c user.name=t -c user.email=t@example.invalid commit -qm init >/dev/null 2>&1
+printf 'fresh\n' > "$RV/repo/notes/untracked.md"
+printf 'l\n' > "$RV/repo/docs/build.log"
+
+rev_verdict() {
+  "$PYTHON3" "$REV" --json "$1" 2>/dev/null \
+    | "$PYTHON3" -c 'import json,sys; print(json.load(sys.stdin)["targets"][0]["verdict"])'
+}
+"$PYTHON3" "$REV" "$RV/plain/old-docs" >/dev/null 2>&1
+REV_RC=$?
+if [ "$REV_RC" -eq 1 ] && [ "$(rev_verdict "$RV/plain/old-docs")" = "NOT_RECOVERABLE" ]; then
+  ok "a directory outside any repository is not recoverable (exit 1)"
+else
+  bad "a directory outside any repository is not recoverable (exit 1)" "rc=$REV_RC"
+fi
+if [ -f "$RV/plain/old-docs/a.md" ]; then
+  ok "the check never touches the target"
+else
+  bad "the check never touches the target"
+fi
+if [ "$(rev_verdict "$RV/repo/notes")" = "NOT_RECOVERABLE" ]; then
+  ok "an untracked file beneath a tracked directory makes it not recoverable"
+else
+  bad "an untracked file beneath a tracked directory makes it not recoverable"
+fi
+if [ "$(rev_verdict "$RV/repo/docs")" = "NOT_RECOVERABLE" ]; then
+  ok "an ignored file beneath a tracked directory makes it not recoverable"
+else
+  bad "an ignored file beneath a tracked directory makes it not recoverable"
+fi
+"$PYTHON3" "$REV" "$RV/repo/docs/a.md" >/dev/null 2>&1
+REV_RC=$?
+if [ "$REV_RC" -eq 0 ] && [ "$(rev_verdict "$RV/repo/docs/a.md")" = "RECOVERABLE" ]; then
+  ok "a tracked, committed, unmodified file is recoverable (exit 0)"
+else
+  bad "a tracked, committed, unmodified file is recoverable (exit 0)" "rc=$REV_RC"
+fi
+if [ "$(rev_verdict "$RV/repo")" = "NOT_RECOVERABLE" ]; then
+  ok "a repository root is never recoverable from its own history"
+else
+  bad "a repository root is never recoverable from its own history"
+fi
+REV_TEXT="$("$PYTHON3" "$REV" "$RV/plain/old-docs" 2>&1)"
+if contains "$REV_TEXT" "mv -n" && contains "$REV_TEXT" "rm -r" && contains "$REV_TEXT" "_archive"; then
+  ok "a not-recoverable target comes with archive commands and the user's delete command"
+else
+  bad "a not-recoverable target comes with archive commands and the user's delete command" "$REV_TEXT"
+fi
+printf 'edit\n' >> "$RV/repo/docs/a.md"
+if [ "$(rev_verdict "$RV/repo/docs/a.md")" = "NOT_RECOVERABLE" ]; then
+  ok "an uncommitted edit makes a tracked file not recoverable"
+else
+  bad "an uncommitted edit makes a tracked file not recoverable"
+fi
+
+# ---------------------------------------------------------------------------
 sec "Mutation probes"
 # ---------------------------------------------------------------------------
 # Each probe removes one guarantee from a sandboxed copy and asserts the check
@@ -372,6 +670,7 @@ cp "$PM" "$PROBE_DIR/project-memory.py"
 # guard held" when in fact nothing ran.
 cp "$REPO/scripts/guard_audit.py" "$PROBE_DIR/guard_audit.py"
 cp "$REPO/scripts/durable.py" "$PROBE_DIR/durable.py"
+cp "$REPO/scripts/cache_root.py" "$PROBE_DIR/cache_root.py"
 
 # Probe 1: restore the pre-fix `exists()`-driven deletion.
 python3 - "$PROBE_DIR/project-memory.py" <<'PY'
@@ -426,6 +725,7 @@ cp "$PM" "$PROBE_DIR/project-memory.py"
 # guard held" when in fact nothing ran.
 cp "$REPO/scripts/guard_audit.py" "$PROBE_DIR/guard_audit.py"
 cp "$REPO/scripts/durable.py" "$PROBE_DIR/durable.py"
+cp "$REPO/scripts/cache_root.py" "$PROBE_DIR/cache_root.py"
 python3 - "$PROBE_DIR/project-memory.py" <<'PY'
 import pathlib
 import re
@@ -459,6 +759,97 @@ else
   else
     bad "probe 2: without the ownership guard a repository directory is deleted" \
         "the weakened build still refused, so the guard is untested"
+  fi
+fi
+
+# Probe 3: drop `artifacts` from what cleanup keeps, and a finished step's report
+# is deleted again.
+cp "$PM" "$PROBE_DIR/project-memory.py"
+"$PYTHON3" - "$PROBE_DIR/project-memory.py" <<'PY'
+import pathlib
+import sys
+
+path = pathlib.Path(sys.argv[1])
+text = path.read_text(encoding="utf-8")
+weakened = text.replace('ALWAYS_KEPT = ("artifacts",)', "ALWAYS_KEPT = ()", 1)
+if weakened == text:
+    sys.exit(3)
+path.write_text(weakened, encoding="utf-8")
+PY
+if [ $? -ne 0 ]; then
+  bad "probe 3 could weaken the build" "ALWAYS_KEPT was not found"
+else
+  CACHE="$(new_cache probe3)"
+  make_task_dir "$CACHE" "proj-860"
+  mkdir -p "$CACHE/proj-860/artifacts"
+  printf 'r\n' > "$CACHE/proj-860/artifacts/report.md"
+  "$PYTHON3" "$PROBE_DIR/project-memory.py" --cache-root "$CACHE" cleanup-task proj-860 \
+    >/dev/null 2>&1
+  if [ ! -f "$CACHE/proj-860/artifacts/report.md" ]; then
+    ok "probe 3: without the keep rule a finished step's report is deleted"
+  else
+    bad "probe 3: without the keep rule a finished step's report is deleted" \
+        "the weakened build kept it, so the keep test proves nothing"
+  fi
+fi
+
+# Probe 4: remove the coordinated-run check, and a step deletes the evidence the
+# coordinator was about to verify.
+PROBE_SCRIPTS="$BOX/probe-scripts"
+mkdir -p "$PROBE_SCRIPTS"
+cp "$REPO"/scripts/*.sh "$REPO"/scripts/*.py "$PROBE_SCRIPTS/"
+"$PYTHON3" - "$PROBE_SCRIPTS/finish-task.sh" <<'PY'
+import pathlib
+import sys
+
+path = pathlib.Path(sys.argv[1])
+text = path.read_text(encoding="utf-8")
+anchor = '  if [[ -n "${COORDINATOR}" ]]; then\n    CLEANUP="false"\n  fi\n'
+if anchor not in text:
+    sys.exit(3)
+path.write_text(text.replace(anchor, "", 1), encoding="utf-8")
+PY
+if [ $? -ne 0 ]; then
+  bad "probe 4 could weaken the build" "the coordinated-run check was not found"
+else
+  CACHE="$(new_cache probe4)"
+  "$PYTHON3" "$BB" --cache-root "$CACHE" init --project demo proj-861 \
+    --skill wamala=1.1.0 >/dev/null 2>&1
+  printf 'delivery_plan: {}\n' > "$CACHE/proj-861/evidence-pack.yml"
+  AGENT_SKILLS_CACHE_DIR="$CACHE" bash "$PROBE_SCRIPTS/finish-task.sh" demo proj-861 \
+    --skill software-engineer --no-candidates --summary "step" >/dev/null 2>&1
+  if [ ! -f "$CACHE/proj-861/evidence-pack.yml" ]; then
+    ok "probe 4: without the coordinated-run check a step deletes the coordinator's evidence"
+  else
+    bad "probe 4: without the coordinated-run check a step deletes the coordinator's evidence" \
+        "the weakened build kept it, so the coordinated-run test proves nothing"
+  fi
+fi
+
+# Probe 5: stop counting untracked content, and an untracked note reads as safe to
+# delete.
+cp "$REPO/scripts/reversibility.py" "$PROBE_DIR/reversibility.py"
+"$PYTHON3" - "$PROBE_DIR/reversibility.py" <<'PY'
+import pathlib
+import sys
+
+path = pathlib.Path(sys.argv[1])
+text = path.read_text(encoding="utf-8")
+anchor = "    elif untracked or ignored or changed:\n"
+if anchor not in text:
+    sys.exit(3)
+path.write_text(text.replace(anchor, "    elif False:\n", 1), encoding="utf-8")
+PY
+if [ $? -ne 0 ]; then
+  bad "probe 5 could weaken the build" "the untracked-content check was not found"
+else
+  GOT="$("$PYTHON3" "$PROBE_DIR/reversibility.py" --json "$RV/repo/notes" 2>/dev/null \
+    | "$PYTHON3" -c 'import json,sys; print(json.load(sys.stdin)["targets"][0]["verdict"])')"
+  if [ "$GOT" = "RECOVERABLE" ]; then
+    ok "probe 5: without the untracked-content check an untracked note reads as recoverable"
+  else
+    bad "probe 5: without the untracked-content check an untracked note reads as recoverable" \
+        "got $GOT, so the reversibility test proves nothing"
   fi
 fi
 

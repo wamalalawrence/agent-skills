@@ -489,6 +489,7 @@ mkdir -p "$ORG_PROBE"
 cp "$REPO/scripts/org-memory.py" "$ORG_PROBE/org-memory.py"
 cp "$REPO/scripts/guard_audit.py" "$ORG_PROBE/guard_audit.py"
 cp "$REPO/scripts/durable.py" "$ORG_PROBE/durable.py"
+cp "$REPO/scripts/cache_root.py" "$ORG_PROBE/cache_root.py"
 if "$PYTHON3" - "$ORG_PROBE/org-memory.py" <<'PY'
 import pathlib
 import sys

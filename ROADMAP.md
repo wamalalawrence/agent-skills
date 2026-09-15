@@ -19,7 +19,16 @@ distribution boundary only — an active seat is required to download and update
 the installed runtime blocks work. The commercial line ships as `2.0`; `1.x` keeps every frozen
 contract and its current credential-free install path.
 
-## Now: v1.0.0
+## Now: v1.1.0
+
+A field-report release on top of `1.0.0`. Wamala finishes multi-phase runs on hosts where
+dispatched agents cannot dispatch, routes a defective plan to its planner, restores independent
+review one level up, carries each phase's `follow_up_context` into the next brief, and checks a
+delete before it happens. The lifecycle wrappers keep what a step produced, take the flags their
+own error message names, and agree on one cache. Additive against the 1.0 contract; see the
+changelog. The npm bootstrap moves in lockstep to `1.1.0`.
+
+## Previously: v1.0.0
 
 The first stable release. The [1.0 contracts](./docs/one-point-oh.md) — CLI command names,
 arguments, exit codes, and machine-readable output; the versioned install layout, `current`

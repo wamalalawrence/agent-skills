@@ -79,11 +79,29 @@ If none resolve, the installation is missing or broken. Report that and point th
 `agent-skills install`, then `agent-skills verify`. Do not treat it as "memory is unavailable, continue
 silently".
 
-If detection picks the wrong project or task id, pass them explicitly:
+If detection picks the wrong project or task id, pass them explicitly. Both commands take the
+same forms:
 
 ```bash
-agent-skills start-task <project> <issue-key> --skill <skill-name>
+agent-skills start-task --project <project> --issue-key <issue-key> --skill <skill-name>
+agent-skills finish-task --project <project> --issue-key <issue-key> --skill <skill-name> --summary "..."
 ```
+
+**A dispatched step always passes them.** Detection is a convenience for one agent in one
+repository. Across agents it goes wrong in two ways that were both seen on one run. A step
+started from a different working directory derives a different project name. A step on a shared
+branch such as `dev` or `main` gets a fresh `ad-hoc-<timestamp>` key every time, so one piece of
+work ends up with several keys, several blackboards, and its memory split between them. A
+coordinator such as Wamala puts the explicit identity into its
+[run preamble](../skills/wamala/references/run-preamble-template.md). `start-task` also says so when
+it generates a key while other tasks are already in flight, and lists them.
+
+**One cache, however you got there.** The wrappers and every Python helper resolve the cache the
+same way: `AGENT_SKILLS_CACHE_DIR`, then `WORKSPACE_ROOT`, then the git root. Outside git, they use
+the nearest parent below `$HOME` that already holds `.agent-skills.yml` or a cache, and only then
+the working directory. Before `1.1.0` most helpers used the working directory, so
+`agent-skills blackboard progress` run from `src/` could not find the blackboard `start-task`
+had just created.
 
 If you have located the runtime and still cannot run it, run the three steps by hand:
 
@@ -192,6 +210,23 @@ bash scripts/finish-task.sh --skill <skill-name> --status blocked \
 
 `blocked` and `needs-context` keep the per-task scratch and the working branch so the next
 agent can resume. That is why using the right status matters more than it looks.
+
+**What "cleaned" keeps.** Cleanup never removes `<issue-key>/artifacts/`. That is where a step
+writes output someone else still has to read: a report, an audit, a run preamble. When a phased
+plan is present, cleanup also keeps `phased-plan/`, `destination.md`, and `evidence-pack.yml`. The
+evidence pack carries each phase's `follow_up_context`, and the next phase is meant to be given it.
+Everything else goes. The output names what was kept.
+
+**A step inside a coordinated run does not clean.** When the task's blackboard records `wamala`
+or `delivery-runner` as a participant, a closeout by any other skill leaves scratch in place and
+says why. The coordinator still has to verify the step from what it wrote, and it cleans once, in
+its own closeout at the end of the run. Before `1.1.0` a dispatched step's `complete` closeout
+deleted its own output before the dispatcher could read it. `--cleanup` still forces it, and
+`--no-cleanup` still prevents it anywhere.
+
+**In flight means a blackboard exists.** The refusal to guess a task, when several are in flight,
+counts task directories that still have a `blackboard.json`. A directory holding only what
+cleanup kept on purpose is not a task anyone is running.
 
 ## Order of operations at the end
 
