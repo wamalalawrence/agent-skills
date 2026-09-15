@@ -31,7 +31,7 @@ Every suite below was run on this checkout, after the rebase onto `main`.
 
 | Gate | Result | 1.0.0 |
 | --- | --- | --- |
-| `scripts/validate-repo.py` | pass, 63 warnings | pass, 63 warnings |
+| `scripts/validate-repo.py` | pass, 90 warnings | pass, 63 warnings |
 | `scripts/run-evals.py` | 57 files, 0 failures, 0 warnings | 56 files, 0, 0 |
 | `scripts/test-cli-install.sh` | 145 passed, 0 failed | 145 |
 | `scripts/test-global-install.sh` | 112 assertions | 112 |
@@ -46,7 +46,13 @@ Every suite below was run on this checkout, after the rebase onto `main`.
 | `scripts/test-tools.sh` | 43 passed, 0 failed | 43 |
 | `scripts/test-release-engine.py` | 31 passed, 0 failed | 31 |
 
-The warning count is unchanged. Three suites grew: lifecycle filesystem safety by 29 (artifact and
+The warning count rose from 63 to 90, and none of the 27 are from this release's changes. All of
+them are in `docs/commercial-roadmap.md`, which reached `main` in PR #57 and arrived here in the
+rebase: links to vendor documentation (Stripe, Cloudflare, Neon, Better Auth, Resend, Hono) that
+the hostname check flags, and three address-shaped strings in the same file. Checked line by line
+against the baseline; the diff of this branch adds no warning of its own.
+
+Three suites grew: lifecycle filesystem safety by 29 (artifact and
 evidence-pack preservation, the `finish-task` flags, the in-flight count, coordinated-run
 deferral, one cache across both resolvers, reversibility, and an anchor owned by another account),
 adaptive execution by 7 (`prerequisite_context`, including a nested mapping that must not
