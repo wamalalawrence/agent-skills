@@ -973,6 +973,11 @@ sec "13. mutation probes: each guarantee fails when removed"
 # A probe copies the runtime, deletes one guarantee, and asserts the matching
 # check above now fails. Without this, a check that never exercised the property
 # would pass whether or not the property holds.
+# The probes run a copy of context.py from $BOX, so the one sibling module it
+# imports has to sit beside it. Without it every weakened build dies on import and
+# each probe reports "no leak" for a reason that has nothing to do with the property.
+cp "$REPO/scripts/cache_root.py" "$BOX/cache_root.py"
+
 probe() {
   local name="$1"
   local sed_program="$2"
