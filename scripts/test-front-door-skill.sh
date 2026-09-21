@@ -111,17 +111,17 @@ else
 fi
 
 TOP_LEVEL="$(find "${REPO_ROOT}/skills" -mindepth 2 -maxdepth 2 -name SKILL.md | wc -l | tr -d ' ')"
-if [ "${TOP_LEVEL}" = "9" ]; then
-  ok "nine top-level skills are registerable (${TOP_LEVEL})"
+if [ "${TOP_LEVEL}" = "10" ]; then
+  ok "ten top-level skills are registerable (${TOP_LEVEL})"
 else
-  bad "nine top-level skills are registerable" "found ${TOP_LEVEL}"
+  bad "ten top-level skills are registerable" "found ${TOP_LEVEL}"
 fi
 
 # The specialists keep their role-based names. A rename that swept them up too
 # would break every direct invocation in the wild.
 for specialist in product-owner software-engineer manual-tester \
   test-automation-engineer delivery-planner delivery-runner domain-modeler \
-  context-optimizer; do
+  context-optimizer meeting-intelligence; do
   check "specialist '${specialist}' keeps its role-based name" \
     test -f "${REPO_ROOT}/skills/${specialist}/SKILL.md"
 done

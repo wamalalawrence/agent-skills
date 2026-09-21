@@ -1,0 +1,125 @@
+[
+  {
+    "participant": {
+      "id": 100,
+      "name": "Alice Example",
+      "is_host": true,
+      "platform": "zoom",
+      "extra_data": null
+    },
+    "words": [
+      {
+        "text": "Maybe",
+        "start_timestamp": {
+          "relative": 12.0,
+          "absolute": null
+        },
+        "end_timestamp": {
+          "relative": 12.3,
+          "absolute": null
+        }
+      },
+      {
+        "text": "we",
+        "start_timestamp": {
+          "relative": 12.3
+        },
+        "end_timestamp": {
+          "relative": 12.4
+        }
+      },
+      {
+        "text": "should",
+        "start_timestamp": {
+          "relative": 12.4
+        },
+        "end_timestamp": {
+          "relative": 12.7
+        }
+      },
+      {
+        "text": "move",
+        "start_timestamp": {
+          "relative": 12.7
+        },
+        "end_timestamp": {
+          "relative": 13.0
+        }
+      },
+      {
+        "text": "retries",
+        "start_timestamp": {
+          "relative": 13.0
+        },
+        "end_timestamp": {
+          "relative": 13.4
+        }
+      },
+      {
+        "text": "to",
+        "start_timestamp": {
+          "relative": 13.4
+        },
+        "end_timestamp": {
+          "relative": 13.5
+        }
+      },
+      {
+        "text": "Kafka.",
+        "start_timestamp": {
+          "relative": 13.5
+        },
+        "end_timestamp": {
+          "relative": 14.1
+        }
+      }
+    ]
+  },
+  {
+    "participant": {
+      "id": 101,
+      "name": "Bob Example",
+      "is_host": false,
+      "platform": "zoom",
+      "extra_data": null
+    },
+    "words": [
+      {
+        "text": "Agreed,",
+        "start_timestamp": {
+          "relative": 15.0
+        },
+        "end_timestamp": {
+          "relative": 15.4
+        }
+      },
+      {
+        "text": "let's",
+        "start_timestamp": {
+          "relative": 15.4
+        },
+        "end_timestamp": {
+          "relative": 15.7
+        }
+      },
+      {
+        "text": "do",
+        "start_timestamp": {
+          "relative": 15.7
+        },
+        "end_timestamp": {
+          "relative": 15.8
+        }
+      },
+      {
+        "text": "that.",
+        "start_timestamp": {
+          "relative": 15.8
+        },
+        "end_timestamp": {
+          "relative": 16.2
+        }
+      }
+    ]
+  }
+]

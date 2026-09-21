@@ -32,6 +32,7 @@ bash scripts/test-access-resolution.sh       # credential precedence and refusal
 bash scripts/test-front-door-skill.sh        # routing table order and skill identity
 bash scripts/test-context-optimizer.sh       # large-input selection, safety, budget
 bash scripts/test-guard.sh                   # Execution Guard rules, hosts, and bypasses
+python3 scripts/test-meeting.py              # Meeting Intelligence, offline, with mutation probes
 bash scripts/audit-npm-package.sh            # exactly what a publish would contain
 ```
 

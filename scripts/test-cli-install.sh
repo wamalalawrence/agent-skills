@@ -254,8 +254,26 @@ if case_start "update"; then
   install_from_source "${BOX}" > /dev/null 2>&1
   NEXT="$(make_next_release "${BOX}" 99.0.0)"
 
+  # Meeting state is durable data under state/, not part of any release. Plant
+  # a record and prove update and rollback neither lose nor fork it.
+  MEETING_DIR="${BOX}/home/.agent-skills/state/meetings/m_0123456789ab"
+  HOME="${BOX}/home" AGENT_SKILLS_HOME="${BOX}/home/.agent-skills" python3 - "${REPO_ROOT}/scripts" <<'PLANT'
+import sys
+sys.path.insert(0, sys.argv[1])
+import meeting_capture as mc
+import meeting_store as store
+record = store.new_record("m_0123456789ab", "zoom", "https://zoom.us/j/81234567890", "Planted",
+                          {"kind": "unscoped"}, mc.CaptureHandle("recall", "7c1f0d52-3a4e-4b6f-9d21-0a1b2c3d4e5f"),
+                          "captions", store.load_config())
+record["state"] = mc.PROCESSED
+store.save_record(record)
+PLANT
+  MEETING_SUM="$(cksum < "${MEETING_DIR}/record.json")"
+
   cli "${BOX}" update --provider local --source "${NEXT}" > "${BOX}/update.log" 2>&1
   assert_eq "$?" "0" "update exits 0"
+  assert_eq "$(cksum < "${MEETING_DIR}/record.json" 2>/dev/null)" "${MEETING_SUM}" \
+    "meeting state survives update untouched"
   assert_eq "$(installed_cli "${BOX}" version)" "99.0.0" "the new release is active"
   assert "[ -d '${BOX}/home/.agent-skills/versions/${VERSION}' ]" "the previous release is retained"
 
@@ -276,6 +294,13 @@ if case_start "update"; then
   esac
   installed_cli "${BOX}" verify > /dev/null 2>&1
   assert_eq "$?" "0" "verify passes after rollback"
+  assert_eq "$(cksum < "${MEETING_DIR}/record.json" 2>/dev/null)" "${MEETING_SUM}" \
+    "meeting state survives rollback untouched"
+  installed_cli "${BOX}" meeting list > "${BOX}/meeting-list.log" 2>&1
+  assert_eq "$?" "0" "the installed launcher dispatches meeting list"
+  assert "grep -q 'm_0123456789ab' '${BOX}/meeting-list.log'" "meeting list reads state that crossed update and rollback"
+  installed_cli "${BOX}" meeting join https://example.com/not-a-meeting > /dev/null 2>&1
+  assert_eq "$?" "2" "an unrecognised meeting link exits 2 through the launcher"
 fi
 
 # ==============================================================================

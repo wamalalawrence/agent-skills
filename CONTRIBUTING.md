@@ -35,6 +35,7 @@ bash scripts/test-cli-install.sh                   # if you touched installation
 python3 scripts/test-release-engine.py             # if you touched the release engine
 bash scripts/test-knowledge.sh                     # if you touched the memory tiers, durable.py, or the lifecycle wrappers
 bash scripts/test-secret-boundary.sh               # if you touched anything that writes durable state
+python3 scripts/test-meeting.py                    # if you touched Meeting Intelligence (scripts/meeting*.py)
 ```
 
 Before tagging a release, work through [docs/release-checklist.md](docs/release-checklist.md) and

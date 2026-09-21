@@ -72,6 +72,10 @@ Context and access
   context <subcommand>  Context Optimizer: bound a large input (see below)
   tools <subcommand>    Engineering Tool Capability Framework (see below)
 
+Meetings
+  meeting <subcommand>  Meeting Intelligence: a visible assistant joins a Teams,
+                        Zoom, or Meet call; facts land in the knowledge base
+
 Runtime safety
   guard <subcommand>    Execution Guard: decide before an action runs (see below)
   redact [--check]      Strip credential-shaped values from text on stdin
@@ -145,6 +149,17 @@ environment already has (host, MCP, authenticated CLI, local tool) over a stored
 secret. It never authenticates — that stays with `access` — and it never
 enforces — that stays with `guard`. It only classifies the action so a skill
 knows the blast radius first.
+
+Meeting subcommands (see docs/meeting-intelligence.md):
+  meeting join <url> [--scope repo:<path>] [--title T]
+  meeting status [<id>] [--wait] [--listen 127.0.0.1:<port>]
+  meeting stop <id>                Ask the assistant to leave; still processed
+  meeting list                     All meetings, reconciled
+  meeting inspect <id> [--transcript] [--facts] [--next-window] [--submit F]
+                       [--reprocess] [--accept all|ids] [--purge --yes]
+
+The assistant always joins visibly, by name, after a one-time recording notice.
+Polling carries a meeting to processed facts; no public URL is needed.
 
 Guard subcommands (see docs/execution-guard.md):
   guard check-command [--cwd P] [--format F] -- '<command>'
@@ -316,6 +331,9 @@ case "${COMMAND}" in
       scripts/guard.py scripts/context.py scripts/tools.py \
       scripts/redact.py scripts/execution-profile.py \
       scripts/execution-watchdog.py \
+      scripts/meeting.py scripts/meeting_capture.py scripts/meeting_recall.py \
+      scripts/meeting_intel.py scripts/meeting_store.py scripts/meeting_secrets.py \
+      scripts/meeting_webhook.py \
       lib/tools/capabilities.json lib/tools/classes.json; do
       if [ ! -f "${RELEASE_DIR}/${required}" ]; then
         printf 'self-test: missing %s\n' "${required}" >&2
@@ -376,6 +394,7 @@ SELFTEST
   project) run_script "scripts/project-context.py" "$@" ;;
   context) run_script "scripts/context.py" "$@" ;;
   tools) run_script "scripts/tools.py" "$@" ;;
+  meeting) run_script "scripts/meeting.py" "$@" ;;
 
   # Every helper is reachable through this one command, so a skill never has to
   # guess whether the scripts live at `scripts/`, `agent-skills/scripts/`, or

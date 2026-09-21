@@ -255,12 +255,14 @@ installer.
 
 ## Skills
 
-Nine top-level, two nested. These names do not change within `1.x`:
+Nine top-level, two nested at `1.0`; `1.2.0` added `meeting-intelligence` as a tenth
+top-level skill. These names do not change within `1.x`:
 
 ```text
 wamala                 delivery-planner       delivery-runner
 software-engineer      product-owner          manual-tester
 test-automation-engineer   domain-modeler     context-optimizer
+meeting-intelligence   (added in 1.2.0)
 
 software-engineer/skills/issue-investigator   (nested)
 software-engineer/skills/code-reviewer        (nested)

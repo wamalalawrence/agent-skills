@@ -60,6 +60,7 @@ second agent purely to shrink a file adds a whole agent's context to save some. 
 | 22 | `validation`, scenario not yet stable | `manual-tester` | Owns exploratory and manual scope |
 | 23 | `validation`, scenario stable and worth automating | `test-automation-engineer` | Owns level choice and fixtures |
 | 24 | A term is contested, or a hard-to-reverse decision needs recording | `domain-modeler` | Owns the glossary and ADRs |
+| 25 | `meeting-capture` — the user asks to listen to, capture, or process a Teams, Zoom, or Meet meeting | `meeting-intelligence` | Owns the visible capture, the transcript, and fact extraction |
 
 ## Chains
 

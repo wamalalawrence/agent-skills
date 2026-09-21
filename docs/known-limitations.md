@@ -129,6 +129,24 @@ See [context-optimizer.md](context-optimizer.md) for the full treatment. The loa
   that issues a verdict from a partial diff has misused it, and no mechanism here can prevent that
   — which is why `code-reviewer` owns verdicts.
 
+## Meeting Intelligence
+
+- The Recall adapter was built against Recall's published API reference and tested against
+  fixtures derived from it, not against a live account. The opt-in smoke test
+  (`AGENT_SKILLS_MEETING_LIVE_SMOKE=1 python3 scripts/test-meeting.py`) authenticates and lists
+  bots; nothing in the suite creates a real bot.
+- Extraction quality depends on the host model. The CLI's checks bound the damage — no invented
+  evidence, no confirmed hedge, no widened scope, no unproven supersession, no unsupported owner —
+  but cannot supply a fact the model missed or the right owner in place of a wrong one.
+- The model-dependent evals in `eval-runs/v1.2.0/` were extracted by the same session that wrote
+  the golden set. They show the pipeline preserves good extraction and neutralises bad
+  extraction; they are not an unbiased measure of a model's extraction quality.
+- Spoken-secret detection is heuristic and errs toward redaction.
+- Only repository scope exists. There is no team or organisation knowledge store.
+- `doctor` does not contact Recall unless `--probe-meeting` is passed.
+- Processing is post-meeting; live transcript streaming and in-meeting interaction are not
+  supported.
+
 ## Execution Guard
 
 [Execution Guard](execution-guard.md) is a second layer, not a solution. Its limits are listed

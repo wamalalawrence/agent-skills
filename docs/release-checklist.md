@@ -11,11 +11,12 @@ One command runs the mechanical half of this list, so the evidence recorded in
 bash scripts/test-release-readiness.sh
 ```
 
-It covers the structural validators, syntax across every shipped artifact, all ten test suites,
+It covers the structural validators, syntax across every shipped artifact, all ten shell test suites plus the Python suites,
 the CLI surface, a clean-`HOME` install with drift and uninstall, an upgrade from the previous
 release tag in both the legacy-workspace and global-install shapes, cloud/in-repo mode, the
 public-safety sweep, README and link integrity, the telemetry report, and version consistency.
-Section 3 runs all ten test suites, including
+Section 3 runs all ten shell test suites, the release engine, and
+[`test-meeting.py`](../scripts/test-meeting.py) (added in `1.2.0`), including
 [`test-knowledge.sh`](../scripts/test-knowledge.sh) (added in `1.0.0`: observation integrity,
 contradiction and decay, budget accounting, lock serialisation, `dod-check`, the idempotent
 stop-hook fallback, and promotion provenance, with three mutation probes),
@@ -125,6 +126,24 @@ tool-definition contract.
 - [ ] Confirm every tool marked `reference_status: validated` was actually exercised through the
       framework this release; anything only represented by a fixture stays labelled a fixture and
       is not described as supported.
+
+## Meeting Intelligence
+
+Required whenever this release changes `scripts/meeting*.py`, the `meetings/` part of
+`scripts/knowledge.py`, `window_items` in `scripts/context.py`, or the `meeting-intelligence` skill.
+
+- [ ] Run `python3 scripts/test-meeting.py` and confirm it exits `0` with no network access.
+      Confirm its four mutation probes report the weakened build giving the weaker answer.
+- [ ] Re-render and re-score the model-dependent evals
+      (`python3 scripts/eval-meeting-intelligence.py render|score --runs eval-runs/<release>/meeting-intelligence`)
+      and the adversarial run; record both tables in `eval-runs/<release>/summary.md`.
+- [ ] Re-verify the Recall contract (bot create fields, status codes, retention, webhook signing)
+      against Recall's **current** reference at `https://docs.recall.ai/llms.txt`, and update
+      `scripts/fixtures/meeting-recall/` with the adapter when it changed.
+- [ ] If a Recall key is available, run `AGENT_SKILLS_MEETING_LIVE_SMOKE=1 python3 scripts/test-meeting.py`.
+      It authenticates and lists bots; it never creates one.
+- [ ] Confirm no meeting module other than `meeting_recall.py` names a Recall field (the boundary
+      test asserts it; read the assertion).
 
 ## Distribution and Packaging
 

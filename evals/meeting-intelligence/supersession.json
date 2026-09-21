@@ -1,0 +1,71 @@
+{
+  "title": "Ledger Storage Decision",
+  "evals": [
+    18,
+    19
+  ],
+  "utterances": [
+    [
+      "Ravi Example",
+      "For the new ledger, let's use PostgreSQL as the primary store."
+    ],
+    [
+      "Chen Example",
+      "Agreed, PostgreSQL for the ledger."
+    ],
+    [
+      "Ravi Example",
+      "Separately, PostgreSQL read replicas for reporting are worth considering at some point."
+    ],
+    [
+      "Chen Example",
+      "Now, the load test numbers came back and write throughput is far above what one Postgres primary handles."
+    ],
+    [
+      "Ravi Example",
+      "Then change of plan: instead of PostgreSQL we'll use DynamoDB for the ledger."
+    ],
+    [
+      "Chen Example",
+      "Agreed, DynamoDB for the ledger, we're no longer using PostgreSQL there."
+    ],
+    [
+      "Ravi Example",
+      "Reporting can stay on Postgres."
+    ]
+  ],
+  "expected": [
+    {
+      "type": [
+        "DECISION",
+        "ARCHITECTURE_DECISION"
+      ],
+      "keywords": [
+        "dynamodb",
+        "ledger"
+      ],
+      "status": "CONFIRMED",
+      "supersedes_keywords": [
+        "postgres"
+      ]
+    },
+    {
+      "type": [
+        "DECISION",
+        "ARCHITECTURE_DECISION"
+      ],
+      "keywords": [
+        "postgres",
+        "ledger"
+      ],
+      "status": "SUPERSEDED"
+    }
+  ],
+  "not_superseded": [
+    {
+      "keywords": [
+        "replica"
+      ]
+    }
+  ]
+}

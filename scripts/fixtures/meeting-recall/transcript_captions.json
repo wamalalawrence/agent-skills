@@ -1,0 +1,34 @@
+[
+  {
+    "participant": {
+      "id": "p-1",
+      "name": "Alice Example"
+    },
+    "words": [
+      {
+        "text": "Maybe we should move retries to Kafka.",
+        "start_timestamp": {
+          "relative": 12.0
+        },
+        "end_timestamp": null
+      }
+    ]
+  },
+  {
+    "participant": {
+      "id": "p-2",
+      "name": "Bob Example"
+    },
+    "words": [
+      {
+        "text": "Agreed, let's do that.",
+        "start_timestamp": {
+          "relative": 15.0
+        },
+        "end_timestamp": {
+          "relative": 16.2
+        }
+      }
+    ]
+  }
+]

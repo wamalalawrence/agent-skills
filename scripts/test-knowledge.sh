@@ -254,6 +254,40 @@ if contains "$OUT" "project.md truncated"; then
 else
   bad "a truncated project.md is reported with its path" "$(printf '%s' "$OUT" | tail -3)"
 fi
+# Small budgets, just above the minimum, used to overrun: once every entry was
+# trimmed, the withheld notice alone could exceed what was left. Sweep every
+# budget from the minimum up, with and without meeting facts in the tier.
+R3S="$(new_repo budget-sweep)"
+cp -R "$R3/.agent-skills" "$R3S/"
+SWEEP="$(cd "$R3S" && "$PYTHON3" - "$(dirname "$KB")" <<'PY'
+import json, subprocess, sys
+from pathlib import Path
+sys.path.insert(0, sys.argv[1])
+import knowledge
+repo = Path.cwd().resolve()
+
+def overruns():
+    return [b for b in range(250, 1200) if len(knowledge.render_read(repo, "thing module", b, 0.3)[0]) > b]
+
+before = overruns()
+subprocess.run(["git", "remote", "add", "origin", "https://github.com/example/budget.git"], check=True)
+facts = [{"id": "f_%016x" % i, "type": "DECISION", "status": "CONFIRMED", "review_state": "ACCEPTED" if i % 4 else "PENDING_REVIEW",
+          "statement": "Decision number %d about the module thing, long enough to matter" % i, "speakers": [],
+          "owner": None, "due": None, "meeting_id": "m_000000000001", "confidence": 0.8,
+          "evidence": [{"segment_id": "s_000000000001", "start_ts": i, "end_ts": i + 1}],
+          "source": {"kind": "meeting", "method": "captions"}, "supersedes": [], "created_at": "2026-09-21"}
+         for i in range(60)]
+knowledge.write_meeting_facts(repo, {"schema": knowledge.MEETING_FACTS_SCHEMA, "meeting_id": "m_000000000001",
+    "title": "Budget", "date": "2026-09-21", "platform": "zoom", "scope": knowledge.repository_scope(repo),
+    "source_method": "captions", "partial": False, "transcript_available": True, "facts": facts,
+    "notes": [], "committed_at": "2026-09-21T00:00:00Z"})
+print(json.dumps({"without": before, "with": overruns()}))
+PY
+)"
+case "$SWEEP" in
+  '{"without": [], "with": []}') ok "no budget from 250 to 1199 overruns, with or without meeting facts" ;;
+  *) bad "no budget from 250 to 1199 overruns" "$SWEEP" ;;
+esac
 PM_CACHE="$BOX/pmcache"
 "$PYTHON3" "$PM" --cache-root "$PM_CACHE" init demo >/dev/null 2>&1
 for i in $(seq 1 60); do

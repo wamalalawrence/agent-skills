@@ -1,0 +1,88 @@
+{
+  "title": "Search Architecture Brainstorm",
+  "evals": [
+    16,
+    19
+  ],
+  "utterances": [
+    [
+      "Amara Example",
+      "Maybe we should replace Elasticsearch with OpenSearch."
+    ],
+    [
+      "Theo Example",
+      "Hmm, interesting."
+    ],
+    [
+      "Amara Example",
+      "What if we denormalised the product catalogue into the search index?"
+    ],
+    [
+      "Theo Example",
+      "I'd lean towards keeping the catalogue normalised, honestly."
+    ],
+    [
+      "Lena Example",
+      "We could probably shard by region later."
+    ],
+    [
+      "Theo Example",
+      "Should we cache facet counts? Not sure it's worth it."
+    ],
+    [
+      "Amara Example",
+      "Perhaps a nightly reindex is enough for now."
+    ],
+    [
+      "Lena Example",
+      "No objections so far? Okay, let's keep thinking about all of these."
+    ],
+    [
+      "Theo Example",
+      "Nothing decided today, we'll revisit next week."
+    ]
+  ],
+  "expected": [],
+  "hedged": [
+    {
+      "keywords": [
+        "opensearch"
+      ]
+    },
+    {
+      "keywords": [
+        "denormalis"
+      ],
+      "alt_keywords": [
+        [
+          "denormaliz"
+        ]
+      ]
+    },
+    {
+      "keywords": [
+        "normalised"
+      ],
+      "alt_keywords": [
+        [
+          "normalized"
+        ]
+      ]
+    },
+    {
+      "keywords": [
+        "shard"
+      ]
+    },
+    {
+      "keywords": [
+        "facet"
+      ]
+    },
+    {
+      "keywords": [
+        "reindex"
+      ]
+    }
+  ]
+}

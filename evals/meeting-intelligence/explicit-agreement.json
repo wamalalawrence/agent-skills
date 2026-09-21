@@ -1,0 +1,109 @@
+{
+  "title": "Checkout Reliability Review",
+  "evals": [
+    15,
+    19,
+    22
+  ],
+  "utterances": [
+    [
+      "Priya Example",
+      "Let's start with the retry storm from last Tuesday."
+    ],
+    [
+      "Marco Example",
+      "Payments retried every failed charge immediately, which hammered the gateway."
+    ],
+    [
+      "Priya Example",
+      "Proposal: move payment retries onto a Kafka topic called retry-events with exponential backoff."
+    ],
+    [
+      "Jonas Example",
+      "Agreed. Let's do that, retry-events it is."
+    ],
+    [
+      "Marco Example",
+      "Second item, idempotency keys. We lose them when the order service re-publishes."
+    ],
+    [
+      "Priya Example",
+      "We should preserve idempotency keys end-to-end, from checkout through settlement."
+    ],
+    [
+      "Jonas Example",
+      "Yes, decided. Keys travel with the message headers everywhere."
+    ],
+    [
+      "Marco Example",
+      "What about the dead-letter queue retention?"
+    ],
+    [
+      "Priya Example",
+      "Seven days of dead-letter retention, and alert when it passes a thousand messages."
+    ],
+    [
+      "Jonas Example",
+      "Approved, go ahead with seven days."
+    ],
+    [
+      "Marco Example",
+      "Okay. That's the three things for today."
+    ]
+  ],
+  "expected": [
+    {
+      "type": [
+        "DECISION",
+        "ARCHITECTURE_DECISION"
+      ],
+      "keywords": [
+        "retr",
+        "kafka"
+      ],
+      "status": "CONFIRMED"
+    },
+    {
+      "type": [
+        "DECISION",
+        "ARCHITECTURE_DECISION",
+        "REQUIREMENT"
+      ],
+      "keywords": [
+        "idempotency"
+      ],
+      "status": "CONFIRMED"
+    },
+    {
+      "type": [
+        "DECISION",
+        "REQUIREMENT",
+        "CONSTRAINT"
+      ],
+      "keywords": [
+        "dead-letter",
+        "seven"
+      ],
+      "alt_keywords": [
+        [
+          "dead",
+          "7"
+        ],
+        [
+          "dlq",
+          "seven"
+        ],
+        [
+          "dead",
+          "seven"
+        ]
+      ],
+      "status": "CONFIRMED"
+    }
+  ],
+  "retrieval": {
+    "brief": "why does payments-service publish to retry-events",
+    "must_contain": "retry-events",
+    "label": "[meeting \u00b7 "
+  }
+}
