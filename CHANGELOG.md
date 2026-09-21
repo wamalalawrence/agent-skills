@@ -4,6 +4,103 @@ All notable project changes should be recorded here.
 
 ## Unreleased
 
+## 1.2.0 - Meeting Intelligence: "Listen to this meeting"
+
+Tell your assistant "Listen to this meeting: <Teams, Zoom, or Google Meet link>". A visible, named
+assistant joins after a one-time recording notice; polling alone carries the meeting to a
+redacted, speaker-attributed transcript with no public URL; the host agent extracts engineering
+facts one bounded window at a time; the CLI validates every fact against the transcript; and the
+meeting's facts land in the repository knowledge base in one write, labelled as meeting evidence
+for later work in the same repository. Additive: no existing command, exit code, or skill
+changed behaviour. The design record, written before any code, is
+[docs/meeting-intelligence/DISCOVERY.md](docs/meeting-intelligence/DISCOVERY.md); the user guide
+is [docs/meeting-intelligence.md](docs/meeting-intelligence.md).
+
+### Added
+
+- **`agent-skills meeting join | status | stop | list | inspect`.** `join` validates the link
+  locally (unknown shapes create nothing), binds a repository scope, creates the bot, and returns.
+  `status`, `list`, and `inspect` reconcile idempotently: poll, advance a monotonic lifecycle,
+  retrieve and redact the transcript, and prepare extraction windows. `inspect` carries the host
+  steps (`--next-window`, `--submit`) and the review and retention actions (`--reprocess`,
+  `--accept`, `--purge`). `status --listen` is an optional loopback webhook listener that only
+  schedules reconciles.
+- **A provider boundary.** `MeetingCaptureProvider` speaks Agent Skills types only;
+  `RecallMeetingBotProvider` (`scripts/meeting_recall.py`) is the one module that knows Recall. It
+  sets the bot's visible name, a join chat notice, `automatic_leave` timeouts, media retention
+  (48 h by default — Recall's own default keeps media indefinitely), and correlation metadata on
+  every bot. Region is required configuration and must match the key.
+- **Transcription fallback.** Platform captions or provider transcription at join; post-meeting
+  transcription of the retained recording when the live transcript is empty or clearly partial;
+  the method used is recorded. All formats (and WebVTT, for future native providers) normalise
+  to one segment model with deterministic ids.
+- **The `meeting-intelligence` skill**, routed from Wamala as the new `meeting-capture` class
+  (routing row 25). It shows the recording notice verbatim and joins only on the user's explicit
+  request.
+- **Meeting facts in the repository knowledge base** (`.agent-skills/knowledge/meetings/`): ten
+  fact types, six statuses, evidence timestamps, supersession with explicit evidence, review
+  state. `knowledge read` (and so every `start-task`) surfaces relevant facts in their own
+  section, labelled as claims; `knowledge facts [--all]` lists them with history; `knowledge
+  doctor` validates and scans them.
+- **`window_items` in Context Optimizer**: a coverage-preserving, budget-bounded windowing
+  primitive with overlap, for inputs that must be read completely but cannot be read at once.
+- **`doctor` Meetings section**: credentials, region consistency, consent, listener mode, stuck
+  meetings. `doctor --probe-meeting` contacts the provider once; without it doctor stays offline.
+- **`resolve_access(values_out=…)`** so an in-process caller can send a credential as a header
+  without it crossing a process boundary. The CLI never uses it and `Resolution` still holds no
+  value.
+
+### Safety
+
+- Transcripts are redacted before they are stored: the shared redactor plus a spoken-secret
+  layer (cue + value, spelled-out values, values announced in one utterance and said in the next,
+  tokens the transcriber split). Facts are redacted again before checkpointing and at the
+  knowledge write.
+- Extraction output is untrusted: a closed schema (rejected, never repaired, three attempts per
+  window), then mechanical checks — evidence must exist in the window and mention the statement,
+  `CONFIRMED` needs explicit agreement in the evidence, owners and dates must be in the evidence,
+  facts resting only on instruction-shaped speech are dropped, supersession needs an explicit
+  replacement.
+- Scope isolation is enforced on read: a meeting file records its repository identity and is
+  withheld anywhere else. No team or organisation scope exists, and none was added.
+- Webhooks are verified (Svix HMAC, constant-time) before parsing, replay-windowed, and deduped,
+  and only ever schedule a reconcile.
+- The Recall key goes only to the region host as a header; a cross-host redirect drops it, and an
+  https→http redirect is refused.
+- The instruction-shaped-text pattern shared by Context Optimizer, `knowledge doctor`, and
+  `guard scan-content` now also catches "ignore **your** previous instructions" and "ignore your
+  instructions". Found by the new prompt-injection eval; guard false-positive corpus unchanged.
+
+### Fixed
+
+- **`knowledge read` overran small budgets.** Just above the minimum (about 300-400 characters),
+  once every entry had been trimmed the withheld notice alone could still exceed the budget — 307
+  rendered 371 in `1.1.0`. When nothing is left to trim, the notice now shortens to one line. It
+  never shortens while an entry is still shown, so the budget-accounting mutation probe still
+  sees its overrun. `test-knowledge.sh` sweeps every budget from 250 to 1199, with and without
+  meeting facts.
+
+### Tests and evals
+
+- `scripts/test-meeting.py`: 22 offline checks — polling-only lifecycle, crash recovery at every
+  checkpoint, webhook signature, replay, dedupe, and ordering, fallback, the import boundary,
+  failure isolation, deterministic dedupe, spoken secrets, scope isolation, retention, state
+  location and unknown schemas, exit codes, Recall mapping from fixtures, bounded windows, and four
+  mutation probes. In CI and in `test-release-readiness.sh`.
+- `scripts/test-cli-install.sh` asserts meeting state survives `update` and `rollback`;
+  `test-release-readiness.sh` rolls back to the previous tag and runs its `verify` and `doctor`
+  against meeting state.
+- `scripts/eval-meeting-intelligence.py` and a six-transcript golden set score brief evals 15-22,
+  for the host's raw output and after the CLI's checks, plus an adversarial run. Results in
+  [eval-runs/v1.2.0/summary.md](eval-runs/v1.2.0/summary.md).
+
+### Known limitations
+
+- The Recall adapter is built against Recall's published reference and fixtures derived from it,
+  not a live account; an opt-in live smoke test exists (`AGENT_SKILLS_MEETING_LIVE_SMOKE=1`).
+- Live, in-meeting streaming is out of scope; processing is post-meeting.
+- Spoken-secret detection is heuristic and errs toward redaction.
+
 ## 1.1.0 - Field report: Wamala finishes the run it starts
 
 An agent used Wamala for a long, real delivery run: fourteen phases, design-system work, on a

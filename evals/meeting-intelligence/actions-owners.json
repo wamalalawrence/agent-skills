@@ -1,0 +1,79 @@
+{
+  "title": "Release Train Sync",
+  "evals": [
+    17,
+    19
+  ],
+  "utterances": [
+    [
+      "Sofia Example",
+      "Before Thursday's release we need a few things done."
+    ],
+    [
+      "Sofia Example",
+      "Kwame, can you update the runbook for the new failover?"
+    ],
+    [
+      "Kwame Example",
+      "Sure, I'll update the runbook by Wednesday."
+    ],
+    [
+      "Sofia Example",
+      "The platform team will rotate the staging certificates."
+    ],
+    [
+      "Ines Example",
+      "I'll write the release notes."
+    ],
+    [
+      "Sofia Example",
+      "And someone should check the feature flags, maybe Dmitri?"
+    ],
+    [
+      "Dmitri Example",
+      "Yes, I'll audit the feature flags tomorrow."
+    ],
+    [
+      "Sofia Example",
+      "Great, that's everything."
+    ]
+  ],
+  "expected": [
+    {
+      "type": [
+        "ACTION"
+      ],
+      "keywords": [
+        "runbook"
+      ],
+      "owner": "Kwame"
+    },
+    {
+      "type": [
+        "ACTION"
+      ],
+      "keywords": [
+        "certificate"
+      ],
+      "owner": "platform team"
+    },
+    {
+      "type": [
+        "ACTION"
+      ],
+      "keywords": [
+        "release notes"
+      ],
+      "owner": "Ines"
+    },
+    {
+      "type": [
+        "ACTION"
+      ],
+      "keywords": [
+        "flag"
+      ],
+      "owner": "Dmitri"
+    }
+  ]
+}

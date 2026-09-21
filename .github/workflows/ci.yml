@@ -140,6 +140,14 @@ jobs:
       - name: Memory integrity
         run: bash scripts/test-knowledge.sh
 
+      # Meeting Intelligence, offline: a fake capture provider and Recall
+      # fixtures behind an injected transport, every Recall call pinned to a
+      # closed loopback port. Lifecycle by polling alone, crash recovery at
+      # every checkpoint, webhook signature/replay/dedupe, spoken-secret
+      # redaction, scope isolation on read, and four mutation probes.
+      - name: Meeting Intelligence
+        run: python3 scripts/test-meeting.py
+
       # A pack must never carry a credential into the model's context. Probed
       # here as well as in the suite, because this is the property whose failure
       # is silent: nothing breaks, the secret is simply in the transcript.

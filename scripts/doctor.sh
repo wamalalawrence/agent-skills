@@ -41,11 +41,12 @@ MODE="full"
 TARGET_REPO=""
 REQUIRE_TRACKER="false"
 REQUIRE_GITHUB="false"
+PROBE_MEETING="false"
 
 usage() {
   cat <<'EOF'
 Usage: ./doctor.sh [--brief|--json] [--repo owner/name] [--require-tracker]
-                   [--require-github] [--help]
+                   [--require-github] [--probe-meeting] [--help]
 
 Probes what this environment can actually do and prints a capability report.
 
@@ -54,6 +55,9 @@ Probes what this environment can actually do and prints a capability report.
   --repo owner/name   Also walk the GitHub access ladder against this repo.
   --require-tracker   Exit 1 when tracker configuration does not resolve.
   --require-github    Exit 1 when no GitHub access path works.
+  --probe-meeting     Contact the meeting capture provider once to check that it
+                      is reachable and accepts the key for its region. Without
+                      this flag doctor stays offline.
   --help              Show this help.
 EOF
 }
@@ -66,6 +70,7 @@ while [[ $# -gt 0 ]]; do
     --repo=*) TARGET_REPO="${1#*=}"; shift ;;
     --require-tracker) REQUIRE_TRACKER="true"; shift ;;
     --require-github) REQUIRE_GITHUB="true"; shift ;;
+    --probe-meeting) PROBE_MEETING="true"; shift ;;
     --help|-h) usage; exit 0 ;;
     *) echo "Unknown option: $1" >&2; usage >&2; exit 2 ;;
   esac
@@ -474,6 +479,37 @@ probe_secret_backend() {
   fi
 }
 
+# Meeting Intelligence: credentials present, region consistent, consent, listener,
+# stuck meetings. Local only unless --probe-meeting. Never prints a secret.
+probe_meeting() {
+  MEETING_STATE="unknown"
+  MEETING_DETAIL="scripts/meeting.py not reachable"
+  MEETING_JSON="{}"
+  local meeting="${REPO_ROOT}/scripts/meeting.py"
+  [[ -f "${meeting}" ]] || return 0
+  local args=(_doctor --json)
+  [[ "${PROBE_MEETING}" == "true" ]] && args+=(--probe)
+  MEETING_JSON="$(${PYTHON3} "${meeting}" "${args[@]}" 2>/dev/null || printf '{}')"
+  MEETING_DETAIL="$(printf '%s' "${MEETING_JSON}" | ${PYTHON3} -c '
+import json, sys
+try:
+    r = json.load(sys.stdin)
+except ValueError:
+    r = {}
+stuck = r.get("stuck") or []
+print("credentials: %s; region: %s; consent: %s; listener: %s; provider: %s; meetings: %s (%d stuck%s)" % (
+    r.get("credentials", "?"), r.get("region", "?"), r.get("consent", "?"), r.get("listener", "?"),
+    r.get("provider", "?"), r.get("meetings", 0), len(stuck), (": " + ", ".join(stuck)) if stuck else ""))
+' 2>/dev/null || printf 'report unavailable')"
+  case "${MEETING_DETAIL}" in
+    *"api key resolves"*) MEETING_STATE="yes" ;;
+    *) MEETING_STATE="no" ;;
+  esac
+  case "${MEETING_DETAIL}" in
+    *MISMATCH*|*FAILED*) MEETING_STATE="no" ;;
+  esac
+}
+
 run_probes() {
   probe_install
   probe_secret_backend
@@ -485,6 +521,7 @@ run_probes() {
   probe_github
   probe_mcp
   probe_memory
+  probe_meeting
 }
 
 # ---------------------------------------------------------------------------
@@ -514,6 +551,10 @@ render_brief() {
   printf '    %smcp              %s\n' "$(mark "${MCP_STATE}")" "${MCP_DETAIL}"
   printf '    %srepo knowledge   %s\n' "$(mark "${KNOWLEDGE_STATE}")" "${KNOWLEDGE_DETAIL}"
   printf '    %sexecution guard  %s\n' "$(mark "${GUARD_STATE}")" "${GUARD_DETAIL}"
+  case "${MEETING_DETAIL}" in
+    *"(0 stuck)"*|"scripts/meeting.py not reachable") : ;;
+    *) printf '    NO  meetings         stuck meetings need a status check: agent-skills meeting list\n' ;;
+  esac
   if [[ -n "${TOOLS_MISSING// /}" ]]; then
     printf '    --  not installed: %s\n' "${TOOLS_MISSING% }"
   fi
@@ -573,6 +614,9 @@ render_full() {
   echo ""
   echo "Memory"
   printf '  %srepo knowledge base — %s\n' "$(mark "${KNOWLEDGE_STATE}")" "${KNOWLEDGE_DETAIL}"
+  echo ""
+  echo "Meetings"
+  printf '  %smeeting capture — %s\n' "$(mark "${MEETING_STATE}")" "${MEETING_DETAIL}"
   echo ""
   echo "Execution Guard"
   if [[ -n "${GUARD_ROWS}" ]]; then
@@ -642,7 +686,9 @@ render_json() {
   printf '  "repo_knowledge": "%s",\n' "$([[ "${KNOWLEDGE_STATE}" == "yes" ]] && echo yes || echo no)"
   printf '  "repo_knowledge_other": "%s",\n' "$(json_escape "${KNOWLEDGE_OTHER}")"
   printf '  "execution_guard": "%s",\n' "${GUARD_STATE}"
-  printf '  "execution_guard_detail": "%s"\n' "$(json_escape "${GUARD_DETAIL}")"
+  printf '  "execution_guard_detail": "%s",\n' "$(json_escape "${GUARD_DETAIL}")"
+  printf '  "meeting_capture": "%s",\n' "${MEETING_STATE}"
+  printf '  "meeting_capture_detail": "%s"\n' "$(json_escape "${MEETING_DETAIL}")"
   printf '}\n'
 }
 

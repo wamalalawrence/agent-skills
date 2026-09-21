@@ -135,6 +135,11 @@ if python3 scripts/test-release-engine.py >/tmp/as-rr-engine.log 2>&1; then
 else
   bad "release engine" "$(grep 'FAIL' /tmp/as-rr-engine.log | head -5)"
 fi
+if python3 scripts/test-meeting.py </dev/null >/tmp/as-rr-meeting.log 2>&1; then
+  good "meeting intelligence: $(tail -1 /tmp/as-rr-meeting.log)"
+else
+  bad "meeting intelligence" "$(grep 'FAIL' /tmp/as-rr-meeting.log | head -5)"
+fi
 
 # ------------------------------------------------------------------------------
 sec "4. CLI surface"
@@ -363,6 +368,35 @@ LEGACYENV
     --workspace-root "$UP/work" >"$UP/migrate.log" 2>&1 || true
   grep -q '\.env' "$UP/migrate.log" \
     && good "migrate still explains an existing legacy .env" || bad "migrate .env report"
+
+  # Meeting state written by this release must be ignored, not tripped over, by
+  # the release a user rolls back to. Plant a real record, roll back to the
+  # previous tag's own code, and run its verify and doctor against it.
+  UP_MEETING="$UP_HOME/.agent-skills/state/meetings/m_0123456789ab/record.json"
+  env HOME="$UP_HOME" AGENT_SKILLS_HOME="$UP_HOME/.agent-skills" python3 - "$REPO/scripts" <<'PLANT'
+import sys
+sys.path.insert(0, sys.argv[1])
+import meeting_capture as mc
+import meeting_store as store
+record = store.new_record("m_0123456789ab", "zoom", "https://zoom.us/j/81234567890", "Planted",
+                          {"kind": "unscoped"}, mc.CaptureHandle("recall", "7c1f0d52-3a4e-4b6f-9d21-0a1b2c3d4e5f"),
+                          "captions", store.load_config())
+store.save_record(record)
+PLANT
+  UP_MEETING_SUM="$(cksum < "$UP_MEETING" 2>/dev/null)"
+  if run_upgraded bash "$UP_HOME/.agent-skills/bin/agent-skills" rollback >"$UP/rollback.log" 2>&1; then
+    run_upgraded bash "$UP_HOME/.agent-skills/bin/agent-skills" verify >"$UP/old-verify.log" 2>&1 \
+      && good "$PREVIOUS_TAG verify passes with meeting state present" \
+      || bad "$PREVIOUS_TAG verify with meeting state" "$(tail -6 "$UP/old-verify.log")"
+    run_upgraded bash "$UP_HOME/.agent-skills/bin/agent-skills" doctor --brief >"$UP/old-doctor.log" 2>&1 \
+      && good "$PREVIOUS_TAG doctor runs with meeting state present" \
+      || bad "$PREVIOUS_TAG doctor with meeting state" "$(tail -6 "$UP/old-doctor.log")"
+    [ "$(cksum < "$UP_MEETING" 2>/dev/null)" = "$UP_MEETING_SUM" ] \
+      && good "rolling back to $PREVIOUS_TAG leaves meeting state untouched" \
+      || bad "rollback to $PREVIOUS_TAG changed meeting state"
+  else
+    bad "rollback to $PREVIOUS_TAG" "$(tail -6 "$UP/rollback.log")"
+  fi
 
   git worktree remove --force "$UP/previous" 2>/dev/null || true
 else

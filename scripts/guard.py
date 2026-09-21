@@ -754,7 +754,7 @@ CONTENT_SIGNALS = (
     (
         "SUSPICIOUS_INSTRUCTION_SHAPED_CONTENT",
         (
-            re.compile(r"\bignore (?:all |any )?(?:previous|prior|above)\b", re.I),
+            re.compile(r"\bignore (?:all |any |your |my )?(?:previous|prior|above|instructions)\b", re.I),
             re.compile(r"\bdisregard\b.*\b(?:instruction|rule|guardrail|policy)", re.I),
             re.compile(r"\byou are (?:now|actually)\b", re.I),
             re.compile(r"\bsystem prompt\b", re.I),

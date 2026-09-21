@@ -1146,8 +1146,16 @@ class Resolution:
         }
 
 
-def resolve_access(service, resource, required, secrets, cwd, allow_capability=True):
-    """Walk the documented precedence order once, top to bottom."""
+def resolve_access(service, resource, required, secrets, cwd, allow_capability=True,
+                   values_out=None):
+    """Walk the documented precedence order once, top to bottom.
+
+    `values_out`, when a dict is passed, receives the resolved field values.
+    It exists for in-process callers that must send a credential themselves
+    (the meeting capture provider sends its key as an HTTP header), so the value
+    never crosses a process boundary, an argv, or stdout. The returned
+    `Resolution` still holds no value, and the CLI never passes this.
+    """
     resolution = Resolution(service, resource)
     root = git_root(cwd) or cwd
     profiles_state = load_profiles()
@@ -1376,6 +1384,8 @@ def resolve_access(service, resource, required, secrets, cwd, allow_capability=T
 
     resolution.fields_present = sorted(found)
     resolution.fields_missing = [field for field in required if field not in found]
+    if isinstance(values_out, dict):
+        values_out.update(found)
 
     if not resolution.fields_missing:
         resolution.status = "resolved"

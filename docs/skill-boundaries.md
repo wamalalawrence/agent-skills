@@ -98,6 +98,18 @@ must hand off when the task moves outside that surface.
   `product-owner` when the behaviour a test should assert was never agreed, to `manual-tester` for
   unstable or exploratory scenarios, and to `code-reviewer` for test-quality review.
 
+### `meeting-intelligence`
+
+- Owns: capturing a meeting the user asked for (a visible, named assistant after a one-time
+  recording notice), the meeting's lifecycle, its redacted transcript, and extracting engineering
+  facts from it window by window into the repository knowledge base. See
+  [Meeting Intelligence](meeting-intelligence.md).
+- Does not own: acting on what a meeting decided. Refinement is `product-owner`'s, implementation
+  is `software-engineer`'s. It never resolves a speaker to a real identity and never treats a
+  meeting fact as more than evidence.
+- Typical handoff: a meeting id and its result block; the facts themselves travel through the
+  knowledge base, where the next task's preflight finds them.
+
 ### `context-optimizer`
 
 - Owns: turning an input too large to read into a bounded, task-specific, traceable context pack.

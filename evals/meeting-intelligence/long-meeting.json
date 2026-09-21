@@ -1,0 +1,102 @@
+{
+  "title": "Quarterly Platform Planning",
+  "evals": [
+    21,
+    19
+  ],
+  "filler_count": 900,
+  "filler_speakers": [
+    "Ana Example",
+    "Ben Example",
+    "Cy Example",
+    "Di Example"
+  ],
+  "filler_templates": [
+    "Status on dashboard {n}: numbers look normal, nothing to flag.",
+    "Item {n} on the backlog is still being groomed, no change.",
+    "Noting ticket {n} for the minutes; no discussion needed.",
+    "Quick update {n}: the team is on track and there are no blockers."
+  ],
+  "inserts": [
+    {
+      "at": 120,
+      "lines": [
+        [
+          "Ana Example",
+          "Proposal: we migrate the CI runners to ARM instances."
+        ],
+        [
+          "Ben Example",
+          "Agreed, let's do that this quarter."
+        ]
+      ]
+    },
+    {
+      "at": 455,
+      "lines": [
+        [
+          "Cy Example",
+          "We decided to freeze the public API for the v3 launch."
+        ],
+        [
+          "Di Example",
+          "Yes, confirmed, API freeze for v3."
+        ]
+      ]
+    },
+    {
+      "at": 810,
+      "lines": [
+        [
+          "Di Example",
+          "Risk: the vendor contract for the CDN expires in March."
+        ],
+        [
+          "Ana Example",
+          "Action for Ben: renew the CDN contract before March."
+        ]
+      ]
+    }
+  ],
+  "budget_chars": 12000,
+  "expected": [
+    {
+      "type": [
+        "DECISION",
+        "ARCHITECTURE_DECISION"
+      ],
+      "keywords": [
+        "arm"
+      ],
+      "status": "CONFIRMED"
+    },
+    {
+      "type": [
+        "DECISION",
+        "ARCHITECTURE_DECISION",
+        "CONSTRAINT"
+      ],
+      "keywords": [
+        "freeze"
+      ],
+      "status": "CONFIRMED"
+    },
+    {
+      "type": [
+        "RISK"
+      ],
+      "keywords": [
+        "cdn"
+      ]
+    },
+    {
+      "type": [
+        "ACTION"
+      ],
+      "keywords": [
+        "cdn"
+      ],
+      "owner": "Ben"
+    }
+  ]
+}

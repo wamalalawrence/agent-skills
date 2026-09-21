@@ -153,6 +153,22 @@ REQUIRED_FILES = [
     "evals/context-optimizer-routing-and-reuse.md",
     "eval-runs/v0.41.0/summary.md",
     "docs/security-review-v0.41.0.md",
+    "skills/meeting-intelligence/SKILL.md",
+    "skills/meeting-intelligence/README.md",
+    "skills/meeting-intelligence/references/extraction-contract.md",
+    "scripts/meeting.py",
+    "scripts/meeting_capture.py",
+    "scripts/meeting_recall.py",
+    "scripts/meeting_intel.py",
+    "scripts/meeting_store.py",
+    "scripts/meeting_secrets.py",
+    "scripts/meeting_webhook.py",
+    "scripts/test-meeting.py",
+    "scripts/eval-meeting-intelligence.py",
+    "docs/meeting-intelligence.md",
+    "docs/meeting-intelligence/DISCOVERY.md",
+    "evals/meeting-intelligence-extraction.md",
+    "evals/meeting-intelligence-capture-and-safety.md",
     "scripts/delivery-run-next.py",
     "evals/delivery-runner-autonomous-handoff.md",
     "eval-runs/v0.34.0/summary.md",
@@ -352,6 +368,12 @@ LINK_REQUIREMENTS = {
         "skills/software-engineer/SKILL.md",
         "skills/delivery-planner/SKILL.md",
     ],
+    "skills/meeting-intelligence/SKILL.md": [
+        "skills/context-optimizer/SKILL.md",
+        "skills/software-engineer/SKILL.md",
+        "skills/software-engineer/skills/issue-investigator/SKILL.md",
+        "skills/product-owner/SKILL.md",
+    ],
     "skills/context-optimizer/SKILL.md": [
         "skills/software-engineer/SKILL.md",
         "skills/software-engineer/skills/issue-investigator/SKILL.md",
@@ -415,6 +437,14 @@ GENERATED_NAMES = {
 }
 FORBIDDEN_TRACKED = GENERATED_NAMES | {".env", ".env.local", ".jira-config.yml", ".skills"}
 ALLOWED_HOSTS = {
+    # Meeting Intelligence validates links for these platforms and names its
+    # capture provider; they are product hosts, not private infrastructure.
+    "recall.ai",
+    "zoom.us",
+    "meet.google.com",
+    "teams.microsoft.com",
+    "teams.live.com",
+    "127.0.0.1",
     "agentskills.io",
     "code.visualstudio.com",
     "skills.sh",

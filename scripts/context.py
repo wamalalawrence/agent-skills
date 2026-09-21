@@ -271,7 +271,7 @@ def thousands(count: int) -> str:
 # never an instruction to follow" — so the detection should not diverge.
 # ---------------------------------------------------------------------------
 INJECTION_PATTERNS = (
-    re.compile(r"\bignore (?:all |any )?(?:previous|prior|above)\b", re.I),
+    re.compile(r"\bignore (?:all |any |your |my )?(?:previous|prior|above|instructions)\b", re.I),
     re.compile(r"\bdisregard\b.*\b(?:instruction|rule|guardrail|policy|prompt)", re.I),
     re.compile(r"\byou are (?:now|actually)\b", re.I),
     re.compile(r"\bnew instructions?\b\s*[:=]", re.I),
@@ -3435,6 +3435,79 @@ def pack_from_dict(data: dict) -> Pack:
 # in the filename; the fourth — the source hash — is verified again on read, so a
 # file edited in place can never be served from a stale pack.
 # ---------------------------------------------------------------------------
+# ---------------------------------------------------------------------------
+# Coverage-preserving windows
+#
+# A pack *selects*: it keeps what a brief makes relevant and reports the rest as
+# omitted. Some work cannot tolerate omission — extracting every decision from a
+# meeting transcript must read every utterance — but still cannot put the whole
+# input in one context. `window_items` is the bounding primitive for that case:
+# every item lands in at least one window, no window's rendered size exceeds the
+# budget, and consecutive windows overlap by a bounded tail so a statement that
+# straddles a boundary is seen whole at least once. Deterministic: the same items
+# and bounds always produce the same windows.
+# ---------------------------------------------------------------------------
+@dataclass
+class Window:
+    index: int
+    items: list[int]
+    overlap: list[int]
+    chars: int
+
+
+def window_items(
+    sizes: list[int],
+    budget_chars: int,
+    overlap_chars: int = 0,
+    frame_chars: int = 0,
+) -> list[Window]:
+    """Split items (given by rendered size) into budget-bounded windows.
+
+    `frame_chars` is the per-window header/footer cost, counted inside the
+    budget like a pack's header is. An item that cannot fit an otherwise empty
+    window is a caller error — silently truncating it would be the omission this
+    primitive exists to prevent — so it raises `UsageError`.
+    """
+    if budget_chars <= frame_chars:
+        raise UsageError("window budget must exceed the frame size")
+    room = budget_chars - frame_chars
+    overlap_chars = max(0, min(overlap_chars, room // 3))
+    for position, size in enumerate(sizes):
+        if size > room:
+            raise UsageError(
+                f"item {position} is {size} chars; a window holds at most {room}"
+            )
+    windows: list[Window] = []
+    start = 0
+    total = len(sizes)
+    while start < total:
+        # Carry a bounded tail of the previous window forward as overlap.
+        carried: list[int] = []
+        if windows and overlap_chars:
+            used = 0
+            for position in reversed(windows[-1].items):
+                if position >= start or used + sizes[position] > overlap_chars:
+                    break
+                carried.insert(0, position)
+                used += sizes[position]
+        members = list(carried)
+        used = sum(sizes[p] for p in carried)
+        cursor = start
+        while cursor < total and used + sizes[cursor] <= room:
+            members.append(cursor)
+            used += sizes[cursor]
+            cursor += 1
+        if cursor == start:
+            # The overlap crowded out the next new item; drop the overlap.
+            members = [start]
+            used = sizes[start]
+            carried = []
+            cursor = start + 1
+        windows.append(Window(len(windows), members, carried, used + frame_chars))
+        start = cursor
+    return windows
+
+
 def resolve_cache_root(explicit: str | None) -> Path:
     # One resolution order for every helper and both wrappers; see cache_root.py.
     return default_cache_root(explicit)
