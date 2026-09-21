@@ -25,7 +25,7 @@ compatibility: >-
   `local-workspace`. See docs/execution-modes.md.
 metadata:
   author: wamalalawrence
-  version: "1.1.0"
+  version: "1.2.0"
   homepage: "https://github.com/wamalalawrence/agent-skills"
 argument-hint: "<the request — a ticket key, a PR link, a bug report, or plain prose>"
 user-invocable: true
@@ -248,6 +248,7 @@ work as exactly one of:
 | `terminology` | a term or a hard-to-reverse decision needs recording |
 | `oversized` | more than one focused session, whatever the class |
 | `design-review` | an existing page, screen, or flow is to be judged for UX or visual quality — there is no diff, and no change is requested yet |
+| `meeting-capture` | the user asks to listen to, capture, or process a Teams, Zoom, or Google Meet meeting ("Listen to this meeting: <link>") |
 | `plan-amendment` | a phased plan exists and must change — answers to its decision gates, a new constraint, or a phase criterion shown to be unsatisfiable |
 
 `oversized` and `oversized-input` are different problems. `oversized` is too much **work** for one
@@ -378,6 +379,7 @@ Take the first row that matches. The full table with rationale is in
 | `automation`, scenario too unstable to assert | `manual-tester` | Exploratory scope stays manual |
 | Tests for a code change this session is making or just made | `software-engineer` | Owns the developer tests that ship with its own change |
 | `automation` — new coverage, broken suite, CI triage, flakes, runtime, backlog | `test-automation-engineer` | Owns the suite end to end |
+| `meeting-capture` — listen to, capture, or process a meeting the user named | `meeting-intelligence` | Owns the visible capture, the transcript, and fact extraction |
 | `validation`, scenario not yet stable | `manual-tester` | Owns exploratory and manual scope |
 | `validation`, scenario stable and worth automating | `test-automation-engineer` | Owns level choice |
 | `terminology` or an ADR-worthy decision | `domain-modeler` | Owns glossary and ADRs |
@@ -564,7 +566,7 @@ memory=<updated|blocked>; skill=wamala@<version>`. Do not claim a wrapper ran un
 - Lifecycle:
 - Request: <one line, as understood>
 - Class: defect | change | intent-unclear | question | review | design-review | validation |
-  automation | terminology | oversized | oversized-input | plan-amendment
+  automation | terminology | oversized | oversized-input | plan-amendment | meeting-capture
 - Understanding confidence: unknown | low | medium | high
 - Execution profile: LIGHT | STANDARD | RIGOROUS — <one-line reason>
 - Routed to: <skill> — <one-line reason>

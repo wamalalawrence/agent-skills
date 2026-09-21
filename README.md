@@ -4,13 +4,13 @@ Reusable [Agent Skills](https://agentskills.io/) for software-engineering work �
 role-shaped workflows your AI assistant can load on demand so the same model produces
 senior-engineer, product-owner, tester, or reviewer output instead of generic answers.
 
-> **Status:** `1.1.0` — stable, private. The [1.0 contracts](docs/one-point-oh.md) — CLI names
+> **Status:** `1.2.0` — stable, private. The [1.0 contracts](docs/one-point-oh.md) — CLI names
 > and exit codes, the install layout, the release-provider interface, the skill names, and the
-> Engineering Tool Capability Framework — are frozen for the `1.x` line, and `1.1.0` only adds to
-> them. It answers a field report from an agent that ran Wamala on a real multi-phase delivery:
-> Wamala now runs a plan itself when dispatched agents cannot dispatch, routes a defective plan to
-> its planner, restores independent review, and checks a delete before it happens. The details
-> are [in the changelog](CHANGELOG.md).
+> Engineering Tool Capability Framework — are frozen for the `1.x` line, and `1.2.0` only adds to
+> them. It adds [Meeting Intelligence](docs/meeting-intelligence.md): tell your assistant "Listen
+> to this meeting: <link>" and a visible, named assistant joins the Teams, Zoom, or Meet call, the
+> transcript is retrieved after it ends, and engineering decisions land in the repository
+> knowledge base as labelled meeting evidence. The details are [in the changelog](CHANGELOG.md).
 
 ## Start here
 
@@ -103,18 +103,18 @@ Requirements: Python 3.8+, bash, and git. macOS or Linux; on Windows use WSL or 
 with every supported agent host it finds, and makes the runtime invocable from anywhere:
 
 ```text
-  resolve    1.1.0 (stable, via git)
+  resolve    1.2.0 (stable, via git)
   download   164 files staged
   verify     payload hash and version agree
   self-test  staged runtime answers correctly
-  activate   current -> versions/1.1.0
+  activate   current -> versions/1.2.0
   hosts      claude-code, agents-standard, cursor, codex
   verified   installation is consistent
 
-Agent Skills 1.1.0 is installed.
+Agent Skills 1.2.0 is installed.
 
   install root : ~/.agent-skills
-  active release: ~/.agent-skills/versions/1.1.0
+  active release: ~/.agent-skills/versions/1.2.0
   hosts        : claude-code, agents-standard, cursor, codex
   command      : ~/.local/bin/agent-skills
 
@@ -258,8 +258,9 @@ know the answer.
 | [`test-automation-engineer`][tae] | Automated tests | Coverage needs to hold the behaviour down |
 | [`domain-modeler`][domain-modeler] | Domain language | The code and the business disagree about words |
 | [`context-optimizer`][context-optimizer] | Large inputs | The file is far too big for any model to read |
+| [`meeting-intelligence`][meeting-intelligence] | Meetings | A Teams, Zoom, or Meet call should become engineering knowledge |
 
-**Nine top-level skills** are meant to be invoked directly. **Two nested support skills** —
+**Ten top-level skills** are meant to be invoked directly. **Two nested support skills** —
 `issue-investigator` and `code-reviewer` — are loaded by the engineering workflow when it needs a
 more specific checklist.
 
@@ -362,6 +363,22 @@ usage shows they are useful independently.
   payment failure on transaction 84721.
   ```
 
+### [`meeting-intelligence`][meeting-intelligence] (top-level)
+
+- Key collaborators: `context-optimizer`, `software-engineer`, `issue-investigator`,
+  `product-owner`.
+- Purpose: "Listen to this meeting: <link>". A visible, named assistant joins the Teams, Zoom, or
+  Google Meet call after a one-time recording notice; polling carries the meeting to a redacted,
+  speaker-attributed transcript with no public URL; the host agent extracts decisions, actions,
+  risks, and the rest one bounded window at a time; the CLI validates every fact against the
+  transcript and commits the meeting's facts to the repository knowledge base in one write.
+  Later engineering work in the same repository retrieves them as labelled meeting evidence.
+- Sample command:
+
+  ```text
+  Listen to this meeting: https://meet.google.com/abc-defg-hij
+  ```
+
 ### [`issue-investigator`][issue-investigator] (nested support)
 
 - Key collaborators: `software-engineer`, `manual-tester`, `product-owner`.
@@ -384,12 +401,13 @@ usage shows they are useful independently.
 [tae]: skills/test-automation-engineer/
 [domain-modeler]: skills/domain-modeler/
 [context-optimizer]: skills/context-optimizer/
+[meeting-intelligence]: skills/meeting-intelligence/
 [issue-investigator]: skills/software-engineer/skills/issue-investigator/
 [code-reviewer]: skills/software-engineer/skills/code-reviewer/
 
 ## The Company Brain
 
-`agent-skills` is built so the eleven specialist skills compound value across
+`agent-skills` is built so the twelve specialist skills compound value across
 projects, sessions, and time — not just one task. Every task writes to a
 shared blackboard, every PR's outcome is recorded, every recurring lesson can
 be promoted into org-tier memory, and a telemetry layer records what actually ran
