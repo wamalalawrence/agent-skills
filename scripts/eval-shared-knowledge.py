@@ -178,9 +178,15 @@ def render(result: dict) -> str:
             "yes" if e19["engineer_b_told_on_sync"] else "no", "yes" if e19["engineer_b_told_on_sync"] else "no"),
         "",
         "Top answer each installation was given after approval:", "",
+        "| Installation | Label | Status | Statement | Approval |", "| --- | --- | --- | --- | --- |",
     ]
     for name, line in sorted(e18["after_approval"]["answers"].items()):
-        lines.append("- `{}`: {}".format(name, line.replace("|", "\\|")))
+        match = re.match(r"- \[([^·]+) · \w+ · (\w+) · [^]]+\] (.+?) — .*?(approved by [^(]+)?\(", line)
+        if match:
+            label, status, statement, approval = (g.strip() if g else "none" for g in match.groups())
+            lines.append("| `{}` | {} | {} | {} | {} |".format(name, label, status, statement, approval))
+        else:
+            lines.append("| `{}` | (unparsed) | | {} | |".format(name, line[:120].replace("|", "/")))
     lines.append("")
     return "\n".join(lines)
 

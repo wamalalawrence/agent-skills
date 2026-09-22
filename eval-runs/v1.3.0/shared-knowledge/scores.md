@@ -14,6 +14,8 @@ by `knowledge read --brief`, not how a model phrases its answer.
 
 Top answer each installation was given after approval:
 
-- `a`: - [shared:acme · DECISION · CONFIRMED · team:payments · 0.90] Payment retries use Kafka. — meeting "Payments Architecture" 2026-09-21 @14:32; approved by Rita Reviewer via PR #31 (f_b73e83fd4dced6e1)
-- `b`: - [shared:acme · DECISION · CONFIRMED · team:payments · 0.90] Payment retries use Kafka. — meeting "Payments Architecture" 2026-09-21 @14:32; approved by Rita Reviewer via PR #31 (f_b73e83fd4dced6e1)
-- `c`: - [shared:acme · DECISION · CONFIRMED · team:payments · 0.90] Payment retries use Kafka. — meeting "Payments Architecture" 2026-09-21 @14:32; approved by Rita Reviewer via PR #31 (f_b73e83fd4dced6e1)
+| Installation | Label | Status | Statement | Approval |
+| --- | --- | --- | --- | --- |
+| `a` | shared:acme | CONFIRMED | Payment retries use Kafka. | approved by Rita Reviewer via PR #31 |
+| `b` | shared:acme | CONFIRMED | Payment retries use Kafka. | approved by Rita Reviewer via PR #31 |
+| `c` | shared:acme | CONFIRMED | Payment retries use Kafka. | approved by Rita Reviewer via PR #31 |
