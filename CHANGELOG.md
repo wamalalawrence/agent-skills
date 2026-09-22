@@ -89,8 +89,8 @@ the user guide is [docs/shared-knowledge.md](docs/shared-knowledge.md).
 - Shared facts are untrusted data. Instruction-shaped text is marked, and changes no binding,
   target, or command.
 - Found and fixed during the security review ([docs/security-review-v1.3.0.md](docs/security-review-v1.3.0.md)):
-  an option-shaped URL (`--upload-pack=…`) from a pointer file could have reached git as an
-  option; a symlinked fact file could have been read from outside the clone; and after an
+  a pointer file whose URL was `--upload-pack=<program>` made `sources add` execute that program
+  through `git ls-remote`, before any confirmation (never published); a symlinked fact file could have been read from outside the clone; and after an
   upstream history rewrite, the clone's own local branch kept the removed objects reachable; and a
   fact recorded locally in one repository was readable from every other repository on the machine.
 - Speaker names never leave the machine. Action owners are shared only under the default

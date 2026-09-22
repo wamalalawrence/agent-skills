@@ -109,22 +109,28 @@ for a normal confirmation.
 
 **Finding (fixed during this review):** see the next threat.
 
-## Threat: an untrusted URL is read as a git option
+## Threat: an untrusted URL is read as a git option — the most serious finding
 
 **Probed.** Case "pointer: a URL shaped like a git option…" plants a pointer whose URL is
-`--upload-pack=<script>`, and passes the same string to `sources add`. Both exit `2`, and the
-script never runs. `GitAccess` refuses the URL directly.
+`--upload-pack=<script>`, and passes the same string to `sources add`. At this release both exit
+`2` and the script never runs, and `GitAccess` refuses the URL directly. Against the pre-fix
+commit, the pointer half of the case fails: **the script ran.**
 
-**Finding (fixed during this review):** such a URL contains no whitespace or shell metacharacter,
-so it passed the first URL check, and it would have reached `git clone` / `git ls-remote` as the
-repository argument. URLs that start with `-` or contain control characters are now refused in
-`GitAccess`, which every networked call goes through, and every git command that takes a
-repository URL puts `--` before it. A fork URL returned by the host CLI is checked the same way.
+**Finding (fixed during this review, reproduced before fixing):** a pointer file is untrusted
+repository content, and its URL was validated only for whitespace and shell metacharacters, so
+`--upload-pack=<program>` passed. `sources add` (with no URL) then probed the source with
+`git ls-remote --symref <url> HEAD`, and git read the "URL" as an option and **executed the named
+program**. This happened before the confirmation prompt, in any repository whose pointer file an
+attacker could commit. Reproduced twice: through the CLI against the pre-fix commit, and directly
+with `git ls-remote` (a harmless `touch` script). With `--` before the URL, the same command runs
+nothing. `git clone` refuses a leading-dash path by itself ("strange pathname … blocked"), and
+that is why the first reading of this threat wrongly rated it as defence in depth. `ls-remote`
+does not refuse it.
 
-Honest note on the probe: git itself also refuses a leading-dash repository path ("strange
-pathname … blocked", checked by hand), so the CLI-level assertion would pass even without this
-fix. The direct `GitAccess` assertion is the one that fails when the check is removed (shown by
-hand against a weakened build).
+Fix: `GitAccess`, which every networked git call goes through, refuses a URL that starts with `-`
+or contains a control character. Every git command that takes a repository URL puts `--` before
+it, and a fork URL returned by the host CLI is checked the same way. Exposure: introduced and
+fixed within this release, never published.
 
 ## Threat: a shared fact steers the agent that reads it
 
