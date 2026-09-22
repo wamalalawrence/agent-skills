@@ -1026,6 +1026,26 @@ def t_history_rewrite(box):
     assert leaked["id"] not in box.ok("read", "--brief", "never merged fact", cwd=repo)
 
 
+@check("local isolation: a fact recorded in one client's repository is not read in another's")
+def t_local_isolation(box):
+    repo_a = box.code_repo("api", HOST + "client-a/api.git")
+    repo_b = box.code_repo("api-b", HOST + "client-b/api.git")
+    box.ok("record", "--type", "DECISION", "--statement", "Client A settles invoices in Kafka.", "--scope",
+           "team:payments", "--source", "manual:a", cwd=repo_a)
+    assert "Client A settles" in box.ok("read", "--brief", "invoices kafka", cwd=repo_a)
+    rc, out, err = box.k("read", "--brief", "invoices kafka", cwd=repo_b)
+    assert "Client A" not in out + err, out
+    rc, out, _ = box.k("propose", cwd=repo_b)
+    assert "Client A" not in out
+    stored = next((box.state() / "local" / "facts").glob("f_*.json")).read_text()
+    assert "example.com/client-a/api" in stored
+    url = box.source("client-b")
+    box.connect(repo_b, url)
+    fact_id = re.search(r"f_[0-9a-f]{16}", next((box.state() / "local" / "facts").glob("f_*.json")).name).group(0)
+    rc, _, err = box.k("propose", fact_id, "--yes", cwd=repo_b)
+    assert rc == 2 and "no local fact" in err, (rc, err)
+
+
 @check("pointer: a URL shaped like a git option is refused before git runs")
 def t_pointer_option(box):
     repo = box.code_repo("api", HOST + "acme/api.git")

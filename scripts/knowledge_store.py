@@ -265,15 +265,37 @@ class LocalKnowledgeStore(KnowledgeStore):
                     out.append(unified)
         return out
 
+    @property
+    def repo_key(self) -> str:
+        """This repository's identity, the same one bindings and meeting scopes use."""
+        if self.repo_root is None:
+            return ""
+        if not hasattr(self, "_repo_key"):
+            from access import project_identity
+
+            self._repo_key = str(project_identity(self.repo_root).get("key", ""))
+        return self._repo_key
+
     def _recorded_facts(self) -> List[dict]:
+        """Facts recorded from this repository only.
+
+        A recorded fact is visible only in the repositories it was recorded in.
+        One machine can hold several clients' repositories, and a fact recorded
+        in one must never be read in another. A file with no record of where it
+        came from is shown nowhere (fail closed).
+        """
         out = []
-        if not self.facts_dir.is_dir():
+        if not self.facts_dir.is_dir() or not self.repo_key:
             return out
         for path in sorted(self.facts_dir.glob("f_*.json")):
             data = read_json(path, None)
-            if isinstance(data, dict) and data.get("id"):
-                data["_local"] = {"kind": "recorded", "review_state": "ACCEPTED", "scope_known": True}
-                out.append(data)
+            if not isinstance(data, dict) or not data.get("id"):
+                continue
+            recorded_in = data.pop("_recorded_in", None) or []
+            if self.repo_key not in recorded_in:
+                continue
+            data["_local"] = {"kind": "recorded", "review_state": "ACCEPTED", "scope_known": True}
+            out.append(data)
         return out
 
     def overlay(self) -> dict:
@@ -372,10 +394,17 @@ class LocalKnowledgeStore(KnowledgeStore):
         if findings:
             raise StoreError("fact still carries a credential-shaped value: " + "; ".join(findings), "usage")
         path = private_dir(self.facts_dir) / "{}.json".format(clean["id"])
+        if not self.repo_key:
+            raise StoreError("record needs a repository to record it in", "usage")
         with locked(path):
             previous = read_json(path, None)
-            if isinstance(previous, dict) and previous.get("created_at"):
-                clean["created_at"] = previous["created_at"]
+            recorded_in = [self.repo_key]
+            if isinstance(previous, dict):
+                if previous.get("created_at"):
+                    clean["created_at"] = previous["created_at"]
+                recorded_in = sorted(set(previous.get("_recorded_in") or []) | {self.repo_key})
+            # Local-only provenance: shareable_body() never carries it anywhere.
+            clean["_recorded_in"] = recorded_in
             write_private_json(path, clean)
         return path
 
