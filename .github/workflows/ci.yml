@@ -148,6 +148,16 @@ jobs:
       - name: Meeting Intelligence
         run: python3 scripts/test-meeting.py
 
+      # Shared organisational knowledge, offline: every remote is a local bare
+      # repository behind git's insteadOf, the PR adapter is a fake `gh`. Cases 1
+      # and 16 compare against the 1.2.0 tree byte for byte, so that tag is
+      # fetched first. Four mutation probes; evals 18-19 across 3 installations.
+      - name: Shared knowledge
+        run: |
+          git fetch --no-tags --depth=1 origin +refs/tags/v1.2.0:refs/tags/v1.2.0
+          python3 scripts/test-shared-knowledge.py
+          python3 scripts/eval-shared-knowledge.py
+
       # A pack must never carry a credential into the model's context. Probed
       # here as well as in the suite, because this is the property whose failure
       # is silent: nothing breaks, the secret is simply in the transcript.

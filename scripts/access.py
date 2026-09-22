@@ -52,6 +52,7 @@ from __future__ import annotations
 
 import argparse
 import getpass
+import fnmatch
 import json
 import os
 import re
@@ -572,6 +573,119 @@ def project_identity(cwd: Path) -> dict:
         "root": str(root),
         "remote": None,
     }
+
+
+# ----------------------------------------------------------------------------
+# Knowledge-source bindings (1.3.0)
+#
+# Which shared knowledge source a repository reads from and proposes to is an
+# access decision, so it lives beside the credential bindings and is keyed by
+# the same identity. The rule that matters most: a repository binds to AT MOST
+# one source. Two matching sources is a configuration error the caller reports;
+# it never picks one. A path-keyed repository (no origin remote) has no
+# identity another machine could reproduce, so it never binds.
+#
+# The file holds URLs and glob patterns only. It is `machine_binding` data and
+# never leaves this machine.
+# ----------------------------------------------------------------------------
+KNOWLEDGE_SOURCES_SCHEMA = "agent-skills.knowledge-sources/v1"
+
+
+class AccessError(Exception):
+    """A binding or source configuration problem: a usage error, never a crash."""
+
+
+KNOWLEDGE_SOURCE_NAME_RE = re.compile(r"^[a-z0-9][a-z0-9._-]{0,39}$")
+DEFAULT_SYNC_INTERVAL_MINUTES = 15
+
+
+def knowledge_sources_path() -> Path:
+    return config_dir() / "knowledge-sources.json"
+
+
+def load_knowledge_sources() -> dict:
+    """The configured sources and settings. A missing file is no sources."""
+    empty = {"schema": KNOWLEDGE_SOURCES_SCHEMA, "sources": {}, "settings": {}}
+    path = knowledge_sources_path()
+    try:
+        data = json.loads(path.read_text(encoding="utf-8"))
+    except FileNotFoundError:
+        return empty
+    except (OSError, ValueError):
+        # Unreadable is not "no sources": the caller must not silently fall
+        # back to unbound and hide a configuration the user believes exists.
+        raise AccessError("knowledge source configuration is unreadable: %s" % path)
+    if not isinstance(data, dict) or data.get("schema") != KNOWLEDGE_SOURCES_SCHEMA:
+        raise AccessError("knowledge source configuration has an unknown schema: %s" % path)
+    data.setdefault("sources", {})
+    data.setdefault("settings", {})
+    return data
+
+
+def save_knowledge_sources(data: dict) -> None:
+    ensure_config_dir()
+    data["schema"] = KNOWLEDGE_SOURCES_SCHEMA
+    write_json(knowledge_sources_path(), data)
+
+
+def binding_pattern(value: str) -> str:
+    """Normalise a binding pattern the way a remote is normalised.
+
+    `git@example.com:acme/*` and `https://example.com/acme/*` are one pattern.
+    """
+    pattern = normalise_remote(value)
+    if not pattern or "/" not in pattern:
+        raise AccessError("a binding pattern needs a host and a path: %r" % value)
+    return pattern
+
+
+def _identity_remote_key(identity: dict) -> str:
+    key = str(identity.get("key") or "")
+    return key[len("remote:"):] if key.startswith("remote:") else ""
+
+
+def resolve_knowledge_binding(identity: dict, data: dict = None) -> dict:
+    """Which configured source this repository identity binds to.
+
+    Returns {"status": "none" | "bound" | "ambiguous", "source": name | None,
+    "candidates": [names]}. Only "bound" names a source.
+    """
+    data = load_knowledge_sources() if data is None else data
+    remote = _identity_remote_key(identity)
+    if not remote:
+        return {"status": "none", "source": None, "candidates": [],
+                "reason": "repository has no origin remote"}
+    matches = []
+    for name, source in sorted(data.get("sources", {}).items()):
+        for pattern in source.get("binds") or []:
+            if fnmatch.fnmatchcase(remote, pattern):
+                matches.append(name)
+                break
+    if not matches:
+        return {"status": "none", "source": None, "candidates": []}
+    if len(matches) > 1:
+        return {"status": "ambiguous", "source": None, "candidates": matches,
+                "reason": "several knowledge sources bind this repository"}
+    return {"status": "bound", "source": matches[0], "candidates": matches}
+
+
+def knowledge_binding_conflicts(data: dict = None) -> list:
+    """Configuration errors `doctor` reports: shared org, overlapping binds."""
+    data = load_knowledge_sources() if data is None else data
+    sources = data.get("sources", {})
+    problems = []
+    names = sorted(sources)
+    for index, first in enumerate(names):
+        for second in names[index + 1:]:
+            a, b = sources[first], sources[second]
+            active = a.get("status", "active") == "active" and b.get("status", "active") == "active"
+            if active and a.get("org") and a.get("org") == b.get("org"):
+                problems.append("sources %s and %s both claim org %r" % (first, second, a["org"]))
+            for pa in a.get("binds") or []:
+                for pb in b.get("binds") or []:
+                    if pa == pb or fnmatch.fnmatchcase(pa, pb) or fnmatch.fnmatchcase(pb, pa):
+                        problems.append("sources %s and %s overlap on %s / %s" % (first, second, pa, pb))
+    return problems
 
 
 def tracked_state(path: Path) -> str:

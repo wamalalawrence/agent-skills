@@ -145,6 +145,22 @@ Required whenever this release changes `scripts/meeting*.py`, the `meetings/` pa
 - [ ] Confirm no meeting module other than `meeting_recall.py` names a Recall field (the boundary
       test asserts it; read the assertion).
 
+## Shared Knowledge
+
+Required whenever this release changes `scripts/knowledge_*.py`, the Resolver paths in
+`scripts/knowledge.py`, the knowledge-binding section of `scripts/access.py`, or the source layout.
+
+- [ ] Run `python3 scripts/test-shared-knowledge.py` with no network. Confirm case 1 still matches
+      the `1.2.0` output byte for byte, and that its four mutation probes report the weakened build
+      giving the weaker answer.
+- [ ] Run `python3 scripts/eval-shared-knowledge.py --out eval-runs/<release>/shared-knowledge` and
+      record both tables in `eval-runs/<release>/summary.md`.
+- [ ] Confirm no push path can target the default branch or use `--force`: read `_push_and_review`
+      in `knowledge_git.py`, not just the test.
+- [ ] If the fact schema or the manifest changed, bump `SUPPORTED_SOURCE_SCHEMA` / `schema_version`
+      and confirm an older client goes read-only against it (case 15).
+- [ ] Re-check the `gh` / `glab` command lines against each CLI's current documentation.
+
 ## Distribution and Packaging
 
 Required whenever a release changes `lib/asrelease/`, `scripts/install.py`, `bin/agent-skills`,

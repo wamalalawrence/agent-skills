@@ -147,6 +147,31 @@ See [context-optimizer.md](context-optimizer.md) for the full treatment. The loa
 - Processing is post-meeting; live transcript streaming and in-meeting interaction are not
   supported.
 
+## Shared knowledge
+
+- **A git repository is not a database.** A source is sized for thousands to low tens of
+  thousands of facts. Propagation takes minutes (the sync interval plus review time), and nothing
+  is real-time or pushed to clients.
+- **Git keeps what it merged.** Removing a secret or personal data needs a history rewrite on the
+  source, a host cache purge, and a sync on every client
+  ([runbook](knowledge/HISTORY-REMOVAL.md)). Forks and clones outside your control keep it.
+- **Approval is read from history, not from the host.** A merge commit, or a host-made
+  squash/rebase commit carrying a PR number, counts as reviewed. Agent Skills cannot see *who
+  reviewed* a squash merge, only that the host merged it, and it does not query the host's review
+  API. Branch protection is what makes "merged" mean "reviewed".
+- **Verification is a code-path check, not a semantic one.** A STALE mark means a referenced path
+  or snippet hash no longer matches `HEAD`. A fact whose code still exists but no longer does what
+  it says is not detected.
+- **Isolation is per source, not per scope.** Within one source, every bound repository reads
+  every organisation, team, and project fact. Scope decides relevance and review ownership, not
+  secrecy. Anything that must not be read by a whole organisation belongs in a separate source.
+- **Host adapters.** `gh` is exercised through a fake CLI in the suite. `glab` creates and reads
+  merge requests but cannot fork, and is covered by reasoning only. Azure DevOps and Bitbucket
+  get a compare URL and no automatic PR.
+- **`knowledge check` pattern-matches.** It blocks common shapes of secrets, transcripts, code,
+  emails, and @-handles. It cannot recognise a person's name written in plain prose, which is why
+  review is still required.
+
 ## Execution Guard
 
 [Execution Guard](execution-guard.md) is a second layer, not a solution. Its limits are listed

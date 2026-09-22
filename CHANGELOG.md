@@ -4,6 +4,125 @@ All notable project changes should be recorded here.
 
 ## Unreleased
 
+## 1.3.0 - Shared knowledge: one reviewed source per organisation
+
+An organisation can now keep one shared, reviewed, provenance-carrying knowledge source, and every
+installation bound to it retrieves the same facts: architecture decisions, domain facts, meeting
+decisions, ownership, cross-repository dependencies, incident learnings, and standards. The v1
+backend is a git repository the organisation already hosts. Repository permissions are the access
+control, a pull request is the review, **a merge is the approval**, and a local clone is the
+offline cache. Agents propose and never assert, and nothing is pushed without the engineer's
+confirmation. Additive: with no source configured, `knowledge read` returns exactly what `1.2.0`
+returned (tested byte for byte), and no existing command, exit code, or skill changed behaviour.
+The design record, written before any code, is [docs/knowledge/DISCOVERY.md](docs/knowledge/DISCOVERY.md);
+the user guide is [docs/shared-knowledge.md](docs/shared-knowledge.md).
+
+### Added
+
+- **The Knowledge Resolver** (`scripts/knowledge_resolver.py`), now the single read/write entry
+  point. Meeting Intelligence, the eval harness, and `knowledge read` / `note` / `lesson` go
+  through it, and a static test fails if any other module imports a store or opens a knowledge
+  file. It applies the precedence rules (shared beats a local copy; superseded is history;
+  local-only is labelled `local, unshared`; conflicts are shown, never resolved silently; STALE and
+  low-confidence rank lower), and re-checks both isolation layers on every shared fact it returns.
+- **A backend-neutral `KnowledgeStore` interface** (`get`, `query`, `propose`, `list_proposals`,
+  `sync`, `capabilities`, `health`). Two implementations: `LocalKnowledgeStore` (unshared and
+  pending facts, personal categories, the local status overlay, the proposal ledger, the outbox)
+  and `GitKnowledgeStore`. No git concept crosses the interface, so an `HttpKnowledgeStore` can
+  follow without changing skills or the Resolver.
+- **The unified fact schema** (`knowledge_model.py`, `schema_version: 1`), which extends Meeting
+  Intelligence's. It adds three types (`DOMAIN_FACT`, `SYSTEM_OWNERSHIP`, `ENGINEERING_STANDARD`),
+  the `STALE` status, per-fact `{level, key}` scope, typed `sources[]`, `corroborated_by[]`,
+  `produced_by`, `verification`, and `last_verified_at`. `approved_by` and `proposed_by` are
+  derived from git history, and are rejected when they appear in content.
+- **Knowledge-source bindings in the Access Resolver** (`<config_dir>/knowledge-sources.json`).
+  A repository binds to at most one source by its normalised remote. Two matching sources is an
+  error `doctor` reports, and the Resolver then reads neither.
+- **CLI:** `agent-skills knowledge status | sources [add|remove|bind] | sync | propose | inspect |
+  check | init-source`, plus `record` and `verify` (both recorded as deviations D4 and D6).
+  `sources add` with no URL discovers a source from a committed pointer file
+  (`.agent-skills/knowledge.json`), then from the well-known `engineering-knowledge` name.
+- **The propose flow:** redaction and a content scan, then the exact files shown, then
+  confirmation. The branch is `agent-skills/proposals/<installation>/<timestamp>` (never the
+  default branch, never `--force`). A PR/MR opens through `gh` or `glab` when available, otherwise
+  a compare URL is printed. Without write access the proposal goes to a fork PR, or to an outbox
+  patch. It is never retried with another credential. Supersession edits the old and new fact in
+  one commit. Near-duplicates become corroboration. `--from-source` merges a duplicate source
+  with its provenance.
+- **The proposal lifecycle** (`open | merged | closed_unmerged`), derived on sync. A rejected fact
+  is marked `REJECTED (shared review)` and not suggested again until its content changes.
+- **Sync, cache, and index.** Sync is a fast-forward to the default branch at most once per
+  interval (15 minutes by default) when a read needs it, with a short timeout, falling back to
+  the cache and stating its age. A derived SQLite index is rebuilt from the clone (with a scan
+  fallback when `sqlite3` is missing). Sync reports facts that became SUPERSEDED or STALE. An
+  upstream history rewrite purges the removed objects from the local cache.
+- **Code-reference verification:** a missing path or a changed snippet hash at `HEAD` marks the fact
+  STALE in the local view. `propose --mark-stale` / `--reverify` share the result, as proposals.
+- **`agent-skills knowledge check [<dir>]`** for the source's CI, with no network. It checks the
+  schema, secrets, transcript text, code snippets, personal data under the manifest's
+  `person_names` policy, instruction-shaped text, supersession links, allowed scopes, file
+  placement, duplicate ids, and near-duplicates.
+- **`agent-skills knowledge init-source <dir> --org <org>`**: manifest (UUID `source_id`, org,
+  status, successor, allowed scopes, policy), CODEOWNERS, README, a CI template, and the scope
+  directories. It refuses when a manifest exists, or an active source for the org is
+  discoverable, unless `--force --reason`.
+- **First-run migration**, classifying existing local facts as `personal` or
+  `shareable-candidate` without rewriting a committed file. Nothing is ever uploaded
+  automatically.
+- **`doctor` knowledge section**: git, bindings, cross-org sources, schema compatibility, sync age,
+  index health, and setup gaps. Local by default; `--probe-knowledge` contacts each source with
+  the user's own git access.
+- **Docs:** [shared knowledge](docs/shared-knowledge.md), [setup and roles](docs/knowledge/SETUP.md),
+  and [the history-removal runbook](docs/knowledge/HISTORY-REMOVAL.md).
+- **`meeting-intelligence` skill:** it may *suggest* sharing accepted decisions, and runs
+  `propose` only after the user agrees.
+
+### Safety
+
+- Credentials, machine bindings, private preferences, and task context can never be proposed.
+  This is enforced by category in the Resolver and again in the store, whatever the flags.
+- A shared fact is shown as CONFIRMED only when git shows a review: a merge commit, a host merge
+  with its PR number, or a different committer. A CONFIRMED claim pushed directly is shown as
+  PROPOSED.
+- Pointer files are untrusted. A cross-org pointer needs the org name typed back, and a pointer
+  never overrides a binding.
+- Shared facts are untrusted data. Instruction-shaped text is marked, and changes no binding,
+  target, or command.
+- Speaker names never leave the machine. Action owners are shared only under the default
+  `action_owners_only` policy, and a source can set `none`.
+
+### Changed
+
+- `knowledge read` renders through the Resolver. Output is identical unless the repository is
+  bound or has locally recorded facts.
+- `meeting.py` reads committed meeting files through the Resolver (`read_meeting_file`) instead of
+  opening them by path.
+- `test-knowledge.sh` mutation probes now copy every runtime script into their sandbox, because
+  `knowledge.py` reaches the Resolver.
+
+### Tests and evals
+
+- `scripts/test-shared-knowledge.py`: 32 cases, offline. Remotes are local bare repositories
+  behind git's `insteadOf`, and the PR adapter is a fake `gh`. It covers brief items 1-17 and
+  20-27, lost access, history removal, and exit codes, with four mutation probes: binding
+  isolation, the personal-category rule, the unreviewed downgrade, and the content scan.
+- `scripts/eval-shared-knowledge.py` (brief evals 18-19): three installations, one source. 3/3 get
+  the same CONFIRMED shared answer after approval; before approval only the proposer sees it,
+  labelled `local, unshared`; a superseded decision is presented as current in 0 of 18 queries.
+  These measure what each agent is *given*, not how a model phrases its answer.
+
+### Known limitations
+
+- Scale: thousands to low tens of thousands of facts per source. Latency: sync interval plus review
+  time; not real-time.
+- Deleting merged data needs a history rewrite on the source (see the runbook); git keeps what it
+  merged.
+- The `glab` adapter creates and reads merge requests, but cannot fork, and is exercised only by
+  reasoning, not by a fake. Azure DevOps and Bitbucket get compare URLs only.
+- `normalise_remote` keeps `.git` when a remote ends in `.git/`, so that rare form is a different
+  repository identity. Unchanged from `1.2.0`, because credential bindings and meeting scopes
+  already depend on it.
+
 ## 1.2.0 - Meeting Intelligence: "Listen to this meeting"
 
 Tell your assistant "Listen to this meeting: <Teams, Zoom, or Google Meet link>". A visible, named

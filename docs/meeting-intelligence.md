@@ -196,8 +196,10 @@ earlier fact; anything less goes to review and supersedes nothing.
 
 ## Scope
 
-The knowledge base has **repository** scope only; there is no team or organisation store, and
-none is added. A meeting's scope is bound at `join` — `--scope repo:<path>`, or the current
+The local knowledge base has **repository** scope only. Team, project, and organisation scopes
+exist only in a shared knowledge source (from `1.3.0`, see [shared knowledge](shared-knowledge.md)),
+and a fact reaches one only when a user proposes it with `knowledge propose --scope …` and a
+reviewer merges it. A meeting's scope is bound at `join` — `--scope repo:<path>`, or the current
 repository — and shown. Facts inherit it and never widen. `--scope team:…`, `org:…`, and
 `project:…` are refused with exit `2`.
 

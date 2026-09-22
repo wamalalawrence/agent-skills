@@ -42,11 +42,12 @@ TARGET_REPO=""
 REQUIRE_TRACKER="false"
 REQUIRE_GITHUB="false"
 PROBE_MEETING="false"
+PROBE_KNOWLEDGE="false"
 
 usage() {
   cat <<'EOF'
 Usage: ./doctor.sh [--brief|--json] [--repo owner/name] [--require-tracker]
-                   [--require-github] [--probe-meeting] [--help]
+                   [--require-github] [--probe-meeting] [--probe-knowledge] [--help]
 
 Probes what this environment can actually do and prints a capability report.
 
@@ -58,6 +59,8 @@ Probes what this environment can actually do and prints a capability report.
   --probe-meeting     Contact the meeting capture provider once to check that it
                       is reachable and accepts the key for its region. Without
                       this flag doctor stays offline.
+  --probe-knowledge   Contact each shared knowledge source once with your own git
+                      access (git ls-remote). Without this flag doctor stays offline.
   --help              Show this help.
 EOF
 }
@@ -71,6 +74,7 @@ while [[ $# -gt 0 ]]; do
     --require-tracker) REQUIRE_TRACKER="true"; shift ;;
     --require-github) REQUIRE_GITHUB="true"; shift ;;
     --probe-meeting) PROBE_MEETING="true"; shift ;;
+    --probe-knowledge) PROBE_KNOWLEDGE="true"; shift ;;
     --help|-h) usage; exit 0 ;;
     *) echo "Unknown option: $1" >&2; usage >&2; exit 2 ;;
   esac
@@ -510,6 +514,61 @@ print("credentials: %s; region: %s; consent: %s; listener: %s; provider: %s; mee
   esac
 }
 
+# Shared knowledge sources (1.3.0): git available, bindings unambiguous, schema
+# compatible, sync age, index health, setup gaps. Local only unless
+# --probe-knowledge, which runs `git ls-remote` with the user's own access.
+probe_knowledge_sources() {
+  SOURCES_STATE="unknown"
+  SOURCES_DETAIL="scripts/knowledge.py not reachable"
+  local kb="${REPO_ROOT}/scripts/knowledge.py"
+  [[ -f "${kb}" ]] || return 0
+  if ! command -v git >/dev/null 2>&1; then
+    SOURCES_STATE="no"
+    SOURCES_DETAIL="git is not installed; shared knowledge sources need it"
+    return 0
+  fi
+  local args=(status --doctor --json)
+  [[ "${PROBE_KNOWLEDGE}" == "true" ]] && args+=(--probe)
+  SOURCES_DETAIL="$(${PYTHON3} "${kb}" "${args[@]}" 2>/dev/null | ${PYTHON3} -c '
+import json, sys
+try:
+    r = json.load(sys.stdin)
+except ValueError:
+    print("report unavailable")
+    raise SystemExit(0)
+sources = r.get("sources") or {}
+binding = r.get("binding") or {}
+if not sources:
+    print("none configured (local knowledge only)")
+    raise SystemExit(0)
+parts = []
+for name, h in sorted(sources.items()):
+    age = h.get("cache_age_seconds")
+    age = "never synced" if age is None else ("%d min ago" % (age // 60))
+    bit = "%s: %s, synced %s, schema %s, index %s" % (name, h.get("status", "?"), age, h.get("schema", "?"),
+                                                      h.get("index", "?"))
+    if h.get("reachable"):
+        bit += ", reachable: %s" % h["reachable"]
+    if h.get("read_only_reason"):
+        bit += ", READ-ONLY"
+    if h.get("setup_missing"):
+        bit += ", setup missing: " + "; ".join(h["setup_missing"])
+    parts.append(bit)
+problems = list(r.get("problems") or [])
+line = "this repo: %s; %s" % (binding.get("status", "?") + (" (" + binding["source"] + ")" if binding.get("source") else ""),
+                            " | ".join(parts))
+if problems:
+    line += "; PROBLEMS: " + "; ".join(problems)
+if r.get("setup_missing"):
+    line += "; setup: " + "; ".join(r["setup_missing"])
+print(line)
+' 2>/dev/null || printf 'report unavailable')"
+  case "${SOURCES_DETAIL}" in
+    *PROBLEMS*|*READ-ONLY*|*"reachable: auth"*|*"reachable: network"*|"report unavailable") SOURCES_STATE="no" ;;
+    *) SOURCES_STATE="yes" ;;
+  esac
+}
+
 run_probes() {
   probe_install
   probe_secret_backend
@@ -522,6 +581,7 @@ run_probes() {
   probe_mcp
   probe_memory
   probe_meeting
+  probe_knowledge_sources
 }
 
 # ---------------------------------------------------------------------------
@@ -551,6 +611,10 @@ render_brief() {
   printf '    %smcp              %s\n' "$(mark "${MCP_STATE}")" "${MCP_DETAIL}"
   printf '    %srepo knowledge   %s\n' "$(mark "${KNOWLEDGE_STATE}")" "${KNOWLEDGE_DETAIL}"
   printf '    %sexecution guard  %s\n' "$(mark "${GUARD_STATE}")" "${GUARD_DETAIL}"
+  case "${SOURCES_DETAIL}" in
+    "none configured"*|"scripts/knowledge.py not reachable") : ;;
+    *) printf '    %sshared knowledge %s\n' "$(mark "${SOURCES_STATE}")" "${SOURCES_DETAIL}" ;;
+  esac
   case "${MEETING_DETAIL}" in
     *"(0 stuck)"*|"scripts/meeting.py not reachable") : ;;
     *) printf '    NO  meetings         stuck meetings need a status check: agent-skills meeting list\n' ;;
@@ -614,6 +678,7 @@ render_full() {
   echo ""
   echo "Memory"
   printf '  %srepo knowledge base — %s\n' "$(mark "${KNOWLEDGE_STATE}")" "${KNOWLEDGE_DETAIL}"
+  printf '  %sshared knowledge sources — %s\n' "$(mark "${SOURCES_STATE}")" "${SOURCES_DETAIL}"
   echo ""
   echo "Meetings"
   printf '  %smeeting capture — %s\n' "$(mark "${MEETING_STATE}")" "${MEETING_DETAIL}"
@@ -688,7 +753,9 @@ render_json() {
   printf '  "execution_guard": "%s",\n' "${GUARD_STATE}"
   printf '  "execution_guard_detail": "%s",\n' "$(json_escape "${GUARD_DETAIL}")"
   printf '  "meeting_capture": "%s",\n' "${MEETING_STATE}"
-  printf '  "meeting_capture_detail": "%s"\n' "$(json_escape "${MEETING_DETAIL}")"
+  printf '  "meeting_capture_detail": "%s",\n' "$(json_escape "${MEETING_DETAIL}")"
+  printf '  "knowledge_sources": "%s",\n' "${SOURCES_STATE}"
+  printf '  "knowledge_sources_detail": "%s"\n' "$(json_escape "${SOURCES_DETAIL}")"
   printf '}\n'
 }
 

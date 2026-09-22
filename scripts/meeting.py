@@ -51,7 +51,7 @@ from typing import Callable, Dict, List, Optional
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 
-import knowledge  # noqa: E402
+import knowledge_resolver as knowledge  # noqa: E402  (the Knowledge Resolver; 1.3.0)
 import meeting_capture as mc  # noqa: E402
 import meeting_intel as intel  # noqa: E402
 import meeting_secrets  # noqa: E402
@@ -460,8 +460,7 @@ def _all_windows_done(record: dict) -> bool:
 def _prior_facts(scope: dict) -> List[dict]:
     if scope.get("kind") != "repository" or not scope.get("root") or not Path(scope["root"]).is_dir():
         return []
-    facts, _ = knowledge.meeting_facts(Path(scope["root"]))
-    return facts
+    return knowledge.prior_facts(Path(scope["root"]))
 
 
 def _finalize(record: dict) -> None:
@@ -568,7 +567,7 @@ def _mark_transcript_unavailable(record: dict) -> None:
             pending["transcript_available"] = False
             store.save_pending_facts(record["id"], pending)
         return
-    data = json.loads(Path(path).read_text(encoding="utf-8"))
+    data = knowledge.read_meeting_file(Path(path))
     data["transcript_available"] = False
     knowledge.write_meeting_facts(Path(record["scope"]["root"]), data)
 
@@ -579,7 +578,7 @@ def _mark_transcript_unavailable(record: dict) -> None:
 def _facts_for(record: dict) -> Optional[dict]:
     path = record["processing"].get("knowledge_file")
     if path and Path(path).exists():
-        return json.loads(Path(path).read_text(encoding="utf-8"))
+        return knowledge.read_meeting_file(Path(path))
     return store.load_pending_facts(record["id"])
 
 
@@ -823,7 +822,7 @@ def _accept(record: dict, which: str, scope_arg: Optional[str]) -> None:
         path = record["processing"].get("knowledge_file")
         if not path or not Path(path).exists():
             raise CliError("no facts are waiting for review on {}".format(record["id"]), EXIT_USAGE)
-        payload = json.loads(Path(path).read_text(encoding="utf-8"))
+        payload = knowledge.read_meeting_file(Path(path))
         committed = True
     wanted = None if which == "all" else {w.strip() for w in which.split(",") if w.strip()}
     if committed:

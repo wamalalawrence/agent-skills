@@ -86,7 +86,8 @@ Adaptive execution
 
 Memory and helpers
   memory [args]         Per-project memory (project-memory.py)
-  knowledge [args]      Repo-resident knowledge base (knowledge.py)
+  knowledge [args]      Repo-resident knowledge base, and shared organisational
+                        knowledge sources (knowledge.py)
   blackboard [args]     Per-task shared working memory (blackboard.py)
   org-memory [args]     Cross-project memory tier (org-memory.py)
   telemetry [args]      Append-only event log (telemetry.py)
@@ -160,6 +161,19 @@ Meeting subcommands (see docs/meeting-intelligence.md):
 
 The assistant always joins visibly, by name, after a one-time recording notice.
 Polling carries a meeting to processed facts; no public URL is needed.
+
+Shared knowledge subcommands (see docs/shared-knowledge.md):
+  knowledge status                 Bound source, sync age, proposals, candidates, conflicts
+  knowledge sources [add|remove|bind]  Connect (no URL: discover), leave, or bind repos
+  knowledge sync                   Fetch the bound source now
+  knowledge propose [<id>...]      Review and propose local facts (shows exact files)
+  knowledge inspect <id>           Full fact, provenance, supersession chain
+  knowledge check [<dir>]          Validate a knowledge source; CI-safe, no network
+  knowledge init-source <dir> --org O  Scaffold a knowledge source repository
+  knowledge record / verify        Record a local fact; check code references
+
+Nothing is shared without `propose` and your confirmation, and a merge is the
+only approval. With no source configured, knowledge stays local, as before.
 
 Guard subcommands (see docs/execution-guard.md):
   guard check-command [--cwd P] [--format F] -- '<command>'
@@ -334,6 +348,9 @@ case "${COMMAND}" in
       scripts/meeting.py scripts/meeting_capture.py scripts/meeting_recall.py \
       scripts/meeting_intel.py scripts/meeting_store.py scripts/meeting_secrets.py \
       scripts/meeting_webhook.py \
+      scripts/knowledge.py scripts/knowledge_resolver.py scripts/knowledge_store.py \
+      scripts/knowledge_git.py scripts/knowledge_model.py scripts/knowledge_source.py \
+      scripts/knowledge_cli.py \
       lib/tools/capabilities.json lib/tools/classes.json; do
       if [ ! -f "${RELEASE_DIR}/${required}" ]; then
         printf 'self-test: missing %s\n' "${required}" >&2

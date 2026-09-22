@@ -20,7 +20,7 @@ compatibility: >-
   .agent-skills.yml). See docs/execution-modes.md.
 metadata:
   author: wamalalawrence
-  version: "1.2.0"
+  version: "1.3.0"
   homepage: "https://github.com/wamalalawrence/agent-skills"
 argument-hint: "<the large task to decompose — a feature, migration, or refactor>"
 user-invocable: true

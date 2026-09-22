@@ -140,6 +140,16 @@ if python3 scripts/test-meeting.py </dev/null >/tmp/as-rr-meeting.log 2>&1; then
 else
   bad "meeting intelligence" "$(grep 'FAIL' /tmp/as-rr-meeting.log | head -5)"
 fi
+if python3 scripts/test-shared-knowledge.py </dev/null >/tmp/as-rr-shared-knowledge.log 2>&1; then
+  good "shared knowledge: $(grep -E 'passed:' /tmp/as-rr-shared-knowledge.log | tr -s ' ') $(tail -1 /tmp/as-rr-shared-knowledge.log)"
+else
+  bad "shared knowledge" "$(grep 'FAIL' /tmp/as-rr-shared-knowledge.log | head -5)"
+fi
+if python3 scripts/eval-shared-knowledge.py </dev/null >/tmp/as-rr-shared-evals.log 2>&1; then
+  good "shared knowledge evals 18-19: $(tail -1 /tmp/as-rr-shared-evals.log)"
+else
+  bad "shared knowledge evals 18-19" "$(grep -E '\| no \||FAIL' /tmp/as-rr-shared-evals.log | head -5)"
+fi
 
 # ------------------------------------------------------------------------------
 sec "4. CLI surface"
@@ -384,6 +394,16 @@ record = store.new_record("m_0123456789ab", "zoom", "https://zoom.us/j/812345678
 store.save_record(record)
 PLANT
   UP_MEETING_SUM="$(cksum < "$UP_MEETING" 2>/dev/null)"
+  # Shared-knowledge state written by this release (the first-run migration
+  # record and a recorded local fact) must be equally invisible to it.
+  UP_KNOWLEDGE="$UP_HOME/.agent-skills/state/knowledge"
+  (cd "$UP/work/repo-a" && \
+    run_upgraded bash "$UP_HOME/.agent-skills/bin/agent-skills" knowledge record --type DECISION \
+      --statement "Planted before rollback." --scope team:planted --source manual:readiness) \
+    >"$UP/knowledge-record.log" 2>&1 \
+    && good "this release records a local fact before rollback" \
+    || bad "knowledge record before rollback" "$(tail -4 "$UP/knowledge-record.log")"
+  UP_KNOWLEDGE_SUM="$(find "$UP_KNOWLEDGE" -type f -exec cksum {} + 2>/dev/null | sort)"
   if run_upgraded bash "$UP_HOME/.agent-skills/bin/agent-skills" rollback >"$UP/rollback.log" 2>&1; then
     run_upgraded bash "$UP_HOME/.agent-skills/bin/agent-skills" verify >"$UP/old-verify.log" 2>&1 \
       && good "$PREVIOUS_TAG verify passes with meeting state present" \
@@ -394,6 +414,9 @@ PLANT
     [ "$(cksum < "$UP_MEETING" 2>/dev/null)" = "$UP_MEETING_SUM" ] \
       && good "rolling back to $PREVIOUS_TAG leaves meeting state untouched" \
       || bad "rollback to $PREVIOUS_TAG changed meeting state"
+    [ -n "$UP_KNOWLEDGE_SUM" ] && [ "$(find "$UP_KNOWLEDGE" -type f -exec cksum {} + 2>/dev/null | sort)" = "$UP_KNOWLEDGE_SUM" ] \
+      && good "rolling back to $PREVIOUS_TAG leaves shared-knowledge state untouched" \
+      || bad "rollback to $PREVIOUS_TAG changed or lost shared-knowledge state"
   else
     bad "rollback to $PREVIOUS_TAG" "$(tail -6 "$UP/rollback.log")"
   fi

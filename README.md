@@ -4,13 +4,14 @@ Reusable [Agent Skills](https://agentskills.io/) for software-engineering work �
 role-shaped workflows your AI assistant can load on demand so the same model produces
 senior-engineer, product-owner, tester, or reviewer output instead of generic answers.
 
-> **Status:** `1.2.0` — stable, private. The [1.0 contracts](docs/one-point-oh.md) — CLI names
+> **Status:** `1.3.0` — stable, private. The [1.0 contracts](docs/one-point-oh.md) — CLI names
 > and exit codes, the install layout, the release-provider interface, the skill names, and the
-> Engineering Tool Capability Framework — are frozen for the `1.x` line, and `1.2.0` only adds to
-> them. It adds [Meeting Intelligence](docs/meeting-intelligence.md): tell your assistant "Listen
-> to this meeting: <link>" and a visible, named assistant joins the Teams, Zoom, or Meet call, the
-> transcript is retrieved after it ends, and engineering decisions land in the repository
-> knowledge base as labelled meeting evidence. The details are [in the changelog](CHANGELOG.md).
+> Engineering Tool Capability Framework — are frozen for the `1.x` line, and `1.3.0` only adds to
+> them. It adds [shared knowledge](docs/shared-knowledge.md): an organisation keeps one reviewed,
+> provenance-carrying knowledge source in a git repository it already hosts, engineers propose
+> facts (including meeting decisions from [Meeting Intelligence](docs/meeting-intelligence.md))
+> as pull requests, a merge is the approval, and every bound installation reads the same facts.
+> With no source configured nothing changes. The details are [in the changelog](CHANGELOG.md).
 
 ## Start here
 
@@ -103,18 +104,18 @@ Requirements: Python 3.8+, bash, and git. macOS or Linux; on Windows use WSL or 
 with every supported agent host it finds, and makes the runtime invocable from anywhere:
 
 ```text
-  resolve    1.2.0 (stable, via git)
+  resolve    1.3.0 (stable, via git)
   download   164 files staged
   verify     payload hash and version agree
   self-test  staged runtime answers correctly
-  activate   current -> versions/1.2.0
+  activate   current -> versions/1.3.0
   hosts      claude-code, agents-standard, cursor, codex
   verified   installation is consistent
 
-Agent Skills 1.2.0 is installed.
+Agent Skills 1.3.0 is installed.
 
   install root : ~/.agent-skills
-  active release: ~/.agent-skills/versions/1.2.0
+  active release: ~/.agent-skills/versions/1.3.0
   hosts        : claude-code, agents-standard, cursor, codex
   command      : ~/.local/bin/agent-skills
 

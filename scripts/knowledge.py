@@ -41,6 +41,10 @@ Subcommands:
   promote   --project P [--apply]          Propose cache facts for the repo tier.
   facts     [--all] [--json]               Meeting-derived facts, with status history.
 
+Shared organisational knowledge (1.3.0; see docs/shared-knowledge.md):
+  status | sources [add|remove|bind] | sync | propose | inspect | check |
+  init-source | record | verify
+
 Exit codes: 0 ok, 1 findings or nothing to show, 2 usage/setup error.
 
 Observation integrity — the rules a lesson's confidence obeys:
@@ -690,9 +694,16 @@ def render_read(
     brief: str,
     budget_chars: int,
     min_confidence: float,
+    shared: dict | None = None,
 ) -> tuple[str, int]:
+    """Render the repository tier, budgeted.
+
+    `shared` is supplied only by the Knowledge Resolver, and only when this
+    repository binds to a knowledge source or has locally recorded facts. With
+    it absent the output is exactly the 1.2.0 output.
+    """
     kdir = knowledge_dir(repo_root)
-    if not kdir.is_dir():
+    if not kdir.is_dir() and not shared:
         return (
             f"-- no repo knowledge base at {kdir}\n"
             f"-- run: python3 scripts/knowledge.py init",
@@ -740,9 +751,31 @@ def render_read(
         if text:
             parts.append(text)
 
+    # Shared and locally recorded facts from the Knowledge Resolver, capped at
+    # their share of the budget. Placed before meeting evidence: a reviewed,
+    # shared fact outranks a local meeting claim.
+    shared_lines: list[str] = []
+    shared_remaining = 0
+    if shared and (shared.get("lines") or shared.get("notices")):
+        before = rendered_length(parts)
+        parts.append(shared["header"])
+        for line in shared.get("lines") or []:
+            grown = rendered_length(parts + [line])
+            if grown + notice_reserve > budget_chars or grown - before > budget_chars * shared["share"]:
+                break
+            parts.append(line)
+            shared_lines.append(line)
+        shared_remaining = len(shared.get("lines") or []) - len(shared_lines)
+        if not shared_lines:
+            parts.pop()
+
     # Meeting-derived facts in this repository's scope, ranked by the brief.
     # Capped at 40% of the budget so they cannot crowd the curated tiers out.
     meeting_candidates, meeting_withheld = meeting_facts(repo_root)
+    if shared:
+        # A meeting fact that is now shared renders once, in the shared section.
+        meeting_candidates = [f for f in meeting_candidates
+                              if f.get("id") not in shared.get("hide_meeting_ids", set())]
     meeting_ranked = rank_meeting_facts(meeting_candidates, brief)
     meeting_lines: list[str] = []
     if meeting_ranked:
@@ -750,6 +783,8 @@ def render_read(
         parts.append(MEETING_SECTION)
         for fact in meeting_ranked:
             line = meeting_fact_line(fact)
+            if shared and shared.get("label_meetings"):
+                line += " [local, unshared]"
             grown = rendered_length(parts + [line])
             if grown + notice_reserve > budget_chars or grown - before > budget_chars * 0.4:
                 break
@@ -779,6 +814,10 @@ def render_read(
     # Say what was withheld and how to get it. An agent that does not know
     # more exists cannot ask for it.
     notes: list[str] = []
+    if shared:
+        notes.extend(shared.get("notices") or [])
+        if shared_remaining:
+            notes.append(f"{shared_remaining} more shared/local fact(s) did not fit")
     if project_truncated:
         notes.append(f"project.md truncated; read {project} for the rest")
     remaining = len(ranked) - shown
@@ -820,12 +859,17 @@ def render_read(
         parts.remove(meeting_lines.pop())
         if not meeting_lines and MEETING_SECTION in parts:
             parts.remove(MEETING_SECTION)
+    while rendered_length(parts) > budget_chars and shared_lines:
+        parts.remove(shared_lines.pop())
+        if not shared_lines and shared and shared["header"] in parts:
+            parts.remove(shared["header"])
     # With every entry trimmed, a long list of withheld reasons can still be
     # what overruns a small budget. Say the same thing in fewer characters —
     # but only once nothing is left to trim. While any entry is still shown,
     # an overrun is an accounting defect in the loops above, and shortening
     # the notice would hide it (test-knowledge.sh probe 3 depends on that).
-    if notice and shown == 0 and not meeting_lines and rendered_length(parts) > budget_chars:
+    if notice and shown == 0 and not meeting_lines and not shared_lines \
+            and rendered_length(parts) > budget_chars:
         parts[parts.index(notice)] = "-- Withheld: more than fits; raise --budget-chars."
 
     return separator.join(p for p in parts + [footer] if p), 0
@@ -1289,8 +1333,11 @@ def cmd_init(args: argparse.Namespace) -> int:
 
 
 def cmd_read(args: argparse.Namespace) -> int:
-    text, code = render_read(
-        detect_repo_root(args.repo_root),
+    # Through the Knowledge Resolver: with no source bound and nothing recorded
+    # locally it returns render_read's output unchanged.
+    from knowledge_resolver import Resolver
+
+    text, code = Resolver(detect_repo_root(args.repo_root)).render_read(
         args.brief or "",
         args.budget_chars,
         args.min_confidence,
@@ -1303,7 +1350,9 @@ def cmd_read(args: argparse.Namespace) -> int:
 
 
 def cmd_note(args: argparse.Namespace) -> int:
-    append_note(detect_repo_root(args.repo_root), args.section, args.text)
+    import knowledge_resolver
+
+    knowledge_resolver.note(detect_repo_root(args.repo_root), args.section, args.text)
     print(f"noted under {args.section!r}")
     return 0
 
@@ -1315,7 +1364,9 @@ def cmd_lesson_add(args: argparse.Namespace) -> int:
             "lesson add requires at least one --evidence (a task key, run id, or "
             "artifact path): a lesson with nothing behind it is an assertion"
         )
-    path, outcome = add_lesson(
+    import knowledge_resolver
+
+    path, outcome = knowledge_resolver.add_lesson(
         detect_repo_root(args.repo_root),
         args.id,
         args.trigger,
@@ -1349,7 +1400,9 @@ def cmd_lesson_add(args: argparse.Namespace) -> int:
 
 
 def cmd_lesson_confirm(args: argparse.Namespace) -> int:
-    lesson, outcome = confirm_lesson(detect_repo_root(args.repo_root), args.id, args.evidence)
+    import knowledge_resolver
+
+    lesson, outcome = knowledge_resolver.confirm_lesson(detect_repo_root(args.repo_root), args.id, args.evidence)
     if outcome == "unchanged":
         print(
             f"{lesson.identifier}: unchanged at {lesson.confidence:.1f} — that evidence "
@@ -1361,7 +1414,9 @@ def cmd_lesson_confirm(args: argparse.Namespace) -> int:
 
 
 def cmd_lesson_contradict(args: argparse.Namespace) -> int:
-    lesson = contradict_lesson(detect_repo_root(args.repo_root), args.id, args.evidence)
+    import knowledge_resolver
+
+    lesson = knowledge_resolver.contradict_lesson(detect_repo_root(args.repo_root), args.id, args.evidence)
     print(f"{lesson.identifier}: confidence now {lesson.confidence:.1f} [{lesson.status}]")
     if lesson.status == "disputed":
         print(
@@ -1418,10 +1473,12 @@ def cmd_promote(args: argparse.Namespace) -> int:
     if not candidates:
         print("-- no promotable facts in project memory")
         return 0
+    import knowledge_resolver
+
     repo_root = detect_repo_root(args.repo_root)
     for section, payload in candidates:
         if args.apply:
-            append_note(repo_root, section, payload)
+            knowledge_resolver.note(repo_root, section, payload)
             print(f"promoted -> {section}: {payload}")
         else:
             print(f"candidate -> {section}: {payload}")
@@ -1523,6 +1580,11 @@ def build_parser() -> argparse.ArgumentParser:
     sp.add_argument("--json", action="store_true")
     sp.set_defaults(func=cmd_facts)
 
+    # Shared organisational knowledge (1.3.0): status, sources, sync, propose,
+    # inspect, check, init-source, record, verify.
+    import knowledge_cli
+
+    knowledge_cli.register(sub)
     return parser
 
 
