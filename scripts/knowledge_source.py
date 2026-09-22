@@ -55,9 +55,12 @@ def check_source(root: Path) -> dict:
     folder = root / "facts"
     files = sorted(folder.rglob("*")) if folder.is_dir() else []
     for path in files:
-        if path.is_dir() or path.name == ".gitkeep":
+        if path.name == ".gitkeep" or (path.is_dir() and not path.is_symlink()):
             continue
         rel = path.relative_to(root).as_posix()
+        if path.is_symlink():
+            errors.append("{}: a symlink; fact files must be regular files".format(rel))
+            continue
         if path.suffix != ".json":
             errors.append("{}: only fact JSON files belong under facts/".format(rel))
             continue

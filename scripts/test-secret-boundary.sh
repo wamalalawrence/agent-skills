@@ -520,7 +520,9 @@ fi
 # again at the one point a lesson is serialised. Remove the redactor from the
 # module and the evidence field must leak, or neither layer is being tested.
 KB_PROBE="$(mktemp -d "$BOX/kbprobe.XXXX")"
-cp "$REPO/scripts/knowledge.py" "$REPO/scripts/durable.py" "$REPO/scripts/guard_audit.py" "$KB_PROBE/"
+# knowledge.py reaches the Resolver modules (1.3.0), so the probe copy carries
+# every runtime script; only knowledge.py itself is weakened below.
+cp "$REPO"/scripts/*.py "$KB_PROBE/"
 "$PYTHON3" - "$KB_PROBE/knowledge.py" <<'PY'
 import pathlib
 import sys

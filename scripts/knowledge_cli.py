@@ -117,7 +117,7 @@ def cmd_status(args: argparse.Namespace) -> int:
 
         for name, source in sorted(resolver.config().get("sources", {}).items()):
             access = GitAccess(source["url"])
-            rc, _, err, _ = access.remote(["ls-remote", "--heads", source["url"]], timeout=30)
+            rc, _, err, _ = access.remote(["ls-remote", "--heads", "--", source["url"]], timeout=30)
             report["sources"].setdefault(name, {})["reachable"] = "yes" if rc == 0 else classify_failure(rc, err)
     if args.json:
         _json(report)

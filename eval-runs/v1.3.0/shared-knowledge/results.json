@@ -1,0 +1,35 @@
+{
+  "eval_18": {
+    "after_approval": {
+      "answers": {
+        "a": "- [shared:acme \u00b7 DECISION \u00b7 CONFIRMED \u00b7 team:payments \u00b7 0.90] Payment retries use Kafka. \u2014 meeting \"Payments Architecture\" 2026-09-21 @14:32; approved by Rita Reviewer via PR #31 (f_b73e83fd4dced6e1)",
+        "b": "- [shared:acme \u00b7 DECISION \u00b7 CONFIRMED \u00b7 team:payments \u00b7 0.90] Payment retries use Kafka. \u2014 meeting \"Payments Architecture\" 2026-09-21 @14:32; approved by Rita Reviewer via PR #31 (f_b73e83fd4dced6e1)",
+        "c": "- [shared:acme \u00b7 DECISION \u00b7 CONFIRMED \u00b7 team:payments \u00b7 0.90] Payment retries use Kafka. \u2014 meeting \"Payments Architecture\" 2026-09-21 @14:32; approved by Rita Reviewer via PR #31 (f_b73e83fd4dced6e1)"
+      },
+      "consistent": 3,
+      "identical_lines": true,
+      "installations": 3
+    },
+    "before_approval": {
+      "others_do_not_see_it": [
+        true,
+        true
+      ],
+      "proposer_sees_it_labelled_local_unshared": true
+    },
+    "rate": 1.0,
+    "target": 1.0
+  },
+  "eval_19": {
+    "engineer_b_told_on_sync": true,
+    "leaks": [],
+    "old_fact_links_forward": [
+      "f_b73e83fd4dced6e1"
+    ],
+    "presented_as_current": 0,
+    "rate": 1.0,
+    "target": 1.0,
+    "trials": 18
+  },
+  "met": true
+}

@@ -1026,6 +1026,47 @@ def t_history_rewrite(box):
     assert leaked["id"] not in box.ok("read", "--brief", "never merged fact", cwd=repo)
 
 
+@check("pointer: a URL shaped like a git option is refused before git runs")
+def t_pointer_option(box):
+    repo = box.code_repo("api", HOST + "acme/api.git")
+    marker = box.path / "pwned"
+    evil = box.path / "evil.sh"
+    evil.write_text("#!/bin/sh\ntouch {}\n".format(marker))
+    evil.chmod(0o755)
+    (repo / ".agent-skills").mkdir()
+    (repo / ".agent-skills/knowledge.json").write_text(json.dumps({"url": "--upload-pack=" + str(evil), "org": "acme"}))
+    rc, out, err = box.k("sources", "add", "--yes", cwd=repo)
+    assert rc == 2 and not marker.exists(), (rc, out, err)
+    rc, _, err = box.k("sources", "add", "--upload-pack=" + str(evil), "--yes", cwd=repo)
+    assert rc == 2 and not marker.exists(), (rc, err)
+    try:
+        knowledge_git.GitAccess("--upload-pack=" + str(evil))
+        raise AssertionError("GitAccess accepted an option-shaped URL")
+    except StoreError as exc:
+        assert exc.kind == "usage"
+
+
+@check("symlinks: a source cannot point a fact file at a file elsewhere on this machine")
+def t_symlink(box):
+    outside = box.path / "outside.json"
+    target = fact("Read from outside the clone.")
+    outside.write_text(km.canonical_json(target))
+
+    def plant(clone: Path) -> None:
+        link = clone / km.fact_location(target)
+        link.parent.mkdir(parents=True, exist_ok=True)
+        os.symlink(str(outside), str(link))
+
+    url = box.source("acme")
+    box.admin_commit(url, plant, merge=True)
+    repo = box.code_repo("api", HOST + "acme/api.git")
+    box.connect(repo, url)
+    assert target["id"] not in box.ok("read", "--brief", "read outside clone", cwd=repo)
+    work = box.path / "symcheck"
+    box.git("clone", "-q", url, str(work))
+    assert any("symlink" in e for e in knowledge_source.check_source(work)["errors"])
+
+
 @check("exit codes: an unreachable source is network-failure (4) and a bad binding is usage-error (2)")
 def t_exit_codes(box):
     repo = box.code_repo("api", HOST + "acme/api.git")
@@ -1131,6 +1172,32 @@ def t_probe_secret(box):
         assert FAKE_TOKEN in text, "the weakened build should leak the token"
     finally:
         km.content_findings, km.redact_fact = saved
+
+
+@check("probe: without symlink skipping, the client reads a planted link to a file outside the clone")
+def t_probe_symlink(box):
+    outside = box.path / "outside.json"
+    target = fact("Read from outside the clone.")
+    outside.write_text(km.canonical_json(target))
+
+    def plant(clone: Path) -> None:
+        link = clone / km.fact_location(target)
+        link.parent.mkdir(parents=True, exist_ok=True)
+        os.symlink(str(outside), str(link))
+
+    url = box.source("acme")
+    box.admin_commit(url, plant, merge=True)
+    repo = box.code_repo("api", HOST + "acme/api.git")
+    box.connect(repo, url)
+    with box.use("a"):
+        store = knowledge_resolver.Resolver(repo, auto_sync=False).bound_store()
+        assert target["id"] not in [r["id"] for r in store.scan_rows()]
+        original = Path.is_symlink
+        Path.is_symlink = lambda self: False
+        try:
+            assert target["id"] in [r["id"] for r in store.scan_rows()], "the weakened build should read it"
+        finally:
+            Path.is_symlink = original
 
 
 def main() -> int:

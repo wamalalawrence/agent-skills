@@ -96,6 +96,13 @@ class GitAccess(release_git.GitReleaseProvider):
     """The installer's git plumbing, pointed at a knowledge source."""
 
     def __init__(self, url: str) -> None:
+        # A URL can come from untrusted content (a pointer file, a manifest's
+        # successor). One that starts with "-" would be read by git as an
+        # option such as --upload-pack=<program>. Every command below also puts
+        # "--" before the URL; this refuses it before any git runs.
+        if not isinstance(url, str) or not url.strip() or url.lstrip().startswith("-") or any(
+                ord(c) < 32 for c in url):
+            raise StoreError("not a usable git URL: {!r}".format(url), "usage")
         try:
             super().__init__(repo=url)
         except ProviderError as exc:
@@ -111,7 +118,7 @@ class GitAccess(release_git.GitReleaseProvider):
         return self._run_with_auth(args, cwd=where, timeout=timeout)
 
     def run_local(self, args: List[str], cwd: Path, timeout: int = 60,
-              env: Optional[Dict[str, str]] = None) -> Tuple[int, str, str]:
+                  env: Optional[Dict[str, str]] = None) -> Tuple[int, str, str]:
         base = self._base_env()
         base["GIT_ASKPASS"] = "echo"
         # The clone lives under the user's home, so the installer's ceiling
@@ -305,7 +312,7 @@ def well_known_candidate(remote: str, name: str) -> str:
 def remote_manifest(url: str, timeout: int = NETWORK_TIMEOUT) -> Tuple[Optional[dict], str]:
     """(manifest, state) where state is found | absent | missing | auth | network."""
     access = GitAccess(url)
-    rc, out, err, _ = access.remote(["ls-remote", "--symref", url, "HEAD"], timeout=timeout)
+    rc, out, err, _ = access.remote(["ls-remote", "--symref", "--", url, "HEAD"], timeout=timeout)
     if rc != 0:
         kind = classify_failure(rc, err)
         return None, kind if kind in ("auth", "network") else "missing"
@@ -313,7 +320,7 @@ def remote_manifest(url: str, timeout: int = NETWORK_TIMEOUT) -> Tuple[Optional[
         return None, "absent"  # an empty repository
     work = Path(tempfile.mkdtemp(prefix="agent-skills-knowledge-probe-"))
     try:
-        rc, _, err, _ = access.remote(["clone", "--quiet", "--depth", "1", "--no-tags", url,
+        rc, _, err, _ = access.remote(["clone", "--quiet", "--depth", "1", "--no-tags", "--", url,
                                        str(work / "c")], timeout=timeout)
         if rc != 0:
             kind = classify_failure(rc, err)
@@ -424,7 +431,7 @@ class GitKnowledgeStore(KnowledgeStore):
             if not (self.clone / ".git").is_dir():
                 shutil.rmtree(self.clone, ignore_errors=True)
                 rc, _, err, strategy = self.access.remote(
-                    ["clone", "--quiet", "--no-tags", self.url, str(self.clone)], timeout=timeout)
+                    ["clone", "--quiet", "--no-tags", "--", self.url, str(self.clone)], timeout=timeout)
                 if rc != 0:
                     raise _fail("read", self.url, rc, err)
             else:
@@ -573,6 +580,8 @@ class GitKnowledgeStore(KnowledgeStore):
         provenance = self._provenance()
         rows = []
         for path in self._fact_files():
+            if path.is_symlink():
+                continue  # a source could point a "fact" at any file on this machine
             location = path.relative_to(self.clone).as_posix()
             try:
                 body = read_json(path, None)
@@ -782,6 +791,8 @@ class GitKnowledgeStore(KnowledgeStore):
         rows = []
         folder = tree / "facts"
         for path in sorted(folder.rglob("f_*.json")) if folder.is_dir() else []:
+            if path.is_symlink():
+                continue
             try:
                 body = read_json(path, None)
             except StoreError:
@@ -880,9 +891,11 @@ class GitKnowledgeStore(KnowledgeStore):
         # No write access. Never retried with another credential.
         if adapter.available():
             fork = adapter.fork()
+            if fork and fork[0].lstrip().startswith("-"):
+                fork = None
             if fork:
                 fork_url, owner = fork
-                rc, _, err, _ = self.access.remote(["push", "--quiet", fork_url, refspec], cwd=work,
+                rc, _, err, _ = self.access.remote(["push", "--quiet", "--", fork_url, refspec], cwd=work,
                                                    strategy=strategy)
                 if rc == 0:
                     pr_url = adapter.create_pr(base, "{}:{}".format(owner, branch), change["title"],

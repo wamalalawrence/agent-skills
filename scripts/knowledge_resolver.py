@@ -783,7 +783,8 @@ class Resolver:
             return {"invalid": "not an object"}
         url = str(data.get("url", ""))
         org = str(data.get("org", "")).lower()
-        if not url or len(url) > 400 or any(c in url for c in " \n\t\"'`$;|&") or not km.KEY_RE.match(org):
+        if not url or len(url) > 400 or url.startswith("-") or any(c in url for c in " \n\t\"'`$;|&") \
+                or not km.KEY_RE.match(org):
             return {"invalid": "url or org is malformed"}
         return {"url": url, "org": org, "source_id": str(data.get("source_id", "")),
                 "same_org": self.same_org(url)}
@@ -844,7 +845,7 @@ class Resolver:
             url = suggestion["url"]
         else:
             suggestion = {"url": url, "via": "explicit", "same_org": bool(self.repo_key) and self.same_org(url)}
-        if any(c in url for c in " \n\t\"'`$;|&"):
+        if url.startswith("-") or any(c in url for c in " \n\t\"'`$;|&"):
             raise StoreError("not a git URL: {!r}".format(url), "usage")
         pointer = self.pointer_report()
         if suggestion["via"] == "pointer" and pointer and pointer.get("conflict"):
