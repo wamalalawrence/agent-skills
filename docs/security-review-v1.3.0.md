@@ -84,6 +84,18 @@ The hard boundary is the binding: the Resolver instantiates only the single boun
 defence in depth, every shared fact it returns is re-checked for origin and scope (fail closed),
 so a store bug cannot widen what a repository sees.
 
+**Finding (fixed during the diff review):** isolation also has a local half. Facts recorded with
+`knowledge record` were stored per machine, not per repository, so on a consultant's machine a
+fact recorded in client A's repository appeared in `knowledge read` in client B's, with no
+source configured at all. Each recorded fact now carries the identities of the repositories it
+was recorded in (local-only; `shareable_body` never copies it), and is shown and proposable only
+there. A file without that record is shown nowhere. Case "local isolation" covers read, the
+candidate list, and `propose` from the other repository.
+
+Unscoped meeting facts (`PENDING_REVIEW`, no repository) belong to no client, so they are
+candidates in whichever repository the user runs `propose`. They reach a source only when the
+user assigns a scope and confirms the exact files. **Residual, by design.**
+
 ## Threat: a pointer file redirects knowledge to an attacker's repository
 
 **Probed.** Case 20: a same-org pointer is offered with a normal confirmation. A pointer to

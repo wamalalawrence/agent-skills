@@ -91,7 +91,8 @@ the user guide is [docs/shared-knowledge.md](docs/shared-knowledge.md).
 - Found and fixed during the security review ([docs/security-review-v1.3.0.md](docs/security-review-v1.3.0.md)):
   an option-shaped URL (`--upload-pack=…`) from a pointer file could have reached git as an
   option; a symlinked fact file could have been read from outside the clone; and after an
-  upstream history rewrite, the clone's own local branch kept the removed objects reachable.
+  upstream history rewrite, the clone's own local branch kept the removed objects reachable; and a
+  fact recorded locally in one repository was readable from every other repository on the machine.
 - Speaker names never leave the machine. Action owners are shared only under the default
   `action_owners_only` policy, and a source can set `none`.
 
@@ -106,10 +107,11 @@ the user guide is [docs/shared-knowledge.md](docs/shared-knowledge.md).
 
 ### Tests and evals
 
-- `scripts/test-shared-knowledge.py`: 35 cases, offline. Remotes are local bare repositories
+- `scripts/test-shared-knowledge.py`: 36 cases, offline. Remotes are local bare repositories
   behind git's `insteadOf`, and the PR adapter is a fake `gh`
   (`scripts/fixtures/knowledge/fake-gh.sh`). It covers brief items 1-17 and 20-27, lost access,
-  history removal, option-shaped URLs, symlinked fact files, and exit codes, with five mutation
+  history removal, local isolation of recorded facts, option-shaped URLs, symlinked fact files,
+  and exit codes, with five mutation
   probes: binding isolation, the personal-category rule, the unreviewed downgrade, the content
   scan, and symlink skipping.
 - `scripts/eval-shared-knowledge.py` (brief evals 18-19): three installations, one source. 3/3 get
