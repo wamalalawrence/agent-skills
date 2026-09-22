@@ -16,7 +16,7 @@ compatibility: >-
   .agent-skills.yml). See docs/execution-modes.md.
 metadata:
   author: wamalalawrence
-  version: "1.2.0"
+  version: "1.3.0"
   homepage: "https://github.com/wamalalawrence/agent-skills"
 argument-hint: "<the goal or request to refine into scope and acceptance criteria>"
 user-invocable: true

@@ -29,6 +29,12 @@ Start here when reading the repository outside GitHub's main README.
   joins a Teams, Zoom, or Meet call, polling carries it to a redacted transcript, the host agent
   extracts facts window by window, and they land in the repository knowledge base as meeting
   evidence. The design record is [meeting-intelligence/DISCOVERY.md](meeting-intelligence/DISCOVERY.md).
+- [Shared knowledge](shared-knowledge.md) - one reviewed, provenance-carrying knowledge source per
+  organisation, in a git repository you already host: connect, propose (a merge is the approval),
+  sync, and the precedence rules for local versus shared facts. Setup for source admins is
+  [knowledge/SETUP.md](knowledge/SETUP.md), removing merged data is
+  [knowledge/HISTORY-REMOVAL.md](knowledge/HISTORY-REMOVAL.md), and the design record is
+  [knowledge/DISCOVERY.md](knowledge/DISCOVERY.md).
 - [Lifecycle preflight](lifecycle-preflight.md) - the full contract behind the two commands
   every skill runs (`start-task.sh` / `finish-task.sh`): fallbacks, statuses, durable-fact
   flags, the capability report, and why task size never waives them.

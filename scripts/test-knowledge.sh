@@ -592,7 +592,9 @@ sec "Mutation probes"
 # ---------------------------------------------------------------------------
 PROBE="$BOX/probe"
 mkdir -p "$PROBE"
-cp "$KB" "$REPO/scripts/durable.py" "$REPO/scripts/guard_audit.py" "$PROBE/"
+# knowledge.py reaches the Resolver modules (1.3.0), so the probe copy carries
+# every runtime script; only knowledge.py itself is weakened below.
+cp "$REPO"/scripts/*.py "$PROBE/"
 
 # Probe 1: remove the evidence-identity check and the same evidence must inflate.
 "$PYTHON3" - "$PROBE/knowledge.py" <<'PY'

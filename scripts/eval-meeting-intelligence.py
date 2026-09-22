@@ -33,7 +33,7 @@ HERE = Path(__file__).resolve().parent
 ROOT = HERE.parent
 sys.path.insert(0, str(HERE))
 
-import knowledge  # noqa: E402
+import knowledge_resolver as knowledge  # noqa: E402
 import meeting_capture as mc  # noqa: E402
 import meeting_intel as intel  # noqa: E402
 
