@@ -261,3 +261,49 @@ signatures, `http.server` for the optional listener, `json` for everything. No n
 - **D8 — a meeting that ends before any recording is `FAILED` with reason
   `ended_without_media`** (or `TIMED_OUT` when the provider reports no-one joined), so every
   terminal state is one of the named terminal states.
+
+## 1.4.0 addendum: capture as a user choice
+
+Recorded for the `1.4.0` change, against the `1.3.0` tree (commit `4361874`), in response to field
+feedback: onboarding failed silently (nothing said a Recall account, key, region,
+and secret were needed), cost and third-party processing were never disclosed, and Recall was the
+only way to capture. What already existed and was reused:
+
+| Need | Existing owner, reused | What 1.4.0 adds |
+| --- | --- | --- |
+| Provider boundary | `MeetingCaptureProvider`, `Capabilities`, boundary test | `readiness()`, `resolve()`, `activity()`; defaulted cost / data-flow / attribution fields; `MeetingRefusal` |
+| Lifecycle, reconcile | `reconcile()`, the monotonic state machine | One provider per record (`capture_provider`, else the handle's); the fetch window is a poll outcome |
+| Credentials | The Access Resolver's store (`access.py`) | `store_identity()` / `fetch_identity()` from `access set`: tokens and client secrets in the same store |
+| HTTPS rules | Recall's credential-safe redirect and bounded transport | Moved to `meeting_http.py`, shared by every provider and token endpoint |
+| Transcript model and normalisation | `NormalisedTranscript`, `build_transcript`, `parse_webvtt` | `speaker_attribution`, `capture_provider`, `language` (stored in the same v1 transcript file) |
+| Extraction checks | `meeting_intel.check_fact` | Attribution-aware: channel labels are never owners; agreements and actions are capped at 0.6 |
+| Config | `meeting.json` | `default_provider`, `provider_notices`, `recall`, `native`, `desktop` sections; `provider` keeps its 1.2.0 value `recall` |
+| doctor | `doctor.sh` → `meeting.py _doctor` | Per-provider rows; the probe also checks the desktop loopback |
+
+Deviations from the brief, and why:
+
+- **D9 — one composition root.** Only `meeting_providers.py` (and the interactive
+  `meeting_setup.py`) import provider modules, inside functions. The brief allowed `meeting.py`'s
+  `build_provider` to; with three providers, one registry keeps the boundary test simple and makes
+  "never fall back" a property of one module.
+- **D10 — raw desktop audio is headerless PCM while recording**, finalised into the two-channel WAV
+  the brief names at stop. A WAV header is written only at the end, so a crash would leave an
+  unreadable file; raw PCM loses at most the last buffer, which is what makes `PARTIAL` possible.
+- **D11 — transcription runs in a background worker**, not inside `stop`. `stop` follows its
+  progress; `status` shows it; a crash resumes at the first missing chunk. Holding the meeting lock
+  for a long transcription would have blocked `status` and `list`.
+- **D12 — a native meeting waits in `CREATED`**, not a new state: waiting for the platform
+  transcript is `CREATED` → `ENDED` (`not_yet_available`) → `MEDIA_READY`, and an expired window
+  is `FAILED` with the refusal code as its reason. No new lifecycle state, so 1.3.0 reads the
+  records.
+- **D13 — Google "Desktop app" clients carry a client secret.** Google's own guidance treats it as
+  non-confidential for installed apps, but it is still handled as a credential (hidden input, the
+  credential store), never distributed in the import file; for Zoom the secret is mandatory.
+- **D14 — `setup` never asks a non-interactive caller anything.** Where the brief says a person is
+  needed (a secret, a browser sign-in, an acknowledgement, a self-test recording), setup prints the
+  remaining steps and exits `2`. The one exception kept from 1.2.0 is `join
+  --acknowledge-recording-notice` for Recall's per-installation recording notice, because removing
+  it would break existing assistant flows.
+- **D15 — model integrity is SHA-1**, because that is the digest whisper.cpp publishes for its
+  models. It is compared against a pinned value in the source, downloaded only over https from
+  huggingface.co, and never used as a key.

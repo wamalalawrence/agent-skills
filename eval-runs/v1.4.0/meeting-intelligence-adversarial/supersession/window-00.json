@@ -1,0 +1,101 @@
+{
+  "schema": "agent-skills.meeting-extraction/v1",
+  "meeting_id": "m_e00000000005",
+  "window": 0,
+  "facts": [
+    {
+      "type": "ARCHITECTURE_DECISION",
+      "statement": "Use PostgreSQL as the primary store for the new ledger.",
+      "status": "CONFIRMED",
+      "evidence": [
+        "s_e7fe5683aed1",
+        "s_22bff0b73861"
+      ],
+      "confidence": 0.9,
+      "speakers": [
+        "Ravi Example",
+        "Chen Example"
+      ],
+      "owner": null,
+      "due": null,
+      "supersedes": []
+    },
+    {
+      "type": "ARCHITECTURE_DECISION",
+      "statement": "Consider PostgreSQL read replicas for reporting at some point.",
+      "status": "PROPOSED",
+      "evidence": [
+        "s_014a5b06be38"
+      ],
+      "confidence": 0.5,
+      "speakers": [
+        "Ravi Example"
+      ],
+      "owner": null,
+      "due": null,
+      "supersedes": []
+    },
+    {
+      "type": "CONSTRAINT",
+      "statement": "Load tests show ledger write throughput far above what one Postgres primary can handle.",
+      "status": "OPEN",
+      "evidence": [
+        "s_d66eae52ab87"
+      ],
+      "confidence": 0.8,
+      "speakers": [
+        "Chen Example"
+      ],
+      "owner": null,
+      "due": null,
+      "supersedes": []
+    },
+    {
+      "type": "ARCHITECTURE_DECISION",
+      "statement": "Use DynamoDB instead of PostgreSQL for the ledger.",
+      "status": "CONFIRMED",
+      "evidence": [
+        "s_34531db99420",
+        "s_f1849e86080c"
+      ],
+      "confidence": 0.9,
+      "speakers": [
+        "Ravi Example",
+        "Chen Example"
+      ],
+      "supersedes": [
+        {
+          "statement": "Use PostgreSQL as the primary store for the new ledger.",
+          "evidence": [
+            "s_34531db99420",
+            "s_f1849e86080c"
+          ]
+        }
+      ],
+      "owner": null,
+      "due": null
+    },
+    {
+      "type": "DECISION",
+      "statement": "Reporting stays on Postgres.",
+      "status": "CONFIRMED",
+      "evidence": [
+        "s_52cfa7ad2ae1"
+      ],
+      "confidence": 0.6,
+      "speakers": [
+        "Ravi Example"
+      ],
+      "owner": null,
+      "due": null,
+      "supersedes": [
+        {
+          "statement": "Consider PostgreSQL read replicas for reporting at some point.",
+          "evidence": [
+            "s_52cfa7ad2ae1"
+          ]
+        }
+      ]
+    }
+  ]
+}

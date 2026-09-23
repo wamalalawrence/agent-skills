@@ -32,6 +32,24 @@ agent-skills rollback    # return to the previous release
 agent-skills uninstall   # remove it again
 ```
 
+## Optional: Meeting Intelligence
+
+"Listen to this meeting: <link>" turns a Teams, Zoom, or Google Meet meeting into engineering
+knowledge. It needs one of three capture methods, which you choose and set up yourself:
+
+| Method | Bot joins | Extra cost | Audio / transcript goes to |
+| --- | --- | --- | --- |
+| `native` — the platform's own transcript | no | none | stays in your organisation (needs an admin to register an app once) |
+| `recall` — a visible Recall.ai bot | yes | ≈ $0.65 per meeting hour, billed by Recall | Recall.ai, in the region you pick |
+| `desktop` — record and transcribe locally | no | none | nowhere: your computer only; no one in the meeting is notified automatically, so you tell them |
+
+In every mode your AI assistant extracts the facts, so transcript text reaches its model provider.
+Nothing is captured until you pick one:
+
+```bash
+agent-skills meeting setup --compare
+```
+
 ## Requirements
 
 - Python 3.8 or newer

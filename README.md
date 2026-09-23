@@ -4,14 +4,13 @@ Reusable [Agent Skills](https://agentskills.io/) for software-engineering work �
 role-shaped workflows your AI assistant can load on demand so the same model produces
 senior-engineer, product-owner, tester, or reviewer output instead of generic answers.
 
-> **Status:** `1.3.0` — stable, private. The [1.0 contracts](docs/one-point-oh.md) — CLI names
+> **Status:** `1.4.0` — stable, private. The [1.0 contracts](docs/one-point-oh.md) — CLI names
 > and exit codes, the install layout, the release-provider interface, the skill names, and the
-> Engineering Tool Capability Framework — are frozen for the `1.x` line, and `1.3.0` only adds to
-> them. It adds [shared knowledge](docs/shared-knowledge.md): an organisation keeps one reviewed,
-> provenance-carrying knowledge source in a git repository it already hosts, engineers propose
-> facts (including meeting decisions from [Meeting Intelligence](docs/meeting-intelligence.md))
-> as pull requests, a merge is the approval, and every bound installation reads the same facts.
-> With no source configured nothing changes. The details are [in the changelog](CHANGELOG.md).
+> Engineering Tool Capability Framework — are frozen for the `1.x` line, and `1.4.0` only adds to
+> them. It makes meeting capture your choice: [Meeting Intelligence](docs/meeting-intelligence/README.md)
+> can use the transcript Teams, Meet, or Zoom already made (no bot, no cost), a visible Recall bot,
+> or a local recording transcribed with whisper.cpp, and each option states its cost, where the data
+> goes, and how participants are told before anything runs. The details are [in the changelog](CHANGELOG.md).
 
 ## Start here
 
@@ -104,18 +103,18 @@ Requirements: Python 3.8+, bash, and git. macOS or Linux; on Windows use WSL or 
 with every supported agent host it finds, and makes the runtime invocable from anywhere:
 
 ```text
-  resolve    1.3.0 (stable, via git)
+  resolve    1.4.0 (stable, via git)
   download   164 files staged
   verify     payload hash and version agree
   self-test  staged runtime answers correctly
-  activate   current -> versions/1.3.0
+  activate   current -> versions/1.4.0
   hosts      claude-code, agents-standard, cursor, codex
   verified   installation is consistent
 
-Agent Skills 1.3.0 is installed.
+Agent Skills 1.4.0 is installed.
 
   install root : ~/.agent-skills
-  active release: ~/.agent-skills/versions/1.3.0
+  active release: ~/.agent-skills/versions/1.4.0
   hosts        : claude-code, agents-standard, cursor, codex
   command      : ~/.local/bin/agent-skills
 
@@ -368,9 +367,12 @@ usage shows they are useful independently.
 
 - Key collaborators: `context-optimizer`, `software-engineer`, `issue-investigator`,
   `product-owner`.
-- Purpose: "Listen to this meeting: <link>". A visible, named assistant joins the Teams, Zoom, or
-  Google Meet call after a one-time recording notice; polling carries the meeting to a redacted,
-  speaker-attributed transcript with no public URL; the host agent extracts decisions, actions,
+- Purpose: "Listen to this meeting: <link>". The meeting is captured the way the user chose in
+  `agent-skills meeting setup` — the platform's own Teams / Meet / Zoom transcript (no bot), a
+  visible, named Recall bot, or a local recording transcribed with whisper.cpp — and each option
+  states its cost, data flow, and consent up front; with none chosen, the assistant explains the
+  options instead of failing. Polling carries the meeting to a redacted transcript with no public
+  URL; the host agent extracts decisions, actions,
   risks, and the rest one bounded window at a time; the CLI validates every fact against the
   transcript and commits the meeting's facts to the repository knowledge base in one write.
   Later engineering work in the same repository retrieves them as labelled meeting evidence.

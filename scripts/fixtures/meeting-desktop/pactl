@@ -1,0 +1,14 @@
+#!/usr/bin/env python3
+"""A fake pactl (PulseAudio/PipeWire) for the offline desktop tests on Linux."""
+import sys
+
+args = sys.argv[1:]
+if args == ["get-default-source"]:
+    print("alsa_input.placeholder-microphone")
+elif args == ["get-default-sink"]:
+    print("alsa_output.placeholder-speakers")
+elif args[:3] == ["list", "short", "sources"]:
+    print("1\talsa_input.placeholder-microphone\tmodule-alsa-card.c\ts16le 2ch 48000Hz\tRUNNING")
+    print("2\talsa_output.placeholder-speakers.monitor\tmodule-alsa-card.c\ts16le 2ch 48000Hz\tIDLE")
+else:
+    sys.exit(1)

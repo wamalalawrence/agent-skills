@@ -25,10 +25,12 @@ Start here when reading the repository outside GitHub's main README.
   billing and seat policies, private distribution, operating costs, and the build order to launch.
 - [Updates, rollback, and channels](updates.md) - how a user notices a new release and applies it without losing
   credentials or bindings (`agent-skills check-updates`, `agent-skills update`, `git pull`).
-- [Meeting Intelligence](meeting-intelligence.md) - "Listen to this meeting": a visible assistant
-  joins a Teams, Zoom, or Meet call, polling carries it to a redacted transcript, the host agent
-  extracts facts window by window, and they land in the repository knowledge base as meeting
-  evidence. The design record is [meeting-intelligence/DISCOVERY.md](meeting-intelligence/DISCOVERY.md).
+- [Meeting Intelligence](meeting-intelligence.md) - "Listen to this meeting": the meeting is
+  captured the way you chose (native platform transcript, a visible Recall bot, or a local
+  recording), polling carries it to a redacted transcript, the host agent extracts facts window by
+  window, and they land in the repository knowledge base as meeting evidence. Choosing and setting
+  up a capture provider, costs, and privacy: [meeting-intelligence/README.md](meeting-intelligence/README.md).
+  The design record is [meeting-intelligence/DISCOVERY.md](meeting-intelligence/DISCOVERY.md).
 - [Shared knowledge](shared-knowledge.md) - one reviewed, provenance-carrying knowledge source per
   organisation, in a git repository you already host: connect, propose (a merge is the approval),
   sync, and the precedence rules for local versus shared facts. Setup for source admins is

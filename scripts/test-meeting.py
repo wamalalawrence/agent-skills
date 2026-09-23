@@ -8,6 +8,14 @@ transport. Nothing here opens a network connection except to a listener this
 suite starts on 127.0.0.1. Every case runs in its own temporary HOME, config
 directory, and git repositories.
 
+From 1.4.0 (cases C1-C17): the native provider replays sanitised Graph, Meet,
+and Zoom fixtures (`scripts/fixtures/meeting-native/`) through injected
+transports and signs in against a fake loopback OAuth server; the desktop
+provider runs its real background workers against a fake `ffmpeg`,
+`whisper-cli`, and `pactl` (`scripts/fixtures/meeting-desktop/`) that synthesise
+two-channel audio and canned transcriptions. C16 runs the v1.3.0 tree (from
+git) against the new state; it skips that half when the tag is absent.
+
 One opt-in live smoke test exists at the end: set AGENT_SKILLS_MEETING_LIVE_SMOKE=1
 with real Recall credentials in the environment. It only authenticates and lists
 bots; it never creates one.
@@ -220,8 +228,12 @@ class FakeProvider(mc.MeetingCaptureProvider):
         self.calls.append(("delete_media", handle.provider_ref))
 
 
-def use(provider):
+def use(provider, default="recall"):
+    """Inject a provider in place of the real one, as the user's chosen default."""
     meeting.PROVIDER_FACTORY = lambda config, need_secret: provider
+    config = store.load_config()
+    config["default_provider"] = default
+    store.save_config(config)
     return provider
 
 
@@ -598,19 +610,40 @@ def _imports_and_strings(path: Path):
     return imports, strings, functions_importing
 
 
-@check("7. Meeting Intelligence depends on no Recall type (import boundary)")
+PROVIDER_MODULES = ("meeting_recall", "meeting_native", "meeting_native_teams", "meeting_native_meet",
+                    "meeting_native_zoom", "meeting_desktop", "meeting_oauth")
+
+
+def _all_imports(path: Path) -> set:
+    names = set()
+    for node in ast.walk(ast.parse(path.read_text(encoding="utf-8"))):
+        if isinstance(node, ast.Import):
+            names.update(alias.name for alias in node.names)
+        elif isinstance(node, ast.ImportFrom) and node.module:
+            names.add(node.module)
+    return names
+
+
+@check("7. Meeting Intelligence depends on no provider type (import boundary)")
 def t_boundary(box):
     for name in ("meeting_intel.py", "meeting_store.py", "meeting_capture.py", "meeting_secrets.py",
-                 "meeting_webhook.py", "knowledge.py"):
-        imports, strings, _ = _imports_and_strings(HERE / name)
-        assert "meeting_recall" not in imports, "{} imports the Recall adapter".format(name)
-        leaks = [s for s in strings for word in RECALL_VOCABULARY if word in s]
-        assert not leaks, "{} names Recall concepts: {}".format(name, leaks[:3])
-    imports, _, importing_functions = _imports_and_strings(HERE / "meeting.py")
-    assert set(importing_functions) == {"build_provider"}, importing_functions
-    tree = ast.parse((HERE / "meeting.py").read_text())
-    top_level = [n for n in tree.body if isinstance(n, (ast.Import, ast.ImportFrom))]
-    assert not any("meeting_recall" in ast.dump(n) for n in top_level), "meeting.py imports Recall at module level"
+                 "meeting_webhook.py", "knowledge.py", "meeting.py"):
+        imports = _all_imports(HERE / name)
+        assert not imports & set(PROVIDER_MODULES), "{} imports a provider: {}".format(
+            name, imports & set(PROVIDER_MODULES))
+        if name != "meeting.py":
+            _, strings, _ = _imports_and_strings(HERE / name)
+            leaks = [s for s in strings for word in RECALL_VOCABULARY if word in s]
+            assert not leaks, "{} names Recall concepts: {}".format(name, leaks[:3])
+    # The composition root and setup import providers only inside functions.
+    for name in ("meeting_providers.py", "meeting_setup.py"):
+        tree = ast.parse((HERE / name).read_text())
+        top_level = [n for n in tree.body if isinstance(n, (ast.Import, ast.ImportFrom))]
+        assert not any(m in ast.dump(n) for n in top_level for m in PROVIDER_MODULES), name
+    # Only the Recall adapter names Recall's API; the other providers do not borrow its vocabulary.
+    for name in ("meeting_native.py", "meeting_native_teams.py", "meeting_native_meet.py",
+                 "meeting_native_zoom.py", "meeting_desktop.py", "meeting_oauth.py", "meeting_http.py"):
+        assert "meeting_recall" not in _all_imports(HERE / name), name
 
 
 # ---------------------------------------------------------------------------
@@ -890,17 +923,31 @@ def t_exit_codes(box):
     assert (meeting.EXIT_USAGE, meeting.EXIT_AUTH, meeting.EXIT_NETWORK, meeting.EXIT_INTEGRITY, meeting.EXIT_STATE) == (
         Exit.USAGE, Exit.AUTH_REQUIRED, Exit.NETWORK, Exit.INTEGRITY, Exit.VERIFY_FAILED)
     repo = git_repo(box / "r", "https://github.com/example/r.git")
-    # Consent missing in a non-interactive shell: usage, nothing created.
-    assert run_cli("join", ZOOM, "--scope", str(repo))[0] == Exit.USAGE
+    # Nothing chosen: usage, the preflight, nothing created.
+    code, out, _ = run_cli("join", ZOOM, "--scope", str(repo))
+    assert code == Exit.USAGE and "isn't set up yet" in out, (code, out)
     assert not store.list_meeting_ids()
-    acknowledge()
-    # Missing credentials: authentication-required, no bot.
-    code, _, err = run_cli("join", ZOOM, "--scope", str(repo))
-    assert code == Exit.AUTH_REQUIRED, (code, err)
-    assert not store.list_meeting_ids()
+    # Recall chosen, key but no region: authentication-required, no bot.
+    config = store.load_config()
+    config["default_provider"] = "recall"
+    store.save_config(config)
     os.environ["AGENT_SKILLS_RECALL_API_KEY"] = "test-key-not-real"
     code, _, err = run_cli("join", ZOOM, "--scope", str(repo))
     assert code == Exit.AUTH_REQUIRED and "region" in err, (code, err)
+    assert not store.list_meeting_ids()
+    # Region but no key: authentication-required.
+    del os.environ["AGENT_SKILLS_RECALL_API_KEY"]
+    os.environ["AGENT_SKILLS_RECALL_REGION"] = "eu-central-1"
+    code, _, err = run_cli("join", ZOOM, "--scope", str(repo))
+    assert code == Exit.AUTH_REQUIRED and "API key" in err, (code, err)
+    os.environ["AGENT_SKILLS_RECALL_API_KEY"] = "test-key-not-real"
+    del os.environ["AGENT_SKILLS_RECALL_REGION"]
+    # Consent missing in a non-interactive shell: usage, nothing created.
+    os.environ["AGENT_SKILLS_RECALL_REGION"] = "eu-central-1"
+    assert run_cli("join", ZOOM, "--scope", str(repo))[0] == Exit.USAGE
+    assert not store.list_meeting_ids()
+    del os.environ["AGENT_SKILLS_RECALL_REGION"]
+    acknowledge()
     # Region/key mismatch between the meeting config and the credential.
     config = store.load_config()
     config["region"] = "us-east-1"
@@ -1045,7 +1092,7 @@ def t_mechanical(box):
 
 @check("doctor reports Recall credentials from metadata, never by reading the secret")
 def t_doctor_presence(box):
-    assert meeting.recall_credential_presence() == (False, "")
+    assert recall.credential_presence() == (False, False, "")
     config_dir = Path(os.environ["AGENT_SKILLS_CONFIG_DIR"])
     config_dir.mkdir(parents=True, exist_ok=True)
     (config_dir / "credentials.json").write_text(json.dumps({"schema": "agent-skills.credentials/v1", "profiles": {
@@ -1055,12 +1102,14 @@ def t_doctor_presence(box):
     original = access.backend_for_field
     access.backend_for_field = lambda *a, **k: (_ for _ in ()).throw(AssertionError("a secret was read"))
     try:
-        assert meeting.recall_credential_presence() == (True, "eu-central-1")
+        assert recall.credential_presence() == (True, False, "eu-central-1")
         report = meeting.doctor_report(probe=False)
     finally:
         access.backend_for_field = original
     assert report["credentials"] == "api key resolves" and report["region"] == "eu-central-1", report
     assert "not probed" in report["provider"]
+    assert report["providers"]["recall"].startswith("recall   ready"), report["providers"]
+    assert report["default_provider"] == "recall", "a 1.3.0 Recall setup must stay the default"
 
 
 # ---------------------------------------------------------------------------
@@ -1147,6 +1196,983 @@ def t_probe_scope(box):
         assert "Move payment retries to Kafka." in text, "the weakened build should leak"
     finally:
         knowledge.repository_scope = original
+
+
+# ---------------------------------------------------------------------------
+# 1.4.0: capture is the user's choice among native, recall, and desktop.
+# Cases C1-C17 follow the release brief's test list.
+# ---------------------------------------------------------------------------
+import builtins  # noqa: E402
+import signal as _signal  # noqa: E402
+import socket  # noqa: E402
+from datetime import datetime, timedelta, timezone  # noqa: E402
+from urllib.parse import quote  # noqa: E402
+
+import access  # noqa: E402
+import meeting_desktop as desktop  # noqa: E402
+import meeting_native as native  # noqa: E402
+import meeting_oauth  # noqa: E402
+import meeting_providers as providers  # noqa: E402
+import meeting_setup  # noqa: E402
+
+NATIVE_FIXTURES = HERE / "fixtures" / "meeting-native"
+DESKTOP_FAKES = HERE / "fixtures" / "meeting-desktop"
+TENANT = "00000000-0000-4000-8000-000000000001"
+OTHER_TENANT = "99999999-0000-4000-8000-000000000009"
+# Built from parts: obviously fake, and not a committed secret shape.
+TOKENS = {p: {"access_token": "at-" + "placeholder-" + p, "refresh_token": "rt-" + "placeholder-" + p}
+          for p in mc.PLATFORMS}
+ZOOM_CLIENT_SECRET = "zcs-" + "placeholder-client-secret"
+RECALL_KEY = "rk-" + "placeholder-recall-key"
+
+
+def teams_url(tenant=TENANT):
+    return ("https://teams.microsoft.com/l/meetup-join/19%3ameeting_placeholder%40thread.v2/0?context="
+            + quote(json.dumps({"Tid": tenant, "Oid": "placeholder-organiser"})))
+
+
+def fixture(name: str) -> bytes:
+    return (NATIVE_FIXTURES / name).read_bytes()
+
+
+class Routes:
+    """An injected transport: ordered (method, url-substring) routes, recorded calls, no network.
+
+    A route's response may be a list, consumed in order (the last one repeats).
+    """
+
+    def __init__(self, routes):
+        self.routes = [[m, sub, r if isinstance(r, list) else [r]] for m, sub, r in routes]
+        self.calls = []
+
+    def __call__(self, method, url, headers, body):
+        self.calls.append((method, url, dict(headers), body))
+        for route in self.routes:
+            if route[0] == method and route[1] in url:
+                status, payload = route[2][0] if len(route[2]) == 1 else route[2].pop(0)
+                return status, payload() if callable(payload) else payload
+        raise AssertionError("unrouted call: {} {}".format(method, url))
+
+
+class Clock:
+    def __init__(self):
+        self.now = datetime.now(timezone.utc)
+
+    def __call__(self):
+        return self.now
+
+
+def native_setup(default=True):
+    config = store.load_config()
+    config["native"] = {
+        "teams": {"client_id": "placeholder-client-teams", "tenant_id": TENANT},
+        "google_meet": {"client_id": "placeholder-client-meet"},
+        "zoom": {"client_id": "placeholder-client-zoom", "account_domain": "acme.zoom.us"},
+    }
+    if default:
+        config["default_provider"] = "native"
+    providers.record_notice(config, "native", "setup", store.now_iso())
+    store.save_config(config)
+    for platform in mc.PLATFORMS:
+        profile = native.profile_name(platform)
+        if platform == "zoom":
+            access.store_identity(profile, profile, {}, {"client_secret": ZOOM_CLIENT_SECRET})
+        meeting_oauth.TokenStore(profile, profile).save(dict(TOKENS[platform], expires_in=3600))
+
+
+def use_native(transports, clock=None):
+    provider = {}
+
+    def factory(config, _need_secret):
+        # One provider per reconcile run, like production; the clock and fixtures persist.
+        provider["p"] = native.NativeTranscriptProvider(config, transports=transports, now=clock)
+        return provider["p"]
+
+    meeting.PROVIDER_FACTORY = factory
+    return provider
+
+
+def graph_routes(lookup=None, transcripts=None, content=None):
+    return Routes([
+        ("GET", "/me/onlineMeetings?$filter=", lookup or (200, fixture("teams_meeting_lookup.json"))),
+        ("GET", "/content", content or (200, fixture("teams_content.vtt"))),
+        ("GET", "/transcripts", transcripts or (200, fixture("teams_transcripts.json"))),
+    ])
+
+
+def teams_lookup(end: datetime) -> bytes:
+    data = json.loads(fixture("teams_meeting_lookup.json"))
+    data["value"][0]["endDateTime"] = end.strftime("%Y-%m-%dT%H:%M:%SZ")
+    return json.dumps(data).encode()
+
+
+def meeting_id_from(out: str) -> str:
+    return out.split("Meeting id: ")[1].split()[0]
+
+
+def no_network():
+    """Fail loudly on any socket connection for the duration of a with-block."""
+    real = socket.socket.connect
+
+    def refuse(self, address):
+        raise AssertionError("a network connection was attempted: {!r}".format(address))
+
+    class Guard:
+        def __enter__(self):
+            socket.socket.connect = refuse
+
+        def __exit__(self, *exc):
+            socket.socket.connect = real
+
+    return Guard()
+
+
+@check("C1. with no provider configured, join makes no call, starts nothing, and prints the preflight")
+def t_preflight(box):
+    repo = git_repo(box / "r", "https://github.com/example/r.git")
+    with no_network():
+        for url in (ZOOM, MEET, teams_url()):
+            code, out, err = run_cli("join", url, "--scope", str(repo))
+            assert code == Exit.USAGE, (code, out, err)
+            for needle in ("isn't set up yet", "native   Download the transcript", "recall   A visible",
+                           "desktop  Your computer records", "Cost ≈ $0.65 per meeting hour",
+                           "agent-skills meeting setup native|recall|desktop", "agent-skills meeting setup --compare",
+                           "docs/meeting-intelligence/README.md", "No one in the meeting is notified automatically"):
+                assert needle in out, (needle, out)
+        # The same preflight from status, for the host skill.
+        code, out, _ = run_cli("status", "--providers")
+        assert code == 0 and "isn't set up yet" in out and "native   not configured" in out, out
+        code, out, _ = run_cli("status", "--providers", "--json")
+        data = json.loads(out)
+        assert data["default_provider"] is None and "isn't set up yet" in data["preflight"]
+    assert not store.list_meeting_ids(), "a meeting record was created"
+    assert not store.state_root().exists() or not any(store.state_root().iterdir())
+
+
+@check("C2. every provider reports ready / not configured / broken with its fix; doctor lists all three")
+def t_readiness(box):
+    config = store.load_config()
+    states = {p: providers.readiness(config, p).state for p in providers.PROVIDERS}
+    assert states == {"native": mc.NOT_CONFIGURED, "recall": mc.NOT_CONFIGURED, "desktop": mc.NOT_CONFIGURED} or (
+        states["desktop"] == mc.BROKEN and desktop.unsupported_reason()), states
+    # recall: key without region → broken; mismatch → broken; both → ready.
+    os.environ["AGENT_SKILLS_RECALL_API_KEY"] = RECALL_KEY
+    state = providers.readiness(config, "recall")
+    assert state.state == mc.BROKEN and "region" in state.reason and state.fix_command == "agent-skills meeting setup recall"
+    os.environ["AGENT_SKILLS_RECALL_REGION"] = "eu-central-1"
+    config["region"] = "us-east-1"
+    state = providers.readiness(config, "recall")
+    assert state.state == mc.BROKEN and "mismatch" in state.reason, state
+    config["region"] = ""
+    assert providers.readiness(config, "recall").ready
+    # native: imported but not signed in → broken with the platform's fix command; signed in → ready;
+    # an invalid_grant marks it expired → broken again.
+    config["native"] = {"teams": {"client_id": "placeholder-client-teams", "tenant_id": TENANT}}
+    state = providers.readiness(config, "native")
+    assert state.state == mc.BROKEN and "not signed in" in state.reason, state
+    assert state.fix_command == "agent-skills meeting setup native --platform teams", state
+    meeting_oauth.TokenStore("meeting-teams", "meeting-teams").save(dict(TOKENS["teams"], expires_in=3600))
+    assert providers.readiness(config, "native").ready
+    meeting_oauth.TokenStore("meeting-teams", "meeting-teams").mark_expired()
+    state = providers.readiness(config, "native")
+    assert state.state == mc.BROKEN and "expired" in state.reason, state
+    # Zoom needs its client secret before anything else.
+    config["native"]["zoom"] = {"client_id": "placeholder-client-zoom"}
+    state = native.platform_readiness(config, "zoom")
+    assert state.state == mc.BROKEN and "client secret" in state.reason, state
+    # desktop: each missing piece is named with the one fix.
+    if not desktop.unsupported_reason():
+        os.environ["PATH"] = str(box / "empty-bin")
+        config["desktop"] = {"configured_at": store.now_iso(), "system_device": "BlackHole 2ch"}
+        state = providers.readiness(config, "desktop")
+        assert state.state == mc.BROKEN and "ffmpeg" in state.reason and "ffmpeg" in state.fix_command, state
+        install_desktop_fakes(box)
+        state = providers.readiness(config, "desktop")
+        assert state.state == mc.BROKEN and "model" in state.reason and "--model small" in state.fix_command, state
+        fake_model()
+        assert providers.readiness(config, "desktop").ready, providers.readiness(config, "desktop")
+    store.save_config(config)
+    report = meeting.doctor_report(probe=False)
+    assert set(report["providers"]) == {"native", "recall", "desktop"}, report
+    assert "Microsoft Teams: sign-in expired" in report["providers"]["native"], report["providers"]
+    assert "native   broken:" in report["providers"]["native"]
+    assert report["providers"]["recall"].startswith("recall   ready")
+
+
+@check("C3. the host skill checks providers first and relays the preflight instead of joining")
+def t_host_skill(box):
+    skill = (ROOT / "skills" / "meeting-intelligence" / "SKILL.md").read_text()
+    first = skill.index("agent-skills meeting status --providers")
+    assert first < skill.index("agent-skills meeting join <link>"), "the provider check must come before join"
+    for needle in ("relay the preflight", "never run `meeting setup`", "--via desktop", "must not start"):
+        assert needle in skill, needle
+    wamala = (ROOT / "skills" / "wamala" / "references" / "routing-table.md").read_text()
+    assert "status --providers" in wamala
+    # And the command the skill runs prints exactly that preflight when nothing is set up.
+    code, out, _ = run_cli("status", "--providers")
+    assert code == 0 and out.startswith(providers.preflight_text(store.load_config()))
+
+
+@check("C4. a refused provider never triggers another one")
+def t_no_fallback(box):
+    repo = git_repo(box / "r", "https://github.com/example/r.git")
+    native_setup()
+    os.environ["AGENT_SKILLS_RECALL_API_KEY"] = RECALL_KEY  # recall would be ready, and must stay untouched
+    os.environ["AGENT_SKILLS_RECALL_REGION"] = "eu-central-1"
+    recall_calls = []
+    original = recall._default_transport
+    recall._default_transport = lambda *a: recall_calls.append(a) or (500, b"")
+    try:
+        routes = graph_routes(lookup=(403, fixture("teams_forbidden.json")))
+        use_native({"teams": routes})
+        code, out, err = run_cli("join", teams_url(), "--scope", str(repo))
+        assert code == Exit.USAGE and "[no_access]" in err and "--via recall or --via desktop" in err, (code, err)
+        assert "Alternatives:" in err and "nothing switches automatically" in err, err
+        # An external meeting, a refused desktop start: still nothing else is tried.
+        code, _, err = run_cli("join", teams_url(OTHER_TENANT), "--scope", str(repo))
+        assert code == Exit.USAGE and "[external_tenant]" in err
+        meeting.PROVIDER_FACTORY = None
+        code, _, err = run_cli("join", MEET, "--via", "desktop", "--scope", str(repo))
+        assert code == Exit.USAGE, (code, err)
+    finally:
+        recall._default_transport = original
+    assert not recall_calls, "Recall was contacted after another provider refused"
+    assert not store.list_meeting_ids(), "a refused join created a meeting"
+
+
+def drive(meeting_id, times=4):
+    for _ in range(times):
+        run_cli("status", meeting_id)
+    return store.load_record(meeting_id)
+
+
+@check("C5. native Teams: join-URL lookup, not-yet-available window, 403 and non-calendar refusals, VTT")
+def t_native_teams(box):
+    repo = git_repo(box / "r", "https://github.com/example/r.git")
+    native_setup()
+    clock = Clock()
+    end = clock.now + timedelta(minutes=30)
+    listed = [(200, fixture("teams_transcripts_empty.json")), (200, fixture("teams_transcripts_empty.json")),
+              (200, fixture("teams_transcripts.json"))]
+    routes = graph_routes(lookup=(200, teams_lookup(end)), transcripts=listed)
+    use_native({"teams": routes}, clock)
+    code, out, err = run_cli("join", teams_url(), "--scope", str(repo), "--title", "Payments Architecture")
+    assert code == 0, err
+    for needle in ("Provider: native (Microsoft Teams). No bot will join.",
+                   '→ Switch on "Start transcription" in the meeting. Participants will see Microsoft Teams\'s banner.',
+                   "After the meeting, run: agent-skills meeting status", "Cost: No extra cost",
+                   "transcript text is sent to that assistant's model provider"):
+        assert needle in out, (needle, out)
+    meeting_id = meeting_id_from(out)
+    lookup = routes.calls[0][1]
+    assert "JoinWebUrl%20eq%20" in lookup and routes.calls[0][2]["Authorization"] == "Bearer " + TOKENS["teams"]["access_token"]
+    assert store.load_record(meeting_id)["state"] == mc.CREATED
+    run_cli("status", meeting_id)
+    assert store.load_record(meeting_id)["state"] == mc.CREATED, "before the meeting ends nothing moves"
+    clock.now = end + timedelta(minutes=5)
+    run_cli("status", meeting_id)
+    record = store.load_record(meeting_id)
+    assert record["state"] == mc.ENDED and record["reason"] == "not_yet_available", record["state"]
+    record = drive(meeting_id, 2)
+    assert record["state"] == mc.PROCESSING, record["state"]
+    transcript = store.load_transcript(meeting_id)
+    assert [s.speaker_label for s in transcript.segments] == ["Alice Example", "Bob Example"]
+    assert transcript.speaker_attribution == "named" and transcript.capture_provider == "native"
+    content = [c for c in routes.calls if c[1].endswith("/content")][0]
+    assert content[2]["Accept"] == "text/vtt"
+    assert not record["media"]["deleted_at"], "native must not delete anything"
+    # The window closes with nothing listed: not_enabled, with the explanation.
+    routes2 = graph_routes(lookup=(200, teams_lookup(clock.now - timedelta(minutes=1))),
+                           transcripts=(200, fixture("teams_transcripts_empty.json")))
+    use_native({"teams": routes2}, clock)
+    code, out, _ = run_cli("join", teams_url(), "--scope", str(repo))
+    second = meeting_id_from(out)
+    assert "Switch on" not in out, "no reminder for a meeting that already ended"
+    run_cli("status", second)
+    clock.now += timedelta(hours=25)
+    code, out, _ = run_cli("status", second)
+    record = store.load_record(second)
+    assert record["state"] == mc.FAILED and record["reason"] == "not_enabled", record
+    assert "No transcript exists for this meeting" in out, out
+    # A forwarded single occurrence: 403 at lookup → no_access, nothing created.
+    before = len(store.list_meeting_ids())
+    use_native({"teams": graph_routes(lookup=(403, fixture("teams_forbidden.json")))}, clock)
+    code, _, err = run_cli("join", teams_url(), "--scope", str(repo))
+    assert code == Exit.USAGE and "[no_access]" in err and "forwarded occurrence" in err, err
+    assert len(store.list_meeting_ids()) == before
+    # A meeting without a calendar event: Graph has no transcript list → unsupported_meeting.
+    use_native({"teams": graph_routes(lookup=(200, teams_lookup(clock.now)),
+                                      transcripts=(404, fixture("teams_forbidden.json")))}, clock)
+    code, out, _ = run_cli("join", teams_url(), "--scope", str(repo))
+    third = meeting_id_from(out)
+    record = drive(third, 1)
+    assert record["state"] == mc.FAILED and record["reason"] == "unsupported_meeting", record
+    # Tenant switched Graph transcript access off → no_access, explained.
+    use_native({"teams": graph_routes(lookup=(200, teams_lookup(clock.now)),
+                                      transcripts=(403, fixture("teams_transcripts_disabled.json")))}, clock)
+    code, out, _ = run_cli("join", teams_url(), "--scope", str(repo))
+    record = drive(meeting_id_from(out), 1)
+    assert record["state"] == mc.FAILED and record["reason"] == "no_access", record
+    # Speaker attribution switched off → the unattributed format, marked `none`.
+    denied = graph_routes(lookup=(200, teams_lookup(clock.now - timedelta(minutes=1))),
+                          content=[(403, fixture("teams_speaker_attribution_denied.json")),
+                                   (200, fixture("teams_content_unattributed.vtt"))])
+    use_native({"teams": denied}, clock)
+    code, out, _ = run_cli("join", teams_url(), "--scope", str(repo))
+    fourth = meeting_id_from(out)
+    drive(fourth, 2)
+    transcript = store.load_transcript(fourth)
+    assert transcript.speaker_attribution == "none", transcript.speaker_attribution
+    assert {s.speaker_label for s in transcript.segments} == {"Unattributed"}
+    accepts = [c[2]["Accept"] for c in denied.calls if c[1].endswith("/content")]
+    assert accepts == ["text/vtt", "application/vnd.microsoft.graph.transcript+text"], accepts
+
+
+def meet_routes(space=None, records=None, transcripts=None):
+    return Routes([
+        ("GET", "/spaces/abc-defg-hij", space or (200, fixture("meet_space.json"))),
+        ("GET", "/conferenceRecords?", records or (200, fixture("meet_conference_records.json"))),
+        ("GET", "/entries?pageSize=100&pageToken=page-2", (200, fixture("meet_entries_page2.json"))),
+        ("GET", "/entries?pageSize=100", (200, fixture("meet_entries_page1.json"))),
+        ("GET", "/participants/p1", (200, fixture("meet_participant_p1.json"))),
+        ("GET", "/participants/p2", (200, fixture("meet_participant_p2.json"))),
+        ("GET", "/transcripts", transcripts or (200, fixture("meet_transcripts.json"))),
+    ])
+
+
+@check("C6. native Meet: meeting-code lookup, paged entries with names, no_access, not_enabled")
+def t_native_meet(box):
+    repo = git_repo(box / "r", "https://github.com/example/r.git")
+    native_setup()
+    clock = Clock()
+    routes = meet_routes()
+    use_native({"google_meet": routes}, clock)
+    code, out, err = run_cli("fetch", MEET, "--scope", str(repo))
+    assert code == 0, err
+    meeting_id = meeting_id_from(out)
+    record = store.load_record(meeting_id)
+    assert record["state"] == mc.PROCESSING, (record["state"], out)
+    transcript = store.load_transcript(meeting_id)
+    assert [s.speaker_label for s in transcript.segments] == ["Alice Example", "Bob Example"]
+    assert transcript.segments[0].start_ts == 12.0 and transcript.language == "en-US"
+    urls = [c[1] for c in routes.calls]
+    assert any("space.meeting_code" in u and "abc-defg-hij" in u for u in urls)
+    assert any("pageToken=page-2" in u for u in urls), "the second page of entries was not read"
+    # A space the user cannot read.
+    use_native({"google_meet": meet_routes(space=(403, fixture("meet_forbidden.json")))}, clock)
+    code, _, err = run_cli("fetch", MEET, "--scope", str(repo))
+    assert code == Exit.USAGE and "[no_access]" in err and "organiser" in err, err
+    # Ended with no transcript: not_enabled once the window closes.
+    use_native({"google_meet": meet_routes(transcripts=(200, fixture("meet_transcripts_empty.json")))}, clock)
+    code, out, _ = run_cli("fetch", MEET, "--scope", str(repo))
+    other = meeting_id_from(out)
+    assert store.load_record(other)["state"] == mc.FAILED, "the fixture conference ended days ago"
+    assert store.load_record(other)["reason"] == "not_enabled"
+
+
+def zoom_routes(meeting_body=None, recordings=None):
+    return Routes([
+        ("GET", "/users/me", (200, fixture("zoom_users_me.json"))),
+        ("GET", "/recordings", recordings or (200, fixture("zoom_recordings.json"))),
+        ("GET", "/meetings/81234567890", meeting_body or (200, fixture("zoom_meeting.json"))),
+        ("GET", "/rec/download/placeholder-transcript", (200, fixture("zoom_transcript.vtt"))),
+    ])
+
+
+@check("C7. native Zoom: the host's transcript, non-host refused, no transcript → not_enabled")
+def t_native_zoom(box):
+    repo = git_repo(box / "r", "https://github.com/example/r.git")
+    native_setup()
+    clock = Clock()
+    routes = zoom_routes()
+    use_native({"zoom": routes}, clock)
+    code, out, err = run_cli("fetch", ZOOM, "--scope", str(repo))
+    assert code == 0, err
+    meeting_id = meeting_id_from(out)
+    transcript = store.load_transcript(meeting_id)
+    assert transcript is not None, (out, err, store.load_record(meeting_id)["history"], routes.calls)
+    assert [s.speaker_label for s in transcript.segments] == ["Alice Example", "Bob Example"], transcript.segments
+    assert transcript.segments[1].text == "Agreed, let's do that for payment retries."
+    download = [c for c in routes.calls if "/rec/download/" in c[1]][0]
+    assert download[2]["Authorization"] == "Bearer " + TOKENS["zoom"]["access_token"]
+    assert not any("placeholder-audio" in c[1] for c in routes.calls), "recording media must never be downloaded"
+    use_native({"zoom": zoom_routes(meeting_body=(200, fixture("zoom_meeting_other_host.json")))}, clock)
+    code, _, err = run_cli("fetch", ZOOM, "--scope", str(repo))
+    assert code == Exit.USAGE and "[no_access]" in err and "not the host" in err, err
+    use_native({"zoom": zoom_routes(recordings=(404, fixture("zoom_no_recording.json")))}, clock)
+    code, out, _ = run_cli("fetch", ZOOM, "--scope", str(repo))
+    other = meeting_id_from(out)
+    record = store.load_record(other)
+    assert record["state"] == mc.FAILED and record["reason"] == "not_enabled", record  # the meeting ended days ago
+    use_native({"zoom": zoom_routes(recordings=(200, fixture("zoom_recordings_no_transcript.json")))}, clock)
+    code, out, _ = run_cli("fetch", ZOOM, "--scope", str(repo))
+    assert store.load_record(meeting_id_from(out))["reason"] == "not_enabled"
+
+
+@check("C8. a meeting hosted by another organisation is refused as external_tenant, with the way out")
+def t_external(box):
+    repo = git_repo(box / "r", "https://github.com/example/r.git")
+    native_setup()
+    teams = graph_routes()
+    zoom = zoom_routes()
+    use_native({"teams": teams, "zoom": zoom})
+    code, _, err = run_cli("join", teams_url(OTHER_TENANT), "--scope", str(repo))
+    assert code == Exit.USAGE and "[external_tenant]" in err, err
+    assert "The transcript belongs to the other organisation. Use --via recall or --via desktop" in err, err
+    assert not teams.calls, "an external meeting reached Graph"
+    code, _, err = run_cli("join", "https://globex.zoom.us/j/81234567890", "--scope", str(repo))
+    assert code == Exit.USAGE and "[external_tenant]" in err, err
+    assert not zoom.calls
+
+
+class FakeAuthServer:
+    """A loopback OAuth authorization server: checks PKCE S256, issues and rotates tokens."""
+
+    def __init__(self):
+        import http.server
+
+        server = self
+        self.challenges = {}
+        self.refresh_issued = []
+        self.revoked = False
+
+        class Handler(http.server.BaseHTTPRequestHandler):
+            def do_GET(self):  # /…/authorize
+                from urllib.parse import parse_qs, urlsplit
+
+                query = {k: v[0] for k, v in parse_qs(urlsplit(self.path).query).items()}
+                assert query["code_challenge_method"] == "S256" and query["response_type"] == "code"
+                server.challenges["code-1"] = query["code_challenge"]
+                self.send_response(302)
+                self.send_header("Location", "{}?code=code-1&state={}".format(query["redirect_uri"], query["state"]))
+                self.end_headers()
+
+            def do_POST(self):  # /…/token
+                from urllib.parse import parse_qs
+
+                form = {k: v[0] for k, v in parse_qs(self.rfile.read(int(self.headers["Content-Length"])).decode()).items()}
+                if form["grant_type"] == "authorization_code":
+                    digest = base64.urlsafe_b64encode(hashlib.sha256(form["code_verifier"].encode()).digest())
+                    ok = digest.decode().rstrip("=") == server.challenges.get(form["code"])
+                    body = {"error": "invalid_grant"} if not ok else None
+                elif server.revoked:
+                    body = {"error": "invalid_grant"}
+                else:
+                    body = None
+                if body is None:
+                    fresh = "rt-rotated-{}".format(len(server.refresh_issued) + 1)
+                    server.refresh_issued.append(fresh)
+                    body = {"access_token": "at-issued-{}".format(len(server.refresh_issued)), "expires_in": 3600,
+                            "refresh_token": fresh, "token_type": "Bearer"}
+                data = json.dumps(body).encode()
+                self.send_response(400 if "error" in body else 200)
+                self.send_header("Content-Type", "application/json")
+                self.send_header("Content-Length", str(len(data)))
+                self.end_headers()
+                self.wfile.write(data)
+
+            def log_message(self, *_):
+                return
+
+        self.httpd = http.server.HTTPServer(("127.0.0.1", 0), Handler)
+        threading.Thread(target=self.httpd.serve_forever, daemon=True).start()
+        self.base = "http://127.0.0.1:{}".format(self.httpd.server_address[1])
+
+
+@check("C9. OAuth: PKCE loopback sign-in, refresh-token rotation, tokens only in the 0600 store; --import refuses secrets")
+def t_oauth(box):
+    auth = FakeAuthServer()
+    os.environ[meeting_oauth.OAUTH_BASE_ENV] = auth.base
+    try:
+        native_setup()
+        config = store.load_config()
+        adapter = native.build_adapter(config, "teams")
+        client = adapter.oauth_client()
+        assert client.authorize_url.startswith(auth.base + "/") and "/oauth2/v2.0/authorize" in client.authorize_url
+
+        def browser(url):
+            with urllib.request.urlopen(url, timeout=5) as response:  # follows the 302 to our loopback listener
+                return response.read()
+
+        tokens = client.sign_in(open_browser=browser, timeout=10, announce=lambda _t: None)
+        assert tokens["refresh_token"] == "rt-rotated-1"
+        adapter.store.save(tokens)
+        secrets_file = Path(os.environ["AGENT_SKILLS_CONFIG_DIR"]) / "secrets" / "meeting-teams.json"
+        assert oct(secrets_file.stat().st_mode & 0o777) == "0o600", oct(secrets_file.stat().st_mode)
+        assert "rt-rotated-1" in secrets_file.read_text()
+        # Force a refresh: the rotated refresh token replaces the old one at once.
+        access.store_identity("meeting-teams", "meeting-teams", {"access_expires_at": "2000-01-01T00:00:00Z"}, {})
+        adapter._token = None
+        assert adapter.token() == "at-issued-2"
+        assert access.fetch_identity("meeting-teams", ["refresh_token"])["refresh_token"] == "rt-rotated-2"
+        # A revoked grant marks the identity expired: readiness says so, with the fix.
+        auth.revoked = True
+        access.store_identity("meeting-teams", "meeting-teams", {"access_expires_at": "2000-01-01T00:00:00Z"}, {})
+        adapter._token = None
+        try:
+            adapter.token()
+            raise AssertionError("an expired grant was accepted")
+        except mc.ProviderAuthError as exc:
+            assert "expired" in exc.message and "setup native --platform teams" in exc.message
+        assert "expired" in native.platform_readiness(store.load_config(), "teams").reason
+        # A wrong verifier is refused by the server (proves the challenge is checked).
+        auth.challenges["code-1"] = "not-the-challenge"
+        try:
+            client._token({"grant_type": "authorization_code", "code": "code-1", "redirect_uri": "http://localhost:1/",
+                           "code_verifier": "x" * 64})
+            raise AssertionError("a mismatched PKCE verifier was accepted")
+        except mc.ProviderAuthError:
+            pass
+        # Tokens never reach meeting state or the shareable config.
+        blobs = [p.read_text() for p in Path(os.environ["AGENT_SKILLS_HOME"]).rglob("*.json")]
+        blobs.append(store.config_path().read_text())
+        assert not any(t in b for b in blobs for t in ("rt-rotated", "at-issued")), "a token left the credential store"
+    finally:
+        auth.httpd.shutdown()
+    # The admin's shareable config: a client secret anywhere in it is refused, nothing imported.
+    bad = box / "native-config.json"
+    for payload in (
+        {"schema": native.IMPORT_SCHEMA, "zoom": {"client_id": "placeholder-client-zoom", "client_secret": "x"}},
+        {"schema": native.IMPORT_SCHEMA, "teams": {"client_id": "placeholder-client-teams", "tenant_id": TENANT},
+         "client_secret": "x"},
+        {"schema": native.IMPORT_SCHEMA, "teams": {"client_id": "ghp_" + "Zx9Qm2Lk7Vb4Nc1Rt8Yw3Pd6Hs5Jf0Ga",
+                                                   "tenant_id": TENANT}},
+    ):
+        bad.write_text(json.dumps(payload))
+        config_before = store.config_path().read_text()
+        code, out, _ = run_cli("setup", "native", "--import", str(bad))
+        assert code == Exit.USAGE and "refused" in out, out
+        assert store.config_path().read_text() == config_before, "a refused import changed the config"
+    good = box / "native-good.json"
+    good.write_text(json.dumps({"schema": native.IMPORT_SCHEMA, "google_meet": {
+        "client_id": "placeholder-client-meet2", "workspace_domain": "Example.COM"}}))
+    code, out, _ = run_cli("setup", "native", "--import", str(good))
+    assert "imported Google Meet" in out, out
+    assert store.load_config()["native"]["google_meet"] == {"client_id": "placeholder-client-meet2",
+                                                           "workspace_domain": "example.com"}
+    assert code == Exit.USAGE and "needs you at a terminal" in out, "sign-in must stop without a person"
+
+
+@check("C10. Recall: the setup self-test creates no bot, cost is disclosed, a second bot for one URL is refused")
+def t_recall_setup(box):
+    calls = []
+    original = recall._default_transport
+
+    def transport(method, url, headers, body):
+        calls.append((method, url))
+        return 200, b'{"results": []}'
+
+    recall._default_transport = transport
+    del os.environ["AGENT_SKILLS_RECALL_BASE_URL"]
+    answers = iter(["", "yes"])  # region: accept the suggestion; notice: yes
+    meeting_setup.INTERACTIVE = lambda: True
+    meeting_setup.ASK = lambda prompt: next(answers)
+    meeting_setup.ASK_SECRET = lambda prompt: RECALL_KEY if "API key" in prompt else ""
+    os.environ["TZ"] = "Europe/Berlin"
+    try:
+        code, out, _ = run_cli("setup", "recall")
+    finally:
+        recall._default_transport = original
+        meeting_setup.INTERACTIVE = lambda: sys.stdin.isatty() and sys.stdout.isatty()
+        meeting_setup.ASK = input
+    assert code == 0, out
+    assert calls == [("GET", "https://eu-central-1.recall.ai/api/v1/bot/?page_size=1")], calls
+    assert "eu-central-1" in out and "no bot was created" in out and "≈ $0.65/meeting hour" in out
+    assert "data processing agreement" in out and "works-council" in out
+    config = store.load_config()
+    assert config["default_provider"] == "recall" and providers.notice_current(config, "recall")
+    assert RECALL_KEY not in store.config_path().read_text() and RECALL_KEY not in out
+    # Re-running is safe: the stored key is detected, nothing is asked twice.
+    recall._default_transport = transport
+    meeting_setup.INTERACTIVE = lambda: True
+    meeting_setup.ASK = lambda prompt: "yes"
+    try:
+        code, out, _ = run_cli("setup", "recall")
+    finally:
+        recall._default_transport = original
+        meeting_setup.INTERACTIVE = lambda: sys.stdin.isatty() and sys.stdout.isatty()
+        meeting_setup.ASK = input
+        meeting_setup.ASK_SECRET = getpass_default
+    assert code == 0 and "already stored" in out and "already acknowledged" in out, out
+    # join: the cost line comes from config, and one URL gets one bot.
+    config["recall"] = {"cost_per_hour_usd": 0.8}
+    store.save_config(config)
+    acknowledge()
+    provider = FakeProvider(transcripts={"captions": utterances(MEETING_SCRIPT)})
+    meeting.PROVIDER_FACTORY = lambda c, s: provider
+    repo = git_repo(box / "r", "https://github.com/example/r.git")
+    code, out, err = run_cli("join", ZOOM, "--scope", str(repo))
+    assert code == 0 and "Billed by Recall to your account, ≈ $0.80/meeting hour." in out, (out, err)
+    assert "Provider: recall." in out and "processed by Recall.ai" in out
+    code, _, err = run_cli("join", ZOOM.replace("placeholderpasscode", "another"), "--scope", str(repo))
+    assert code == Exit.USAGE and "already active" in err and provider.started == 1, (code, err, provider.started)
+
+
+import getpass as _getpass  # noqa: E402
+
+getpass_default = _getpass.getpass
+
+
+def install_desktop_fakes(box: Path) -> None:
+    os.environ["PATH"] = str(DESKTOP_FAKES) + os.pathsep + os.environ.get("PATH", "")
+
+
+def fake_model(name="small"):
+    folder = desktop.models_dir()
+    folder.mkdir(parents=True, exist_ok=True)
+    desktop.model_path(name).write_bytes(b"placeholder model")
+    (folder / "ggml-{}.bin.sha1".format(name)).write_text(desktop.MODELS[name][0] + "\n")
+
+
+def desktop_setup(box, **overrides):
+    install_desktop_fakes(box)
+    fake_model()
+    config = store.load_config()
+    section = {"configured_at": store.now_iso(), "system_device": "BlackHole 2ch", "language": "de",
+               "chunk_seconds": 60}
+    section.update(overrides)
+    config["desktop"] = section
+    config["default_provider"] = "desktop"
+    providers.record_notice(config, "desktop", "setup", store.now_iso())
+    store.save_config(config)
+    script = box / "whisper-script.json"
+    script.write_text(json.dumps({
+        "0": [[1000, 2000, "Anna will draft the plan."], [5000, 6000, "I'll write the release notes."]],
+        "1": [[3000, 4000, "Agreed, let's do that. We move payment retries to Kafka."]],
+    }))
+    os.environ["FAKE_WHISPER_SCRIPT"] = str(script)
+    os.environ["FAKE_WHISPER_LOG"] = str(box / "whisper.log")
+
+
+class AtTerminal:
+    """A person at a terminal typing `reply` (patches both TTY checks and input)."""
+
+    def __init__(self, reply="everyone agreed"):
+        self.reply = reply
+
+    def __enter__(self):
+        self.saved = (meeting._interactive, desktop.interactive, builtins.input)
+        meeting._interactive = lambda: True
+        desktop.interactive = lambda: True
+        builtins.input = lambda prompt="": self.reply
+
+    def __exit__(self, *exc):
+        meeting._interactive, desktop.interactive, builtins.input = self.saved
+
+
+def wait_for(predicate, seconds=40.0, step=0.3):
+    deadline = time.monotonic() + seconds
+    while time.monotonic() < deadline:
+        value = predicate()
+        if value:
+            return value
+        time.sleep(step)
+    raise AssertionError("timed out waiting")
+
+
+def settle(meeting_id, states=(mc.PROCESSING, mc.FAILED), seconds=60.0):
+    def done():
+        run_cli("status", meeting_id)
+        return store.load_record(meeting_id)["state"] in states
+
+    wait_for(done, seconds, 0.5)
+    return store.load_record(meeting_id)
+
+
+@check("C11. desktop: TTY only, attestation stored, supervised recorder, max duration, crash → PARTIAL, audio deleted")
+def t_desktop_lifecycle(box):
+    if desktop.unsupported_reason():
+        print("        (skipped on this OS: {})".format(desktop.unsupported_reason()))
+        return
+    repo = git_repo(box / "r", "https://github.com/example/r.git")
+    desktop_setup(box)
+    # Not a terminal: refused, the exact command printed, nothing started.
+    code, out, err = run_cli("join", MEET, "--scope", str(repo), "--title", "Local")
+    assert code == Exit.USAGE and "agent-skills meeting join https://meet.google.com/abc-defg-hij --via desktop" in err, err
+    assert not store.list_meeting_ids()
+    # A person who does not confirm: nothing recorded.
+    with AtTerminal("yes"):
+        code, _, err = run_cli("join", MEET, "--scope", str(repo))
+    assert code == Exit.USAGE and "consent not confirmed" in err and not store.list_meeting_ids(), err
+    os.environ["FAKE_FFMPEG_SPEED"] = "40"
+    with AtTerminal():
+        code, out, err = run_cli("join", MEET, "--scope", str(repo), "--title", "Local")
+    assert code == 0, err
+    for needle in ("Provider: desktop. Nothing joins the meeting", "RECORDING — stop with: agent-skills meeting stop",
+                   "I'm recording and transcribing this meeting locally", "Audio never leaves this computer"):
+        assert needle in out, (needle, out)
+    meeting_id = meeting_id_from(out)
+    record = store.load_record(meeting_id)
+    assert record["state"] == mc.RECORDING and record["attestation"]["confirmed_at"], record
+    assert record["attestation"]["notice_version"] == providers.NOTICE_VERSIONS["desktop"]
+    folder = desktop.audio_dir(meeting_id)
+    assert desktop.worker_alive(meeting_id, "record"), "no supervised recorder"
+    assert (folder / "record.pid").exists()
+    assert oct(folder.stat().st_mode & 0o777) == "0o700"
+    wait_for(lambda: desktop.pcm_seconds(folder / "meeting.pcm") > 2)
+    assert oct((folder / "meeting.pcm").stat().st_mode & 0o777) == "0o600"
+    code, out, _ = run_cli("list")
+    assert "● RECORDING locally" in out and meeting_id in out, out
+    code, out, _ = run_cli("stop", meeting_id)
+    assert code == 0, out
+    record = store.load_record(meeting_id)
+    assert record["state"] == mc.PROCESSING, (record["state"], out)
+    assert not (folder / "record.pid").exists() and not desktop.worker_alive(meeting_id, "record")
+    assert not (folder / "meeting.pcm").exists() and not (folder / "meeting.wav").exists(), "raw audio was kept"
+    assert record["media"]["deleted_at"]
+    assert json.loads((folder / "capture.json").read_text())["reason"] == "stopped"
+
+    # Max duration auto-stops without anyone calling stop.
+    config = store.load_config()
+    config["desktop"]["max_duration_minutes"] = 5
+    store.save_config(config)
+    os.environ["FAKE_FFMPEG_SPEED"] = "4000"
+    with AtTerminal():
+        code, out, _ = run_cli("join", MEET, "--scope", str(repo))
+    second = meeting_id_from(out)
+    record = settle(second)
+    capture = json.loads((desktop.audio_dir(second) / "capture.json").read_text())
+    assert capture["reason"] == "max_duration" and capture["seconds"] >= 299, capture
+    assert record["state"] == mc.PROCESSING and not record["transcription"]["partial"]
+
+    # The supervisor is killed mid-recording: the stale pidfile is cleaned, what was
+    # recorded is kept and processed, and the meeting ends PARTIAL.
+    os.environ["FAKE_FFMPEG_SPEED"] = "20"
+    with AtTerminal():
+        code, out, _ = run_cli("join", MEET, "--scope", str(repo))
+    third = meeting_id_from(out)
+    folder = desktop.audio_dir(third)
+    wait_for(lambda: desktop.pcm_seconds(folder / "meeting.pcm") > 2)
+    os.kill(int((folder / "record.pid").read_text()), _signal.SIGKILL)
+    wait_for(lambda: not desktop.worker_alive(third, "record"))
+    record = settle(third)
+    assert record["transcription"]["partial"] is True, record["transcription"]
+    capture = json.loads((folder / "capture.json").read_text())
+    assert capture["reason"] == "crashed" and not (folder / "record.pid").exists(), capture
+    extract_all(third, channel_extractor)
+    assert store.load_record(third)["state"] == mc.PARTIAL
+
+
+@check("C12. desktop: per-channel transcription merges in order with You / Remote labels; language passes through")
+def t_desktop_merge(box):
+    # A configured device name can never become an ffmpeg option.
+    assert desktop.settings({"desktop": {"mic_device": "-filter_complex", "system_device": "ok\nname"}})[
+        "mic_device"] == ""
+    assert desktop.settings({"desktop": {"system_device": "ok\nname"}})["system_device"] == ""
+    rows = desktop.merge_channels({0: [(5.0, 6.0, "c"), (1.0, 2.0, "a")], 1: [(3.0, 4.0, "b"), (5.0, 5.5, "d")]})
+    assert [(r[0], r[4]) for r in rows] == [("You", "a"), ("Remote participants (unidentified)", "b"),
+                                            ("You", "c"), ("Remote participants (unidentified)", "d")], rows
+    if desktop.unsupported_reason():
+        return
+    repo = git_repo(box / "r", "https://github.com/example/r.git")
+    desktop_setup(box, language="de")
+    os.environ["FAKE_FFMPEG_SPEED"] = "4000"
+    config = store.load_config()
+    config["desktop"]["max_duration_minutes"] = 5
+    store.save_config(config)
+    with AtTerminal():
+        code, out, err = run_cli("join", MEET, "--scope", str(repo))
+    assert code == 0, err
+    meeting_id = meeting_id_from(out)
+    settle(meeting_id)
+    transcript = store.load_transcript(meeting_id)
+    assert [(s.speaker_label, s.start_ts) for s in transcript.segments] == [
+        ("You", 1.0), ("Remote participants (unidentified)", 3.0), ("You", 5.0)], transcript.segments
+    assert transcript.speaker_attribution == "channel" and transcript.language == "de"
+    assert not any("BLANK_AUDIO" in s.text for s in transcript.segments)
+    runs = [json.loads(line) for line in (box / "whisper.log").read_text().splitlines()]
+    assert runs and all(r[r.index("-l") + 1] == "de" for r in runs), runs
+    assert all("-oj" in r and "--" not in " ".join(r) for r in runs)
+    # Each chunk is a mono 16 kHz WAV of one channel (the fake asserts it).
+    assert {Path(r[r.index("-f") + 1]).name[:2] for r in runs} == {"c0", "c1"}
+
+
+def channel_extractor(meeting_id, index, text):
+    facts = []
+    for sid, line in lines_by_id(text).items():
+        if "Anna will draft the plan" in line:
+            facts.append({"type": "ACTION", "statement": "Draft the plan.", "status": "OPEN", "evidence": [sid],
+                          "confidence": 0.9, "owner": "Anna"})
+        if "release notes" in line:
+            facts.append({"type": "ACTION", "statement": "Write the release notes.", "status": "OPEN",
+                          "evidence": [sid], "confidence": 0.9, "owner": "You", "speakers": ["You"]})
+        if "payment retries to Kafka" in line:
+            facts.append({"type": "DECISION", "statement": "Move payment retries to Kafka.", "status": "CONFIRMED",
+                          "evidence": [sid], "confidence": 0.95})
+    return {"schema": intel.EXTRACTION_SCHEMA, "meeting_id": meeting_id, "window": index, "facts": facts}
+
+
+@check("C13. channel attribution never yields guessed names or owners; a spoken owner is still extracted")
+def t_channel_attribution(box):
+    transcript = mc.build_transcript("m_000000000013", "local_whisper", [
+        ("You", "channel-mic", 1.0, 2.0, "Anna will draft the plan."),
+        ("Remote participants (unidentified)", "channel-system", 3.0, 4.0, "Agreed, let's do that. We move payment retries to Kafka."),
+        ("You", "channel-mic", 5.0, 6.0, "I'll write the release notes."),
+    ])
+    transcript.speaker_attribution = "channel"
+    plan = intel.plan_windows(transcript, 12000, 1200)
+    window = intel.render_window(transcript, plan, 0)
+    assert "Speakers are audio channels, not people" in window and "Never guess who spoke" in window
+    raw = channel_extractor("m_000000000013", 0, window)
+    segments = {s.segment_id: s for s in transcript.segments}
+    ids = plan[0]["segment_ids"]
+    facts = {f["statement"]: f for f in (intel.check_fact(r, "m_000000000013", ids, segments, "local_whisper", "channel")[0]
+                                         for r in raw["facts"])}
+    assert facts["Draft the plan."]["owner"] == "Anna", facts["Draft the plan."]
+    assert facts["Write the release notes."]["owner"] is None, "a speaker channel became an owner"
+    assert facts["Move payment retries to Kafka."]["confidence"] == intel.ATTRIBUTION_CONFIDENCE_CAP
+    assert facts["Draft the plan."]["confidence"] == intel.ATTRIBUTION_CONFIDENCE_CAP
+    for fact in facts.values():
+        assert set(fact["speakers"]) <= {"You", "Remote participants (unidentified)"}, fact["speakers"]
+    # Named attribution keeps the 1.3.0 behaviour: a speaker who commits in their own line owns it.
+    named = mc.build_transcript("m_000000000014", "captions", [("Ines Example", "p", 1, 2, "I'll write the release notes.")])
+    fact = intel.check_fact({"type": "ACTION", "statement": "Write the release notes.", "status": "OPEN",
+                             "evidence": [named.segments[0].segment_id], "confidence": 0.9, "owner": "Ines"},
+                            "m_000000000014", [named.segments[0].segment_id],
+                            {s.segment_id: s for s in named.segments}, "captions")[0]
+    assert fact["owner"] == "Ines" and fact["confidence"] == 0.9
+    record = {"id": "m_000000000013", "title": "Local", "state": mc.PROCESSED, "recording_seconds": 60,
+              "transcription": {"final_method": "local_whisper", "speaker_attribution": "channel"}}
+    assert "Speakers not individually identified (local capture)." in intel.summarize(record, list(facts.values()))
+
+
+@check("C14. a model download is verified by checksum; a mismatch is refused and nothing is kept")
+def t_model_checksum(box):
+    class Body(io.BytesIO):
+        def __enter__(self):
+            return self
+
+        def __exit__(self, *exc):
+            return False
+
+    seen = []
+    try:
+        desktop.download_model("small", report=lambda _t: None,
+                               opener=lambda url: seen.append(url) or Body(b"not the real model"))
+        raise AssertionError("a model with the wrong checksum was accepted")
+    except ValueError as exc:
+        assert "checksum mismatch" in str(exc)
+    assert seen == ["https://huggingface.co/ggerganov/whisper.cpp/resolve/main/ggml-small.bin"], seen
+    assert not desktop.model_path("small").exists() and not list(desktop.models_dir().glob("*.part"))
+    assert not desktop.model_verified("small")
+    payload = b"placeholder model bytes"
+    desktop.MODELS["test-tiny"] = (hashlib.sha1(payload).hexdigest(), "1 KiB")  # noqa: S324
+    try:
+        path = desktop.download_model("test-tiny", report=lambda _t: None, opener=lambda url: Body(payload))
+        assert path.read_bytes() == payload and desktop.model_verified("test-tiny")
+        assert oct(path.stat().st_mode & 0o777) == "0o600"
+    finally:
+        del desktop.MODELS["test-tiny"]
+    try:
+        desktop.download_model("not-a-model")
+        raise AssertionError("an unknown model name was accepted")
+    except ValueError:
+        pass
+
+
+@check("C15. secrets never appear in logs, state, argv, or inspect output")
+def t_provider_secrets(box):
+    repo = git_repo(box / "r", "https://github.com/example/r.git")
+    native_setup()
+    outputs = []
+    use_native({"teams": graph_routes(lookup=(200, teams_lookup(datetime.now(timezone.utc) - timedelta(minutes=5)))),
+                "google_meet": meet_routes(), "zoom": zoom_routes()})
+    for argv in (("join", teams_url(), "--scope", str(repo)), ("fetch", MEET, "--scope", str(repo)),
+                 ("fetch", ZOOM, "--scope", str(repo))):
+        code, out, err = run_cli(*argv)
+        assert code == 0, err
+        outputs.append(out + err)
+    for meeting_id in store.list_meeting_ids():
+        for argv in (("status", meeting_id), ("inspect", meeting_id, "--json"),
+                     ("inspect", meeting_id, "--transcript", "--facts")):
+            code, out, err = run_cli(*argv)
+            outputs.append(out + err)
+    outputs.append(run_cli("status", "--providers", "--json")[1])
+    outputs.append(json.dumps(meeting.doctor_report(probe=False)))
+    blobs = outputs + [p.read_text() for p in Path(os.environ["AGENT_SKILLS_HOME"]).rglob("*") if p.is_file()]
+    blobs.append(store.config_path().read_text())
+    blobs.append(Path(os.environ["AGENT_SKILLS_CONFIG_DIR"], "credentials.json").read_text())
+    needles = [t for pair in TOKENS.values() for t in pair.values()] + [ZOOM_CLIENT_SECRET]
+    for blob in blobs:
+        for needle in needles:
+            assert needle not in blob, "leaked a secret"
+    # Recall: the key is sent only as a header, never on argv or in a record.
+    os.environ["AGENT_SKILLS_RECALL_API_KEY"] = RECALL_KEY
+    os.environ["AGENT_SKILLS_RECALL_REGION"] = "eu-central-1"
+    code, out, err = run_cli("join", ZOOM, "--via", "recall", "--scope", str(repo), "--acknowledge-recording-notice")
+    assert RECALL_KEY not in out + err
+    # The desktop worker's argv carries only its role and the meeting id.
+    source = (HERE / "meeting_desktop.py").read_text()
+    assert '[sys.executable, str(Path(__file__).resolve()), role, meeting_id]' in source
+
+
+def _v130_tree(box: Path) -> Path:
+    target = box / "v1.3.0"
+    target.mkdir()
+    archive = subprocess.run(["git", "-C", str(ROOT), "archive", "v1.3.0", "scripts", "lib"],
+                             capture_output=True, check=False)
+    if archive.returncode != 0:
+        return Path()
+    subprocess.run(["tar", "-x", "-C", str(target)], input=archive.stdout, check=True)
+    return target
+
+
+@check("C16. upgrading from 1.3.0 keeps Recall as the default; rolling back to 1.3.0 does not crash on new state")
+def t_migration(box):
+    # A 1.3.0 installation: Recall key + region, the recording notice acknowledged, no default_provider key.
+    store.config_path().parent.mkdir(parents=True, exist_ok=True)
+    store.config_path().write_text(json.dumps({"schema": store.CONFIG_SCHEMA, "provider": "recall",
+                                               "region": "eu-central-1", "consent": {
+                                                   "notice_version": 1, "acknowledged_at": "2026-09-01T00:00:00Z"}}))
+    os.environ["AGENT_SKILLS_RECALL_API_KEY"] = RECALL_KEY
+    os.environ["AGENT_SKILLS_RECALL_REGION"] = "eu-central-1"
+    config = store.load_config()
+    assert providers.default_provider(config) == "recall"
+    provider = FakeProvider(transcripts={"captions": utterances(MEETING_SCRIPT)})
+    meeting.PROVIDER_FACTORY = lambda c, s: provider
+    repo = git_repo(box / "r", "https://github.com/example/r.git")
+    code, out, err = run_cli("join", ZOOM, "--scope", str(repo))
+    assert code == 0, err
+    assert "Recall bot — what you are agreeing to" in out and "≈ $0.65/meeting hour" in out, out
+    code, out, err = run_cli("join", MEET, "--scope", str(repo))
+    assert code == 0 and "what you are agreeing to" not in out, "the new notice must be shown once, not every time"
+    saved = json.loads(store.config_path().read_text())
+    assert saved["provider"] == "recall", "the 1.3.0 key must keep its meaning"
+    # In-flight 1.3.0 records (no capture_provider field) still reconcile as Recall.
+    legacy = store.load_record(store.list_meeting_ids()[0])
+    legacy.pop("capture_provider")
+    store.save_record(legacy)
+    assert meeting.provider_for_record(legacy) == "fake"
+    # New-provider records beside them, then the 1.3.0 code reads the same state.
+    native_setup(default=False)
+    use_native({"teams": graph_routes(lookup=(200, teams_lookup(datetime.now(timezone.utc) + timedelta(hours=1))))})
+    code, out, err = run_cli("join", teams_url(), "--via", "native", "--scope", str(repo))
+    assert code == 0, err
+    old = _v130_tree(box)
+    if not old.parts:
+        print("        (rollback half skipped: tag v1.3.0 is not in this clone; CI fetches it)")
+        return
+    for argv in (["list"], ["status"], ["inspect", meeting_id_from(out)]):
+        run = subprocess.run([sys.executable, str(old / "scripts" / "meeting.py")] + argv,
+                             capture_output=True, text=True, timeout=120, env=dict(os.environ), cwd=str(box))
+        assert "Traceback" not in run.stderr, (argv, run.stderr[-2000:])
+        assert run.returncode in (0, 2, 3, 4), (argv, run.returncode, run.stderr[-500:])
+    assert json.loads(store.config_path().read_text()).get("provider") == "recall"
+
+
+@check("C17. the npm README explains the three capture methods; the package carries no protected content")
+def t_npm_readme(box):
+    readme = (ROOT / "npm" / "README.md").read_text()
+    section = readme[readme.index("## Optional: Meeting Intelligence"):]
+    for needle in ("native", "recall", "desktop", "agent-skills meeting setup --compare", "Recall.ai",
+                   "no one in the meeting is notified automatically"):
+        assert needle in section, needle
+    package = json.loads((ROOT / "npm" / "package.json").read_text())
+    assert not any(f.startswith(("docs", "skills", "scripts", "evals")) for f in package["files"]), package["files"]
+    if shutil.which("npm"):
+        run = subprocess.run(["bash", str(ROOT / "scripts" / "audit-npm-package.sh")], capture_output=True, text=True,
+                             timeout=300, check=False, cwd=str(ROOT))
+        assert run.returncode == 0, run.stdout[-2000:] + run.stderr[-2000:]
 
 
 # ---------------------------------------------------------------------------

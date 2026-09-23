@@ -1,0 +1,12 @@
+{
+  "@odata.context": "https://graph.microsoft.com/v1.0/$metadata#users('placeholder')/onlineMeetings",
+  "value": [
+    {
+      "id": "MSpwbGFjZWhvbGRlci1tZWV0aW5nLWlkKjA",
+      "subject": "Payments Architecture",
+      "startDateTime": "2026-09-21T09:00:00Z",
+      "endDateTime": "2026-09-21T10:00:00Z",
+      "joinWebUrl": "https://teams.microsoft.com/l/meetup-join/19%3ameeting_placeholder%40thread.v2/0"
+    }
+  ]
+}

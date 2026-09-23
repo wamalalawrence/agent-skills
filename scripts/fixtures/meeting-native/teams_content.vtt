@@ -1,0 +1,7 @@
+WEBVTT
+
+00:00:12.000 --> 00:00:14.100
+<v Alice Example>Maybe we should move payment retries to Kafka.</v>
+
+00:00:15.000 --> 00:00:16.200
+<v Bob Example>Agreed, let's do that for payment retries.</v>

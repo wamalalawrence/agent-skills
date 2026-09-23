@@ -73,8 +73,9 @@ Context and access
   tools <subcommand>    Engineering Tool Capability Framework (see below)
 
 Meetings
-  meeting <subcommand>  Meeting Intelligence: a visible assistant joins a Teams,
-                        Zoom, or Meet call; facts land in the knowledge base
+  meeting <subcommand>  Meeting Intelligence: capture a Teams, Zoom, or Meet call
+                        (native transcript, Recall bot, or local recording, your
+                        choice); facts land in the knowledge base
 
 Runtime safety
   guard <subcommand>    Execution Guard: decide before an action runs (see below)
@@ -151,16 +152,20 @@ secret. It never authenticates — that stays with `access` — and it never
 enforces — that stays with `guard`. It only classifies the action so a skill
 knows the blast radius first.
 
-Meeting subcommands (see docs/meeting-intelligence.md):
-  meeting join <url> [--scope repo:<path>] [--title T]
-  meeting status [<id>] [--wait] [--listen 127.0.0.1:<port>]
-  meeting stop <id>                Ask the assistant to leave; still processed
+Meeting subcommands (see docs/meeting-intelligence/README.md):
+  meeting setup [native|recall|desktop] [--compare] [--import F]
+                                   Choose how meetings are captured; guided
+  meeting join <url> [--via native|recall|desktop] [--scope repo:<path>] [--title T]
+  meeting fetch <url>              native: a meeting that already ended
+  meeting status [<id>] [--providers] [--wait] [--listen 127.0.0.1:<port>]
+  meeting stop <id>                Stop capturing; what was captured is processed
   meeting list                     All meetings, reconciled
   meeting inspect <id> [--transcript] [--facts] [--next-window] [--submit F]
                        [--reprocess] [--accept all|ids] [--purge --yes]
 
-The assistant always joins visibly, by name, after a one-time recording notice.
-Polling carries a meeting to processed facts; no public URL is needed.
+Nothing is captured until you choose a provider with `meeting setup`; each one
+states its cost, where the data goes, and how participants are told. A local
+recording is started only by you, in a terminal, after telling participants.
 
 Shared knowledge subcommands (see docs/shared-knowledge.md):
   knowledge status                 Bound source, sync age, proposals, candidates, conflicts
@@ -347,7 +352,10 @@ case "${COMMAND}" in
       scripts/execution-watchdog.py \
       scripts/meeting.py scripts/meeting_capture.py scripts/meeting_recall.py \
       scripts/meeting_intel.py scripts/meeting_store.py scripts/meeting_secrets.py \
-      scripts/meeting_webhook.py \
+      scripts/meeting_webhook.py scripts/meeting_http.py scripts/meeting_providers.py \
+      scripts/meeting_setup.py scripts/meeting_oauth.py scripts/meeting_native.py \
+      scripts/meeting_native_teams.py scripts/meeting_native_meet.py \
+      scripts/meeting_native_zoom.py scripts/meeting_desktop.py \
       scripts/knowledge.py scripts/knowledge_resolver.py scripts/knowledge_store.py \
       scripts/knowledge_git.py scripts/knowledge_model.py scripts/knowledge_source.py \
       scripts/knowledge_cli.py \

@@ -142,8 +142,18 @@ Required whenever this release changes `scripts/meeting*.py`, the `meetings/` pa
       `scripts/fixtures/meeting-recall/` with the adapter when it changed.
 - [ ] If a Recall key is available, run `AGENT_SKILLS_MEETING_LIVE_SMOKE=1 python3 scripts/test-meeting.py`.
       It authenticates and lists bots; it never creates one.
-- [ ] Confirm no meeting module other than `meeting_recall.py` names a Recall field (the boundary
-      test asserts it; read the assertion).
+- [ ] Confirm no meeting module other than `meeting_recall.py` names a Recall field, and that only
+      `meeting_providers.py` / `meeting_setup.py` import a provider module (the boundary test
+      asserts both; read the assertion).
+- [ ] Re-verify the native contracts against the vendors' **current** docs — Graph online meetings
+      and transcripts (permissions, the 403 inner codes), Meet REST v2 (filter fields, entries
+      paging, scope), Zoom recordings (file types, granular scopes, download auth) — update the
+      "last verified" date in each `docs/meeting-intelligence/SETUP-native-*.md` and the fixtures in
+      `scripts/fixtures/meeting-native/`.
+- [ ] Re-check Recall's pricing and update `DEFAULT_RECALL_COST_PER_HOUR`, the docs' figures, and
+      their "last verified" date; re-check the whisper.cpp model checksums in `meeting_desktop.MODELS`.
+- [ ] Run `AGENT_SKILLS_MEETING_LIVE_SMOKE=1 python3 scripts/test-meeting.py` where credentials exist,
+      and `agent-skills meeting setup <provider>` self-tests on a real machine for each provider.
 
 ## Shared Knowledge
 

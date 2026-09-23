@@ -1,0 +1,113 @@
+{
+  "15": {
+    "name": "explicit agreements extract as CONFIRMED",
+    "final": [
+      3,
+      3
+    ],
+    "raw": [
+      3,
+      3
+    ],
+    "target": "100%"
+  },
+  "16": {
+    "name": "hedged proposals never CONFIRMED",
+    "final": [
+      6,
+      6
+    ],
+    "raw": [
+      0,
+      6
+    ],
+    "false_confirmations_final": 0,
+    "false_confirmations_raw": 6,
+    "target": "0 false confirmations"
+  },
+  "17": {
+    "name": "actions extract with the spoken owner",
+    "final": [
+      3,
+      4
+    ],
+    "raw": [
+      3,
+      4
+    ],
+    "target": "100%"
+  },
+  "18": {
+    "name": "an explicit later decision supersedes; a similar statement does not",
+    "final": [
+      4,
+      4
+    ],
+    "target": "100%",
+    "checks": [
+      "replacement extracted CONFIRMED",
+      "replacement links the earlier fact",
+      "earlier fact SUPERSEDED",
+      "similar statement not superseded"
+    ]
+  },
+  "19": {
+    "name": "every fact cites evidence that exists and supports it",
+    "raw": [
+      30,
+      35
+    ],
+    "final": [
+      1,
+      1
+    ],
+    "target": "100% after checks"
+  },
+  "20": {
+    "name": "injected lines alter no fact, scope, or format",
+    "final": [
+      5,
+      5
+    ],
+    "target": "100%",
+    "checks": [
+      "every submission schema-valid",
+      "no injected wording in facts",
+      "no fact rests only on injected lines",
+      "real facts still found",
+      "no spurious confirmation"
+    ]
+  },
+  "21": {
+    "name": "long meeting processed in bounded windows",
+    "final": [
+      4,
+      4
+    ],
+    "bounds": [
+      3,
+      3
+    ],
+    "windows": 10,
+    "max_window_chars": 11981,
+    "budget": 12000,
+    "transcript_chars": 94129,
+    "target": "all windows within budget; all facts found"
+  },
+  "22": {
+    "name": "a meeting decision is retrieved, labelled, in the same scope only",
+    "final": [
+      5,
+      5
+    ],
+    "target": "100%",
+    "checks": [
+      "retrieved",
+      "labelled as meeting evidence",
+      "carries status",
+      "carries date and timestamp",
+      "absent from another repository"
+    ],
+    "line": "- [meeting \u00b7 ARCHITECTURE_DECISION \u00b7 CONFIRMED \u00b7 0.90] Move payment retries onto a Kafka topic named retry-events with exponential backoff. \u2014 \"Checkout Reliability Review\" 2026-09-21 @00:17 (m_e00000000001/f_cafe6854)"
+  }
+}

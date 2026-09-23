@@ -1,0 +1,69 @@
+{
+  "schema": "agent-skills.meeting-extraction/v1",
+  "meeting_id": "m_e00000000004",
+  "window": 0,
+  "facts": [
+    {
+      "type": "INCIDENT_FACT",
+      "statement": "The outage started at 14:02 when the config service returned empty payloads.",
+      "status": "OPEN",
+      "evidence": [
+        "s_b77a66a4b38b"
+      ],
+      "confidence": 0.85,
+      "speakers": [
+        "Hana Example"
+      ],
+      "owner": null,
+      "due": null,
+      "supersedes": []
+    },
+    {
+      "type": "INCIDENT_FACT",
+      "statement": "Root cause: a deploy shipped with an empty feature-flag file.",
+      "status": "OPEN",
+      "evidence": [
+        "s_88dae6888db5"
+      ],
+      "confidence": 0.8,
+      "speakers": [
+        "Omar Example"
+      ],
+      "owner": null,
+      "due": null,
+      "supersedes": []
+    },
+    {
+      "type": "REQUIREMENT",
+      "statement": "The config service must reject an empty payload instead of serving it.",
+      "status": "CONFIRMED",
+      "evidence": [
+        "s_43773ebbeeeb"
+      ],
+      "confidence": 0.9,
+      "speakers": [
+        "Hana Example"
+      ],
+      "owner": null,
+      "due": null,
+      "supersedes": []
+    },
+    {
+      "type": "ACTION",
+      "statement": "Add a schema check for flag files to the deploy pipeline.",
+      "status": "OPEN",
+      "evidence": [
+        "s_6117cb53374c",
+        "s_1fd19141964f"
+      ],
+      "confidence": 0.9,
+      "speakers": [
+        "Hana Example",
+        "Omar Example"
+      ],
+      "owner": "Omar",
+      "due": null,
+      "supersedes": []
+    }
+  ]
+}

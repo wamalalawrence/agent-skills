@@ -7,52 +7,64 @@ Listen to this meeting:
 https://meet.google.com/abc-defg-hij
 ```
 
-and Agent Skills sends a visible, named assistant into the Microsoft Teams, Zoom, or Google Meet
-call, retrieves the speaker-attributed transcript when the recording ends, extracts engineering
+and Agent Skills captures the Microsoft Teams, Zoom, or Google Meet meeting the way you chose —
+the platform's own transcript, a visible named Recall bot, or a local recording on your computer —
+retrieves the transcript when the meeting ends, extracts engineering
 knowledge from it in bounded windows, shows a short result, and stores the facts — with status,
 scope, and timestamped evidence — in the repository knowledge base. A later question in the same
 repository ("why does payments-service publish to retry-events?") finds the decision, labelled as
 meeting evidence.
 
-Added in `1.2.0`. The design decisions and what they are built on are in
-[meeting-intelligence/DISCOVERY.md](meeting-intelligence/DISCOVERY.md).
+Added in `1.2.0`; the choice of capture provider was added in `1.4.0`. The design decisions and
+what they are built on are in [meeting-intelligence/DISCOVERY.md](meeting-intelligence/DISCOVERY.md).
 
-## Setup
+## Setup: choose how meetings are captured
 
-1. A [Recall.ai](https://www.recall.ai/) account. Recall is the capture provider: it runs the bot,
-   records, and transcribes. Pick a region and keep everything in it — keys, bots, and media are
-   region-local. `eu-central-1` keeps data in the EU.
-2. Store the key through the Access Resolver (hidden input, OS keychain where available):
+Nothing is captured until you choose one of three capture providers. The comparison (cost, data
+flow, consent, what each needs), the per-provider setup guides, and the privacy page are in
+[meeting-intelligence/README.md](meeting-intelligence/README.md).
 
-   ```bash
-   agent-skills access set --profile recall --service recall \
-     --field region=eu-central-1 --secret-field api_key
-   ```
+```bash
+agent-skills meeting setup --compare                  # native vs recall vs desktop
+agent-skills meeting setup native|recall|desktop      # guided; ends with a self-test
+```
 
-   Or set `AGENT_SKILLS_RECALL_API_KEY` and `AGENT_SKILLS_RECALL_REGION` in the environment. The key
-   is never written to meeting state, logs, transcripts, facts, or a process argument.
-3. `agent-skills doctor` shows a **Meetings** section: credentials, region consistency, consent,
-   listener mode, and stuck meetings. `agent-skills doctor --probe-meeting` also contacts Recall
-   once to prove the key works in its region; without the flag, doctor stays offline.
+| Provider | In one line |
+| --- | --- |
+| `native` | Teams / Meet / Zoom already transcribes; Agent Skills downloads it with your sign-in. No bot, no cost, stays in your tenant. |
+| `recall` | A visible "Agent Skills Meeting Assistant" bot joins; Recall bills you ≈ $0.65 per meeting hour and processes the audio. |
+| `desktop` | Your computer records and whisper.cpp transcribes locally. No bot, no cost; **you** must tell participants. |
+
+In every mode the facts are extracted by your AI assistant, so transcript text reaches its model
+provider. With no provider set up, `join` contacts nothing and prints these options instead.
+`agent-skills doctor` lists each provider as `ready`, `not configured`, or `broken: <reason> → <fix>`;
+`doctor --probe-meeting` additionally contacts Recall once and checks that the desktop system-audio
+input receives sound. Without the flag, doctor stays offline.
 
 ## Using it
 
 ```bash
-agent-skills meeting join <meeting-url> [--scope repo:<path>] [--title <text>]
-agent-skills meeting status [<id>] [--wait]
+agent-skills meeting join <meeting-url> [--via native|recall|desktop] [--scope repo:<path>] [--title <text>]
+agent-skills meeting fetch <meeting-url> [--scope repo:<path>]     # native: after the meeting
+agent-skills meeting status [<id>] [--providers] [--wait]
 agent-skills meeting stop <id>
 agent-skills meeting list
 agent-skills meeting inspect <id> [--transcript] [--facts]
 ```
 
-`join` validates the link locally (unknown shapes are refused and nothing is created), binds the
-scope, creates the bot, and returns — the terminal does not need to stay open.
+`join` uses your default provider, or the one `--via` names for this meeting. It checks that the
+provider is ready (locally, before any network call), validates the link, binds the scope, starts
+the capture, and returns — the terminal does not need to stay open. A provider that cannot serve
+the meeting stops with the reason and the alternatives; nothing ever switches providers for you.
 
 ```text
-Agent Skills Meeting Assistant → joining (Zoom)
+Provider: recall. Agent Skills Meeting Assistant → joining (Zoom)
 Meeting id: m_7f3c12ab34cd   Scope: repo:payments-service
 The assistant will appear in the participant list as "Agent Skills Meeting Assistant".
 Tell participants that recording and transcription are active.
+Cost: Billed by Recall to your account, ≈ $0.65/meeting hour.
+Data: Audio and transcript are processed by Recall.ai (a third party) in your chosen region; ...
+Extraction: In every mode, fact extraction runs in your AI assistant (...)
 Check progress: agent-skills meeting status m_7f3c12ab34cd
 ```
 
@@ -83,20 +95,28 @@ Full details: agent-skills meeting inspect m_7f3c12ab34cd --facts
 ```
 
 Other `inspect` flags: `--reprocess` (extract again from the stored transcript), `--accept
-all|<ids> [--scope repo:<path>]` (accept facts pending review), `--purge --yes` (delete provider
+all|<ids> [--scope repo:<path>]` (accept facts pending review), `--purge --yes` (delete captured
 media and the local transcript, keep facts), `--json`.
 
 ## Consent and safety
 
-- The first `join` shows a one-time notice and requires explicit acknowledgement (interactively,
-  or `--acknowledge-recording-notice` after the user agreed in their assistant). It is shown again
-  whenever the notice text changes.
+- Each provider has a versioned cost, data-flow, and consent notice that `meeting setup` shows and
+  records; when its text changes, it is shown again.
+- `recall`: the first `join` shows a one-time recording notice and requires explicit
+  acknowledgement (interactively, or `--acknowledge-recording-notice` after the user agreed in
+  their assistant). It is shown again whenever the notice text changes.
+- `native`: participants see the platform's own transcription banner; nothing else joins.
+- `desktop`: nobody is notified automatically, so it is started only by the user at an interactive
+  terminal, after typing a confirmation that everyone was told and agreed (stored on the meeting),
+  with a ready-to-paste chat announcement. An assistant cannot start it. See
+  [SETUP-desktop.md](meeting-intelligence/SETUP-desktop.md).
 - The assistant always joins as a named participant (`Agent Skills Meeting Assistant` by default;
   configurable, never empty) and posts a chat message saying it is recording and transcribing
   (configurable, never empty).
 - Organisational policy and local law — including all-party consent jurisdictions and GDPR —
   still apply. Telling participants is your responsibility.
-- No auto-joining, no calendar attendance, no hidden participants, no local microphone capture.
+- No auto-joining, no calendar attendance, no hidden participants, no meeting auto-detection.
+  Local capture happens only in the `desktop` mode, started by the user.
 - A platform that refuses recording (a Zoom host denying permission) ends the meeting as
   `PERMISSION_DENIED` and the assistant is asked to leave. There is no retry loop.
 
@@ -115,6 +135,12 @@ meeting backwards. The provider's own sub-code is kept beside the state, redacte
 
 | Situation | Outcome |
 | --- | --- |
+| No capture provider set up | exit `2`, the three options printed, nothing contacted or created |
+| Chosen provider not ready (`broken`) | exit `2`, or `3` for a key / sign-in problem, with the one fix command |
+| Chosen provider refuses the meeting | exit `2`: `external_tenant`, `no_access`, `unsupported_platform`, `unsupported_meeting`, with alternatives |
+| Native: transcription never switched on | `FAILED` (`not_enabled`) once the fetch window (24 h) closes |
+| Desktop started without a terminal, or consent not confirmed | exit `2`, the command to run yourself; nothing recorded |
+| Desktop recorder crashed | what was recorded is transcribed and processed as `PARTIAL` |
 | Unrecognised meeting link | exit `2`, nothing created |
 | Missing or rejected Recall key, missing region | exit `3`, nothing created |
 | Region in `meeting.json` differs from the credential's | exit `3`; doctor reports `MISMATCH` |
@@ -130,7 +156,11 @@ meeting backwards. The provider's own sub-code is kept beside the state, redacte
 
 ## Transcription
 
-Preference order, configurable in `meeting.json` (`transcription_preference`):
+`native` uses the platform's transcript (WebVTT from Teams and Zoom, transcript entries from Meet).
+`desktop` transcribes each audio channel with whisper.cpp; its speakers are only "You" and "Remote
+participants (unidentified)" (`speaker_attribution: channel`), so owners are never guessed and the
+confidence of agreements and actions is capped at 0.6. For `recall`, the preference order is
+configurable in `meeting.json` (`transcription_preference`):
 
 1. `captions` — the platform's own captions through the provider (best speaker attribution;
    depends on the host's caption settings).
@@ -144,7 +174,9 @@ giving up. The method that produced the final transcript is recorded.
 
 Every provider format is normalised to one model: `segment_id` (stable, deterministic),
 `speaker_label` (the display name), `participant_ref` (opaque), `start_ts` / `end_ts` (seconds
-from the start), `text`, `source_method`. **Speaker names are display names, not identities.**
+from the start), `text`, `source_method`; per transcript, `speaker_attribution`
+(`named | channel | none`), `capture_provider`, and `language`. **Speaker names are display names,
+not identities.**
 Nothing maps them to people, emails, or tracker accounts.
 
 ## Webhooks (optional)
@@ -242,9 +274,13 @@ secrets and instruction-shaped text.
 
 ## Retention
 
+Per provider, including what stays with the platform: [PRIVACY.md](meeting-intelligence/PRIVACY.md).
+
 | Data | Where | Default |
 | --- | --- | --- |
-| Recording media | At the provider only; never downloaded | 48 h retention set on every bot (`media_retention_hours`, 1–168); deleted once the transcript is stored |
+| Recording media (`recall`) | At the provider only; never downloaded | 48 h retention set on every bot (`media_retention_hours`, 1–168); deleted once the transcript is stored |
+| Raw audio (`desktop`) | `~/.agent-skills/state/meetings/<id>/audio/`, `0600` | Deleted once the transcript is stored (`desktop.delete_audio_after_transcript`; else at most 7 days) |
+| Platform transcript (`native`) | The platform, under your organisation's retention | Never deleted or modified by Agent Skills |
 | Raw transcript | `~/.agent-skills/state/meetings/<id>/transcript.json`, redacted, `0600` | 30 days (`transcript_retention_days`) |
 | Facts | The repository knowledge base | Durable |
 | Meeting record | `~/.agent-skills/state/meetings/<id>/record.json` | Durable metadata and evidence index |
@@ -275,6 +311,16 @@ period and check your Recall agreement before telling participants data is gone.
 | `transcript_retention_days` | 30 |
 | `window_budget_chars` / `window_overlap_chars` | 12000 / 1200 |
 | `listener_url` | empty (polling only) |
+| `default_provider` | empty until `meeting setup`; a 1.3.0 installation with Recall configured is treated as `recall` |
+| `provider_notices` | the notice version each provider was acknowledged at |
+| `recall.cost_per_hour_usd` | `0.65` (printed in the cost disclosure) |
+| `native.<teams\|google_meet\|zoom>` | client id, tenant / domain, redirect URI — imported with `setup native --import`; never a secret |
+| `native.fetch_window_hours` | 24 (1–168): how long after the meeting to wait for a transcript |
+| `desktop.model` / `desktop.language` | `small` / `auto` |
+| `desktop.max_duration_minutes` | 180 (5–720) |
+| `desktop.announcement` | the chat announcement (never empty) |
+| `desktop.delete_audio_after_transcript` / `desktop.raw_audio_retention_days` | `true` / 1 (1–7) |
+| `desktop.mic_device` / `desktop.system_device` | empty (default microphone) / the loopback input setup found |
 
 ## State, updates, and rollback
 
@@ -286,14 +332,25 @@ refuses — without rewriting — any record whose schema it does not know. `uni
 
 ## Provider boundary
 
-Meeting Intelligence speaks only its own types. `MeetingCaptureProvider` (`start`, `poll`, `stop`,
-`fetch_transcript`, `request_async_transcript`, `delete_media`, `verify_event`, `capabilities`) is
-implemented by `RecallMeetingBotProvider` in `scripts/meeting_recall.py`, the only module that
-knows Recall exists; a test fails if any other meeting module imports it or names a Recall field.
-`capabilities()` describes join-live, existing-transcript retrieval, diarization quality, and
-retention control, so a native Teams or Meet transcript provider can be preferred later without
-changing Meeting Intelligence. A WebVTT normaliser (the format those platforms export) already
-exists.
+Meeting Intelligence speaks only its own types. `MeetingCaptureProvider` (`capabilities`,
+`readiness`, `resolve`, `start`, `poll`, `stop`, `fetch_transcript`, `request_async_transcript`,
+`delete_media`, `verify_event`, `activity`) has three implementations:
+
+| Provider | Module |
+| --- | --- |
+| `recall` | `scripts/meeting_recall.py` (`RecallMeetingBotProvider`) — the only module that knows Recall |
+| `native` | `scripts/meeting_native.py`, with `meeting_native_teams.py`, `meeting_native_meet.py`, `meeting_native_zoom.py`, and `meeting_oauth.py` (PKCE) |
+| `desktop` | `scripts/meeting_desktop.py` (ffmpeg recorder, whisper.cpp transcriber) |
+
+`scripts/meeting_providers.py` is the one composition root: it builds providers, computes their
+readiness locally, and holds the preflight, comparison, and notice texts. A test fails if
+`meeting.py`, `meeting_intel.py`, `meeting_store.py`, or `knowledge.py` imports any provider
+module. `capabilities()` states live capture, post-meeting fetch, visible participant, speaker
+attribution (`named | channel | none`), third-party processing, per-hour cost, platforms, and
+languages; `resolve()` returns a provider-neutral reference or a typed refusal (`unsupported_platform`,
+`external_tenant`, `no_access`, `not_found`, `not_enabled`, `not_yet_available`,
+`unsupported_meeting`). A self-hosted bot server (for example Vexa) would be a fourth
+implementation of the same interface.
 
 ## Limitations
 
@@ -304,5 +361,10 @@ exists.
   fixtures derived from it, not against a live account. Run
   `AGENT_SKILLS_MEETING_LIVE_SMOKE=1 python3 scripts/test-meeting.py` with real credentials before
   relying on it; it authenticates and lists bots and never creates one.
+- The native adapters (Graph, Meet REST, Zoom) were built against the vendors' documentation as
+  read on 2026-09-23 and tested against sanitised fixtures, not a live tenant. The setup self-test
+  is the first live check; run it before relying on a platform.
+- Desktop capture was tested with a fake `ffmpeg` and `whisper-cli`, and the ffmpeg filter graph
+  against real ffmpeg with synthetic inputs; transcription quality depends on the model you pick.
 - Spoken-secret detection is heuristic. It errs toward redaction, and it can still miss a secret
   said in an unusual way.

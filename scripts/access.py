@@ -1672,6 +1672,95 @@ def cmd_profiles(args) -> int:
     return 0
 
 
+def store_identity(profile, service, plain, secrets, backend=None, resource="", account=""):
+    """Write one identity: non-secret fields to credentials.json, secrets to a backend.
+
+    The one write path for credentials. `access set` uses it after reading
+    secrets with hidden input; in-process callers that obtained a secret the
+    same way (a hidden prompt) or from a token endpoint (an OAuth refresh
+    token) use it too, so every secret lands in the same store, recorded per
+    field, and `forget` removes it. Names must already be validated.
+    """
+    if not PROFILE_NAME_RE.match(profile) or not SERVICE_NAME_RE.match(service):
+        raise BackendError("invalid profile or service name")
+    for name in list(plain) + list(secrets):
+        if not FIELD_NAME_RE.match(name):
+            raise BackendError("invalid field name %r" % name)
+    backend = backend or select_backend()
+    for name, value in secrets.items():
+        backend.store(profile, name, value)
+
+    state = load_profiles()
+    profiles = state.setdefault("profiles", {})
+    entry = profiles.get(profile)
+    if not isinstance(entry, dict):
+        entry = {"created_at": utc_now()}
+    entry["name"] = profile
+    entry["service"] = service
+    if resource:
+        entry["resource"] = resource.strip()
+    if account:
+        entry["account"] = account.strip()
+    merged_fields = entry.get("fields") if isinstance(entry.get("fields"), dict) else {}
+    merged_fields.update(plain)
+    entry["fields"] = merged_fields
+    existing_secrets = entry.get("secret_fields") or []
+    entry["secret_fields"] = sorted(set(list(existing_secrets) + list(secrets)))
+    # Record storage per field. `backend` stays as the profile-level default so
+    # profiles written by earlier versions keep resolving, but the per-field map
+    # is what `resolve` and `forget` read.
+    per_field = entry.get("secret_backends")
+    if not isinstance(per_field, dict):
+        per_field = {}
+    for field in secrets:
+        per_field[field] = backend.name
+    if per_field:
+        entry["secret_backends"] = per_field
+    if secrets or not entry.get("backend"):
+        entry["backend"] = backend.name
+    entry["updated_at"] = utc_now()
+    profiles[profile] = entry
+    save_profiles(state)
+    return entry
+
+
+def fetch_identity(profile, fields):
+    """In-process read of one identity's fields, secrets included.
+
+    For callers that own the identity by name (the meeting providers' OAuth
+    tokens). Values are returned to the caller only: never printed, never
+    passed on argv. Missing profile or field -> absent from the result.
+    """
+    entry = (load_profiles().get("profiles") or {}).get(profile)
+    if not isinstance(entry, dict):
+        return {}
+    out = {}
+    plain = entry.get("fields") if isinstance(entry.get("fields"), dict) else {}
+    secret_fields = set(entry.get("secret_fields") or [])
+    for field in fields:
+        if field in secret_fields:
+            backend, problem = backend_for_field(entry, field)
+            if backend is None:
+                raise BackendError(problem)
+            value = backend.fetch(profile, field)
+            if value:
+                out[field] = value
+        elif plain.get(field) not in (None, ""):
+            out[field] = str(plain[field])
+    return out
+
+
+def identity_metadata(profile):
+    """Non-secret view of one identity: fields and the names of its secrets."""
+    entry = (load_profiles().get("profiles") or {}).get(profile)
+    if not isinstance(entry, dict):
+        return {}
+    return {
+        "fields": dict(entry.get("fields") or {}),
+        "secret_fields": sorted(entry.get("secret_fields") or []),
+    }
+
+
 def cmd_set(args) -> int:
     profile = args.profile.strip().lower()
     service = args.service.strip().lower()
@@ -1758,44 +1847,12 @@ def cmd_set(args) -> int:
             return 2
         collected[name] = entered
 
-    for name, value in collected.items():
-        try:
-            backend.store(profile, name, value)
-        except BackendError as error:
-            print("FAIL %s" % error, file=sys.stderr)
-            return 2
-
-    state = load_profiles()
-    profiles = state.setdefault("profiles", {})
-    entry = profiles.get(profile)
-    if not isinstance(entry, dict):
-        entry = {"created_at": utc_now()}
-    entry["name"] = profile
-    entry["service"] = service
-    if args.resource:
-        entry["resource"] = args.resource.strip()
-    if args.account:
-        entry["account"] = args.account.strip()
-    merged_fields = entry.get("fields") if isinstance(entry.get("fields"), dict) else {}
-    merged_fields.update(plain)
-    entry["fields"] = merged_fields
-    existing_secrets = entry.get("secret_fields") or []
-    entry["secret_fields"] = sorted(set(list(existing_secrets) + list(collected)))
-    # Record storage per field. `backend` stays as the profile-level default so
-    # profiles written by earlier versions keep resolving, but the per-field map
-    # is what `resolve` and `forget` read.
-    per_field = entry.get("secret_backends")
-    if not isinstance(per_field, dict):
-        per_field = {}
-    for field in collected:
-        per_field[field] = backend.name
-    if per_field:
-        entry["secret_backends"] = per_field
-    if collected or not entry.get("backend"):
-        entry["backend"] = backend.name
-    entry["updated_at"] = utc_now()
-    profiles[profile] = entry
-    save_profiles(state)
+    try:
+        store_identity(profile, service, plain, collected, backend=backend,
+                       resource=args.resource or "", account=args.account or "")
+    except BackendError as error:
+        print("FAIL %s" % error, file=sys.stderr)
+        return 2
 
     print("Stored identity %r for service %r." % (profile, service))
     if collected:

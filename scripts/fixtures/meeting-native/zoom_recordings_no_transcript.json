@@ -1,0 +1,13 @@
+{
+  "id": 81234567890,
+  "host_id": "placeholderHostId",
+  "start_time": "2026-09-21T09:00:00Z",
+  "recording_files": [
+    {
+      "id": "r1",
+      "file_type": "M4A",
+      "status": "completed",
+      "download_url": "https://zoom.us/rec/download/placeholder-audio"
+    }
+  ]
+}

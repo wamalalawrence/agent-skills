@@ -1,8 +1,10 @@
 #!/usr/bin/env python3
 """agent-skills meeting — Meeting Intelligence, from a meeting link to scoped facts.
 
-    agent-skills meeting join <meeting-url> [--scope <repo>] [--title <text>]
-    agent-skills meeting status [<id>] [--wait] [--listen <host:port>]
+    agent-skills meeting setup [native|recall|desktop] [--compare] [--import <file>]
+    agent-skills meeting join <meeting-url> [--via native|recall|desktop] [--scope <repo>] [--title <text>]
+    agent-skills meeting fetch <meeting-url> [--scope <repo>]      (native: a meeting that already ended)
+    agent-skills meeting status [<id>] [--providers] [--wait] [--listen <host:port>]
     agent-skills meeting stop <id>
     agent-skills meeting list
     agent-skills meeting inspect <id> [--transcript] [--facts] [--next-window]
@@ -12,11 +14,21 @@
 That is the whole surface. Natural language ("Listen to this meeting: <url>")
 arrives through the `meeting-intelligence` skill, which calls this command.
 
+Capture is the user's choice among three providers (`meeting_providers.py`):
+`native` downloads the transcript the platform already made, `recall` sends a
+visible bot, `desktop` records on this computer and transcribes locally. The
+user picks a default in `meeting setup` and may override it per meeting with
+`--via`. With nothing chosen, `join` runs no provider at all: it prints the
+preflight that explains the three options. A provider that cannot serve a
+meeting stops with the reason and the alternatives; nothing ever falls back to
+another provider on its own.
+
 How a meeting moves:
 
-    join       validates the link locally, resolves the scope, sends a visible,
-               named bot, persists the meeting, and returns. The terminal does
-               not have to stay open.
+    join       validates the link, checks the chosen provider is ready (local
+               checks, no network), resolves the scope, starts the capture,
+               persists the meeting, and returns. The terminal does not have to
+               stay open.
     status     reconciles: polls the provider for any meeting not yet finished,
     list       advances the lifecycle monotonically, retrieves and redacts the
     inspect    transcript once the recording is done, and prepares bounded
@@ -39,7 +51,6 @@ from __future__ import annotations
 
 import argparse
 import json
-import os
 import queue
 import subprocess
 import sys
@@ -54,6 +65,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parent))
 import knowledge_resolver as knowledge  # noqa: E402  (the Knowledge Resolver; 1.3.0)
 import meeting_capture as mc  # noqa: E402
 import meeting_intel as intel  # noqa: E402
+import meeting_providers as providers  # noqa: E402  (the one place providers are built; 1.4.0)
 import meeting_secrets  # noqa: E402
 import meeting_store as store  # noqa: E402
 from durable import LockTimeout  # noqa: E402
@@ -79,11 +91,12 @@ PROVIDER_FACTORY: Optional[Callable[[Dict[str, object], bool], mc.MeetingCapture
 
 
 class CliError(Exception):
-    def __init__(self, message: str, code: int, hint: str = "") -> None:
+    def __init__(self, message: str, code: int, hint: str = "", plain: bool = False) -> None:
         super().__init__(message)
         self.message = message
         self.code = code
         self.hint = hint
+        self.plain = plain  # a complete, user-facing text (the preflight): printed as is
 
 
 def out(text: str = "") -> None:
@@ -95,93 +108,56 @@ def err(text: str) -> None:
 
 
 # ---------------------------------------------------------------------------
-# Provider and credentials
+# Providers: chosen by the user, built by meeting_providers.py
 # ---------------------------------------------------------------------------
-RECALL_SETUP_HINT = (
-    "store it with: agent-skills access set --profile recall --service recall "
-    "--field region=<region> --secret-field api_key   (hidden input; or set "
-    "AGENT_SKILLS_RECALL_API_KEY in the environment)"
-)
+def provider_for_record(record: dict) -> str:
+    """Records from 1.2.0/1.3.0 carry only the handle; its provider is the id."""
+    return str(record.get("capture_provider") or (record.get("handle") or {}).get("provider") or "recall")
 
 
-def resolve_recall_credentials(need_secret: bool) -> Dict[str, str]:
-    from access import resolve_access
-
-    fields = ["api_key", "region"] + (["verification_secret"] if need_secret else [])
-    values: Dict[str, str] = {}
-    resolve_access(
-        "recall", "", fields, {"api_key", "verification_secret"}, Path.cwd(),
-        allow_capability=False, values_out=values,
-    )
-    return values
-
-
-def recall_credential_presence() -> tuple:
-    """(api key configured?, region) from metadata only — no secret is read.
-
-    `doctor` runs inside every `start-task`; fetching a keychain secret there
-    just to report that it exists would read a credential on every task.
-    """
-    from access import env_candidates, load_profiles
-
-    present = any(os.environ.get(name) for name in env_candidates("recall", "api_key"))
-    region = next((os.environ[n] for n in env_candidates("recall", "region") if os.environ.get(n)), "")
-    for entry in (load_profiles().get("profiles") or {}).values():
-        if not isinstance(entry, dict) or entry.get("service") != "recall":
-            continue
-        present = present or "api_key" in (entry.get("secret_fields") or [])
-        fields = entry.get("fields") if isinstance(entry.get("fields"), dict) else {}
-        region = region or str(fields.get("region") or "")
-    return present, region
-
-
-def effective_region(config: Dict[str, object], credentials: Dict[str, str]) -> str:
-    configured = str(config.get("region") or "").strip()
-    stored = str(credentials.get("region") or "").strip()
-    if configured and stored and configured != stored:
-        raise CliError(
-            "region mismatch: meeting config says {} but the Recall credential is for {}".format(configured, stored),
-            EXIT_AUTH,
-            "Recall keys, bots, and media are region-local; make them agree",
-        )
-    return configured or stored
-
-
-def build_provider(config: Dict[str, object], need_secret: bool = False) -> mc.MeetingCaptureProvider:
+def build_provider(config: Dict[str, object], need_secret: bool = False,
+                   provider: str = "recall") -> mc.MeetingCaptureProvider:
     if PROVIDER_FACTORY is not None:
         return PROVIDER_FACTORY(config, need_secret)
-    if config.get("provider") != "recall":
-        raise CliError("unknown capture provider {!r}".format(config.get("provider")), EXIT_USAGE)
-    import meeting_recall
-
-    credentials = resolve_recall_credentials(need_secret)
-    region = effective_region(config, credentials)
-    if not region:
-        raise CliError(
-            "no Recall region is configured",
-            EXIT_AUTH,
-            "set one of {} as the credential's region field (or AGENT_SKILLS_RECALL_REGION)".format(
-                ", ".join(meeting_recall.REGIONS)
-            ),
-        )
-    if not credentials.get("api_key"):
-        raise CliError("no Recall API key is available", EXIT_AUTH, RECALL_SETUP_HINT)
-    if need_secret and not credentials.get("verification_secret"):
-        raise CliError(
-            "listener mode needs the Recall workspace verification secret",
-            EXIT_AUTH,
-            "add it with --secret-field verification_secret on the recall profile",
-        )
     try:
-        return meeting_recall.RecallMeetingBotProvider(
-            credentials["api_key"], region, credentials.get("verification_secret", "")
-        )
+        return providers.build(config, provider, need_secret)
     except mc.ProviderError as exc:
         raise CliError(exc.message, _KIND_TO_EXIT.get(exc.kind, EXIT_USAGE)) from None
 
 
 def provider_failure(exc: mc.ProviderError) -> CliError:
     return CliError(exc.message, _KIND_TO_EXIT.get(exc.kind, EXIT_NETWORK))
+
+
+def _readiness_exit(state: mc.Readiness) -> int:
+    lowered = state.reason.lower()
+    auth = ("key", "sign", "secret", "region", "credential", "token")
+    return EXIT_AUTH if any(word in lowered for word in auth) else EXIT_USAGE
+
+
+def choose_provider(config: Dict[str, object], via: Optional[str]) -> str:
+    """The provider the user chose, ready to run; otherwise stop and say exactly why.
+
+    No network call happens before this returns: readiness is local.
+    """
+    chosen = via or providers.default_provider(config)
+    if chosen is None:
+        raise CliError(providers.preflight_text(config), EXIT_USAGE, plain=True)
+    if chosen not in providers.PROVIDERS:
+        raise CliError("unknown capture provider {!r}; choose native, recall, or desktop".format(chosen), EXIT_USAGE)
+    if PROVIDER_FACTORY is not None:
+        return chosen  # the test harness injected a provider in place of the real one
+    state = providers.readiness(config, chosen)
+    if state.state == mc.NOT_CONFIGURED:
+        raise CliError(
+            "the {} provider is not set up on this machine ({}).".format(chosen, state.reason),
+            EXIT_USAGE,
+            "set it up: {}\ncompare the options: agent-skills meeting setup --compare".format(state.fix_command),
+        )
+    if not state.ready:
+        raise CliError("the {} provider is not ready: {}".format(chosen, state.reason), _readiness_exit(state),
+                       "fix: " + state.fix_command)
+    return chosen
 
 
 # ---------------------------------------------------------------------------
@@ -254,6 +230,8 @@ def _store_transcript(record: dict, transcript: mc.NormalisedTranscript, partial
     )
     record["transcription"]["final_method"] = transcript.source_method
     record["transcription"]["partial"] = bool(partial)
+    record["transcription"]["speaker_attribution"] = transcript.speaker_attribution
+    record["transcription"]["language"] = transcript.language
     candidate = store.meeting_dir(record["id"]) / "transcript-candidate.json"
     if candidate.exists():
         candidate.unlink()
@@ -275,6 +253,9 @@ def _save_candidate(record: dict, transcript: mc.NormalisedTranscript) -> None:
         "schema": store.TRANSCRIPT_SCHEMA,
         "meeting_id": transcript.meeting_id,
         "source_method": transcript.source_method,
+        "speaker_attribution": transcript.speaker_attribution,
+        "capture_provider": transcript.capture_provider,
+        "language": transcript.language,
         "segments": [s.to_dict() for s in transcript.segments],
     }
     store._write_private_json(_candidate_path(record), payload)
@@ -289,6 +270,9 @@ def _load_candidate(record: dict) -> Optional[mc.NormalisedTranscript]:
         meeting_id=record["id"],
         source_method=str(data.get("source_method", "")),
         segments=[mc.Segment.from_dict(record["id"], s) for s in data.get("segments", [])],
+        speaker_attribution=str(data.get("speaker_attribution") or "named"),
+        capture_provider=str(data.get("capture_provider") or ""),
+        language=str(data.get("language") or ""),
     )
 
 
@@ -301,17 +285,25 @@ def _retrieve_transcript(record: dict, provider: mc.MeetingCaptureProvider) -> N
         {"at": store.now_iso(), "method": method, "status": result.status, "reason": redact(result.reason)[:60]}
     ]
     if result.status == "pending":
+        if result.progress:
+            record["reason"] = redact(result.progress)[:120]
         return
     transcript = result.transcript if result.status == "ready" else None
-    good = transcript is not None and transcript.usable and not _clearly_partial(transcript, record)
+    # "Clearly partial" is a heuristic for a live transcript that a post-meeting
+    # pass could still improve; a provider without one reports partial itself.
+    can_retry = "async" in provider.capabilities().transcription_methods
+    good = transcript is not None and transcript.usable and (
+        result.partial or not can_retry or not _clearly_partial(transcript, record))
     if good:
-        _store_transcript(record, transcript, partial=False)  # type: ignore[arg-type]
-        store.transition(record, mc.TRANSCRIPT_READY, "transcript via " + method)
+        _store_transcript(record, transcript, partial=result.partial)  # type: ignore[arg-type]
+        store.transition(record, mc.TRANSCRIPT_READY, ("partial transcript via " if result.partial
+                                                       else "transcript via ") + transcript.source_method)
         return
     if transcript is not None and transcript.usable:
         _save_candidate(record, transcript)
     can_fallback = (
-        "async" in info["preference"]
+        can_retry
+        and "async" in info["preference"]
         and not info["async_requested"]
         and not record["media"].get("deleted_at")
     )
@@ -324,7 +316,8 @@ def _retrieve_transcript(record: dict, provider: mc.MeetingCaptureProvider) -> N
         _store_transcript(record, candidate, partial=True)
         store.transition(record, mc.TRANSCRIPT_READY, "partial transcript via " + candidate.source_method)
         return
-    store.transition(record, mc.FAILED, "transcription_unavailable")
+    named = mc.REFUSALS + ("local_transcription_failed", "audio_missing", "nothing_was_said", "empty_transcript")
+    store.transition(record, mc.FAILED, result.reason if result.reason in named else "transcription_unavailable")
 
 
 def _plan_path(meeting_id: str) -> Path:
@@ -351,10 +344,38 @@ def _prepare_processing(record: dict, config: Dict[str, object]) -> None:
     store.transition(record, mc.PROCESSING, "{} window(s) ready for extraction".format(len(plan)))
 
 
+def _desktop_settings(config: Dict[str, object]) -> dict:
+    return config.get("desktop") if isinstance(config.get("desktop"), dict) else {}  # type: ignore[return-value]
+
+
+def media_pending(record: dict, config: Dict[str, object]) -> bool:
+    """Is there captured media left to delete for this meeting, now?
+
+    recall: the provider's recording, once the transcript is stored (config
+    `delete_media_after_transcript`). desktop: the raw local audio, at once by
+    default, else after `desktop.raw_audio_retention_days` (at most 7).
+    native: never — no media was downloaded, and the platform's transcript
+    stays under the organisation's own retention.
+    """
+    if record["media"].get("deleted_at") or not record["transcript"].get("stored_at"):
+        return False
+    kind = provider_for_record(record)
+    if kind == "native":
+        return False
+    if kind == "desktop":
+        desktop = _desktop_settings(config)
+        if desktop.get("delete_audio_after_transcript", True):
+            return True
+        try:
+            days = max(1, min(7, int(desktop.get("raw_audio_retention_days", 1))))
+        except (TypeError, ValueError):
+            days = 1
+        return store.transcript_expired(record, days)
+    return bool(config.get("delete_media_after_transcript"))
+
+
 def _maybe_delete_media(record: dict, provider: mc.MeetingCaptureProvider, config: Dict[str, object]) -> None:
-    if not config.get("delete_media_after_transcript") or record["media"].get("deleted_at"):
-        return
-    if not record["transcript"].get("stored_at"):
+    if not media_pending(record, config):
         return
     try:
         provider.delete_media(mc.CaptureHandle.from_dict(record["handle"]))
@@ -381,11 +402,7 @@ def needs_provider(record: dict, config: Dict[str, object]) -> bool:
     return bool(
         state in mc.PROVIDER_ACTIVE_STATES
         or state in (mc.ENDED, mc.MEDIA_READY)
-        or (
-            record["transcript"].get("stored_at")
-            and config.get("delete_media_after_transcript")
-            and not record["media"].get("deleted_at")
-        )
+        or media_pending(record, config)
     )
 
 
@@ -485,6 +502,9 @@ def _finalize(record: dict) -> None:
         "platform": record["platform"],
         "scope": {k: scope[k] for k in ("kind", "key", "label") if k in scope},
         "source_method": record["transcription"].get("final_method", ""),
+        "capture_provider": provider_for_record(record),
+        "speaker_attribution": transcript.speaker_attribution,
+        "language": transcript.language,
         "partial": partial,
         "transcript_available": True,
         "facts": facts,
@@ -546,7 +566,8 @@ def submit_extraction(meeting_id: str, payload: object) -> dict:
         facts: List[dict] = []
         notes: List[str] = []
         for raw in raw_facts:
-            fact, fact_notes = intel.check_fact(raw, meeting_id, window_ids, segments, transcript.source_method)
+            fact, fact_notes = intel.check_fact(raw, meeting_id, window_ids, segments, transcript.source_method,
+                                                transcript.speaker_attribution)
             notes.extend("window {}: {}".format(index, n) for n in fact_notes)
             if fact is not None:
                 facts.append(fact)
@@ -582,9 +603,13 @@ def _facts_for(record: dict) -> Optional[dict]:
     return store.load_pending_facts(record["id"])
 
 
-def _status_line(record: dict) -> str:
+def _status_line(record: dict, config: Optional[Dict[str, object]] = None) -> str:
     title = record.get("title") or "(untitled)"
     extra = ""
+    activity = _activity(record, config) if config is not None else ""
+    if activity:
+        # A persistent indicator for as long as this computer is recording.
+        extra += "  ● " + activity
     if record["state"] == mc.PROCESSING:
         processing = record["processing"]
         done = len(processing["completed"]) + len(processing["failed"])
@@ -593,8 +618,9 @@ def _status_line(record: dict) -> str:
         extra += "  reason: " + record["reason"]
     if (record.get("reconcile") or {}).get("last_error"):
         extra += "  (last check failed: {}; will retry)".format(record["reconcile"]["last_error"])
-    return "{}  {:<22} {:<16} {:<18} {}{}".format(
-        record["id"], record["state"], mc.PLATFORM_LABELS.get(record["platform"], record["platform"]),
+    return "{}  {:<22} {:<8} {:<16} {:<18} {}{}".format(
+        record["id"], record["state"], provider_for_record(record),
+        mc.PLATFORM_LABELS.get(record["platform"], record["platform"]),
         scope_label(record["scope"]), title[:40], extra,
     )
 
@@ -604,9 +630,24 @@ def _next_step(record: dict) -> str:
     if state == mc.PROCESSING:
         return ("Transcript ready. Extraction runs in your assistant: ask it to process meeting {id}, "
                 "or read `agent-skills meeting inspect {id} --next-window`.").format(id=record["id"])
+    if provider_for_record(record) == "desktop" and state == mc.RECORDING:
+        return "RECORDING — stop with: agent-skills meeting stop {}".format(record["id"])
     if state in mc.PROVIDER_ACTIVE_STATES or state in (mc.ENDED, mc.MEDIA_READY):
         return "Check progress: agent-skills meeting status {}".format(record["id"])
+    if state == mc.FAILED and record.get("reason") in mc.REFUSALS:
+        return _refusal_hint(record)
     return ""
+
+
+def _refusal_hint(record: dict) -> str:
+    reason = record.get("reason")
+    if reason == "not_enabled":
+        return ("No transcript exists for this meeting. Next time switch on transcription, or use another "
+                "provider. " + providers.alternatives(provider_for_record(record)))
+    if reason == "external_tenant":
+        return ("The transcript belongs to the other organisation. Use --via recall or --via desktop for "
+                "meetings you don't host.")
+    return providers.alternatives(provider_for_record(record))
 
 
 def print_summary(record: dict) -> None:
@@ -618,34 +659,100 @@ def print_summary(record: dict) -> None:
 # ---------------------------------------------------------------------------
 # Commands
 # ---------------------------------------------------------------------------
-def cmd_join(args: argparse.Namespace) -> int:
+def _classify(url: str) -> tuple:
     try:
-        platform, display = mc.classify_meeting_url(args.url)
+        return mc.classify_meeting_url(url)
     except mc.MeetingUrlError as exc:
         raise CliError(str(exc), EXIT_USAGE, "supported: Microsoft Teams, Google Meet, and Zoom meeting links") from None
-    scope = resolve_scope(args.scope)
-    config = store.load_config()
-    if not store.consent_current(config):
-        out(store.consent_text(config))
-        if args.acknowledge_recording_notice:
-            store.record_consent(config)
-        elif sys.stdin.isatty():
-            reply = input("Type 'I understand' to continue: ").strip().lower()
-            if reply != "i understand":
-                raise CliError("recording notice not acknowledged; nothing was created", EXIT_USAGE)
-            store.record_consent(config)
-        else:
-            raise CliError(
-                "the one-time recording notice has not been acknowledged; nothing was created",
-                EXIT_USAGE,
-                "show the notice above to the user; once they explicitly agree, re-run with "
-                "--acknowledge-recording-notice",
-            )
-    provider = build_provider(config)
-    live = next((m for m in config["transcription_preference"] if m != "async"), "captions")  # type: ignore[union-attr]
-    meeting_id = store.new_meeting_id()
+
+
+def _refused(provider: str, refusal: mc.MeetingRefusal) -> CliError:
+    """A typed refusal: say why and what else exists. Never switch providers."""
+    return CliError("{} cannot capture this meeting [{}]: {}".format(provider, refusal.code, refusal.message),
+                    EXIT_USAGE, providers.alternatives(provider))
+
+
+def _show_notice_once(config: Dict[str, object], provider: str) -> None:
+    """Existing users (and notice text changes) see the current notice without being blocked."""
+    if providers.notice_current(config, provider):
+        return
+    out(providers.notice_text(config, provider))
+    out("")
+    providers.record_notice(config, provider, "shown on join", store.now_iso())
+    store.save_config(config)
+
+
+def _interactive() -> bool:
+    """A person at a terminal. Tests replace this; no flag or variable skips it."""
+    return sys.stdin.isatty() and sys.stdout.isatty()
+
+
+def _recall_consent(config: Dict[str, object], args: argparse.Namespace) -> None:
+    if store.consent_current(config):
+        return
+    out(store.consent_text(config))
+    if args.acknowledge_recording_notice:
+        store.record_consent(config)
+    elif _interactive():
+        reply = input("Type 'I understand' to continue: ").strip().lower()
+        if reply != "i understand":
+            raise CliError("recording notice not acknowledged; nothing was created", EXIT_USAGE)
+        store.record_consent(config)
+    else:
+        raise CliError(
+            "the one-time recording notice has not been acknowledged; nothing was created",
+            EXIT_USAGE,
+            "show the notice above to the user; once they explicitly agree, re-run with "
+            "--acknowledge-recording-notice",
+        )
+
+
+def _active_duplicate(display_url: str, provider: str) -> Optional[str]:
+    for meeting_id in store.list_meeting_ids():
+        try:
+            record = store.load_record(meeting_id)
+        except store.StateError:
+            continue
+        if (provider_for_record(record) == provider and record.get("meeting_url_display") == display_url
+                and record["state"] in mc.PROVIDER_ACTIVE_STATES):
+            return meeting_id
+    return None
+
+
+def _desktop_attestation(config: Dict[str, object], meeting_id: str, url: str) -> dict:
+    """The consent step for local recording. Only a person at a terminal can pass it."""
+    if not _interactive():
+        raise CliError(
+            "local desktop recording can only be started by you, in an interactive terminal. Nothing was started.",
+            EXIT_USAGE,
+            "run it yourself in a terminal:\n    agent-skills meeting join {} --via desktop\n"
+            "An assistant must not start a local recording; no one in the meeting is notified automatically.".format(
+                url.split("?")[0]),
+        )
+    _show_notice_once(config, "desktop")
+    desktop = _desktop_settings(config)
+    announcement = " ".join(str(desktop.get("announcement") or "").split()) or (
+        "I'm recording and transcribing this meeting locally for my engineering notes. Tell me if you object.")
+    out("No one in this meeting will be notified automatically. Before recording:")
+    out("  1. Tell everyone that you are recording and transcribing, for example by pasting")
+    out("     this into the meeting chat:")
+    out("")
+    out("       " + announcement)
+    out("")
+    out("  2. Make sure every participant agrees. Recording people without their knowledge can be")
+    out("     unlawful (e.g. §201 StGB in Germany); your organisation may require more.")
+    out("")
+    reply = input("Type 'everyone agreed' to start recording: ").strip().lower()
+    if reply != "everyone agreed":
+        raise CliError("consent not confirmed; nothing was recorded", EXIT_USAGE)
+    return {"confirmed_at": store.now_iso(), "notice_version": providers.NOTICE_VERSIONS["desktop"],
+            "announcement": announcement[:400], "by": "typed confirmation at an interactive terminal"}
+
+
+def _capture_options(config: Dict[str, object], meeting_id: str, live: str,
+                     ref: Optional[mc.MeetingRef] = None, attestation: Optional[dict] = None) -> mc.CaptureOptions:
     leave = config["automatic_leave"]
-    options = mc.CaptureOptions(
+    return mc.CaptureOptions(
         bot_name=str(config["bot_name"]),
         chat_notice=str(config["chat_notice"]),
         live_method=live,
@@ -654,26 +761,120 @@ def cmd_join(args: argparse.Namespace) -> int:
         noone_joined_timeout=int(leave["noone_joined_timeout"]),  # type: ignore[index]
         everyone_left_timeout=int(leave["everyone_left_timeout"]),  # type: ignore[index]
         correlation_id=meeting_id,
+        ref=ref,
+        attestation=attestation,
     )
-    try:
-        handle = provider.start(args.url.strip(), options)
-    except mc.ProviderError as exc:
-        raise provider_failure(exc) from None
-    record = store.new_record(meeting_id, platform, display, args.title or "", scope, handle, live, config)
-    store.save_record(record)
-    label = mc.PLATFORM_LABELS[platform]
-    out("{} → joining ({})".format(config["bot_name"], label))
-    out("Meeting id: {}   Scope: {}".format(meeting_id, scope_label(scope)))
-    out('The assistant will appear in the participant list as "{}".'.format(config["bot_name"]))
-    out("Tell participants that recording and transcription are active.")
+
+
+def cmd_join(args: argparse.Namespace) -> int:
+    config = store.load_config()
+    via = getattr(args, "via", None)
+    fetch_only = bool(getattr(args, "fetch_only", False))
+    if fetch_only:
+        via = "native"
+    # Which provider, and is it ready: local checks only, before anything else.
+    provider_id = choose_provider(config, via)
+    # The link is checked before any provider call, so a bad one never reaches
+    # a provider. Desktop only labels the meeting, so it accepts other platforms.
+    platform, display = ("other", "") if provider_id == "desktop" else _classify(args.url)
+    scope = resolve_scope(args.scope)
+    meeting_id = store.new_meeting_id()
+
+    if provider_id == "recall":
+        _recall_consent(config, args)
+        duplicate = _active_duplicate(display, "recall")
+        if duplicate:
+            raise CliError("a Recall bot is already active for this meeting ({}); no second bot was started".format(
+                duplicate), EXIT_USAGE, "check it: agent-skills meeting status {}".format(duplicate))
+        _show_notice_once(config, "recall")
+        provider = build_provider(config, provider=provider_id)
+        live = next((m for m in config["transcription_preference"] if m != "async"), "captions")  # type: ignore[union-attr]
+        try:
+            handle = provider.start(args.url.strip(), _capture_options(config, meeting_id, live))
+        except mc.ProviderError as exc:
+            raise provider_failure(exc) from None
+        record = store.new_record(meeting_id, platform, display, args.title or "", scope, handle, live, config)
+        record["capture_provider"] = provider_id
+        store.save_record(record)
+        out("Provider: recall. {} → joining ({})".format(config["bot_name"], mc.PLATFORM_LABELS[platform]))
+        out("Meeting id: {}   Scope: {}".format(meeting_id, scope_label(scope)))
+        out('The assistant will appear in the participant list as "{}".'.format(config["bot_name"]))
+        out("Tell participants that recording and transcription are active.")
+        out("Cost: " + providers.cost_line(config, "recall"))
+        out("Data: " + providers.data_line("recall"))
+    elif provider_id == "native":
+        _show_notice_once(config, "native")
+        provider = build_provider(config, provider=provider_id)
+        try:
+            ref = provider.resolve(args.url.strip())
+            handle = provider.start(args.url.strip(), _capture_options(
+                config, meeting_id, "post_meeting" if fetch_only else "native", ref=ref))
+        except mc.MeetingRefusal as refusal:
+            raise _refused("native", refusal) from None
+        except mc.ProviderError as exc:
+            raise provider_failure(exc) from None
+        record = store.new_record(meeting_id, ref.platform, ref.display_url, args.title or "", scope, handle,
+                                  "native", config, initial_state=mc.CREATED,
+                                  initial_reason="waiting for the platform transcript")
+        record["capture_provider"] = provider_id
+        store.save_record(record)
+        label = mc.PLATFORM_LABELS[ref.platform]
+        out("Provider: native ({}). No bot will join.".format(label))
+        out("Meeting id: {}   Scope: {}".format(meeting_id, scope_label(scope)))
+        if not fetch_only and ref.has_ended is not True:
+            out('→ Switch on "Start transcription" in the meeting. Participants will see {}\'s banner.'.format(label))
+        out("Cost: " + providers.cost_line(config, "native"))
+        out("Data: " + providers.data_line("native"))
+    else:
+        provider = build_provider(config, provider=provider_id)
+        try:
+            ref = provider.resolve(args.url.strip())
+        except mc.MeetingRefusal as refusal:
+            raise _refused("desktop", refusal) from None
+        platform, display = ref.platform, ref.display_url
+        attestation = _desktop_attestation(config, meeting_id, args.url.strip())
+        try:
+            handle = provider.start(args.url.strip(), _capture_options(
+                config, meeting_id, "local_whisper", ref=ref, attestation=attestation))
+        except mc.ProviderError as exc:
+            raise provider_failure(exc) from None
+        record = store.new_record(meeting_id, platform, display, args.title or "", scope, handle, "local_whisper",
+                                  config, initial_state=mc.RECORDING, initial_reason="local recording started",
+                                  attribution="channel")
+        record["attestation"] = attestation
+        record["capture_provider"] = provider_id
+        store.save_record(record)
+        out("Provider: desktop. Nothing joins the meeting; this computer is recording it.")
+        out("RECORDING — stop with: agent-skills meeting stop {}".format(meeting_id))
+        out("Meeting id: {}   Scope: {}".format(meeting_id, scope_label(scope)))
+        out("Cost: " + providers.cost_line(config, "desktop"))
+        out("Data: " + providers.data_line("desktop"))
+    out("Extraction: " + providers.HOST_MODEL_NOTE)
     if scope.get("kind") != "repository":
         out("No repository scope: extracted facts will wait for review (inspect --accept --scope <repo>).")
-    out("Check progress: agent-skills meeting status {}".format(meeting_id))
+    if provider_id == "native":
+        if fetch_only:
+            _reconcile_many([meeting_id], config, explicit=True)
+            record = store.load_record(meeting_id)
+            out(_status_line(record, config))
+            if _next_step(record):
+                out(_next_step(record))
+            return EXIT_OK
+        out("After the meeting, run: agent-skills meeting status {}   (transcripts can take a few minutes "
+            "to appear)".format(meeting_id))
+    elif provider_id == "recall":
+        out("Check progress: agent-skills meeting status {}".format(meeting_id))
     return EXIT_OK
 
 
+def cmd_fetch(args: argparse.Namespace) -> int:
+    args.fetch_only = True
+    args.via = "native"
+    return cmd_join(args)
+
+
 def _reconcile_many(ids: List[str], config: Dict[str, object], explicit: bool) -> int:
-    provider: Optional[mc.MeetingCaptureProvider] = None
+    built: Dict[str, Optional[mc.MeetingCaptureProvider]] = {}
     code = EXIT_OK
     for meeting_id in ids:
         try:
@@ -682,16 +883,18 @@ def _reconcile_many(ids: List[str], config: Dict[str, object], explicit: bool) -
             err("{}: {}".format(meeting_id, exc))
             code = max(code, EXIT_STATE)
             continue
-        if provider is None and needs_provider(record, config):
+        kind = provider_for_record(record)
+        if kind not in built and needs_provider(record, config):
             try:
-                provider = build_provider(config)
+                built[kind] = build_provider(config, provider=kind)
             except CliError as exc:
+                built[kind] = None
                 if explicit:
                     raise
                 # Local work (retention, a pending commit) still runs below.
-                err("provider unavailable: {}".format(exc.message))
+                err("{} provider unavailable: {}".format(kind, exc.message))
         try:
-            reconcile(meeting_id, config, provider, honour_backoff=not explicit)
+            reconcile(meeting_id, config, built.get(kind), honour_backoff=not explicit)
         except mc.ProviderError as exc:
             err("{}: {} (state kept; will retry)".format(meeting_id, exc.message))
             code = max(code, _KIND_TO_EXIT.get(exc.kind, EXIT_NETWORK)) if explicit else code
@@ -707,12 +910,34 @@ def _reconcile_many(ids: List[str], config: Dict[str, object], explicit: bool) -
     return code
 
 
+def print_providers(config: Dict[str, object], as_json: bool) -> int:
+    """`status --providers`: what the host skill runs before any join."""
+    rows = providers.status_rows(config)
+    default = providers.default_provider(config)
+    if as_json:
+        out(json.dumps({"default_provider": default, "providers": rows,
+                        "preflight": None if default else providers.preflight_text(config)}, sort_keys=True))
+        return EXIT_OK
+    if default is None:
+        out(providers.preflight_text(config))
+        out("")
+    out("Capture providers (default: {}):".format(default or "none chosen"))
+    for row in rows:
+        out("  " + providers.status_line(row))
+    return EXIT_OK
+
+
 def cmd_status(args: argparse.Namespace) -> int:
     config = store.load_config()
+    if args.providers:
+        return print_providers(config, args.json)
     if args.listen:
         return run_listener(args.listen, config)
     ids = [store.resolve_meeting_id(args.id)] if args.id else store.list_meeting_ids()
     if not ids:
+        if providers.default_provider(config) is None:
+            out(providers.preflight_text(config))
+            return EXIT_OK
         out("No meetings yet. Start one: agent-skills meeting join <meeting-url>")
         return EXIT_OK
     deadline = time.monotonic() + args.timeout
@@ -732,10 +957,22 @@ def cmd_status(args: argparse.Namespace) -> int:
         if args.id and record["state"] in (mc.PROCESSED, mc.PARTIAL):
             print_summary(record)
             continue
-        out(_status_line(record))
+        out(_status_line(record, config))
         if args.id and _next_step(record):
             out(_next_step(record))
     return code
+
+
+def _activity(record: dict, config: Dict[str, object]) -> str:
+    """The live line for work in progress on this machine (desktop recording or transcription)."""
+    if provider_for_record(record) != "desktop" or record["state"] not in (mc.RECORDING, mc.ENDED, mc.MEDIA_READY):
+        return ""
+    if PROVIDER_FACTORY is not None:
+        return ""
+    try:
+        return build_provider(config, provider="desktop").activity(mc.CaptureHandle.from_dict(record["handle"]))
+    except (CliError, mc.ProviderError, OSError):
+        return ""
 
 
 def cmd_stop(args: argparse.Namespace) -> int:
@@ -743,18 +980,50 @@ def cmd_stop(args: argparse.Namespace) -> int:
     config = store.load_config()
     with store.meeting_lock(meeting_id):
         record = store.load_record(meeting_id)
+        kind = provider_for_record(record)
         if record["state"] not in mc.PROVIDER_ACTIVE_STATES:
-            out("{} is {}; the assistant is no longer in the meeting.".format(meeting_id, record["state"]))
+            out("{} is {}; nothing is capturing it any more.".format(meeting_id, record["state"]))
             return EXIT_OK
-        provider = build_provider(config)
+        if kind == "native":
+            out("Nothing joined {}: the platform transcribes it, and the transcript is fetched after the "
+                "meeting. Nothing to stop.".format(meeting_id))
+            return EXIT_OK
+        provider = build_provider(config, provider=kind)
         try:
             provider.stop(mc.CaptureHandle.from_dict(record["handle"]))
         except mc.ProviderError as exc:
             raise provider_failure(exc) from None
         record.setdefault("history", []).append({"at": store.now_iso(), "state": record["state"], "reason": "stop requested"})
         store.save_record(record)
-    out("Asked the assistant to leave {}. What was recorded so far will still be processed.".format(meeting_id))
-    out("Check progress: agent-skills meeting status {}".format(meeting_id))
+    if kind != "desktop":
+        out("Asked the assistant to leave {}. What was recorded so far will still be processed.".format(meeting_id))
+        out("Check progress: agent-skills meeting status {}".format(meeting_id))
+        return EXIT_OK
+    out("Stopping the local recording of {} …".format(meeting_id))
+    return _follow_desktop(meeting_id, config, provider, wait=not args.no_wait)
+
+
+def _follow_desktop(meeting_id: str, config: Dict[str, object], provider: mc.MeetingCaptureProvider,
+                    wait: bool, poll_seconds: float = 2.0) -> int:
+    """Finalise → transcribe (with progress) → store; the transcript keeps going if this is interrupted."""
+    last = ""
+    while True:
+        try:
+            record = reconcile(meeting_id, config, provider)
+        except mc.ProviderError as exc:
+            raise provider_failure(exc) from None
+        line = record.get("reason") or ""
+        if line and line != last:
+            out("  " + line)
+            last = line
+        if record["state"] not in (mc.RECORDING, mc.ENDED, mc.MEDIA_READY) or not wait:
+            break
+        time.sleep(poll_seconds)
+    out(_status_line(record, config))
+    if record["state"] in (mc.RECORDING, mc.ENDED, mc.MEDIA_READY):
+        out("Transcription continues in the background. Check: agent-skills meeting status {}".format(meeting_id))
+    elif _next_step(record):
+        out(_next_step(record))
     return EXIT_OK
 
 
@@ -767,7 +1036,7 @@ def cmd_list(args: argparse.Namespace) -> int:
     _reconcile_many(ids, config, explicit=False)
     for meeting_id in ids:
         try:
-            out(_status_line(store.load_record(meeting_id)))
+            out(_status_line(store.load_record(meeting_id), config))
         except store.StateError as exc:
             out("{}  UNREADABLE  {}".format(meeting_id, exc))
     return EXIT_OK
@@ -899,16 +1168,27 @@ def cmd_inspect(args: argparse.Namespace) -> int:
     if args.json:
         out(json.dumps(record, indent=2, sort_keys=True))
         return EXIT_OK
-    out(_status_line(record))
-    out("  scope: {}   created: {}   bot: {}".format(scope_label(record["scope"]), record["created_at"], record["bot_name"]))
+    out(_status_line(record, config))
+    kind = provider_for_record(record)
+    out("  provider: {}   scope: {}   created: {}{}".format(
+        kind, scope_label(record["scope"]), record["created_at"],
+        "   bot: " + record["bot_name"] if kind == "recall" else ""))
     info = record["transcription"]
-    out("  transcript: {} (preference {}; async requested: {}; partial: {})".format(
-        info.get("final_method") or "not yet", " > ".join(info["preference"]), info["async_requested"], info["partial"]))
+    out("  transcript: {} (speakers: {}; language: {}; partial: {})".format(
+        info.get("final_method") or "not yet", info.get("speaker_attribution", "named"),
+        info.get("language") or "-", info["partial"]))
+    if record.get("attestation"):
+        out("  consent: participants informed and agreed, confirmed {} (notice v{})".format(
+            record["attestation"].get("confirmed_at", "?"), record["attestation"].get("notice_version", "?")))
     media = record["media"]
-    out("  provider media: retention {}h; {}".format(
-        record["media_retention_hours"],
-        "deleted " + media["deleted_at"] if media.get("deleted_at") else "not yet deleted" + (
-            " ({})".format(media["delete_error"]) if media.get("delete_error") else "")))
+    if kind == "native":
+        out("  platform transcript: stays with the platform under your organisation's retention; no media downloaded")
+    else:
+        out("  {}: {}".format(
+            "provider media (retention {}h)".format(record["media_retention_hours"]) if kind == "recall"
+            else "local raw audio",
+            "deleted " + media["deleted_at"] if media.get("deleted_at") else "not yet deleted" + (
+                " ({})".format(media["delete_error"]) if media.get("delete_error") else "")))
     if record["transcript"].get("purged_at"):
         out("  local transcript: purged {}".format(record["transcript"]["purged_at"]))
     elif record["transcript"].get("stored_at"):
@@ -961,10 +1241,11 @@ def _print_window(record: dict, index: Optional[int]) -> int:
 def _purge(meeting_id: str, config: Dict[str, object], assume_yes: bool) -> int:
     record = store.load_record(meeting_id)
     if record["state"] in mc.PROVIDER_ACTIVE_STATES or record["state"] in (mc.ENDED, mc.MEDIA_READY):
-        raise CliError("the meeting is still in progress; stop it and let it finish first", EXIT_USAGE)
+        if provider_for_record(record) != "native":
+            raise CliError("the meeting is still in progress; stop it and let it finish first", EXIT_USAGE)
     if not assume_yes:
         if not sys.stdin.isatty():
-            raise CliError("purge deletes the provider's media and the local transcript; pass --yes to confirm",
+            raise CliError("purge deletes the captured media and the local transcript; pass --yes to confirm",
                            EXIT_USAGE)
         reply = input("Delete provider media and the local transcript for {}? Facts are kept. [y/N] ".format(
             meeting_id)).strip().lower()
@@ -974,9 +1255,10 @@ def _purge(meeting_id: str, config: Dict[str, object], assume_yes: bool) -> int:
     code = EXIT_OK
     with store.meeting_lock(meeting_id):
         record = store.load_record(meeting_id)
-        if not record["media"].get("deleted_at"):
+        if not record["media"].get("deleted_at") and provider_for_record(record) != "native":
             try:
-                build_provider(config).delete_media(mc.CaptureHandle.from_dict(record["handle"]))
+                build_provider(config, provider=provider_for_record(record)).delete_media(
+                    mc.CaptureHandle.from_dict(record["handle"]))
                 record["media"]["deleted_at"] = store.now_iso()
                 record["media"]["delete_error"] = ""
             except (mc.ProviderError, CliError) as exc:
@@ -993,9 +1275,14 @@ def _purge(meeting_id: str, config: Dict[str, object], assume_yes: bool) -> int:
             store.transition(record, mc.PURGED, "media and transcript purged by the user")
         store.save_record(record)
     out("Local transcript for {} deleted; facts are kept and still cite their timestamps.".format(meeting_id))
-    if code == EXIT_OK:
+    kind = provider_for_record(record)
+    if kind == "native":
+        out("The platform's own transcript is untouched; it follows your organisation's retention policy.")
+    elif kind == "desktop" and code == EXIT_OK:
+        out("Local raw audio deleted.")
+    elif code == EXIT_OK:
         out("Provider media deleted. Recall may still keep bot metadata and logs for a limited period;"
-            " see docs/meeting-intelligence.md#what-the-provider-keeps.")
+            " see docs/meeting-intelligence/PRIVACY.md.")
     return code
 
 
@@ -1056,27 +1343,31 @@ def _meeting_for_event(event: mc.ProviderEvent) -> str:
 # doctor section (internal; called by scripts/doctor.sh)
 # ---------------------------------------------------------------------------
 def doctor_report(probe: bool) -> dict:
+    """Local by default. `probe` (doctor --probe-meeting) may contact Recall once and,
+    for desktop, record one second from the loopback input only (never the microphone)."""
     report: Dict[str, object] = {}
     try:
         config = store.load_config()
     except store.ConfigError as exc:
         return {"config": "invalid: {}".format(exc)}
+    rows = providers.status_rows(config)
+    report["providers"] = {row["provider"]: providers.status_line(row) for row in rows}
+    report["default_provider"] = providers.default_provider(config) or "none"
+    ready_default = any(row["default"] and row["state"] == mc.READY for row in rows)
+    report["capture"] = "ready" if ready_default else (
+        "not set up (run: agent-skills meeting setup --compare)" if report["default_provider"] == "none"
+        else "default provider not ready")
+    # The Recall keys keep their 1.2.0 names and meanings for scripts that read them.
     report["consent"] = "acknowledged" if store.consent_current(config) else "not yet acknowledged"
     report["listener"] = (
         "configured (run: agent-skills meeting status --listen 127.0.0.1:<port>)"
         if config.get("listener_url") else "not configured (polling only)"
     )
-    try:
-        present, stored_region = recall_credential_presence()
-        report["credentials"] = "api key resolves" if present else "api key missing"
-        try:
-            region = effective_region(config, {"region": stored_region})
-            report["region"] = region or "not configured"
-        except CliError as exc:
-            report["region"] = "MISMATCH: " + exc.message
-    except Exception:  # noqa: BLE001 - a report, never a crash
-        report["credentials"] = "could not be resolved"
-        report["region"] = "unknown"
+    recall_row = next(row for row in rows if row["provider"] == "recall")
+    report["credentials"] = "api key resolves" if recall_row["state"] == mc.READY or (
+        "region" in recall_row["reason"]) else "api key missing"
+    report["region"] = ("MISMATCH: " + recall_row["reason"]) if "mismatch" in recall_row["reason"] else (
+        recall_row["detail"].replace("region ", "") if recall_row["state"] == mc.READY else "not configured")
     stuck = []
     unreadable = 0
     for meeting_id in store.list_meeting_ids():
@@ -1086,26 +1377,29 @@ def doctor_report(probe: bool) -> dict:
             unreadable += 1
             continue
         updated = store.parse_iso(record.get("updated_at", ""))
-        if not store.is_terminal(record) and updated and (
+        if not store.is_terminal(record) and updated and provider_for_record(record) != "native" and (
             datetime.now(timezone.utc) - updated
         ).total_seconds() > STUCK_AFTER_HOURS * 3600:
             stuck.append("{} ({})".format(meeting_id, record["state"]))
     report["meetings"] = len(store.list_meeting_ids())
     report["stuck"] = stuck
     report["unreadable"] = unreadable
+    report["provider"] = "not probed (doctor stays offline; use doctor --probe-meeting)"
     if probe:
-        try:
-            provider = build_provider(config)
-            probe_fn = getattr(provider, "probe", None)
-            if probe_fn:
-                probe_fn()
-            report["provider"] = "reachable; key and region accepted"
-        except CliError as exc:
-            report["provider"] = "not probed: " + exc.message
-        except mc.ProviderError as exc:
-            report["provider"] = "FAILED: " + exc.message
-    else:
-        report["provider"] = "not probed (doctor stays offline; use doctor --probe-meeting)"
+        probes = []
+        if recall_row["state"] == mc.READY:
+            try:
+                provider = build_provider(config, provider="recall")
+                getattr(provider, "probe")()
+                probes.append("recall: reachable; key and region accepted")
+            except CliError as exc:
+                probes.append("recall: not probed: " + exc.message)
+            except mc.ProviderError as exc:
+                probes.append("recall: FAILED: " + exc.message)
+        desktop_row = next(row for row in rows if row["provider"] == "desktop")
+        if desktop_row["state"] != mc.NOT_CONFIGURED:
+            probes.append("desktop: " + providers.probe_desktop_loopback(config))
+        report["provider"] = "; ".join(probes) or "nothing to probe (no provider configured)"
     return report
 
 
@@ -1114,30 +1408,61 @@ def cmd_doctor(args: argparse.Namespace) -> int:
     if args.json:
         out(json.dumps(report, sort_keys=True))
         return EXIT_OK
-    for key in ("credentials", "region", "provider", "consent", "listener"):
-        out("  {:<12}: {}".format(key, report.get(key, "")))
+    out("  default provider: {}".format(report.get("default_provider", "none")))
+    for line in (report.get("providers") or {}).values():  # type: ignore[union-attr]
+        out("  " + line)
+    out("  probe: {}".format(report.get("provider", "")))
     stuck = report.get("stuck") or []
-    out("  {:<12}: {} total; {} stuck{}{}".format(
-        "meetings", report.get("meetings", 0), len(stuck),  # type: ignore[arg-type]
+    out("  meetings: {} total; {} stuck{}{}".format(
+        report.get("meetings", 0), len(stuck),  # type: ignore[arg-type]
         (" — " + ", ".join(stuck)) if stuck else "",  # type: ignore[arg-type]
         "; {} unreadable".format(report["unreadable"]) if report.get("unreadable") else ""))
     return EXIT_OK
 
 
+def cmd_setup(args: argparse.Namespace) -> int:
+    import meeting_setup
+
+    return meeting_setup.run(args)
+
+
 # ---------------------------------------------------------------------------
 def build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(prog="agent-skills meeting", description=__doc__.split("\n\n")[0])
-    sub = parser.add_subparsers(dest="command", required=True, metavar="{join,status,stop,list,inspect}")
+    sub = parser.add_subparsers(dest="command", required=True,
+                                metavar="{setup,join,fetch,status,stop,list,inspect}")
 
-    sp = sub.add_parser("join", help="Send the visible assistant into a meeting.")
+    sp = sub.add_parser("setup", help="Choose and set up how meetings are captured (guided, re-runnable).")
+    sp.add_argument("provider", nargs="?", choices=providers.PROVIDERS)
+    sp.add_argument("--compare", action="store_true", help="show the three providers side by side")
+    sp.add_argument("--import", dest="import_file", default=None,
+                    help="native: an admin's non-secret app-registration config (JSON)")
+    sp.add_argument("--platform", default=None, choices=mc.PLATFORMS, help="native: set up one platform")
+    sp.add_argument("--region", default=None, help="recall: the region to use")
+    sp.add_argument("--model", default=None, help="desktop: the whisper.cpp model to use")
+    sp.add_argument("--language", default=None, help="desktop: transcription language (auto, de, en, ...)")
+    sp.add_argument("--no-default", action="store_true", help="set up without making it the default")
+    sp.set_defaults(func=cmd_setup)
+
+    sp = sub.add_parser("join", help="Capture a meeting with the chosen provider.")
     sp.add_argument("url")
+    sp.add_argument("--via", default=None, choices=providers.PROVIDERS,
+                    help="use this provider for this meeting instead of the default")
     sp.add_argument("--scope", default=None, help="repo:<path> (default: this repository); 'none' for unscoped")
     sp.add_argument("--title", default="")
     sp.add_argument("--acknowledge-recording-notice", action="store_true",
-                    help="record the user's explicit acknowledgement of the one-time notice")
+                    help="recall: record the user's explicit acknowledgement of the one-time notice")
     sp.set_defaults(func=cmd_join)
 
-    sp = sub.add_parser("status", help="Reconcile and show meetings.")
+    sp = sub.add_parser("fetch", help="native: fetch the platform transcript of a meeting that already ended.")
+    sp.add_argument("url")
+    sp.add_argument("--scope", default=None)
+    sp.add_argument("--title", default="")
+    sp.set_defaults(func=cmd_fetch, acknowledge_recording_notice=False)
+
+    sp = sub.add_parser("status", help="Reconcile and show meetings; --providers shows capture readiness.")
+    sp.add_argument("--providers", action="store_true", help="each provider: ready / not configured / broken")
+    sp.add_argument("--json", action="store_true")
     sp.add_argument("id", nargs="?")
     sp.add_argument("--wait", action="store_true", help="poll until the recording is transcribed")
     sp.add_argument("--interval", type=int, default=30)
@@ -1145,8 +1470,9 @@ def build_parser() -> argparse.ArgumentParser:
     sp.add_argument("--listen", default="", help="optional webhook listener on loopback host:port")
     sp.set_defaults(func=cmd_status)
 
-    sp = sub.add_parser("stop", help="Ask the assistant to leave; what was recorded is processed.")
+    sp = sub.add_parser("stop", help="Stop capturing; what was recorded is processed.")
     sp.add_argument("id")
+    sp.add_argument("--no-wait", action="store_true", help="desktop: do not follow local transcription")
     sp.set_defaults(func=cmd_stop)
 
     sp = sub.add_parser("list", help="Reconcile and list all meetings.")
@@ -1184,9 +1510,12 @@ def main(argv: Optional[List[str]] = None) -> int:
     try:
         return int(args.func(args))
     except CliError as exc:
-        err("agent-skills meeting: {}".format(redact(exc.message)))
+        if exc.plain:
+            out(exc.message)
+        else:
+            err("agent-skills meeting: {}".format(redact(exc.message)))
         if exc.hint:
-            err("  " + exc.hint)
+            err("  " + exc.hint.replace("\n", "\n  "))
         return exc.code
     except store.ConfigError as exc:
         err("agent-skills meeting: {}".format(exc))
