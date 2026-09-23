@@ -1,0 +1,86 @@
+{
+  "schema": "agent-skills.meeting-extraction/v1",
+  "meeting_id": "m_e00000000000",
+  "window": 0,
+  "facts": [
+    {
+      "type": "CONSTRAINT",
+      "statement": "The listed tasks must be done before Thursday's release.",
+      "status": "OPEN",
+      "evidence": [
+        "s_f0bb262881e2"
+      ],
+      "confidence": 0.7,
+      "speakers": [
+        "Sofia Example"
+      ],
+      "owner": null,
+      "due": null,
+      "supersedes": []
+    },
+    {
+      "type": "ACTION",
+      "statement": "Update the runbook for the new failover.",
+      "status": "OPEN",
+      "evidence": [
+        "s_4bd854108c47",
+        "s_27204bc6ff29"
+      ],
+      "confidence": 0.9,
+      "speakers": [
+        "Sofia Example",
+        "Kwame Example"
+      ],
+      "owner": "Kwame",
+      "due": "Wednesday",
+      "supersedes": []
+    },
+    {
+      "type": "ACTION",
+      "statement": "Rotate the staging certificates.",
+      "status": "OPEN",
+      "evidence": [
+        "s_708e8ff22c76"
+      ],
+      "confidence": 0.8,
+      "speakers": [
+        "Sofia Example"
+      ],
+      "owner": "platform team",
+      "due": null,
+      "supersedes": []
+    },
+    {
+      "type": "ACTION",
+      "statement": "Write the release notes.",
+      "status": "OPEN",
+      "evidence": [
+        "s_6d75a984a75e"
+      ],
+      "confidence": 0.85,
+      "speakers": [
+        "Ines Example"
+      ],
+      "owner": "Ines",
+      "due": null,
+      "supersedes": []
+    },
+    {
+      "type": "ACTION",
+      "statement": "Audit the feature flags.",
+      "status": "OPEN",
+      "evidence": [
+        "s_e750b0464966",
+        "s_99431e23218e"
+      ],
+      "confidence": 0.85,
+      "speakers": [
+        "Sofia Example",
+        "Dmitri Example"
+      ],
+      "owner": "Dmitri",
+      "due": "tomorrow",
+      "supersedes": []
+    }
+  ]
+}

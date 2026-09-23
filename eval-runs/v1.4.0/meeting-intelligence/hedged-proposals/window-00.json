@@ -1,0 +1,97 @@
+{
+  "schema": "agent-skills.meeting-extraction/v1",
+  "meeting_id": "m_e00000000002",
+  "window": 0,
+  "facts": [
+    {
+      "type": "DECISION",
+      "statement": "Replace Elasticsearch with OpenSearch.",
+      "status": "PROPOSED",
+      "evidence": [
+        "s_b83d3180dc92"
+      ],
+      "confidence": 0.6,
+      "speakers": [
+        "Amara Example"
+      ],
+      "owner": null,
+      "due": null,
+      "supersedes": []
+    },
+    {
+      "type": "ARCHITECTURE_DECISION",
+      "statement": "Denormalise the product catalogue into the search index.",
+      "status": "PROPOSED",
+      "evidence": [
+        "s_f6e1853e2016"
+      ],
+      "confidence": 0.5,
+      "speakers": [
+        "Amara Example"
+      ],
+      "owner": null,
+      "due": null,
+      "supersedes": []
+    },
+    {
+      "type": "ARCHITECTURE_DECISION",
+      "statement": "Keep the product catalogue normalised rather than denormalising it into the index.",
+      "status": "PROPOSED",
+      "evidence": [
+        "s_cf638562bf5d"
+      ],
+      "confidence": 0.5,
+      "speakers": [
+        "Theo Example"
+      ],
+      "owner": null,
+      "due": null,
+      "supersedes": []
+    },
+    {
+      "type": "ARCHITECTURE_DECISION",
+      "statement": "Shard the search index by region at a later stage.",
+      "status": "PROPOSED",
+      "evidence": [
+        "s_425e6030eb2e"
+      ],
+      "confidence": 0.4,
+      "speakers": [
+        "Lena Example"
+      ],
+      "owner": null,
+      "due": null,
+      "supersedes": []
+    },
+    {
+      "type": "OPEN_QUESTION",
+      "statement": "Is caching facet counts worth doing?",
+      "status": "OPEN",
+      "evidence": [
+        "s_367b218961a2"
+      ],
+      "confidence": 0.7,
+      "speakers": [
+        "Theo Example"
+      ],
+      "owner": null,
+      "due": null,
+      "supersedes": []
+    },
+    {
+      "type": "DECISION",
+      "statement": "Use a nightly reindex for now.",
+      "status": "PROPOSED",
+      "evidence": [
+        "s_f73082668adb"
+      ],
+      "confidence": 0.5,
+      "speakers": [
+        "Amara Example"
+      ],
+      "owner": null,
+      "due": null,
+      "supersedes": []
+    }
+  ]
+}

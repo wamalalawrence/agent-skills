@@ -272,7 +272,7 @@ class NormalisedTranscript:
     segments: List[Segment] = field(default_factory=list)
     speaker_attribution: str = "named"  # one of ATTRIBUTIONS
     capture_provider: str = ""
-    language: str = ""  # BCP-47-ish code the provider reported, or "auto"/""
+    language: str = ""  # language tag the provider reported (BCP 47 style), or "auto"/""
 
     @property
     def usable(self) -> bool:

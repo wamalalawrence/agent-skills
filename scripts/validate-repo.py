@@ -460,6 +460,13 @@ ALLOWED_HOSTS = {
     "meet.google.com",
     "teams.microsoft.com",
     "teams.live.com",
+    # 1.4.0: the native transcript provider's APIs and identity providers, and
+    # the official whisper.cpp model source. Public vendor endpoints.
+    "graph.microsoft.com",
+    "login.microsoftonline.com",
+    "googleapis.com",
+    "accounts.google.com",
+    "huggingface.co",
     "127.0.0.1",
     "agentskills.io",
     "code.visualstudio.com",

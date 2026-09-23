@@ -10,7 +10,7 @@ own delegated sign-in. No bot joins, and nothing leaves your tenant except to th
 1. **Microsoft Entra admin center → App registrations → New registration.**
    - Name: `Agent Skills Meeting Transcripts` (any name; users see it on the consent screen).
    - Supported account types: **Accounts in this organizational directory only** (single tenant).
-   - Redirect URI: platform **Public client/native (mobile & desktop)**, value `http://localhost`.
+   - Redirect URI: platform **Public client/native (mobile & desktop)**, value `http://localhost/` (loopback).
      The Microsoft identity platform accepts any port on a loopback redirect, so each user's
      sign-in can use a free local port.
 2. **No client secret.** Agent Skills is a public client: it uses the authorization-code flow with
