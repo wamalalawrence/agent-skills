@@ -29,15 +29,19 @@ _spec.loader.exec_module(suite)
 Box, PAGE, rung = suite.Box, suite.PAGE, suite.rung
 
 
-def transcript(box, *args, env=None):
-    rc, out, err = box.run(*args, env=env)
+def _clean(box, text):
     import os
-    text = "$ agent-skills access %s\n%s%s[exit %d]\n" % (" ".join(args), out, err, rc)
+    text = text.replace("\r\n", "\n")
     for home in (os.path.realpath(str(box.home)), str(box.home)):
         text = text.replace(home, "~")
     for sandbox in (os.path.realpath(str(box.dir)), str(box.dir)):
         text = text.replace(sandbox, "<sandbox>")
-    return rc, text
+    return text
+
+
+def transcript(box, *args, env=None):
+    rc, out, err = box.run(*args, env=env)
+    return rc, _clean(box, "$ agent-skills access %s\n%s%s[exit %d]\n" % (" ".join(args), out, err, rc))
 
 
 def s1_incident():
@@ -62,8 +66,8 @@ def s2_write_profile_present():
         rc, text = transcript(box, "setup", "confluence", "--write-profile", "--host", "codex")
         texts.append(text)
         rc, out = box.run_tty(["yes"], "setup", "confluence", "--write-profile", "--host", "codex")
-        texts.append("$ agent-skills access setup confluence --write-profile --host codex   (in a terminal)\n"
-                     + out.replace(str(box.home), "~").replace(str(box.dir), "<sandbox>"))
+        texts.append(_clean(box, "$ agent-skills access setup confluence --write-profile --host codex   "
+                                 "(in a terminal)\n" + out + "[exit %d]\n" % rc))
         rc, text = transcript(box, "remember", "--system", "confluence", "--server", "atlassian", "--host", "codex",
                               "--yes")
         texts.append(text)

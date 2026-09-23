@@ -76,8 +76,11 @@ def _r(text: str) -> str:
 
 def _tilde(path: str) -> str:
     home = os.environ.get("HOME") or ""
-    if home and path.startswith(home + "/"):
-        return "~" + path[len(home):]
+    # Resolved paths (a launcher's real location) carry the resolved home, which
+    # differs from $HOME wherever a parent is a symlink (/var on macOS).
+    for base in (home, os.path.realpath(home) if home else ""):
+        if base and path.startswith(base + "/"):
+            return "~" + path[len(base):]
     return path
 
 
