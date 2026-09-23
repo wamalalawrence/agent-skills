@@ -26,7 +26,7 @@ compatibility: >-
   legacy `local-workspace`. See docs/execution-modes.md.
 metadata:
   author: wamalalawrence
-  version: "1.4.0"
+  version: "1.5.0"
   homepage: "https://github.com/wamalalawrence/agent-skills"
 argument-hint: "<Teams, Zoom, or Google Meet link> [--via native|recall|desktop] [--scope repo:<path>] [--title <text>]"
 user-invocable: true

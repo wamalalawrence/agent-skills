@@ -22,7 +22,7 @@ compatibility: >-
   docs/execution-modes.md.
 metadata:
   author: wamalalawrence
-  version: "1.4.0"
+  version: "1.5.0"
   homepage: "https://github.com/wamalalawrence/agent-skills"
 argument-hint: "<the work key or plan cache dir to execute end to end>"
 user-invocable: true

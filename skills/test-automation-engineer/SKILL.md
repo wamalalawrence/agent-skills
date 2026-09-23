@@ -19,7 +19,7 @@ compatibility: >-
   and docs/access-resolution.md.
 metadata:
   author: wamalalawrence
-  version: "1.4.0"
+  version: "1.5.0"
   homepage: "https://github.com/wamalalawrence/agent-skills"
 argument-hint: "<the automation work — a scenario, a broken suite, a CI failure list, or a flaky test>"
 user-invocable: true
