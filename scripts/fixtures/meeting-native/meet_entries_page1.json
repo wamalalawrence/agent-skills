@@ -1,0 +1,13 @@
+{
+  "transcriptEntries": [
+    {
+      "name": "conferenceRecords/placeholder-record/transcripts/placeholder-transcript/entries/e1",
+      "participant": "conferenceRecords/placeholder-record/participants/p1",
+      "text": "Maybe we should move payment retries to Kafka.",
+      "languageCode": "en-US",
+      "startTime": "2026-09-21T09:00:12Z",
+      "endTime": "2026-09-21T09:00:14.100Z"
+    }
+  ],
+  "nextPageToken": "page-2"
+}

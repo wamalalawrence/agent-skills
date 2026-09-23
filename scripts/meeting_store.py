@@ -85,6 +85,14 @@ DEFAULT_CONFIG: Dict[str, object] = {
     "window_overlap_chars": 1200,
     "listener_url": "",
     "consent": {},
+    # 1.4.0: the user's choice among capture providers, and what they were told.
+    # `provider` above keeps its 1.2.0 meaning ("recall") so a rollback to 1.3.0
+    # reads this file unchanged; the choice lives in `default_provider`.
+    "default_provider": "",
+    "provider_notices": {},
+    "recall": {"cost_per_hour_usd": 0.65},
+    "native": {},
+    "desktop": {},
 }
 
 BOUNDS = {
@@ -210,6 +218,12 @@ def load_config() -> Dict[str, object]:
     config["listener_url"] = str(config.get("listener_url") or "")
     if not isinstance(config.get("consent"), dict):
         config["consent"] = {}
+    for key in ("provider_notices", "recall", "native", "desktop"):
+        if not isinstance(config.get(key), dict):
+            config[key] = json.loads(json.dumps(DEFAULT_CONFIG[key]))
+    config["provider"] = "recall"
+    if config.get("default_provider") not in ("", "native", "recall", "desktop"):
+        config["default_provider"] = ""
     return config
 
 
@@ -305,6 +319,9 @@ def new_record(
     handle: mc.CaptureHandle,
     live_method: str,
     config: Dict[str, object],
+    initial_state: str = mc.JOINING,
+    initial_reason: str = "bot requested",
+    attribution: str = "named",
 ) -> dict:
     return {
         "schema": RECORD_SCHEMA,
@@ -314,9 +331,10 @@ def new_record(
         "meeting_url_display": display_url,
         "scope": scope,
         "handle": handle.to_dict(),
-        "state": mc.JOINING,
+        "state": initial_state,
         "reason": "",
-        "history": [{"at": now_iso(), "state": mc.JOINING, "reason": "bot requested"}],
+        "history": [{"at": now_iso(), "state": initial_state, "reason": initial_reason}],
+        "capture_provider": handle.provider,
         "created_at": now_iso(),
         "updated_at": now_iso(),
         "bot_name": config["bot_name"],
@@ -329,6 +347,8 @@ def new_record(
             "async_requested": False,
             "final_method": "",
             "partial": False,
+            "speaker_attribution": attribution,
+            "language": "",
         },
         "recording_seconds": None,
         "media": {"deleted_at": "", "delete_error": ""},
@@ -386,6 +406,9 @@ def save_transcript(transcript: mc.NormalisedTranscript) -> None:
             "schema": TRANSCRIPT_SCHEMA,
             "meeting_id": transcript.meeting_id,
             "source_method": transcript.source_method,
+            "speaker_attribution": transcript.speaker_attribution,
+            "capture_provider": transcript.capture_provider,
+            "language": transcript.language,
             "segments": [s.to_dict() for s in transcript.segments],
         },
     )
@@ -405,6 +428,9 @@ def load_transcript(meeting_id: str) -> Optional[mc.NormalisedTranscript]:
         meeting_id=meeting_id,
         source_method=str(data.get("source_method", "")),
         segments=[mc.Segment.from_dict(meeting_id, s) for s in data.get("segments", [])],
+        speaker_attribution=str(data.get("speaker_attribution") or "named"),
+        capture_provider=str(data.get("capture_provider") or ""),
+        language=str(data.get("language") or ""),
     )
 
 

@@ -9,14 +9,19 @@ it. A provider's own identifier is carried as an opaque string in
 `CaptureHandle.provider_ref` and is never interpreted outside the provider.
 
     MeetingCaptureProvider
-        ├── RecallMeetingBotProvider        meeting_recall.py
-        ├── TeamsTranscriptProvider         future / native
-        ├── GoogleMeetTranscriptProvider    future / native
-        └── DesktopCaptureProvider          future / fallback, visible and consented
+        ├── RecallMeetingBotProvider        meeting_recall.py    id "recall"
+        ├── NativeTranscriptProvider        meeting_native.py    id "native"
+        │     (Teams / Google Meet / Zoom adapters: meeting_native_*.py)
+        └── DesktopCaptureProvider          meeting_desktop.py   id "desktop"
 
-`capabilities()` describes what a provider can do, so choosing one is data, not
-a hard-coded preference. `test-meeting.py` asserts that the Meeting
-Intelligence modules import nothing provider-specific.
+The user chooses the provider (`meeting setup`, `join --via`); nothing here
+picks one. `capabilities()` describes what a provider can do and what it costs
+the user in money and data flow; `readiness()` says, without the network,
+whether it can run and the one command that fixes it when it cannot;
+`resolve()` turns a meeting link into a provider-neutral reference or a typed
+refusal. `meeting_providers.py` is the only module that constructs providers.
+`test-meeting.py` asserts that the Meeting Intelligence modules import nothing
+provider-specific.
 """
 from __future__ import annotations
 
@@ -72,7 +77,30 @@ TERMINAL_STATES = FAILURE_STATES + (PROCESSED, PARTIAL, PURGED)
 # States in which the provider still has something to tell us.
 PROVIDER_ACTIVE_STATES = (CREATED, JOINING, WAITING_ROOM, IN_CALL_NOT_RECORDING, RECORDING)
 
-SOURCE_METHODS = ("captions", "provider_transcription", "async", "native")
+SOURCE_METHODS = ("captions", "provider_transcription", "async", "native", "local_whisper")
+
+# How the speakers in a transcript were told apart.
+#   named    the platform or provider attributed each utterance to a participant
+#   channel  audio channels only: the local microphone vs. everyone else
+#   none     no attribution at all
+ATTRIBUTIONS = ("named", "channel", "none")
+
+# Readiness states. Computed locally: never a network call.
+READY = "ready"
+NOT_CONFIGURED = "not_configured"
+BROKEN = "broken"
+
+# Typed refusals from resolve(). A refusal is an answer, not a failure to
+# retry, and it never triggers another provider.
+REFUSALS = (
+    "unsupported_platform",
+    "external_tenant",
+    "no_access",
+    "not_found",
+    "not_enabled",
+    "not_yet_available",
+    "unsupported_meeting",
+)
 
 
 class ProviderError(Exception):
@@ -103,6 +131,19 @@ class ProviderRequestError(ProviderError):
     kind = "usage"
 
 
+class MeetingRefusal(Exception):
+    """The chosen provider cannot serve this meeting. Maps to exit 2 (usage).
+
+    `code` is one of REFUSALS. The message says why and what the user can do;
+    the caller adds the alternatives. Never a reason to try another provider.
+    """
+
+    def __init__(self, code: str, message: str) -> None:
+        super().__init__(message)
+        self.code = code if code in REFUSALS else "unsupported_meeting"
+        self.message = message
+
+
 @dataclass
 class Capabilities:
     provider: str
@@ -114,6 +155,41 @@ class Capabilities:
     webhooks: bool
     transcription_methods: Tuple[str, ...]
     platforms: Tuple[str, ...]
+    # Added in 1.4.0, defaulted so a provider written against 1.3.0 still builds.
+    live_capture: bool = False
+    post_meeting_fetch: bool = False
+    visible_participant: bool = False
+    speaker_attribution: str = "named"  # one of ATTRIBUTIONS
+    third_party_processing: bool = False
+    per_hour_cost: bool = False
+    languages: Tuple[str, ...] = ("auto",)
+
+
+@dataclass
+class Readiness:
+    state: str  # READY | NOT_CONFIGURED | BROKEN
+    reason: str = ""
+    fix_command: str = ""
+    detail: str = ""  # a short, secret-free note ("Teams: ready; Zoom: not configured")
+
+    @property
+    def ready(self) -> bool:
+        return self.state == READY
+
+    def to_dict(self) -> dict:
+        return {"state": self.state, "reason": self.reason, "fix_command": self.fix_command,
+                "detail": self.detail}
+
+
+@dataclass
+class MeetingRef:
+    """A provider-neutral reference to one meeting, from resolve()."""
+
+    platform: str  # one of PLATFORMS, or "other" (desktop labels any meeting)
+    display_url: str
+    provider_ref: str = ""  # opaque, provider-owned (e.g. a platform meeting id)
+    has_ended: Optional[bool] = None  # None when the provider cannot tell
+    note: str = ""  # one line for the user, already worded
 
 
 @dataclass
@@ -126,6 +202,10 @@ class CaptureOptions:
     noone_joined_timeout: int
     everyone_left_timeout: int
     correlation_id: str  # Agent Skills' own meeting id, attached as metadata
+    ref: Optional[MeetingRef] = None  # from resolve(), when the provider resolved one
+    # The participants' consent attestation, when the provider requires one
+    # (desktop): {"confirmed_at", "notice_version", "announcement"}.
+    attestation: Optional[dict] = None
 
 
 @dataclass
@@ -190,6 +270,9 @@ class NormalisedTranscript:
     meeting_id: str
     source_method: str
     segments: List[Segment] = field(default_factory=list)
+    speaker_attribution: str = "named"  # one of ATTRIBUTIONS
+    capture_provider: str = ""
+    language: str = ""  # BCP-47-ish code the provider reported, or "auto"/""
 
     @property
     def usable(self) -> bool:
@@ -207,6 +290,8 @@ class TranscriptResult:
     method: str = ""
     transcript: Optional[NormalisedTranscript] = None
     reason: str = ""
+    partial: bool = False  # the provider knows the capture itself was incomplete
+    progress: str = ""  # while pending: a short, secret-free progress line
 
 
 @dataclass
@@ -226,6 +311,19 @@ class MeetingCaptureProvider:
     def capabilities(self) -> Capabilities:
         raise NotImplementedError
 
+    def readiness(self) -> Readiness:
+        """Can this provider run on this machine now? Local checks only."""
+        return Readiness(READY)
+
+    def resolve(self, meeting_url: str) -> MeetingRef:
+        """A meeting reference, or MeetingRefusal. The default only classifies
+        the link locally; a provider that must ask its platform overrides it."""
+        try:
+            platform, display = classify_meeting_url(meeting_url)
+        except MeetingUrlError as exc:
+            raise MeetingRefusal("unsupported_platform", str(exc)) from None
+        return MeetingRef(platform=platform, display_url=display)
+
     def start(self, meeting_url: str, options: CaptureOptions) -> CaptureHandle:
         raise NotImplementedError
 
@@ -234,6 +332,10 @@ class MeetingCaptureProvider:
 
     def stop(self, handle: CaptureHandle) -> None:
         raise NotImplementedError
+
+    def activity(self, handle: CaptureHandle) -> str:
+        """One secret-free line about work in progress (elapsed time, size, progress)."""
+        return ""
 
     def fetch_transcript(self, handle: CaptureHandle, meeting_id: str, method: str) -> TranscriptResult:
         raise NotImplementedError

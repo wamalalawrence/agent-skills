@@ -4,6 +4,98 @@ All notable project changes should be recorded here.
 
 ## Unreleased
 
+## 1.4.0 - Meeting Intelligence: you choose how meetings are captured
+
+Field feedback on `1.3.0`: nothing told a new user that `meeting join` needed a Recall.ai account,
+key, region, and secret; Recall's per-hour cost and its processing of every participant's voice
+were never disclosed; and Recall was the only way to capture. Capture is now a **user choice among
+three providers**, each explained before it is used, and a failing `join` is no longer reachable
+without having been told exactly what to do. Additive: an installation with Recall configured
+keeps working with no action. Design record:
+[DISCOVERY.md, 1.4.0 addendum](docs/meeting-intelligence/DISCOVERY.md#140-addendum-capture-as-a-user-choice);
+guide: [docs/meeting-intelligence/README.md](docs/meeting-intelligence/README.md).
+
+### Added
+
+- **`native` provider** — downloads the transcript Teams, Google Meet, or Zoom already made. No bot,
+  no extra cost, data stays in the organisation's tenant. One provider with three adapters
+  (Microsoft Graph, Meet REST v2, Zoom cloud recordings); an admin registers one app per platform
+  and distributes a non-secret config (`meeting setup native --import <file>`, which refuses a file
+  carrying a secret); each user signs in in the browser (authorization code + PKCE, loopback
+  redirect; delegated, read-only scopes; no application permissions). Every platform limitation
+  is a typed refusal: `external_tenant`, `no_access` (including Teams' forwarded-occurrence 403 and
+  a tenant that switched Graph transcript access off), `unsupported_meeting` (a Teams meeting
+  without a calendar event), `unsupported_platform`, and `not_enabled` once the fetch window
+  (24 h) closes with no transcript. `meeting fetch <url>` handles a meeting that already ended.
+- **`desktop` provider** — records the meeting on the user's computer with `ffmpeg` (two channels:
+  microphone and system audio) and transcribes each channel locally with `whisper.cpp`. macOS
+  (BlackHole loopback) and Linux (PulseAudio/PipeWire); not Windows/WSL. Started only by the user
+  in an interactive terminal after typing that everyone was told and agreed (stored on the
+  meeting), with a ready-to-paste chat announcement; a supervised, visibly named recorder with a
+  pidfile and a maximum duration (180 min); crash-tolerant raw PCM so a crash is processed as
+  `PARTIAL`; resumable chunked transcription; raw audio deleted once the transcript is stored.
+  Models are downloaded on request from huggingface.co and verified against whisper.cpp's
+  published checksums.
+- **`agent-skills meeting setup [native|recall|desktop] [--compare]`** — guided, re-runnable setup
+  per provider ending in a self-test that captures nothing real (Recall: an authenticated read
+  that creates no bot; native: a sign-in and a harmless read; desktop: 5 seconds from both
+  channels, transcribed). It records the default provider and a versioned acknowledgement of the
+  provider's cost, data-flow, and consent notice. Secrets, sign-in, acknowledgements, and the
+  self-test recording happen only at an interactive terminal; anywhere else setup prints the
+  remaining steps and stops.
+- **The preflight.** With no provider chosen, `join` contacts nothing, records nothing, prints the
+  three options (what happens, cost, where data goes, how participants are told), and exits `2`.
+  `meeting status --providers [--json]` prints the same, so the `meeting-intelligence` skill checks
+  it before any `join` and relays it.
+- **`join --via native|recall|desktop`** overrides the default per meeting. Never a silent
+  fallback: a refused or unready provider stops with the reason and the alternatives.
+- **Disclosure in every `join`:** the provider, what will happen, the cost (Recall's rate from
+  `recall.cost_per_hour_usd`, default $0.65/h), where the data goes, and that fact extraction runs
+  in the user's AI assistant, so transcript text reaches its model provider.
+- **`doctor`** lists each provider as `ready` / `not configured` / `broken: <reason> → <fix>` and
+  the default; `--probe-meeting` also records one second from the desktop system-audio input
+  (never the microphone) to prove the loopback receives audio.
+- **Docs:** `docs/meeting-intelligence/README.md` (comparison, data flow per provider, costs),
+  `SETUP-native-teams.md`, `SETUP-native-google-meet.md`, `SETUP-native-zoom.md`,
+  `SETUP-recall.md`, `SETUP-desktop.md`, and `PRIVACY.md`; an "Optional: Meeting Intelligence"
+  section in the npm README.
+
+### Changed
+
+- `MeetingCaptureProvider` gains `readiness()`, `resolve()`, and `activity()`, and `Capabilities`
+  gains live capture, post-meeting fetch, visible participant, speaker attribution, third-party
+  processing, per-hour cost, and languages — all defaulted, so a provider written against 1.3.0
+  still builds. Transcripts carry `speaker_attribution` (`named | channel | none`),
+  `capture_provider`, and `language`.
+- Extraction respects attribution: with channel or no attribution, "You" / "Remote participants"
+  are never owners (an owner named in the text still is), agreement- and owner-dependent
+  confidence is capped at 0.6, windows tell the extractor so, and the result says "Speakers not
+  individually identified (local capture)."
+- Recall setup is guided (`meeting setup recall`), suggests `eu-central-1` for EU timezones and
+  locales, and `join` refuses to start a second bot for a meeting link that already has an active
+  one on this machine.
+- `meeting_providers.py` is the one composition root; the boundary test now asserts that
+  `meeting.py`, `meeting_intel.py`, `meeting_store.py`, and `knowledge.py` import no provider.
+- The HTTPS rules (certificate verification, credential-safe redirects, bounded responses) moved
+  from the Recall adapter to `meeting_http.py`, shared by every provider and token endpoint.
+- `access.py` exposes `store_identity()` / `fetch_identity()`, extracted from `access set`, so OAuth
+  tokens and client secrets land in the same keychain / `0600` store and `access forget` removes them.
+
+### Fixed
+
+- `docs/known-limitations.md` still said no team or organisation knowledge store exists; that has
+  been wrong since shared knowledge sources shipped in `1.3.0`.
+
+### Migration
+
+- An installation with Recall configured gets `recall` as its default automatically; the new cost
+  and data notice is shown once on the next `join`, without blocking. In-flight meetings continue.
+- Meeting state keeps schema `agent-skills.meeting/v1` and only gains fields; `meeting.json` keeps
+  `provider: "recall"`. `rollback` to `1.3.0` reads the state without crashing (tested against the
+  `v1.3.0` tree); 1.3.0 leaves native and desktop meetings alone. 1.3.0 drops the new config keys
+  if it rewrites `meeting.json`, so re-run `meeting setup` after rolling forward again.
+- No new exit code.
+
 ## 1.3.0 - Shared knowledge: one reviewed source per organisation
 
 An organisation can now keep one shared, reviewed, provenance-carrying knowledge source, and every

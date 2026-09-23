@@ -142,10 +142,26 @@ See [context-optimizer.md](context-optimizer.md) for the full treatment. The loa
   the golden set. They show the pipeline preserves good extraction and neutralises bad
   extraction; they are not an unbiased measure of a model's extraction quality.
 - Spoken-secret detection is heuristic and errs toward redaction.
-- Only repository scope exists. There is no team or organisation knowledge store.
-- `doctor` does not contact Recall unless `--probe-meeting` is passed.
+- A meeting is bound to one repository. Team, project, and organisation scopes exist only in a
+  shared knowledge source (from `1.3.0`), and a meeting fact reaches one only through
+  `knowledge propose` and a reviewed merge.
+- `doctor` does not contact Recall, or record from the desktop loopback input, unless
+  `--probe-meeting` is passed.
 - Processing is post-meeting; live transcript streaming and in-meeting interaction are not
   supported.
+- The native adapters (Microsoft Graph, Google Meet REST, Zoom) were built against the vendors'
+  documentation as read on 2026-09-23 and tested against sanitised fixtures, not a live tenant;
+  the `meeting setup native` self-test is the first live check. Zoom transcripts are fetched only
+  for the host's own meetings; Teams only for calendar-backed meetings; Meet only on Workspace
+  editions with transcription. Each app is registered per organisation: a published multi-tenant
+  app would need vendor verification and is out of scope.
+- Desktop capture is macOS and Linux only; macOS needs a loopback driver (BlackHole). Remote
+  speakers are one unidentified group; there is no local diarization model. It was tested with a
+  fake `ffmpeg` and `whisper-cli` (and the ffmpeg filter graph against real ffmpeg 9.0.1 with
+  synthetic inputs), not in a live meeting.
+- Desktop recording refuses to start without an interactive terminal and a typed confirmation.
+  That keeps an assistant from starting it through the CLI; it cannot stop someone who drives a
+  pseudo-terminal deliberately, which the skill forbids.
 
 ## Shared knowledge
 

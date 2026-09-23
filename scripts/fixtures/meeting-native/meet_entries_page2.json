@@ -1,0 +1,12 @@
+{
+  "transcriptEntries": [
+    {
+      "name": "conferenceRecords/placeholder-record/transcripts/placeholder-transcript/entries/e2",
+      "participant": "conferenceRecords/placeholder-record/participants/p2",
+      "text": "Agreed, let's do that for payment retries.",
+      "languageCode": "en-US",
+      "startTime": "2026-09-21T09:00:15Z",
+      "endTime": "2026-09-21T09:00:16.200Z"
+    }
+  ]
+}

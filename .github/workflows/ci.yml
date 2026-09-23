@@ -145,8 +145,13 @@ jobs:
       # closed loopback port. Lifecycle by polling alone, crash recovery at
       # every checkpoint, webhook signature/replay/dedupe, spoken-secret
       # redaction, scope isolation on read, and four mutation probes.
+      # 1.4.0 adds the native (Graph / Meet / Zoom fixtures) and desktop (fake
+      # ffmpeg and whisper-cli on PATH) providers; case C16 runs the v1.3.0 tree
+      # against the new state to prove rollback does not crash, so that tag is fetched.
       - name: Meeting Intelligence
-        run: python3 scripts/test-meeting.py
+        run: |
+          git fetch --no-tags --depth=1 origin +refs/tags/v1.3.0:refs/tags/v1.3.0
+          python3 scripts/test-meeting.py
 
       # Shared organisational knowledge, offline: every remote is a local bare
       # repository behind git's insteadOf, the PR adapter is a fake `gh`. Cases 1

@@ -1,0 +1,62 @@
+#!/usr/bin/env python3
+"""A fake ffmpeg for the offline desktop-capture tests. Never records a real device.
+
+Behaviour, from the arguments the provider passes:
+  -list_devices true      print an avfoundation device list (incl. a loopback input)
+  ... -f s16le <out>      write synthetic 16 kHz stereo PCM: a tone on the left
+                          (microphone) and another on the right (system audio),
+                          FAKE_FFMPEG_SPEED audio-seconds per wall-second, until
+                          the -t limit (exit 0) or SIGINT/SIGTERM (exit 255).
+Environment: FAKE_FFMPEG_MODE=crash exits 1 after two audio-seconds;
+FAKE_FFMPEG_SILENT=right|left writes silence on that channel.
+"""
+import math
+import os
+import signal
+import struct
+import sys
+import time
+
+args = sys.argv[1:]
+if "-list_devices" in args:
+    sys.stderr.write("[AVFoundation indev @ 0x1] AVFoundation video devices:\n"
+                     "[AVFoundation indev @ 0x1] [0] FaceTime HD Camera\n"
+                     "[AVFoundation indev @ 0x1] AVFoundation audio devices:\n"
+                     "[AVFoundation indev @ 0x1] [0] MacBook Pro Microphone\n"
+                     "[AVFoundation indev @ 0x1] [1] BlackHole 2ch\n")
+    sys.exit(1)
+limit = float(args[args.index("-t") + 1]) if "-t" in args else 5.0
+channels = int(args[args.index("-ac") + 1]) if "-ac" in args else 2
+out_path = args[-1]
+speed = float(os.environ.get("FAKE_FFMPEG_SPEED", "50"))
+silent = os.environ.get("FAKE_FFMPEG_SILENT", "")
+stop = {"now": False}
+signal.signal(signal.SIGINT, lambda *_: stop.update(now=True))
+signal.signal(signal.SIGTERM, lambda *_: stop.update(now=True))
+
+
+def second(index):
+    frames = []
+    for n in range(16000):
+        t = (index * 16000 + n) / 16000.0
+        left = 0 if silent == "left" else int(3000 * math.sin(2 * math.pi * 440 * t))
+        right = 0 if silent == "right" else int(3000 * math.sin(2 * math.pi * 660 * t))
+        frames.append(struct.pack("<hh", left, right) if channels == 2 else struct.pack("<h", right))
+    return b"".join(frames)
+
+
+ONE_SECOND = second(0)  # both tones are whole-cycle per second, so every second is identical
+sink = sys.stdout.buffer if out_path == "-" else open(out_path, "ab")
+written = 0.0
+while written < limit:
+    if stop["now"]:
+        sink.flush()
+        sys.exit(255)
+    sink.write(ONE_SECOND)
+    sink.flush()
+    written += 1
+    if os.environ.get("FAKE_FFMPEG_MODE") == "crash" and written >= 2:
+        sys.exit(1)
+    time.sleep(1.0 / speed)
+sink.flush()
+sys.exit(0)

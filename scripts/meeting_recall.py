@@ -39,14 +39,12 @@ import hmac
 import json
 import os
 import re
-import ssl
-import urllib.error
-import urllib.request
 from datetime import datetime
 from typing import Callable, Dict, List, Optional, Tuple
 from urllib.parse import urlsplit
 
 import meeting_capture as mc
+import meeting_http
 
 PROVIDER_NAME = "recall"
 REGIONS = ("us-west-2", "us-east-1", "eu-central-1", "ap-northeast-1")
@@ -69,63 +67,16 @@ def base_url_for(region: str) -> str:
         raise mc.ProviderRequestError(
             "unknown Recall region {!r}; choose one of {}".format(region, ", ".join(REGIONS))
         )
-    override = os.environ.get("AGENT_SKILLS_RECALL_BASE_URL", "").strip().rstrip("/")
-    if override:
-        parts = urlsplit(override)
-        loopback = parts.scheme == "http" and parts.hostname in ("127.0.0.1", "localhost")
-        recall = parts.scheme == "https" and (parts.hostname or "").endswith(".recall.ai")
-        # A base-URL override decides where the API key is sent, so it may only
-        # point at Recall itself or at this machine (the offline test harness).
-        if not (loopback or recall) or parts.username or parts.password:
-            raise mc.ProviderRequestError(
-                "AGENT_SKILLS_RECALL_BASE_URL must be an https *.recall.ai URL or loopback"
-            )
-        return override
-    return "https://" + region + ".recall.ai"
+    # A base-URL override decides where the API key is sent, so it may only
+    # point at Recall itself or at this machine (the offline test harness).
+    override = meeting_http.base_override("AGENT_SKILLS_RECALL_BASE_URL", (".recall.ai",))
+    return override or "https://" + region + ".recall.ai"
 
 
-class _CredentialSafeRedirect(urllib.request.HTTPRedirectHandler):
-    """Follow redirects without carrying the API key anywhere it was not sent.
-
-    urllib's default handler copies every non-content header onto the
-    redirected request, `Authorization` included, whatever host the redirect
-    points at. A redirect from the region API to any other host would hand it
-    the key. So a cross-host hop drops the header, and a downgrade from https
-    to http is refused outright.
-    """
-
-    def redirect_request(self, req, fp, code, msg, headers, newurl):  # noqa: D401 - urllib API
-        old, new = urlsplit(req.full_url), urlsplit(newurl)
-        if old.scheme == "https" and new.scheme != "https":
-            return None
-        redirected = super().redirect_request(req, fp, code, msg, headers, newurl)
-        if redirected is not None and (new.hostname or "").lower() != (old.hostname or "").lower():
-            for name in list(redirected.headers):
-                if name.lower() == "authorization":
-                    del redirected.headers[name]
-            redirected.unredirected_hdrs.pop("Authorization", None)
-        return redirected
-
-
-def _default_transport(method: str, url: str, headers: Dict[str, str], body: Optional[bytes]) -> Tuple[int, bytes]:
-    request = urllib.request.Request(url, data=body, method=method, headers=headers)
-    context = ssl.create_default_context()  # certificate verification stays on
-    opener = urllib.request.build_opener(
-        urllib.request.HTTPSHandler(context=context), _CredentialSafeRedirect()
-    )
-    try:
-        with opener.open(request, timeout=TIMEOUT_SECONDS) as response:
-            data = response.read(MAX_RESPONSE_BYTES + 1)
-            return response.status, data
-    except urllib.error.HTTPError as exc:
-        try:
-            data = exc.read(64 * 1024)
-        except OSError:
-            data = b""
-        return exc.code, data
-    except (urllib.error.URLError, OSError, ValueError):
-        # The exception text can carry the URL; it is deliberately not kept.
-        raise mc.ProviderNetworkError("Recall could not be reached") from None
+# Kept under their 1.2.0 names; the implementation is shared with the other
+# providers in meeting_http.py.
+_CredentialSafeRedirect = meeting_http.CredentialSafeRedirect
+_default_transport = meeting_http.make_transport("Recall")
 
 
 def _clean_code(value: object) -> str:
@@ -223,7 +174,17 @@ class RecallMeetingBotProvider(mc.MeetingCaptureProvider):
             webhooks=True,
             transcription_methods=("captions", "provider_transcription", "async"),
             platforms=("zoom", "google_meet", "teams"),
+            live_capture=False,
+            post_meeting_fetch=True,
+            visible_participant=True,
+            speaker_attribution="named",
+            third_party_processing=True,
+            per_hour_cost=True,
+            languages=("auto",),
         )
+
+    def readiness(self) -> mc.Readiness:
+        return mc.Readiness(mc.READY)
 
     def probe(self) -> None:
         """Cheap authenticated read: proves reachability and that key and region match."""
@@ -512,3 +473,111 @@ def verify_webhook(secret: str, headers: Dict[str, str], body: bytes, now: float
     if not _ID_RE.match(bot_id):
         return None
     return mc.ProviderEvent(event_id=msg_id, provider_ref=bot_id, correlation_id=correlation)
+
+
+# ---------------------------------------------------------------------------
+# Configuration, readiness, and construction. Called by meeting_providers.py,
+# the one composition root; nothing here reads a secret unless it is about to
+# send it.
+# ---------------------------------------------------------------------------
+SETUP_COMMAND = "agent-skills meeting setup recall"
+EU_REGION = "eu-central-1"
+
+
+def credential_presence() -> Tuple[bool, bool, str]:
+    """(api key configured?, verification secret configured?, region), from metadata only.
+
+    `doctor` runs inside every `start-task`; fetching a keychain secret there
+    just to report that it exists would read a credential on every task.
+    """
+    from access import env_candidates, load_profiles
+
+    key = any(os.environ.get(name) for name in env_candidates("recall", "api_key"))
+    secret = any(os.environ.get(name) for name in env_candidates("recall", "verification_secret"))
+    region = next((os.environ[n] for n in env_candidates("recall", "region") if os.environ.get(n)), "")
+    for entry in (load_profiles().get("profiles") or {}).values():
+        if not isinstance(entry, dict) or entry.get("service") != "recall":
+            continue
+        stored = entry.get("secret_fields") or []
+        key = key or "api_key" in stored
+        secret = secret or "verification_secret" in stored
+        fields = entry.get("fields") if isinstance(entry.get("fields"), dict) else {}
+        region = region or str(fields.get("region") or "")
+    return key, secret, region
+
+
+def effective_region(configured: str, stored: str) -> str:
+    configured, stored = (configured or "").strip(), (stored or "").strip()
+    if configured and stored and configured != stored:
+        raise mc.ProviderAuthError(
+            "region mismatch: meeting config says {} but the Recall credential is for {}; "
+            "Recall keys, bots, and media are region-local, so make them agree".format(configured, stored)
+        )
+    return configured or stored
+
+
+def readiness(config: Dict[str, object]) -> mc.Readiness:
+    """Local only: is a key stored, is the region known and consistent?"""
+    try:
+        key, _, stored_region = credential_presence()
+    except Exception:  # noqa: BLE001 - a report, never a crash
+        return mc.Readiness(mc.BROKEN, "the credential store could not be read", SETUP_COMMAND)
+    if not key and not stored_region and not config.get("region"):
+        return mc.Readiness(mc.NOT_CONFIGURED, "no Recall account is connected", SETUP_COMMAND)
+    if not key:
+        return mc.Readiness(mc.BROKEN, "no Recall API key is stored", SETUP_COMMAND)
+    try:
+        region = effective_region(str(config.get("region") or ""), stored_region)
+    except mc.ProviderAuthError as exc:
+        return mc.Readiness(mc.BROKEN, exc.message, SETUP_COMMAND)
+    if not region:
+        return mc.Readiness(mc.BROKEN, "no Recall region is configured", SETUP_COMMAND)
+    if region not in REGIONS:
+        return mc.Readiness(mc.BROKEN, "unknown Recall region {!r}".format(region), SETUP_COMMAND)
+    return mc.Readiness(mc.READY, detail="region " + region)
+
+
+def from_config(config: Dict[str, object], need_secret: bool = False) -> RecallMeetingBotProvider:
+    """Resolve the key through the Access Resolver and build the provider.
+
+    Raises ProviderAuthError with the exact next step when something is missing.
+    """
+    from pathlib import Path
+
+    from access import resolve_access
+
+    fields = ["api_key", "region"] + (["verification_secret"] if need_secret else [])
+    values: Dict[str, str] = {}
+    resolve_access("recall", "", fields, {"api_key", "verification_secret"}, Path.cwd(),
+                   allow_capability=False, values_out=values)
+    region = effective_region(str(config.get("region") or ""), values.get("region", ""))
+    if not region:
+        raise mc.ProviderAuthError(
+            "no Recall region is configured; run: {} (or set AGENT_SKILLS_RECALL_REGION to one of {})".format(
+                SETUP_COMMAND, ", ".join(REGIONS)))
+    if not values.get("api_key"):
+        raise mc.ProviderAuthError(
+            "no Recall API key is available; run: {} (hidden input), or set "
+            "AGENT_SKILLS_RECALL_API_KEY in the environment".format(SETUP_COMMAND))
+    if need_secret and not values.get("verification_secret"):
+        raise mc.ProviderAuthError(
+            "listener mode needs the Recall workspace verification secret; run: {}".format(SETUP_COMMAND))
+    return RecallMeetingBotProvider(values["api_key"], region, values.get("verification_secret", ""))
+
+
+def suggest_region(tz_name: str = "", locale_name: str = "") -> str:
+    """EU organisations get the EU region suggested; everyone else us-west-2 (Recall's default)."""
+    import time as _time
+
+    if not tz_name:
+        tz_name = os.environ.get("TZ", "")
+    if not tz_name:
+        target = os.path.realpath("/etc/localtime")
+        tz_name = target.split("zoneinfo/", 1)[1] if "zoneinfo/" in target else "/".join(_time.tzname)
+    locale_name = locale_name or os.environ.get("LC_ALL", "") or os.environ.get("LANG", "")
+    eu_countries = ("AT", "BE", "BG", "HR", "CY", "CZ", "DK", "EE", "FI", "FR", "DE", "GR", "HU", "IE",
+                    "IT", "LV", "LT", "LU", "MT", "NL", "PL", "PT", "RO", "SK", "SI", "ES", "SE")
+    if tz_name.startswith("Europe/") or any(z in tz_name for z in ("CET", "CEST", "EET", "EEST", "WET")):
+        return EU_REGION
+    country = locale_name.split(".")[0].split("_")[-1].upper() if "_" in locale_name else ""
+    return EU_REGION if country in eu_countries else "us-west-2"

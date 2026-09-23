@@ -1,0 +1,7 @@
+{
+  "name": "conferenceRecords/placeholder-record/participants/p1",
+  "signedinUser": {
+    "user": "users/1",
+    "displayName": "Alice Example"
+  }
+}

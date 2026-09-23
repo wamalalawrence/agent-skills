@@ -56,9 +56,10 @@ Probes what this environment can actually do and prints a capability report.
   --repo owner/name   Also walk the GitHub access ladder against this repo.
   --require-tracker   Exit 1 when tracker configuration does not resolve.
   --require-github    Exit 1 when no GitHub access path works.
-  --probe-meeting     Contact the meeting capture provider once to check that it
-                      is reachable and accepts the key for its region. Without
-                      this flag doctor stays offline.
+  --probe-meeting     Check meeting capture beyond local files: contact Recall once to
+                      check it is reachable and accepts the key for its region, and
+                      record one second from the desktop system-audio input (never the
+                      microphone; nothing is kept). Without this flag doctor stays offline.
   --probe-knowledge   Contact each shared knowledge source once with your own git
                       access (git ls-remote). Without this flag doctor stays offline.
   --help              Show this help.
@@ -483,11 +484,15 @@ probe_secret_backend() {
   fi
 }
 
-# Meeting Intelligence: credentials present, region consistent, consent, listener,
-# stuck meetings. Local only unless --probe-meeting. Never prints a secret.
+# Meeting Intelligence: each capture provider (native, recall, desktop) as
+# ready / not configured / broken with its fix command, the default provider,
+# stuck meetings. Local only unless --probe-meeting (Recall: one authenticated
+# read; desktop: one second from the system-audio input, never the microphone).
+# Never prints a secret.
 probe_meeting() {
   MEETING_STATE="unknown"
   MEETING_DETAIL="scripts/meeting.py not reachable"
+  MEETING_ROWS=""
   MEETING_JSON="{}"
   local meeting="${REPO_ROOT}/scripts/meeting.py"
   [[ -f "${meeting}" ]] || return 0
@@ -501,16 +506,25 @@ try:
 except ValueError:
     r = {}
 stuck = r.get("stuck") or []
-print("credentials: %s; region: %s; consent: %s; listener: %s; provider: %s; meetings: %s (%d stuck%s)" % (
-    r.get("credentials", "?"), r.get("region", "?"), r.get("consent", "?"), r.get("listener", "?"),
-    r.get("provider", "?"), r.get("meetings", 0), len(stuck), (": " + ", ".join(stuck)) if stuck else ""))
+print("default provider: %s (%s); probe: %s; meetings: %s (%d stuck%s)" % (
+    r.get("default_provider", "?"), r.get("capture", "?"), r.get("provider", "?"),
+    r.get("meetings", 0), len(stuck), (": " + ", ".join(stuck)) if stuck else ""))
 ' 2>/dev/null || printf 'report unavailable')"
+  MEETING_ROWS="$(printf '%s' "${MEETING_JSON}" | ${PYTHON3} -c '
+import json, sys
+try:
+    r = json.load(sys.stdin)
+except ValueError:
+    r = {}
+for line in (r.get("providers") or {}).values():
+    print(line)
+' 2>/dev/null || true)"
   case "${MEETING_DETAIL}" in
-    *"api key resolves"*) MEETING_STATE="yes" ;;
+    *"(ready)"*) MEETING_STATE="yes" ;;
     *) MEETING_STATE="no" ;;
   esac
   case "${MEETING_DETAIL}" in
-    *MISMATCH*|*FAILED*) MEETING_STATE="no" ;;
+    *FAILED*) MEETING_STATE="no" ;;
   esac
 }
 
@@ -682,6 +696,11 @@ render_full() {
   echo ""
   echo "Meetings"
   printf '  %smeeting capture — %s\n' "$(mark "${MEETING_STATE}")" "${MEETING_DETAIL}"
+  if [[ -n "${MEETING_ROWS}" ]]; then
+    printf '%s\n' "${MEETING_ROWS}" | while IFS= read -r row; do
+      [[ -n "${row}" ]] && printf '      %s\n' "${row}"
+    done
+  fi
   echo ""
   echo "Execution Guard"
   if [[ -n "${GUARD_ROWS}" ]]; then
