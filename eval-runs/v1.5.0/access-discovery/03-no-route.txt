@@ -1,0 +1,19 @@
+$ agent-skills access check --system jira --op comment --target ABC-12 --host cursor --user-authorised
+Access check: jira · comment · issue ABC-12 (project ABC) · host cursor
+  route    FAIL     no MCP server or CLI for jira in cursor   [declared]
+  launch   skipped
+  auth     skipped
+  mode     skipped
+  target   skipped
+  intent   skipped
+  policy   skipped
+Result: BLOCKED at route.
+Routes considered:
+  browser  not usable (no authenticated session can be detected; never attempted)
+Options:
+  1. Set up an MCP server for jira
+     agent-skills access setup jira --host cursor
+  2. Tell me which tool you normally use for jira, and I will inspect it
+     agent-skills access inspect <command>
+  3. Do it once yourself: I prepare the exact change and the link, and finish the rest of the task
+[exit 1]

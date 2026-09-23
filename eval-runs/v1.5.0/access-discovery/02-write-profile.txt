@@ -1,0 +1,101 @@
+$ agent-skills access setup confluence --write-profile --host codex
+Proposed: a second server 'atlassian-write' in ~/.codex/config.toml (Codex). The existing 'atlassian' entry is not changed.
+Write mode: ACME_ATL_RW=1 switches write mode, per the launcher (~/.local/bin/acme-mcp-atlassian line 14, 15).
+--- ~/.codex/config.toml
++++ ~/.codex/config.toml (proposed)
+@@ -3,3 +3,11 @@
+ command = "~/.local/bin/acme-mcp-atlassian"
+ args = []
+ startup_timeout_sec = 60
++
++[mcp_servers.atlassian-write]
++command = "~/.local/bin/acme-mcp-atlassian"
++args = []
++startup_timeout_sec = 60
++
++[mcp_servers.atlassian-write.env]
++ACME_ATL_RW = "1"
+
+Agent Skills does not know a per-tool approval setting for Codex; if it has one, keep the atlassian-write server's tools on ask.
+Not a terminal, so nothing was written. To apply it, run this yourself in a terminal:
+  agent-skills access setup confluence --write-profile --host codex
+[exit 0]
+
+$ agent-skills access setup confluence --write-profile --host codex   (in a terminal)
+Proposed: a second server 'atlassian-write' in ~/.codex/config.toml (Codex). The existing 'atlassian' entry is not changed.
+Write mode: ACME_ATL_RW=1 switches write mode, per the launcher (~/.local/bin/acme-mcp-atlassian line 14, 15).
+--- ~/.codex/config.toml
++++ ~/.codex/config.toml (proposed)
+@@ -3,3 +3,11 @@
+ command = "~/.local/bin/acme-mcp-atlassian"
+ args = []
+ startup_timeout_sec = 60
++
++[mcp_servers.atlassian-write]
++command = "~/.local/bin/acme-mcp-atlassian"
++args = []
++startup_timeout_sec = 60
++
++[mcp_servers.atlassian-write.env]
++ACME_ATL_RW = "1"
+
+Agent Skills does not know a per-tool approval setting for Codex; if it has one, keep the atlassian-write server's tools on ask.
+Add 'atlassian-write' to ~/.codex/config.toml? Type 'yes' to apply: yes
+Written. Backup: ~/.codex/config.toml.agent-skills-backup-20260923T180254 (undo: agent-skills access setup --undo --host codex)
+Start a new Codex session; Codex reads config.toml at startup.
+Then: agent-skills access check --system confluence --op write --target <target> --host codex
+[exit 0]
+
+$ agent-skills access remember --system confluence --server atlassian --host codex --yes
+Remember these facts (no secrets) in ~/.config/agent-skills/access/routes.json?
+{
+  "match": {
+    "host": "codex",
+    "command": "~/.local/bin/acme-mcp-atlassian"
+  },
+  "learned_from": {
+    "server_name": "atlassian",
+    "host": "codex"
+  },
+  "systems": [
+    "confluence",
+    "jira"
+  ],
+  "upstream": "sooperset-mcp-atlassian",
+  "mode": {
+    "env": "ACME_ATL_RW",
+    "write_when": "1",
+    "default": "read-only"
+  },
+  "base_url": "https://acme.atlassian.net/wiki",
+  "credential_locator": {
+    "kind": "keychain-generic",
+    "name": "acme-atlassian"
+  },
+  "trusted_self_report": false,
+  "confirmed_by_user": "2026-09-23",
+  "source": "wrapper inspection, confirmed in dialogue"
+}
+Confirmed by the user in the conversation (--yes).
+Saved local route knowledge for server 'atlassian' in ~/.config/agent-skills/access/routes.json. Evidence for it is now 'declared'.
+[exit 0]
+
+$ agent-skills access check --system confluence --op update --target https://acme.atlassian.net/wiki/spaces/~jdoe/pages/123456789/Notes --host codex --user-authorised --own-target
+Access check: confluence · update · page 123456789 (space ~jdoe) · host codex
+  route    pass     MCP server "atlassian-write" -> ~/.local/bin/acme-mcp-atlassian (user-local launcher)   [declared]
+  launch   pass     launcher executable; uvx available   [declared]
+  auth     pass     credential present (keychain-generic acme-atlassian, referenced by the launcher)   [inferred]
+  mode     pass     read-write: confirmed local knowledge: read-only unless ACME_ATL_RW=1; host config has ACME_ATL_RW=1   [declared]
+  target   pass     page 123456789 (space ~jdoe): no scope filter excludes it; the account's permission on it is not verified (--probe checks it)   [declared]
+  intent   pass     you asked for this update on this target   [declared]
+  policy   pass     allowed: preview, then proceed on your go-ahead   [declared]
+Result: AVAILABLE.
+Before applying: preview, then proceed on your go-ahead.
+Routes considered:
+  mcp     atlassian [codex] not usable: mode fail: read-only: confirmed local knowledge: read-only unless ACME_ATL_RW=1; host config has ACME_ATL_RW unset
+  mcp     atlassian-write [codex] usable
+  browser  not usable (no authenticated session can be detected; never attempted)
+Credentials found (locators only; a found credential is not a route):
+  keychain-generic acme-atlassian (present)
+warning: codex: ~/.codex/config.toml is readable by other users (mode 644)
+[exit 0]
