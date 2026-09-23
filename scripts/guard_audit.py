@@ -43,6 +43,12 @@ _PATTERNS: tuple[tuple[re.Pattern, str], ...] = (
         re.compile(r"""(?i)(authorization\s*:\s*)(?:bearer|basic|token)\s+[^\s"']+"""),
         r"\1" + REDACTED,
     ),
+    # The same header as a JSON member, which is how an MCP config or an HTTP
+    # client's debug dump prints it: `"Authorization": "Bearer <token>"`.
+    (
+        re.compile(r"""(?i)("authorization"\s*:\s*")(?:bearer|basic|token)\s+[^"]+(")"""),
+        r"\1" + REDACTED + r"\2",
+    ),
     (re.compile(r"""(?i)(x-api-key\s*:\s*)[^\s"']+"""), r"\1" + REDACTED),
     (
         re.compile(
@@ -138,6 +144,10 @@ _PATTERNS: tuple[tuple[re.Pattern, str], ...] = (
     (re.compile(r"\bgh[pousr]_[A-Za-z0-9_]{20,}\b"), REDACTED),
     (re.compile(r"\bxox[baprs]-[A-Za-z0-9-]{10,}\b"), REDACTED),
     (re.compile(r"\bsk-[A-Za-z0-9_-]{20,}\b"), REDACTED),
+    # Atlassian API tokens (`ATATT...`) and Connect/Forge tokens (`ATCTT...`).
+    # Caught before by the high-entropy rule only when long and mixed enough;
+    # a truncated one in a log line slipped through.
+    (re.compile(r"\bAT[AC]TT[A-Za-z0-9_=\-]{8,}"), REDACTED),
     (
         re.compile(r"\beyJ[A-Za-z0-9_-]{10,}\.[A-Za-z0-9_-]{10,}\.[A-Za-z0-9_-]{5,}\b"),
         REDACTED,

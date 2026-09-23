@@ -155,6 +155,20 @@ Required whenever this release changes `scripts/meeting*.py`, the `meetings/` pa
 - [ ] Run `AGENT_SKILLS_MEETING_LIVE_SMOKE=1 python3 scripts/test-meeting.py` where credentials exist,
       and `agent-skills meeting setup <provider>` self-tests on a real machine for each provider.
 
+## Access Discovery
+
+Required whenever this release changes `scripts/access_*.py`, `scripts/guard_access.py`,
+`lib/access/systems/`, or the Wamala access contract.
+
+- [ ] Run `python3 scripts/test-access-discovery.py` with no network. A1-A3 are the incident
+      regression under invented names; N1 is the no-coupling lint.
+- [ ] Re-check every registry file against its upstream source and update `verified_against`
+      (source and date). Mode variables, toolsets, and write-tool names drift between releases.
+- [ ] Confirm the payload names no organisation: N1 passes, and
+      `AGENT_SKILLS_COUPLING_DENYLIST=<your local list> python3 scripts/test-access-discovery.py -k N1`.
+- [ ] Confirm `agent-skills access setup` still writes nothing without an interactive `yes`: read
+      `cmd_setup` in `access_discovery_cli.py`, not just the test.
+
 ## Shared Knowledge
 
 Required whenever this release changes `scripts/knowledge_*.py`, the Resolver paths in

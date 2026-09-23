@@ -140,6 +140,11 @@ if python3 scripts/test-meeting.py </dev/null >/tmp/as-rr-meeting.log 2>&1; then
 else
   bad "meeting intelligence" "$(grep 'FAIL' /tmp/as-rr-meeting.log | head -5)"
 fi
+if python3 scripts/test-access-discovery.py </dev/null >/tmp/as-rr-access-discovery.log 2>&1; then
+  good "access discovery: $(tail -1 /tmp/as-rr-access-discovery.log)"
+else
+  bad "access discovery" "$(grep 'FAIL' /tmp/as-rr-access-discovery.log | head -5)"
+fi
 if python3 scripts/test-shared-knowledge.py </dev/null >/tmp/as-rr-shared-knowledge.log 2>&1; then
   good "shared knowledge: $(grep -E 'passed:' /tmp/as-rr-shared-knowledge.log | tr -s ' ') $(tail -1 /tmp/as-rr-shared-knowledge.log)"
 else

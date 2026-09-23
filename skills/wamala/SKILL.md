@@ -226,7 +226,9 @@ each dispatched agent resolves the same project, repo, and branch context.
 - The fresh-context dispatch capability described above.
 
 The capability report from `start-task.sh` step 4 already answers most of this. Read it before
-routing: a request that needs tracker access is routed differently when no tracker resolves.
+routing: a request that needs tracker access is routed differently when no tracker resolves. Its
+`access` line says, per system, what each route can do (`read-only`, `read-write`) and how strongly
+that is known; the `mcp` line only says a configuration file exists.
 
 ## Required Workflow
 
@@ -350,6 +352,29 @@ items, database rows, cloud resources — are outside what the check can prove a
 safety floor above. The user's words "remove the older ones" once pointed at untracked documents
 in a directory with no `.git`; a literal delete would have been permanent, and it was caught by
 hand.
+
+### 2.9 Check external access before dependent work
+
+When the work needs an external system — updating a Confluence page, commenting on or transitioning
+a Jira issue, opening a pull request, rerunning CI — list each (system, operation, target) the plan
+needs and run one check per triple **before** dispatching the step that depends on it:
+
+```bash
+agent-skills access check --system <id> --op <read|write|destructive|verb> --target "<url-or-key>" \
+  [--user-authorised] [--own-target] [--host <id>]
+```
+
+Relay its output verbatim. `available` goes into the brief with the route and the confirmation the
+policy rung names. Anything else — `blocked`, `unknown`, or `needs-confirmation` on inferred
+evidence — opens the **resolution dialogue** with the user: what was attempted, what was found and
+how strongly, ranked options from the check, one decision at a time, remember what the user
+confirms, re-check after they act. Never pick an option for the user, never try a route the check
+did not list, never use a found credential directly, never ask for a secret in chat. The full
+contract, the keyword safety net for implicit mutations, and mid-task `classify-error`:
+[access resolution dialogue](./references/access-resolution-dialogue.md).
+
+"MCP configured" is not an answer. A read-only route, a scope filter that hides a personal space,
+and a launcher that defaults to read-only all look configured.
 
 ### 3. Route
 
@@ -541,6 +566,10 @@ Stop, and say why, on any of these. Do not improvise a destination.
   outside the canonical set.
 - **The request needs a forbidden action.** Produce the operator runbook per the safety floor
   and hand it to the user. Never dispatch it.
+- **An access check did not pass.** Run the
+  [resolution dialogue](./references/access-resolution-dialogue.md) and wait for the user's choice.
+  A non-interactive run prints the facts and options and exits with the check's code. Manual
+  hand-off is always an option, and the rest of the task continues.
 
 Every stop preserves scratch (`finish-task.sh --status blocked`) so the next agent can resume.
 
@@ -617,6 +646,9 @@ memory=<updated|blocked>; skill=wamala@<version>`. Do not claim a wrapper ran un
 - [ ] Every step with prerequisites had their `follow_up_context` in its brief, verbatim.
 - [ ] Every delete-shaped target was checked with `agent-skills reversibility`; nothing
   unrecoverable was deleted.
+- [ ] Every external (system, operation, target) the work needed was checked with
+  `agent-skills access check` before dependent work, and a result other than `available` went
+  to the user as a resolution dialogue, not an improvised workaround.
 - [ ] Every implementation step's review is accounted for: independent in-step, a sibling review
   over a named range, or reported as owed.
 - [ ] No profile was lowered below a floor, and no work was implemented inline because it
@@ -678,6 +710,9 @@ memory=<updated|blocked>; skill=wamala@<version>`. Do not claim a wrapper ran un
   was asked to review.
 - Do not route work that the safety floor forbids. Routing is not a laundering step: a request
   refused when asked directly is refused here too.
+- Do not treat "MCP configured" as write access, a found credential as a route, or a browser as a
+  write fallback. Do not retry a blocked write through another route. Access problems go to the
+  user as a resolution dialogue.
 - Do not require users to come through this skill. Direct invocation of any skill stays
   first-class.
 
@@ -706,5 +741,7 @@ See [starter prompts](../../docs/starter-prompts.md) and the
   once per run and referenced from every brief.
 - [Verification bars](./references/verification-bars.md) — what done looks like per class,
   checkable from the artifact.
+- [Access resolution dialogue](./references/access-resolution-dialogue.md) — check external access
+  before dependent work, relay the result, and work a blocked or unknown check out with the user.
 - [Adaptive execution](../../docs/adaptive-execution.md) — the profile policy, the escalation
   floor, and the concurrency rules.

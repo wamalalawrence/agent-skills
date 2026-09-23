@@ -30,6 +30,10 @@ just not in the place the agent looked first.
   compatibility.
 5. Only after resolution fails should the agent ask, and the ask must name the specific missing
   fields. **Never ask for a secret value in the conversation.**
+6. **Before writing** to Jira, Confluence, or a git host, run `agent-skills access check --system
+  <id> --op <op> --target <url>` ([Access Discovery](access/README.md)). Resolving a credential says
+  nothing about whether the route that holds it may write, and a credential you found is never a
+  route of its own.
 
 ## Where the files live
 

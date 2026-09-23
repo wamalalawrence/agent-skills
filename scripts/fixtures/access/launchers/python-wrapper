@@ -1,0 +1,13 @@
+#!/usr/bin/env python3
+"""initech wrapper (fixture): python launcher, keyring credential, inverted switch."""
+import os
+import subprocess
+import keyring  # noqa: F401  (fixture: never imported, never run)
+
+env = dict(os.environ)
+env["JIRA_URL"] = "https://initech.example.org"
+env["JIRA_API_TOKEN"] = keyring.get_password("initech-jira", "me")
+if os.environ.get("INITECH_JIRA_READWRITE", "no") != "yes":
+    env["READ_ONLY_MODE"] = "true"
+open(os.environ.get("ACME_FIXTURE_RAN_MARKER", os.devnull), "w").close()
+os.execvpe("uvx", ["uvx", "mcp-atlassian"], env)

@@ -1,0 +1,10 @@
+#!/bin/sh
+# wonka wrapper (fixture): implements the self-report convention.
+if [ "${1:-}" = "--agent-skills-capabilities" ]; then
+  if [ "${WONKA_RW:-0}" = "1" ]; then m=read-write; else m=read-only; fi
+  printf '{"mode":"%s","mode_source":"WONKA_RW","systems":["confluence"],"credential_source":"keychain"}\n' "$m"
+  exit 0
+fi
+echo "wonka-mcp: mode=read-only" >&2
+touch "${ACME_FIXTURE_RAN_MARKER:-/dev/null}"
+exec uvx mcp-atlassian

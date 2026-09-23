@@ -1,0 +1,12 @@
+#!/usr/bin/env bash
+# globex wrapper: docker upstream, pass credential, different switch name.
+set -eu
+TOKEN="$(pass show work/globex/atlassian)"
+if [ -z "${GLOBEX_WRITE_ENABLED:-}" ]; then
+  RO="-e READ_ONLY_MODE=true"
+else
+  RO=""
+fi
+touch "${ACME_FIXTURE_RAN_MARKER:-/dev/null}"
+exec docker run --rm -i -e CONFLUENCE_URL=https://globex.example.net/wiki \
+  -e CONFLUENCE_PERSONAL_TOKEN="$TOKEN" $RO ghcr.io/sooperset/mcp-atlassian:latest

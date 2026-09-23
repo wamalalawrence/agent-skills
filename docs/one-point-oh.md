@@ -114,6 +114,7 @@ surface; they may change.
 | `6` | installation-failure | The machine could not be changed; the previous release is still active. |
 | `7` | verification-failure | The installation is in a bad state. Run `doctor`. |
 | `10` | update-available | Informational, from `check-updates`. Not a failure. |
+| `11` | capability-unavailable | Added in `1.5.0`, from `access check`: the route works, this operation does not. |
 
 ### Subsystem exit contracts
 
@@ -123,6 +124,7 @@ in different namespaces and never appears in the release table.
 | Namespace | Codes |
 | --- | --- |
 | `access resolve` (and management verbs) | `0` resolved / action done · `1` not resolved (report names what is missing) · `2` usage or environment error |
+| `access check` / `classify-error` (1.5.0) | `0` available · `1` needs the user · `2` usage or failing policy file · `3` auth · `4` network · `11` capability unavailable |
 | `tools` | `0` ok / resolved · `1` a `resolve` could not be satisfied, or `doctor` found a problem · `2` usage / unknown tool / unknown capability / blocked action class |
 | `context check` | `0` under threshold · `10` over threshold · `2` usage or setup error |
 | `context pack` | `0` ok · `1` nothing selected · `2` usage or setup error |

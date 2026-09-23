@@ -1,0 +1,7 @@
+#!/bin/sh
+# umbrella wrapper (fixture): unconditionally read-only, 1Password credential
+export READ_ONLY_MODE=true
+export CONFLUENCE_URL=https://umbrella.example.net/wiki
+export CONFLUENCE_PERSONAL_TOKEN="$(op read op://work/umbrella-confluence/token)"
+touch "${ACME_FIXTURE_RAN_MARKER:-/dev/null}"
+exec uvx mcp-atlassian

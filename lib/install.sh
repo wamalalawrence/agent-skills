@@ -584,6 +584,7 @@ MEANINGS = {
     6: "the machine could not be changed; the previous version is still active",
     7: "the machine is in a bad state; run: agent-skills doctor",
     10: "an update is available; informational, not a failure",
+    11: "the route works but this operation is unavailable (mode, scope, or policy); see access check",
 }
 print("agent-skills exit codes (frozen at 1.0; see docs/one-point-oh.md)")
 print("")
@@ -594,7 +595,7 @@ PY
   printf 'agent-skills exit codes\n\n'
   printf '  0   ok\n  2   usage-error\n  3   authentication-required\n'
   printf '  4   network-failure\n  5   integrity-failure\n  6   installation-failure\n'
-  printf '  7   verification-failure\n  10  update-available\n'
+  printf '  7   verification-failure\n  10  update-available\n  11  capability-unavailable\n'
 }
 as_verify_install() {
   local errors=0

@@ -1,0 +1,126 @@
+{
+  "schema": "agent-skills.access-system/v1",
+  "id": "gitlab",
+  "family": "gitlab",
+  "tool_id": "",
+  "summary": "GitLab projects, issues and merge requests.",
+  "docs": "docs/access/gitlab.md",
+  "host_hints": [
+    "gitlab.com",
+    "gitlab.*"
+  ],
+  "name_hints": [
+    "gitlab"
+  ],
+  "mcp_upstreams": [
+    {
+      "id": "zereight-mcp-gitlab",
+      "label": "@zereight/mcp-gitlab",
+      "match": {
+        "args_contain": [
+          "@zereight/mcp-gitlab"
+        ],
+        "command_names": [
+          "mcp-gitlab"
+        ]
+      },
+      "default_mode": "unknown",
+      "mode_note": "Upstream documents the modes but this release does not rely on an undocumented default.",
+      "mode_rules": [
+        {
+          "env": "GITLAB_PERMISSION_MODE",
+          "values": {
+            "readonly": "read-only",
+            "modify": "modify",
+            "full": "read-write"
+          }
+        },
+        {
+          "env": "GITLAB_READ_ONLY_MODE",
+          "truthy": true,
+          "mode": "read-only"
+        }
+      ],
+      "tool_filters": {
+        "env": [
+          "GITLAB_TOOLS"
+        ],
+        "args": []
+      },
+      "toolset_filters": {
+        "env": [
+          "GITLAB_TOOLSETS"
+        ],
+        "all_values": [
+          "all"
+        ]
+      },
+      "scope_filters": {},
+      "base_url_env": [
+        "GITLAB_API_URL"
+      ],
+      "credential_env": [
+        "GITLAB_PERSONAL_ACCESS_TOKEN"
+      ],
+      "tools": {
+        "write": [
+          "create_issue",
+          "update_issue",
+          "create_merge_request",
+          "update_merge_request",
+          "create_or_update_file",
+          "push_files",
+          "create_note",
+          "create_branch",
+          "create_issue_note",
+          "create_merge_request_note"
+        ],
+        "destructive": [
+          "merge_merge_request",
+          "delete_branch",
+          "delete_issue",
+          "delete_milestone",
+          "delete_pipeline",
+          "cancel_pipeline",
+          "cancel_pipeline_job",
+          "stop_environment",
+          "stop_stale_environments",
+          "unprotect_branch",
+          "erase_pipeline_job"
+        ]
+      },
+      "verified_against": [
+        {
+          "source": "https://github.com/zereight/gitlab-mcp/blob/main/README.md",
+          "date": "2026-09-23"
+        }
+      ]
+    }
+  ],
+  "cli_routes": [
+    {
+      "command": "glab",
+      "auth_probe": [
+        "auth",
+        "status"
+      ],
+      "label": "GitLab CLI",
+      "mode_note": "no client-side read-only mode; the token's scopes and project role apply"
+    }
+  ],
+  "probes": {
+    "cli": "glab"
+  },
+  "target_parser": "gitlab",
+  "credential_hints": {
+    "name_keywords": [
+      "gitlab"
+    ],
+    "token_shapes": [
+      "glpat-"
+    ]
+  },
+  "notes": [
+    "GITLAB_READ_ONLY_MODE is deprecated upstream in favour of GITLAB_PERMISSION_MODE=readonly."
+  ]
+}

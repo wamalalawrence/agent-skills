@@ -10,6 +10,7 @@
 #   agent-skills verify                installation integrity and host wiring
 #   scripts/auth-preflight.py          tracker / document-store config
 #   scripts/github-access.sh           the GitHub access ladder
+#   agent-skills access scan           per-host, per-system route qualification
 # plus tool detection, build-tool inference, MCP availability, and the state of
 # the installation itself: which release is active, where it came from, whether
 # anything has drifted, and what a rollback would return to.
@@ -236,13 +237,76 @@ probe_mcp() {
     "${root}/.vscode/mcp.json" \
     "${HOME}/.kiro/settings/mcp.json" \
     "${HOME}/.cursor/mcp.json" \
-    "${HOME}/.claude.json"; do
+    "${HOME}/.claude.json" \
+    "${CODEX_HOME:-${HOME}/.codex}/config.toml" \
+    "${HOME}/Library/Application Support/Claude/claude_desktop_config.json" \
+    "${HOME}/.config/Claude/claude_desktop_config.json"; do
     [[ -f "${candidate}" ]] && found="${found}${candidate} "
   done
   if [[ -n "${found}" ]]; then
     MCP_STATE="yes"
-    MCP_DETAIL="config present: ${found%% }"
+    MCP_DETAIL="config present: ${found%% } (presence only; the access rows say what each route can do)"
   fi
+}
+
+# Access Discovery: per detected host, per known system, what the route can do
+# and how strong the evidence is. Static: no network, no secret values, and no
+# launcher is ever run. `agent-skills access check` answers for one operation.
+probe_access() {
+  ACCESS_STATE="?"
+  ACCESS_DETAIL="access scan unavailable"
+  ACCESS_ROWS=""
+  ACCESS_WARNINGS=""
+  local script="${SCRIPT_DIR}/access.py"
+  [[ -f "${script}" ]] || return 0
+  local out=""
+  out="$("${PYTHON3}" "${script}" scan --json 2>/dev/null)" || true
+  [[ -n "${out}" ]] || return 0
+  local parsed=""
+  parsed="$(printf '%s' "${out}" | "${PYTHON3}" -c '
+import json, sys
+try:
+    scan = json.load(sys.stdin)
+except ValueError:
+    sys.exit(1)
+rows = scan.get("summary") or []
+ready = [r for r in rows if r["state"].startswith("ready")]
+broken = [r for r in rows if r["state"].startswith("broken")]
+host = scan.get("host") or "all detected hosts"
+bits = []
+for r in rows:
+    if r["state"] == "not configured":
+        continue
+    bits.append("%s %s%s" % (r["system"], r["state"].replace("ready ", ""),
+                             " [%s]" % r["strength"] if r["strength"] else ""))
+state = "no" if broken else ("yes" if ready else "no")
+detail = "%s: %s" % (host, "; ".join(sorted(set(bits))) if bits else "no route for a known system")
+print("STATE\t" + state)
+print("DETAIL\t" + detail)
+for r in rows:
+    line = r["state"]
+    if r["route"]:
+        line += " via " + r["route"]
+    if r["strength"]:
+        line += " [" + r["strength"] + "]"
+    if r["auth_evidence"]:
+        line += "; " + r["auth_evidence"]
+    if r["state"].startswith("broken"):
+        line += " -> agent-skills access explain " + r["system"]
+    mark = "yes" if r["state"].startswith("ready") else ("no" if r["state"].startswith("broken") else "none")
+    print("ROW\t%s\t%s\t%s\t%s" % (mark, r["host"], r["system"], line))
+for w in scan.get("warnings") or []:
+    print("WARN\t" + w)
+' 2>/dev/null)" || return 0
+  local kind a b c d
+  while IFS=$'\t' read -r kind a b c d; do
+    case "${kind}" in
+      STATE) ACCESS_STATE="${a}" ;;
+      DETAIL) ACCESS_DETAIL="${a}" ;;
+      ROW) ACCESS_ROWS="${ACCESS_ROWS}${a}"$'\t'"${b}"$'\t'"${c}"$'\t'"${d}"$'\n' ;;
+      WARN) ACCESS_WARNINGS="${ACCESS_WARNINGS}${a}"$'\n' ;;
+    esac
+  done <<< "${parsed}"
 }
 
 # Directories that commonly hold a project's own knowledge base. Checked only to
@@ -593,6 +657,7 @@ run_probes() {
   probe_tracker
   probe_github
   probe_mcp
+  probe_access
   probe_memory
   probe_meeting
   probe_knowledge_sources
@@ -623,6 +688,10 @@ render_brief() {
     "${BUILD_TOOL}" "${BUILD_DETAIL}"
   printf '    %sdocker           %s\n' "$(mark "${DOCKER_STATE}")" "${DOCKER_DETAIL}"
   printf '    %smcp              %s\n' "$(mark "${MCP_STATE}")" "${MCP_DETAIL}"
+  printf '    %saccess           %s\n' "$(mark "${ACCESS_STATE}")" "${ACCESS_DETAIL}"
+  if [[ -n "${ACCESS_WARNINGS}" ]]; then
+    printf '    --  access warnings: %s (agent-skills doctor)\n' "$(printf '%s' "${ACCESS_WARNINGS}" | grep -c .)"
+  fi
   printf '    %srepo knowledge   %s\n' "$(mark "${KNOWLEDGE_STATE}")" "${KNOWLEDGE_DETAIL}"
   printf '    %sexecution guard  %s\n' "$(mark "${GUARD_STATE}")" "${GUARD_DETAIL}"
   case "${SOURCES_DETAIL}" in
@@ -689,6 +758,24 @@ render_full() {
   printf '  %stracker / document store — %s\n' "$(mark "${TRACKER_STATE}")" "${TRACKER_DETAIL}"
   printf '  %sgithub — %s\n' "$(mark "${GITHUB_STATE}")" "${GITHUB_DETAIL}"
   printf '  %smcp — %s\n' "$(mark "${MCP_STATE}")" "${MCP_DETAIL}"
+  if [[ -n "${ACCESS_ROWS}" ]]; then
+    printf '%s' "${ACCESS_ROWS}" | while IFS=$'\t' read -r state host system line; do
+      [[ -n "${system}" ]] || continue
+      if [[ "${state}" == "none" ]]; then
+        printf '  --  %s %s — %s\n' "${host}" "${system}" "${line}"
+      else
+        printf '  %s%s %s — %s\n' "$(mark "${state}")" "${host}" "${system}" "${line}"
+      fi
+    done
+  else
+    printf '  ?   access routes — %s\n' "${ACCESS_DETAIL}"
+  fi
+  if [[ -n "${ACCESS_WARNINGS}" ]]; then
+    printf '%s' "${ACCESS_WARNINGS}" | while IFS= read -r warning; do
+      [[ -n "${warning}" ]] && printf '  !   %s\n' "${warning}"
+    done
+  fi
+  echo "  Presence is not capability: before a write, run agent-skills access check."
   echo ""
   echo "Memory"
   printf '  %srepo knowledge base — %s\n' "$(mark "${KNOWLEDGE_STATE}")" "${KNOWLEDGE_DETAIL}"
@@ -765,6 +852,8 @@ render_json() {
   printf '  "github": "%s",\n' "${GITHUB_STATE}"
   printf '  "github_detail": "%s",\n' "$(json_escape "${GITHUB_DETAIL}")"
   printf '  "mcp": "%s",\n' "${MCP_STATE}"
+  printf '  "access": "%s",\n' "${ACCESS_STATE}"
+  printf '  "access_detail": "%s",\n' "$(json_escape "${ACCESS_DETAIL}")"
   # `repo_knowledge` keeps its 1.0 meaning — is there an agent-skills knowledge
   # base — and its yes/no values; another knowledge base is reported beside it.
   printf '  "repo_knowledge": "%s",\n' "$([[ "${KNOWLEDGE_STATE}" == "yes" ]] && echo yes || echo no)"

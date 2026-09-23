@@ -78,6 +78,13 @@ REQUIRED_FILES = [
     "docs/plans/2026-09-global-install-and-access-resolver.md",
     "scripts/test-global-install.sh",
     "scripts/test-access-resolution.sh",
+    "scripts/test-access-discovery.py",
+    "scripts/access_discovery_cli.py",
+    "scripts/access_ladder.py",
+    "lib/access/systems/confluence.json",
+    "lib/access/systems/jira.json",
+    "docs/access/README.md",
+    "skills/wamala/references/access-resolution-dialogue.md",
     "scripts/test-front-door-skill.sh",
     "scripts/test-release-readiness.sh",
     "scripts/project-memory.py",
@@ -467,6 +474,9 @@ ALLOWED_HOSTS = {
     "googleapis.com",
     "accounts.google.com",
     "huggingface.co",
+    # 1.5.0: Atlassian Cloud's public product domain. Access Discovery's docs
+    # and fixtures use invented sites under it (`acme.atlassian.net`).
+    "atlassian.net",
     "127.0.0.1",
     "agentskills.io",
     "code.visualstudio.com",

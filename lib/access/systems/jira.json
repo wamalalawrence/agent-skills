@@ -1,0 +1,177 @@
+{
+  "schema": "agent-skills.access-system/v1",
+  "id": "jira",
+  "family": "atlassian",
+  "tool_id": "jira",
+  "summary": "Jira issues, comments, transitions, links and sprints.",
+  "docs": "docs/access/atlassian.md",
+  "host_hints": [
+    "*.atlassian.net",
+    "jira.*"
+  ],
+  "name_hints": [
+    "jira",
+    "atlassian"
+  ],
+  "mcp_upstreams": [
+    {
+      "id": "sooperset-mcp-atlassian",
+      "label": "mcp-atlassian (sooperset)",
+      "match": {
+        "args_contain": [
+          "mcp-atlassian",
+          "ghcr.io/sooperset/mcp-atlassian"
+        ],
+        "command_names": [
+          "mcp-atlassian"
+        ]
+      },
+      "default_mode": "read-write",
+      "mode_rules": [
+        {
+          "env": "READ_ONLY_MODE",
+          "truthy": true,
+          "mode": "read-only"
+        },
+        {
+          "arg": "--read-only",
+          "mode": "read-only"
+        }
+      ],
+      "tool_filters": {
+        "env": [
+          "ENABLED_TOOLS"
+        ],
+        "args": [
+          "--enabled-tools"
+        ]
+      },
+      "toolset_filters": {
+        "env": [
+          "TOOLSETS"
+        ],
+        "all_values": [
+          "all",
+          "default",
+          "legacy"
+        ],
+        "system_prefix": "jira_"
+      },
+      "scope_filters": {
+        "JIRA_PROJECTS_FILTER": "project"
+      },
+      "base_url_env": [
+        "JIRA_URL"
+      ],
+      "credential_env": [
+        "JIRA_API_TOKEN",
+        "JIRA_PERSONAL_TOKEN",
+        "JIRA_OAUTH_ACCESS_TOKEN",
+        "ATLASSIAN_OAUTH_ACCESS_TOKEN"
+      ],
+      "tool_prefix": "jira_",
+      "tools": {
+        "write": [
+          "jira_create_issue",
+          "jira_batch_create_issues",
+          "jira_update_issue",
+          "jira_transition_issue",
+          "jira_add_comment",
+          "jira_edit_comment",
+          "jira_assign_issue",
+          "jira_add_worklog",
+          "jira_add_watcher",
+          "jira_remove_watcher",
+          "jira_create_issue_link",
+          "jira_create_remote_issue_link",
+          "jira_remove_issue_link",
+          "jira_link_to_epic",
+          "jira_add_issues_to_sprint",
+          "jira_create_sprint",
+          "jira_update_sprint",
+          "jira_create_version",
+          "jira_batch_create_versions",
+          "jira_update_version",
+          "jira_move_issues_to_backlog",
+          "jira_create_customer_request",
+          "jira_update_proforma_form_answers"
+        ],
+        "destructive": [
+          "jira_delete_issue",
+          "jira_move_issue"
+        ]
+      },
+      "verified_against": [
+        {
+          "source": "https://github.com/sooperset/mcp-atlassian/blob/main/docs/configuration.mdx",
+          "date": "2026-09-23"
+        },
+        {
+          "source": "https://github.com/sooperset/mcp-atlassian/blob/main/.env.example",
+          "date": "2026-09-23"
+        },
+        {
+          "source": "https://github.com/sooperset/mcp-atlassian/blob/main/docs/tools-reference.mdx",
+          "date": "2026-09-23"
+        }
+      ]
+    },
+    {
+      "id": "atlassian-remote-mcp",
+      "label": "Atlassian Remote MCP server (OAuth)",
+      "match": {
+        "args_contain": [
+          "mcp.atlassian.com"
+        ],
+        "url_contains": [
+          "mcp.atlassian.com"
+        ]
+      },
+      "default_mode": "unknown",
+      "mode_note": "Governed by the OAuth scopes granted at sign-in; nothing in local configuration states it.",
+      "mode_rules": [],
+      "scope_filters": {},
+      "base_url_env": [],
+      "credential_env": [],
+      "tools": {
+        "write": [],
+        "destructive": []
+      },
+      "verified_against": [
+        {
+          "source": "not verified in this release: mode is always reported unknown",
+          "date": "2026-09-23"
+        }
+      ]
+    }
+  ],
+  "cli_routes": [
+    {
+      "command": "jira",
+      "auth_probe": [
+        "me"
+      ],
+      "label": "jira CLI",
+      "mode_note": "no client-side read-only mode; the account's own permissions apply"
+    }
+  ],
+  "probes": {
+    "auth_service": "jira",
+    "identity": "GET {base}/rest/api/2/myself",
+    "target_permissions": "GET {base}/rest/api/2/mypermissions?issueKey={id}&permissions=EDIT_ISSUES,ADD_COMMENTS,TRANSITION_ISSUES,DELETE_ISSUES"
+  },
+  "target_parser": "jira",
+  "credential_hints": {
+    "name_keywords": [
+      "jira",
+      "atlassian"
+    ],
+    "token_shapes": [
+      "ATATT"
+    ]
+  },
+  "notes": [
+    "JIRA_PROJECTS_FILTER that omits the issue's project makes the issue look missing, not forbidden.",
+    "Closing or resolving transitions need explicit confirmation naming the issues."
+  ]
+}

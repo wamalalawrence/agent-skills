@@ -392,8 +392,51 @@ def evaluate_structured(
             "tool %s mutates state in a hard-to-undo domain" % name, name,
         ))
 
+    if action.kind == MCP:
+        findings.extend(_access_findings_for_tool(name))
+
     findings.extend(_pattern_findings("%s %s" % (name, json.dumps(arguments)[:4000]), policy))
     return _apply_policy(findings, policy)
+
+
+def _access_findings_for_tool(name: str) -> list[gr.Finding]:
+    """ASK before an MCP write to a known system unless `access check` passed."""
+    import guard_access
+    hit = guard_access.mcp_write(name)
+    if hit is None:
+        return []
+    system, op_class, server, tool = hit
+    if guard_access.has_grant(system, op_class, server):
+        return []
+    return [gr.Finding(
+        gr.ACCESS_UNQUALIFIED_WRITE, ASK,
+        "%s is a %s tool for %s and no access check passed for it in this session. %s"
+        % (tool, op_class, system, guard_access.advice(system, op_class)),
+        name,
+    )]
+
+
+def _access_findings_for_shell(command: str, policy: gpol.Policy) -> list[gr.Finding]:
+    """ASK before `curl -X PUT <known system>` unless `access check` passed.
+
+    This is the route around a read-only MCP server: a found token used
+    directly against the REST API. A passing check for the system is the only
+    thing that makes it expected.
+    """
+    import guard_access
+    hit = guard_access.http_write(command)
+    if hit is None:
+        return []
+    system, method, host = hit
+    op_class = "destructive" if method == "DELETE" else "write"
+    if guard_access.has_grant(system, op_class):
+        return []
+    return _apply_policy([gr.Finding(
+        gr.ACCESS_UNQUALIFIED_WRITE, ASK,
+        "a direct %s to %s (%s) bypasses the configured route for %s. %s"
+        % (method, host, system, system, guard_access.advice(system, op_class)),
+        host,
+    )], policy)
 
 
 def resolve(
@@ -408,6 +451,7 @@ def resolve(
     if action.kind == SHELL:
         findings, parse_notes = evaluate_shell(action.raw, workspace, policy)
         notes.extend(parse_notes)
+        findings.extend(_access_findings_for_shell(action.raw, policy))
     elif action.kind == FILESYSTEM:
         findings = evaluate_filesystem(action, workspace, policy)
     else:

@@ -47,6 +47,11 @@ Exit codes:
   0  access resolved (or the requested management action succeeded)
   1  access not resolved; the report names what is missing
   2  usage or environment error
+
+The Access Discovery subcommands (`scan`, `check`, `classify-error`, ...) live in
+`access_discovery_cli.py` and add three codes from the CLI-wide contract in
+`lib/asrelease/exits.py`: 3 authentication required, 4 network failure during a
+probe, and 11 capability unavailable (the route works; this operation does not).
 """
 from __future__ import annotations
 
@@ -1909,6 +1914,18 @@ def cmd_unbind(args) -> int:
 
 
 def cmd_forget(args) -> int:
+    if not args.profile:
+        # `forget <system>` / `forget --all` remove confirmed route knowledge
+        # (Access Discovery). Identities are only ever removed by --profile.
+        if args.system and args.all:
+            print("FAIL pass a system id or --all, not both", file=sys.stderr)
+            return 2
+        import access_discovery_cli
+        return access_discovery_cli.cmd_forget_routes(args)
+    if args.system or args.all:
+        print("FAIL --profile removes one identity; it cannot be combined with a system id or --all",
+              file=sys.stderr)
+        return 2
     profile = args.profile.strip().lower()
     if not PROFILE_NAME_RE.match(profile):
         print("FAIL invalid profile name", file=sys.stderr)
@@ -2246,8 +2263,16 @@ def build_parser() -> argparse.ArgumentParser:
     unbind.add_argument("--service", required=True)
     unbind.set_defaults(func=cmd_unbind)
 
-    forget = subparsers.add_parser("forget", help="Delete an identity and its secrets.")
-    forget.add_argument("--profile", required=True)
+    forget = subparsers.add_parser(
+        "forget",
+        help="Delete an identity and its secrets (--profile), or forget confirmed route knowledge "
+             "(<system> or --all).",
+    )
+    forget.add_argument("--profile", default="")
+    forget.add_argument("system", nargs="?", default="",
+                        help="forget confirmed route knowledge for this system (never an identity)")
+    forget.add_argument("--all", action="store_true",
+                        help="forget all confirmed route knowledge (never identities)")
     forget.set_defaults(func=cmd_forget)
 
     backend = subparsers.add_parser("backend", help="Report the secret-storage backend.")
@@ -2270,6 +2295,11 @@ def build_parser() -> argparse.ArgumentParser:
         "check-permissions", help="Check permissions on credential state."
     )
     perms.set_defaults(func=cmd_check_permissions)
+
+    # Access Discovery: which route can do which operation on which target.
+    # Imported here so `resolve` and friends never pay for it.
+    import access_discovery_cli
+    access_discovery_cli.register(subparsers)
 
     return parser
 

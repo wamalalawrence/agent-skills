@@ -4,6 +4,91 @@ All notable project changes should be recorded here.
 
 ## Unreleased
 
+## 1.5.0 - Access Discovery: can this host do *this* operation, and via what?
+
+A user asked Wamala to update their own Confluence page. Preflight said only that an Atlassian MCP
+server was configured. The server was a company launcher script that ran read-only unless a
+variable of its own was set; nothing reported that. A browser fallback hit a login page, an agent
+proposed using a keychain token directly against the REST API - around the user's own read-only
+setting - and the user was left trying tools by hand. This release replaces "configured" with a
+seven-rung check asked before any dependent work, and turns every "no" into a precise explanation
+and a short list of options the user chooses from. Nothing about any organisation is built in:
+company specifics are learned on the user's machine. Additive: no host configuration changes unless
+the user runs `access setup` and types yes; install layout, credential locations, existing state
+and existing exit codes are unchanged. Design record: `DISCOVERY-access.md`; guide:
+[docs/access/README.md](docs/access/README.md); security review:
+[docs/security-review-v1.5.0.md](docs/security-review-v1.5.0.md).
+
+### Added
+
+- **`agent-skills access check --system S --op OP [--target T]`** walks route, launch, auth, mode,
+  target, intent and policy for one operation on one target. Each rung reports
+  `pass | fail | unknown | skipped`, its evidence, and whether it is `verified`, `declared` or
+  `inferred`; a write resting on inferred evidence needs the user's confirmation. `--json` is
+  `agent-skills.access-check/v1`. `--probe` adds non-mutating permission queries (Confluence
+  `expand=operations`, Jira `mypermissions`, `gh api .../permissions.push`) using only an identity
+  from `access set`, sent only to the site that identity names; `--live` starts a user-configured
+  MCP server and lists its tools (never a project-scoped one).
+- **`access scan`** - every route in every detected host, statically: Claude Code (user, local and
+  project scope), Claude Desktop, Codex (`config.toml`, via a TOML-subset parser on Python 3.8),
+  Cursor, VS Code / Copilot (JSONC), Kiro. Warns about plaintext tokens in env blocks,
+  group/world-readable configs, host divergence, and stale local knowledge.
+- **Launcher inspection** (`access inspect <command>`): a company wrapper is read, never run -
+  its upstream, its mode switch and default (file and line), its credential locators (keychain,
+  secret service, `pass`, `op`, keyring, `.netrc`, files, env), its base URLs. Launchers can also
+  describe themselves: [docs/access/for-launcher-authors.md](docs/access/for-launcher-authors.md).
+- **System registry** `lib/access/systems/` for Confluence, Jira, GitHub and GitLab: upstream MCP
+  servers, mode and filter settings, write tools, target parsers and probes, each with the source
+  and date it was checked against.
+- **Local route knowledge** (`access remember`, `access forget <system>|--all`) in
+  `~/.config/agent-skills/access/routes.json` (`0600`): facts the user confirmed, never secrets;
+  stale when the launcher changes.
+- **Write profiles** (`access setup <system> --write-profile [--scope KEY] [--undo]`): a second
+  server entry with write mode switched by the route's own rule; masked diff, interactive `yes`
+  only, backup, atomic write, undo. `access setup <system>` prints the steps for a new route.
+- **`access classify-error`** maps a mid-task 401/403/404/"tool not found"/409 back onto a rung;
+  **`access explain`**, **`access systems`**, **`access record`** (write audit in
+  `~/.agent-skills/state/access/audit.jsonl`, no content, no secrets).
+- **Policy** `~/.config/agent-skills/access-policy.json` may tighten (`deny`, `always_confirm`,
+  `require_probe_for_write`) and cannot loosen; a loosening or unknown key fails closed.
+- **Execution Guard rule `ACCESS_UNQUALIFIED_WRITE`** (ASK): an MCP write tool for a known system,
+  or `curl -X PUT|POST|PATCH|DELETE` to its host, is asked about unless `access check` passed for
+  that system, operation class and server in the last 30 minutes.
+- **Wamala** checks external access before dependent work (step 2.9), relays the check verbatim,
+  and runs the resolution dialogue when it does not pass: what it tried, what it found and how
+  strongly, the check's options one decision at a time, remember what the user confirms, re-check
+  after they act. It never picks an option, tries an unlisted route, uses a found credential, falls
+  back to a browser, or asks for a secret in chat. Contract:
+  [access-resolution-dialogue.md](skills/wamala/references/access-resolution-dialogue.md); the
+  handoff template carries a binding "External access" block.
+- **Doctor** gains `access` rows: per detected host and known system, `ready (read-only)`,
+  `ready (read-write)`, `not configured`, or `broken: <reason> -> <fix>`, with evidence strength.
+
+### Changed
+
+- **Exit code `11 capability-unavailable`** joins the frozen contract (`verify --explain-codes`):
+  the route works and is authenticated, but its mode, scope or policy excludes this operation.
+  Nothing was renumbered.
+- **Redaction** covers Atlassian tokens (`ATATT`/`ATCTT`) and a JSON `"Authorization"` member in the
+  runtime, and `Authorization: Basic|Bearer`, JWTs, Atlassian tokens and `*_API_TOKEN=` /
+  `*_PERSONAL_TOKEN=` / `*_SECRET=` assignments in the installer.
+- **Doctor's `mcp` row** now also sees Codex's `config.toml` and Claude Desktop's config (a
+  Codex-only machine used to report no MCP at all), and says it reports presence only.
+- **`access forget`** also accepts `<system>` or `--all` for route knowledge; `--profile NAME` is
+  unchanged and cannot be combined with them.
+
+### Tests
+
+- `scripts/test-access-discovery.py`: 26 offline checks - the incident under invented names (acme,
+  then globex with a docker upstream and a `pass` credential), host readers and the TOML subset,
+  registry mode rules and filters, seven launcher shapes (never executed), presence-only credential
+  checks with canaries, local knowledge and staleness, live introspection against a fake MCP
+  server, `classify-error`, setup under a pseudo-terminal, policy, probes against a local fake
+  Confluence, the guard rule, redaction, exit codes, rollback safety, and a no-coupling lint whose
+  denylist ships only as digests.
+- `scripts/eval-access-discovery.py` runs the CLI side of the ten Wamala access evals
+  (`evals/wamala-access-*.md`) and records the exact output Wamala would relay.
+
 ## 1.4.0 - Meeting Intelligence: you choose how meetings are captured
 
 Field feedback on `1.3.0`: nothing told a new user that `meeting join` needed a Recall.ai account,

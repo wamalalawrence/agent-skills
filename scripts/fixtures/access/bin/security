@@ -1,0 +1,9 @@
+#!/bin/sh
+# Fake macOS `security` (fixture). Logs its argv; prints a canary only if asked
+# for a secret (-w/-g), which Access Discovery must never do.
+echo "$*" >> "${FAKE_SECURITY_LOG:-/dev/null}"
+case " $* " in *" -w"*|*" -g"*) echo "CANARY-SECRET-KEYCHAIN-4f1e"; exit 0;; esac
+for item in ${FAKE_KEYCHAIN_ITEMS:-}; do
+  case " $* " in *" -s $item"|*" -s $item "*) exit 0;; esac
+done
+exit 44
