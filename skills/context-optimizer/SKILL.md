@@ -23,7 +23,7 @@ compatibility: >-
   legacy `local-workspace`. See docs/execution-modes.md.
 metadata:
   author: wamalalawrence
-  version: "1.3.0"
+  version: "1.4.0"
   homepage: "https://github.com/wamalalawrence/agent-skills"
 argument-hint: "<path to the large input> and the question it must answer"
 user-invocable: true
