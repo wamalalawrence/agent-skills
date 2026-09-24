@@ -268,6 +268,26 @@ def _normalise(host: str, scope: str, path: Path, name: str, entry: dict,
     headers = entry.get("headers") if isinstance(entry.get("headers"), dict) else {}
     env_values = {}
     plaintext = []
+    # `docker run -e KEY=VALUE` / `--env KEY=VALUE` in the args sets the server's
+    # environment just as an `env` block does; a read-only flag set that way is
+    # as binding. `-e KEY` alone passes the host env block's value through.
+    arg_env = {}
+    for i, arg in enumerate(args):
+        pair = ""
+        if arg in ("-e", "--env") and i + 1 < len(args):
+            pair = args[i + 1]
+        elif arg.startswith("--env="):
+            pair = arg.split("=", 1)[1]
+        if "=" in pair:
+            key, value = pair.split("=", 1)
+            arg_env[key] = value
+    for key, value in arg_env.items():
+        if looks_secret(key):
+            if value.strip() and not _REFERENCE.match(value):
+                plaintext.append("args:" + key)
+            continue
+        if value_allowed(key):
+            env_values[key] = value
     for key, value in env.items():
         key = str(key)
         if looks_secret(key):
@@ -291,7 +311,7 @@ def _normalise(host: str, scope: str, path: Path, name: str, entry: dict,
         "command": command,
         "args": args,
         "url": url,
-        "env_keys": sorted(str(k) for k in env.keys()),
+        "env_keys": sorted(set(str(k) for k in env.keys()) | set(arg_env)),
         "env_values": env_values,
         "plaintext_secret_keys": sorted(plaintext),
         "disabled": disabled,

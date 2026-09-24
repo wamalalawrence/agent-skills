@@ -104,7 +104,8 @@ runtime enforcement, or guaranteed outcomes.
   reported `unknown`.
 - **Enforcement needs a pre-execution hook.** Execution Guard gates MCP write tools and direct REST
   writes on Claude Code and Codex. Elsewhere, Wamala's contract is the only gate. The guard's grant
-  is per system, operation class and server, not per target.
+  is per system, operation class and server, not per target, and covers MCP tools only. HTTP calls
+  made from inside a program (a Python or Node one-liner) are not parsed.
 - **Probes speak for the identity they used.** `--probe` uses an identity from `access set`; if
   that is not the MCP route's own account, the result is about a different credential, and the
   report says which one it used.

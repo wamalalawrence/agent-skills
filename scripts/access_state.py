@@ -133,9 +133,20 @@ def match_route(data: dict, host: str, server_name: str, command: str) -> Option
     return None
 
 
-def is_stale(route: dict, launcher_sha256: str) -> bool:
-    recorded = (route.get("fingerprint") or {}).get("launcher_sha256")
-    return bool(recorded and launcher_sha256 and recorded != launcher_sha256)
+def entry_fingerprint(command: str, args: List[str]) -> str:
+    """What a directly launched server runs, as a hash: command and arguments."""
+    return hashlib.sha256(json.dumps([command or "", list(args or [])]).encode("utf-8")).hexdigest()
+
+
+def is_stale(route: dict, launcher_sha256: str, entry_sha256: str = "") -> bool:
+    """Confirmed knowledge no longer describes what runs: the launcher's content
+    changed, or (for a server launched directly) its command or arguments did."""
+    fingerprint = route.get("fingerprint") or {}
+    launcher = fingerprint.get("launcher_sha256")
+    if launcher and launcher_sha256 and launcher != launcher_sha256:
+        return True
+    entry = fingerprint.get("entry_sha256")
+    return bool(entry and entry_sha256 and entry != entry_sha256)
 
 
 def remember_route(entry: dict) -> Tuple[dict, bool]:

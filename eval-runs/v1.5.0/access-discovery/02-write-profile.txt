@@ -47,7 +47,7 @@ Limited to: space ~jdoe only (CONFLUENCE_SPACES_FILTER=~jdoe); confluence tools 
 
 Agent Skills does not know a per-tool approval setting for Codex; if it has one, keep the atlassian-write server's tools on ask.
 Add 'atlassian-write' to ~/.codex/config.toml? Type 'yes' to apply: yes
-Written. Backup: ~/.codex/config.toml.agent-skills-backup-20260924T093058 (undo: agent-skills access setup --undo --host codex)
+Written. Backup: ~/.codex/config.toml.agent-skills-backup-20260924T094740 (undo: agent-skills access setup --undo --host codex)
 Start a new Codex session; Codex reads config.toml at startup.
 Then: agent-skills access check --system confluence --op write --target <target> --host codex
 [exit 0]

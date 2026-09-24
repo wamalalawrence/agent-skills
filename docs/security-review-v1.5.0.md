@@ -79,7 +79,8 @@ timeout, and at most 64 KB of stdout read.
 
 ## Threat: a host configuration is changed without the user's consent
 
-**Probed (A2, S1).** `access setup --write-profile` writes only after an interactive `yes` at a
+**Probed (A2, S1).** `--undo` removes only the entry `setup` added and shows the diff first, so
+later edits survive (the first draft restored the whole backup). `access setup --write-profile` writes only after an interactive `yes` at a
 terminal (stdin and stdout both TTYs). There is no flag or variable that skips it; an agent's
 non-interactive run prints the change and writes nothing (A2 asserts the file is byte-identical).
 Writes back up the file, go through a temporary file and `os.replace`, and keep the mode (S1).
@@ -91,12 +92,18 @@ Jira (A2, S1).
 
 ## Threat: a write routes around a read-only setting
 
-**Probed (G1) where a hook exists; reasoned about elsewhere.** Execution Guard's new rule asks
-before an MCP write tool for a known system and before `curl`/`wget`/`http` with a writing method to
-a known system's host, unless `access check` passed for that system, operation class and server in
-the last 30 minutes. A grant for one server does not cover another (G1). Hosts without a
-pre-execution hook depend on Wamala's contract, which forbids retrying a blocked write through
-another route. The grant is not bound to a target; see residual risks.
+**Probed (G1, R8) where a hook exists; reasoned about elsewhere.** Execution Guard's new rule asks
+before an MCP write tool for a known system unless `access check` passed for that system,
+operation class and server in the last 30 minutes, and **always** before a raw HTTP write to a known
+system's host. The independent review found five ways past the first draft, all reproduced and
+fixed: attached curl options (`-d'..'`), `wget --method=`, fetchers inside `sh -c`/`eval`,
+scheme-less URLs, and - most serious - any passing check allowing a raw `curl -X PUT` carrying a
+found token. It also found that a Confluence grant covered Jira's REST paths on the same host, that
+tool names shared by GitHub and GitLab mapped to the wrong system, and that an unreadable registry
+switched the gate off. G1 now runs every one of those commands. In the check itself, a write that
+one route's setting blocks no longer moves silently to another route; it needs the user's choice
+(R8). Hosts without a pre-execution hook depend on Wamala's contract. The grant is not bound to a
+target; see residual risks.
 
 ## Threat: local state tampering loosens policy
 
@@ -123,5 +130,8 @@ with `tomllib` where both run (H2).
   writable or a launcher trusted to self-report. That process can already edit the host configs.
 - **Heuristic inspection can be wrong.** It is always labelled `inferred`, and a write that depends
   on it needs the user's confirmation.
-- **The guard asks by default.** A user who approves every prompt gets no protection from the rule;
-  it can be raised to deny in guard policy.
+- **The guard asks by default** (the maintainer's decision). A user who approves every prompt gets no
+  protection from the rule; it can be raised to deny in guard policy.
+- **HTTP from inside a program** (`python -c 'requests.put(...)'`) is not parsed by the guard.
+- **`remember --yes` is the agent's word** that the user agreed in the chat. It can raise inferred
+  facts to declared; it cannot override an explicit read-only setting, and it changes no host config.

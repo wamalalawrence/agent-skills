@@ -46,15 +46,19 @@ and existing exit codes are unchanged. Design record: `DISCOVERY-access.md`; gui
 - **Write profiles** (`access setup <system> --write-profile --target <t> [--undo]`): a second
   server entry with write mode switched by the route's own rule, limited by default to the target's
   space or project (`--scope KEY`; `--all-scopes` opts out) and to the target system's toolsets;
-  masked diff, interactive `yes` only, backup, atomic write, undo. `access setup <system>` prints the steps for a new route.
+  masked diff, interactive `yes` only, backup, atomic write; `--undo` removes only the added entry.
+  Every discovery command takes `--json` (`setup --json` only proposes). `access setup <system>` prints the steps for a new route.
+- **No silent route switch:** a write that one route's own setting blocks does not quietly move to
+  another route; the check returns `needs-confirmation` and offers it as a choice.
 - **`access classify-error`** maps a mid-task 401/403/404/"tool not found"/409 back onto a rung;
   **`access explain`**, **`access systems`**, **`access record`** (write audit in
   `~/.agent-skills/state/access/audit.jsonl`, no content, no secrets).
 - **Policy** `~/.config/agent-skills/access-policy.json` may tighten (`deny`, `always_confirm`,
   `require_probe_for_write`) and cannot loosen; a loosening or unknown key fails closed.
-- **Execution Guard rule `ACCESS_UNQUALIFIED_WRITE`** (ASK): an MCP write tool for a known system,
-  or `curl -X PUT|POST|PATCH|DELETE` to its host, is asked about unless `access check` passed for
-  that system, operation class and server in the last 30 minutes.
+- **Execution Guard rule `ACCESS_UNQUALIFIED_WRITE`** (ASK): an MCP write tool for a known system is
+  asked about unless `access check` passed for that system, operation class and server in the last
+  30 minutes; a raw HTTP write (`curl`, `wget`, `http`/`xh`, also inside `sh -c`/`eval`) to a known
+  system's host is always asked about, because no check qualifies it. Fails closed.
 - **Wamala** checks external access before dependent work (step 2.9), relays the check verbatim,
   and runs the resolution dialogue when it does not pass: what it tried, what it found and how
   strongly, the check's options one decision at a time, remember what the user confirms, re-check
@@ -78,13 +82,14 @@ and existing exit codes are unchanged. Design record: `DISCOVERY-access.md`; gui
   resolver's note names the server, host and mode, and a route for another site no longer resolves
   a request; `tools resolve` no longer counts a read-only MCP route as providing a WRITE capability;
   doctor lists servers per host, including Codex and Claude Desktop (a Codex-only machine used to
-  report no MCP at all).
+  report no MCP at all). A bare `<repo>/mcp.json` (no leading dot), which no supported host reads,
+  is no longer looked at.
 - **`access forget`** also accepts `<system>` or `--all` for route knowledge; `--profile NAME` is
   unchanged and cannot be combined with them.
 
 ### Tests
 
-- `scripts/test-access-discovery.py`: 27 offline checks - the incident under invented names (acme,
+- `scripts/test-access-discovery.py`: 29 offline checks - the incident under invented names (acme,
   then globex with a docker upstream and a `pass` credential), host readers and the TOML subset,
   registry mode rules and filters, seven launcher shapes (never executed), presence-only credential
   checks with canaries, local knowledge and staleness, live introspection against a fake MCP

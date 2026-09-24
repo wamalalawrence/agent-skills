@@ -20,7 +20,8 @@
       "match": {
         "args_contain": [
           "mcp-atlassian",
-          "ghcr.io/sooperset/mcp-atlassian"
+          "ghcr.io/sooperset/mcp-atlassian",
+          "mcp_atlassian"
         ],
         "command_names": [
           "mcp-atlassian"
@@ -198,5 +199,13 @@
   "notes": [
     "JIRA_PROJECTS_FILTER that omits the issue's project makes the issue look missing, not forbidden.",
     "Closing or resolving transitions need explicit confirmation naming the issues."
+  ],
+  "path_hints": [
+    "/rest/api/2",
+    "/rest/api/3",
+    "/rest/api/latest",
+    "/rest/agile",
+    "/rest/servicedeskapi",
+    "/browse"
   ]
 }

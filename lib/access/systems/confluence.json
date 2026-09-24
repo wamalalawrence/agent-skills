@@ -22,7 +22,8 @@
       "match": {
         "args_contain": [
           "mcp-atlassian",
-          "ghcr.io/sooperset/mcp-atlassian"
+          "ghcr.io/sooperset/mcp-atlassian",
+          "mcp_atlassian"
         ],
         "command_names": [
           "mcp-atlassian"
@@ -174,5 +175,8 @@
     "An Atlassian Cloud API token created with scopes can read but fail writes with 401/403: that is L5 token scope, not a network fault.",
     "Server/Data Center uses CONFLUENCE_PERSONAL_TOKEN; Cloud uses CONFLUENCE_USERNAME + CONFLUENCE_API_TOKEN.",
     "CONFLUENCE_SPACES_FILTER that omits a personal space (~user) makes its pages look missing, not forbidden."
+  ],
+  "path_hints": [
+    "/wiki"
   ]
 }

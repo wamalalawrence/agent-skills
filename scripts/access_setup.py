@@ -17,8 +17,9 @@ Rules this module never bends:
   nothing. There is no flag or variable that skips the prompt.
 * The diff is exact but masked: secret-shaped values appear as
   `<unchanged value of KEY>`. They are copied inside the file, never shown.
-* The host file is backed up first, written atomically with its mode kept, and
-  `--undo` restores the backup (after its own confirmation).
+* The host file is backed up first and written atomically with its mode kept.
+  `--undo` removes only the entry it added (after its own confirmation), so
+  later edits to the file survive; the backup stays for anything else.
 * A file with comments (JSONC) is never rewritten, because rewriting it would
   drop them; the snippet is printed for the user to paste.
 """
@@ -66,8 +67,13 @@ def _save_history(data: dict) -> None:
     tmp.replace(path)
 
 
+# Set by `--json`: a confirmation prompt hidden inside machine output would be
+# answered by nobody, so a JSON run never writes.
+FORCE_NONINTERACTIVE = False
+
+
 def interactive() -> bool:
-    return sys.stdin.isatty() and sys.stdout.isatty()
+    return not FORCE_NONINTERACTIVE and sys.stdin.isatty() and sys.stdout.isatty()
 
 
 def confirm(question: str) -> bool:
@@ -306,6 +312,46 @@ def apply_change(plan: dict) -> Tuple[bool, str]:
     return True, str(backup)
 
 
+def _remove_entry(text: str, fmt: str, name: str) -> Optional[str]:
+    """The file text without server `name`, or None if it is not there.
+
+    Only the entry `setup` added is removed. Everything else in the file -
+    including edits made after the write profile was added - stays as it is.
+    """
+    if fmt == "codex-toml":
+        lines = text.splitlines(True)
+        key = access_toml.dump_key(name)
+        heads = ("[mcp_servers.%s]" % key, "[mcp_servers.%s." % key)
+        out, dropping, found = [], False, False
+        for line in lines:
+            stripped = line.strip()
+            if stripped.startswith("["):
+                dropping = stripped == heads[0] or stripped.startswith(heads[1])
+                found = found or dropping
+            if not dropping:
+                out.append(line)
+        if not found:
+            return None
+        new = "".join(out).rstrip("\n") + "\n"
+        before = access_toml.loads(text).get("mcp_servers", {})
+        after = access_toml.loads(new).get("mcp_servers", {})
+        before.pop(name, None)
+        if before != after:
+            raise ValueError("removing %r would change other servers; not touching the file" % name)
+        return new
+    data = json.loads(text)
+    tables = [data.get("mcpServers"), (data.get("mcp") or {}).get("servers") if isinstance(data.get("mcp"), dict)
+              else None, data.get("servers")]
+    for project in (data.get("projects") or {}).values() if isinstance(data.get("projects"), dict) else []:
+        if isinstance(project, dict):
+            tables.append(project.get("mcpServers"))
+    for table in tables:
+        if isinstance(table, dict) and name in table:
+            del table[name]
+            return json.dumps(data, indent=2) + "\n"
+    return None
+
+
 def undo(host: Optional[str]) -> int:
     history = _load_history()
     candidates = [c for c in history["changes"] if not host or c["host"] == host]
@@ -313,26 +359,55 @@ def undo(host: Optional[str]) -> int:
         print("Nothing to undo%s: no change made by `access setup` is recorded." % (" for %s" % host if host else ""))
         return 0
     change = candidates[-1]
-    path, backup = Path(change["file"]), Path(change["backup"])
-    if not backup.is_file():
-        print("The backup %s is gone; restore %s by hand." % (backup, path), file=sys.stderr)
+    path = Path(change["file"])
+    fmt = hosts_mod.format_of(change["host"], path)
+    try:
+        text = path.read_text(encoding="utf-8")
+        new_text = _remove_entry(text, fmt, change["server"])
+    except (OSError, ValueError, access_toml.TomlSubsetError) as exc:
+        print("Cannot undo automatically (%s). The backup from before the change is %s." % (exc, change["backup"]),
+              file=sys.stderr)
         return 1
-    print("This restores %s from %s, removing server %r." % (path, backup, change["server"]))
+    if new_text is None:
+        print("Server %r is no longer in %s; nothing to undo." % (change["server"], path))
+        history["changes"].remove(change)
+        _save_history(history)
+        return 0
+    entry_secrets = []
+    try:
+        entry_secrets = _secret_values(_find_entry(text, fmt, change["server"]) or {})
+    except (ValueError, access_toml.TomlSubsetError):
+        pass
+    diff = "".join(difflib.unified_diff(_mask(text, entry_secrets).splitlines(True),
+                                        _mask(new_text, entry_secrets).splitlines(True),
+                                        fromfile=str(path), tofile=str(path) + " (after undo)"))
+    print("This removes server %r from %s. Nothing else in the file changes." % (change["server"], path))
+    print(redact(diff))
     if not interactive():
-        print("Not a terminal: nothing was restored. Run this command yourself in a terminal to confirm it.")
+        print("Not a terminal: nothing was changed. Run this command yourself in a terminal to confirm it.")
         return 1
-    if not confirm("Restore it?"):
+    if not confirm("Remove it?"):
         print("Nothing changed.")
         return 1
-    mode = path.stat().st_mode & 0o777 if path.exists() else 0o600
+    mode = path.stat().st_mode & 0o777
     tmp = path.with_name(".%s.agent-skills-tmp" % path.name)
-    shutil.copy2(str(backup), str(tmp))
-    os.chmod(str(tmp), mode)
+    fd = os.open(str(tmp), os.O_WRONLY | os.O_CREAT | os.O_TRUNC, mode or 0o600)
+    with os.fdopen(fd, "w", encoding="utf-8") as handle:
+        handle.write(new_text)
+    os.chmod(str(tmp), mode or 0o600)
     os.replace(str(tmp), str(path))
     history["changes"].remove(change)
     _save_history(history)
-    print("Restored. %s" % hosts_mod.RELOAD_HINTS.get(change["host"], "Reload the host's MCP servers."))
+    print("Removed. %s" % hosts_mod.RELOAD_HINTS.get(change["host"], "Reload the host's MCP servers."))
     return 0
+
+
+def _find_entry(text: str, fmt: str, name: str) -> Optional[dict]:
+    data = access_toml.loads(text) if fmt == "codex-toml" else json.loads(text)
+    for table in (data.get("mcp_servers"), data.get("mcpServers"), data.get("servers")):
+        if isinstance(table, dict) and isinstance(table.get(name), dict):
+            return table[name]
+    return None
 
 
 def approval_note(host: str, name: str) -> str:

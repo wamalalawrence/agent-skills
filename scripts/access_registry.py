@@ -95,14 +95,29 @@ def validate_system(data: dict) -> List[str]:
     return problems
 
 
+def token_is(arg: str, needle: str) -> bool:
+    """Does one argument name this package or image?
+
+    Exactly, or followed by a version or tag (`mcp-atlassian@1.2`,
+    `mcp-atlassian==0.11`, `ghcr.io/x/y:latest`), or as the last path segment
+    of an npm scope. Never as a substring: a company wrapper is routinely named
+    after what it wraps (`acme-mcp-atlassian`, `acme_mcp_atlassian.sh`), and
+    calling it the upstream would report the upstream's default mode for a
+    script whose own mode is the whole question.
+    """
+    arg = str(arg).strip("\"'")
+    if arg == needle:
+        return True
+    return any(arg.startswith(needle + sep) for sep in ("@", "==", ":", "[", ">=", "~="))
+
+
 def match_upstream(system: dict, command: str, args: List[str], url: str = "") -> Optional[dict]:
     """Which known upstream a launch line or URL runs, if any."""
-    # Arguments only: `uvx mcp-atlassian`, `docker run ... <image>`. The command
-    # path is matched by exact basename below, never by substring.
-    joined = " ".join(str(a) for a in args or [])
+    # Arguments are matched token by token (`uvx mcp-atlassian`, `docker run
+    # ... <image>`); the command by exact basename. Never by substring.
     for upstream in system.get("mcp_upstreams", []):
         match = upstream.get("match", {})
-        if any(n in joined for n in match.get("args_contain", [])):
+        if any(token_is(a, n) for a in args or [] for n in match.get("args_contain", [])):
             return upstream
         # Exact basename only. A company wrapper is routinely *named* after the
         # server it wraps (`<org>-mcp-atlassian`); a substring match would call

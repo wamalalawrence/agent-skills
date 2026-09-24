@@ -247,9 +247,12 @@ def _():
         assert statuses["intent"] == "pass" and statuses["policy"] == "pass", statuses
         assert "preview" in rep["confirmation"], rep["confirmation"]
         assert rep.get("grant"), "a passing write check leaves a short-lived grant"
+        config.write_text(config.read_text() + '\n[mcp_servers.later]\ncommand = "added-after-setup"\n')
         rc, out = box.run_tty(["yes"], "setup", "--undo", "--host", "codex")
-        assert rc == 0 and "Restored" in out, out
-        assert config.read_bytes() == before, "undo did not restore the original"
+        assert rc == 0 and "Removed" in out, out
+        restored = config.read_text()
+        assert "atlassian-write" not in restored and 'command = "added-after-setup"' in restored, restored
+        assert restored.startswith(before.decode()), "undo changed the original entry"
         no_canary(box.state_written())
         box.assert_no_secret_requested()
         box.assert_never_ran()
@@ -397,6 +400,11 @@ def _():
     assert reg.match_upstream(systems["confluence"], "/opt/tools/bin/acme-mcp-atlassian", []) is None, \
         "a wrapper named after its upstream must not be mistaken for it"
     assert reg.match_upstream(systems["confluence"], "/usr/local/bin/mcp-atlassian", []) is not None
+    for args in (["mcp-atlassian"], ["mcp-atlassian@0.11.9"], ["-m", "mcp_atlassian"],
+                 ["run", "-i", "ghcr.io/sooperset/mcp-atlassian:latest"]):
+        assert reg.match_upstream(systems["confluence"], "uvx", args) is not None, args
+    for args in (["/opt/tools/bin/acme_mcp_atlassian.sh"], ["acme-mcp-atlassian"], ["--log", "mcp-atlassian.log"]):
+        assert reg.match_upstream(systems["confluence"], "bash", args) is None, args
 
 
 @check("R2 direct upstream: READ_ONLY_MODE, --read-only, ENABLED_TOOLS, TOOLSETS, and the upstream default")
@@ -423,6 +431,53 @@ def _():
         _direct(box, {"READ_ONLY_MODE": "true"})
         rc, rep, _ = box.run_json("check", "--system", "confluence", "--op", "read", "--host", "cursor")
         assert rc == 0 and rep["result"] == "available", "a read-only route must still serve reads"
+    finally:
+        box.close()
+
+
+@check("R7 docker -e in args and interpreter-run launchers are read, not missed")
+def _():
+    box = Box()
+    try:
+        box.json_host(".cursor/mcp.json", "mcpServers", {"atl": {"command": "docker", "args": [
+            "run", "-i", "--rm", "-e", "READ_ONLY_MODE=true", "-e", "CONFLUENCE_API_TOKEN",
+            "ghcr.io/sooperset/mcp-atlassian:latest"], "env": {"CONFLUENCE_API_TOKEN": "${env:T}"}}})
+        rc, rep, _ = box.run_json("check", "--system", "confluence", "--op", "update", "--target", PAGE, "--host",
+                                  "cursor", "--user-authorised")
+        mode = rung(rep, "mode")
+        assert rc == 11 and mode["status"] == "fail" and "READ_ONLY_MODE=true" in mode["evidence"], mode
+        script = box.launcher("acme-mcp-atlassian", "acme_mcp_atlassian.sh")
+        box.env["FAKE_KEYCHAIN_ITEMS"] = "acme-atlassian"
+        box.json_host(".cursor/mcp.json", "mcpServers", {"atl": {"command": "bash", "args": [str(script)]}})
+        rc, rep, _ = box.run_json("check", "--system", "confluence", "--op", "update", "--target", PAGE, "--host",
+                                  "cursor", "--user-authorised")
+        mode = rung(rep, "mode")
+        assert rc == 11 and "ACME_ATL_RW=1" in mode["evidence"] and mode["strength"] == "inferred", mode
+        box.assert_never_ran()
+    finally:
+        box.close()
+
+
+@check("R8 a write blocked by one route's setting does not silently move to another route")
+def _():
+    box = Box()
+    try:
+        box.json_host(".cursor/mcp.json", "mcpServers", {"github": {"command": "docker", "args": [
+            "run", "-i", "--rm", "ghcr.io/github/github-mcp-server"],
+            "env": {"GITHUB_READ_ONLY": "1", "GITHUB_PERSONAL_ACCESS_TOKEN": "${env:GH}"}}})
+        gh = box.home / ".config" / "gh"
+        gh.mkdir(parents=True)
+        (gh / "hosts.yml").write_text("github.com:\n    user: me\n")
+        rc, rep, _ = box.run_json("check", "--system", "github", "--op", "comment", "--target",
+                                  "https://github.com/o/r/pull/7", "--host", "cursor", "--user-authorised")
+        assert rc == 1 and rep["result"] == "needs-confirmation" and rep["blocked_at"] == "route", \
+            (rc, rep["result"], rep["blocked_at"])
+        assert rep["route"]["name"] == "gh" and "blocked at mode" in rep["rungs"][0]["evidence"], rep["rungs"][0]
+        ids = [o["id"] for o in rep["rungs"][0]["fix_options"]]
+        assert ids[0] == "use-other-route" and "write-profile" in ids and ids[-1] == "manual-handoff", ids
+        assert "grant" not in rep, "no grant until the user chooses the other route"
+        rc, rep, _ = box.run_json("check", "--system", "github", "--op", "read", "--target", "o/r", "--host", "cursor")
+        assert rc == 0, "reads are not affected"
     finally:
         box.close()
 
@@ -524,12 +579,12 @@ def _():
                                  cwd=str(box.work), stdout=subprocess.PIPE, stderr=subprocess.STDOUT,
                                  universal_newlines=True, timeout=60)
             return out.returncode, out.stdout
-        _direct(box, {"READ_ONLY_MODE": "true", "JIRA_URL": "https://acme.atlassian.net",
+        _direct(box, {"READ_ONLY_MODE": "true", "JIRA_URL": "https://acme.atlassian.net/",
                       "CONFLUENCE_URL": "https://acme.atlassian.net/wiki"})
-        rc, out, _ = box.run("resolve", "--service", "jira", "--resource", "https://acme.atlassian.net",
+        rc, out, _ = box.run("resolve", "--service", "jira", "--resource", "https://acme.atlassian.net/",
                              "--require", "host,token", "--secret", "token")
         assert rc == 0 and "via: mcp" in out and "read-only [declared]" in out, out
-        rc, out, _ = box.run("resolve", "--service", "jira", "--resource", "https://other.atlassian.net",
+        rc, out, _ = box.run("resolve", "--service", "jira", "--resource", "https://other.atlassian.net/",
                              "--require", "host,token", "--secret", "token")
         assert "via: mcp" not in out, "a route for one site must not resolve a request for another: %s" % out
         rc, out = tool("resolve", "jira", "--capability", "tracker.issue.write", "--allow-write")
@@ -676,6 +731,18 @@ def _():
                                   "cursor", "--user-authorised")
         assert rc == 11 and "READ_ONLY_MODE=true" in rung(rep, "mode")["evidence"], \
             "remembered knowledge must not outrank the route's own read-only setting"
+        box.json_host(".cursor/mcp.json", "mcpServers", {
+            "ro": {"command": "uvx", "args": ["mcp-atlassian"], "env": {"CONFLUENCE_API_TOKEN": "${env:T}"}},
+            "other": {"command": "uvx", "args": ["mcp-atlassian"], "env": {"CONFLUENCE_API_TOKEN": "${env:T}"}}})
+        rc, scan, _ = box.run_json("scan", "--host", "cursor")
+        modes = {r["name"]: r["mode"]["evidence"] for r in scan["routes"] if r["system"] == "confluence"}
+        assert "confirmed local knowledge" in modes["ro"] and "confirmed" not in modes["other"], \
+            "knowledge about one uvx server must not apply to every uvx server: %s" % modes
+        box.json_host(".cursor/mcp.json", "mcpServers", {"ro": {"command": "uvx", "args": [
+            "mcp-atlassian@0.12.0"], "env": {"CONFLUENCE_API_TOKEN": "${env:T}"}}})
+        rc, scan, _ = box.run_json("scan", "--host", "cursor")
+        assert any("stale" in w and "'ro'" in w for w in scan["warnings"]), \
+            "a changed command line must make direct-route knowledge stale: %s" % scan["warnings"]
         rc, out, _ = box.run("forget", "jira")
         assert rc == 0 and "Forgot 1 route fact" in out, out
         rc, out, _ = box.run("forget", "--all")
@@ -808,6 +875,10 @@ def _():
         before = vs.read_bytes()
         rc, out = box.run_tty(["yes"], "setup", "confluence", "--write-profile", "--host", "copilot", "--all-scopes")
         assert "has comments" in out and vs.read_bytes() == before, out
+        rc, out = box.run_tty(["yes"], "setup", "--undo", "--host", "cursor")
+        data = json.loads(path.read_text())
+        assert rc == 0 and "atl-write" not in data["mcpServers"] and data["mcpServers"]["atl"]["env"][
+            "READ_ONLY_MODE"] == "true", out
     finally:
         box.close()
 
@@ -905,7 +976,11 @@ def _():
         target = rung(rep, "target")
         assert rc == 0 and target["status"] == "pass" and target["strength"] == "verified", (rc, target, err)
         allow["update"] = False
+        calls = len(seen["auth"])
         rc, rep, _ = box.run_json(*args, env=env)
+        assert rc == 0 and "probed 0 min ago" in rung(rep, "target")["evidence"] and len(seen["auth"]) == calls, \
+            "a repeat within the cache window must reuse the answer, not call again"
+        rc, rep, _ = box.run_json(*(args + ["--fresh"]), env=env)
         target = rung(rep, "target")
         assert rc == 11 and target["status"] == "fail" and "lacks the 'update' permission" in target["evidence"], target
         no_canary(json.dumps(rep), box.state_written())
@@ -976,7 +1051,39 @@ def _():
         rc, out = guard("check-tool", "--host", "claude-code", stdin=other)
         assert '"ask"' in out, "a grant for one server must not cover another: %s" % out
         rc, out = guard("check-command", "--", put)
-        assert rc == 0, out
+        assert rc == 10, "a passing MCP check must not allow a raw REST write: %s" % out
+        for bypass in ("curl -d'{\"f\":1}' https://acme.atlassian.net/rest/api/2/issue",
+                       "wget --method=DELETE https://api.github.com/repos/a/b",
+                       "sh -c 'curl -X DELETE https://api.github.com/repos/a/b'",
+                       "curl -X PUT acme.atlassian.net/wiki/rest/api/content/1",
+                       "curl --data-urlencode a=b https://acme.atlassian.net/rest/api/3/issue",
+                       "eval curl -XPOST https://gitlab.com/api/v4/projects",
+                       "http PUT https://api.github.com/repos/a/b name=x",
+                       "curl -X PUT 'https://acme.atlassian.net/rest/api/3/issue/X-1"):
+            rc, out = guard("check-command", "--", bypass)
+            assert rc == 10, (bypass, out)
+        import guard_access
+        assert guard_access.http_write("eval curl -XPOST https://gitlab.com/api/v4/projects")[0] == ["gitlab"]
+        assert guard_access.mcp_write("mcp__github__create_issue")[0] == ["github"]
+        assert guard_access.mcp_write("mcp__gitlab__create_branch")[0] == ["gitlab"]
+        assert guard_access.http_write("curl -X PUT https://acme.atlassian.net/rest/api/3/issue/P-1")[0] == ["jira"]
+        assert guard_access.http_write("curl -X PUT https://acme.atlassian.net/wiki/x")[0] == ["confluence"]
+        jira = payload.replace("confluence_update_page", "jira_update_issue")
+        rc, out = guard("check-tool", "--host", "claude-code", stdin=jira)
+        assert '"ask"' in out, "a Confluence grant must not cover a Jira write: %s" % out
+        import access_registry
+        real_load = access_registry.load_systems
+
+        def broken(*_a, **_k):
+            raise access_registry.RegistryError("bad.json: not an object")
+        access_registry.load_systems = broken
+        guard_access._SYSTEMS = None
+        try:
+            assert guard_access.mcp_write("mcp__x__update_page")[0] == [guard_access.UNKNOWN_SYSTEM], \
+                "an unreadable registry must fail closed"
+        finally:
+            access_registry.load_systems = real_load
+            guard_access._SYSTEMS = None
     finally:
         box.close()
 

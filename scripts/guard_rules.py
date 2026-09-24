@@ -283,7 +283,7 @@ ACCESS_UNQUALIFIED_WRITE = _rule(
     "ACCESS_UNQUALIFIED_WRITE", ASK, "access",
     "a write to a known external system without a passing access check",
     "Run `agent-skills access check --system <id> --op write --target <url-or-key> "
-    "--user-authorised`; a passing check allows the write for 30 minutes.",
+    "--user-authorised`; a passing check allows the write for a short grant window.",
 )
 
 # --- observability ---------------------------------------------------------

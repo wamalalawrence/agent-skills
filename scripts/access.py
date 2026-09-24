@@ -2253,6 +2253,7 @@ def build_parser() -> argparse.ArgumentParser:
                         help="forget confirmed route knowledge for this system (never an identity)")
     forget.add_argument("--all", action="store_true",
                         help="forget all confirmed route knowledge (never identities)")
+    forget.add_argument("--json", action="store_true")
     forget.set_defaults(func=cmd_forget)
 
     backend = subparsers.add_parser("backend", help="Report the secret-storage backend.")
@@ -2277,9 +2278,11 @@ def build_parser() -> argparse.ArgumentParser:
     perms.set_defaults(func=cmd_check_permissions)
 
     # Access Discovery: which route can do which operation on which target.
-    # Imported here so `resolve` and friends never pay for it.
+    # Its modules import only the standard library and each other, so loading
+    # them for every subcommand costs a few milliseconds and nothing else.
     import access_discovery_cli
     access_discovery_cli.register(subparsers)
+    forget.set_defaults(func=access_discovery_cli.json_capable(cmd_forget, "forget"))
 
     return parser
 

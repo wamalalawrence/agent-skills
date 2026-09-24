@@ -252,7 +252,8 @@ def _find_upstream(report: dict, lines: List[tuple], systems: Dict[str, dict]) -
         for sid, system in systems.items():
             for upstream in system.get("mcp_upstreams", []):
                 needles = upstream.get("match", {}).get("args_contain", [])
-                if any(n in text for n in needles):
+                tokens = re.split(r"[\s\"'\[\],()]+", _flat(text) if "[" in text else text)
+                if any(reg.token_is(t, n) for t in tokens for n in needles):
                     if report["upstream"] is None:
                         report["upstream"] = {"id": upstream["id"], "label": upstream.get("label", upstream["id"]),
                                               "line": number, "evidence": text.strip()[:160]}

@@ -72,7 +72,10 @@ The names are invented; this is the regression fixture for the incident that mot
 feature. `--json` gives the same answer as `agent-skills.access-check/v1`:
 `system, operation, target, host, rungs[{id, status, strength, evidence, fix_options}], result,
 blocked_at, routes[...], found_credentials[{source, locator, system_guess, present}]`. Locators
-only, never values, and everything passes through [redaction](../secret-boundary.md).
+only, never values, and everything passes through [redaction](../secret-boundary.md). Every
+`access` discovery command takes `--json`; `setup`, `remember`, `forget` and `record` return
+`agent-skills.access-command/v1` (`command`, `exit_code`, `result`, `messages`, `errors`), and a
+`--json` run is never interactive, so `setup --json` only proposes.
 
 ### Exit codes
 
@@ -94,6 +97,7 @@ only, never values, and everything passes through [redaction](../secret-boundary
 | --- | --- | --- |
 | `route` | no MCP server or CLI for the system in this host | `agent-skills access setup <system>` prints the steps; or tell Wamala which tool you use |
 | `route` (unknown) | routes differ by host and the current host is unknown | say which assistant you are in, or pass `--host` |
+| `route` (needs confirmation) | one route is blocked by its own setting and another could do it | choose deliberately: use the other route, add a write profile, or hand off |
 | `launch` | the launcher or its runtime (`uvx`, `docker`) is missing | install it or fix the path |
 | `auth` | no credential, or a launcher reads an item that does not exist | store a token yourself: `agent-skills access set ... --secret-field token` |
 | `mode` | read-only flag, tool allow-list, or toolset without write tools | a write profile: `agent-skills access setup <system> --write-profile --target <t>` |
@@ -108,7 +112,10 @@ apply it, and the rest of the task continues.
 ## Where routes come from
 
 **Host configuration.** One reader per host; each returns the same normalised entry. Values are
-read only for mode, filter, and base-URL keys; every other key is kept as a name.
+read only for mode, filter, and base-URL keys; every other key is kept as a name. Settings passed
+in the server's arguments count too: `docker run -e READ_ONLY_MODE=true ...` is as binding as an
+`env` block, and a launcher started through its interpreter (`bash ~/bin/wrapper.sh`,
+`python3 wrapper.py`) is inspected as the script, not as `bash`.
 
 | Host | Files |
 | --- | --- |
@@ -159,7 +166,9 @@ Presence is checked without reading a value: `security find-generic-password -s 
 cannot prove presence without printing the secret (`secret-tool`, `op`, keyring), the answer is
 `unknown` and you are asked. The keychain is never listed.
 
-`--probe` makes non-mutating permission queries (Confluence `expand=operations`, Jira
+`--probe` answers are kept for 10 minutes (keyed by system, site, target, operation and identity
+name - never a value; network failures are not kept) and say "probed N min ago"; `--fresh` asks
+again. `--probe` makes non-mutating permission queries (Confluence `expand=operations`, Jira
 `mypermissions`, `gh api repos/<o>/<r>` for `permissions.push`) using only an identity you created
 with `agent-skills access set`. It never probes a write by attempting one, and it says which
 identity it spoke for.
@@ -190,7 +199,8 @@ The check's own fix options already carry `--target`, so the command Wamala hand
 
 - It shows the exact diff, with secret-shaped values masked.
 - It writes only after you type `yes` in a terminal. Run by an agent, it prints and writes nothing.
-- It backs up the host file, writes atomically, keeps the file's mode; `--undo` restores.
+- It backs up the host file, writes atomically, keeps the file's mode. `--undo` removes only the
+  entry it added (after showing the diff and asking), so edits you made to the file since survive.
 - A file with comments (VS Code JSONC) is never rewritten; you get the snippet to paste.
 - It tells you how to reload the host and, for Claude Code, to keep the new server's tools off
   your permissions allow list so every write is asked.
@@ -222,14 +232,23 @@ confirmation. No content, no secrets.
 Where [Execution Guard](../execution-guard.md) runs as a host hook (Claude Code and Codex
 `PreToolUse`), rule `ACCESS_UNQUALIFIED_WRITE` asks before:
 
-- an MCP tool the registry lists as a write or destructive tool, and
-- a `curl`, `wget`, or `http` with a writing method aimed at a known system's host (a registry host
-  hint, or a base URL you confirmed),
+- **an MCP tool** the registry lists as a write or destructive tool, unless `access check` passed
+  for that system, operation class and server within the last 30 minutes. The tool is matched to a
+  system by name, narrowed by the server's name where two systems share a tool name
+  (`create_branch`); a server named after a system files an unlisted mutating tool under it. The
+  grant is keyed by system, operation class and server, not by target: tool arguments differ per
+  server and are not a reliable place to read a page id from;
+- **a raw HTTP write** - `curl`, `wget`, `http`/`xh` with a writing method or a body, aimed at a known
+  system's host (a registry host hint, or a base URL you confirmed), including inside `sh -c` or
+  `eval` and with scheme-less URLs - **always**. No check qualifies a raw HTTP call with a token, so
+  no grant covers it; you can still approve one deliberately. A shared host is resolved by path
+  (`/wiki` is Confluence, `/rest/api/3` is Jira) so the message names the right system.
 
-unless `access check` passed for that system and operation class within the last 30 minutes. The
-grant is keyed by system, operation class and server, not by target: tool arguments differ per
-server and are not a reliable place to read a page id from. It asks rather than denies by default
-so that working without Wamala is slowed, not blocked; a guard policy can raise it to deny.
+It fails closed: an unreadable registry makes every mutating-looking MCP tool and every fetcher
+write ask, and a shell line that cannot be tokenised but names a fetcher and a known host counts as
+a write. It asks rather than denies by default so that working without Wamala is slowed, not
+blocked; a guard policy can raise it to deny. A program that makes HTTP calls itself (a Python or
+Node one-liner) is not parsed; the Wamala contract still forbids it.
 
 Hosts without a pre-execution hook have no enforcement point; Wamala's
 [resolution dialogue](../../skills/wamala/references/access-resolution-dialogue.md) is the gate.

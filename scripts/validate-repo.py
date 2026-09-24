@@ -477,6 +477,7 @@ ALLOWED_HOSTS = {
     # 1.5.0: Atlassian Cloud's public product domain. Access Discovery's docs
     # and fixtures use invented sites under it (`acme.atlassian.net`).
     "atlassian.net",
+    "gitlab.com",
     "127.0.0.1",
     "agentskills.io",
     "code.visualstudio.com",

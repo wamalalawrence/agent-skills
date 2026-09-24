@@ -142,13 +142,14 @@ at `mode`, `inferred`, citing lines 14-15, exit `11`.
 - **D3 - exit `1` for "needs the user".** The prompt names 0/2/3/4/11. Route, launch, intent,
   unknown, and needs-confirmation outcomes use `1`, which is the Access Resolver's existing "not
   resolved" code, rather than a new number.
-- **D4 - the guard asks, it does not deny.** A hard deny would lock out users working without Wamala.
-  ASK puts the decision in front of the user and can be raised to deny by guard policy. Grants are
-  per system, operation class and server, not per target: MCP tool arguments differ per server and
-  are not a reliable place to read a page id.
-- **D5 - no static-scan cache.** A scan of six hosts with launcher inspection is fast enough that a
-  cache would add a staleness class (a launcher edit not noticed) for no gain. Grants are the only
-  cached state.
+- **D4 - the guard asks, it does not deny** (confirmed by the maintainer). A hard deny would lock
+  out users working without Wamala. Grants cover MCP tool calls only, per system, operation class
+  and server, not per target: MCP tool arguments differ per server and are not a reliable place to
+  read a page id. A raw HTTP write to a known system is never covered by a grant, because no check
+  qualifies it (the first draft did cover it; see the review below).
+- **D5 - no static-scan cache.** The spec's cache key (config and launcher mtimes) would catch edits,
+  but a full scan of six hosts with launcher inspection already takes well under a second, so the
+  cache would buy nothing measurable. Probe answers are cached (10 minutes, `--fresh` bypasses).
 - **D6 - Readiness reused as vocabulary, not as a class.** `meeting_capture.Readiness` is per
   capture provider; access readiness is per (host, system, route) with an evidence strength. Doctor
   rows use the same words.
@@ -164,7 +165,12 @@ at `mode`, `inferred`, citing lines 14-15, exit `11`.
   writer the agent can call after an MCP write.
 - **D11 - `remember --yes`.** Confirmation in an agent session happens in the chat, not at a
   terminal. `--yes` records that the user said yes; without it and without a terminal, nothing is
-  written. `access setup` has no such flag: host configs change only at an interactive prompt.
+  written. `access setup` has no such flag: host configs change only at an interactive prompt. The
+  asymmetry is deliberate: `remember` changes what Agent Skills believes (and an explicit read-only
+  setting still outranks it), `setup` changes what a host runs.
+- **D12 - no silent route switch.** When one route is blocked by its own setting (read-only, scope,
+  policy) and another route could do the write, the check returns `needs-confirmation` and offers
+  the other route as a choice. A write profile of the same server is exempt: it is the user's fix.
 
 ## Registry
 
@@ -191,6 +197,30 @@ CLI routes: `jira me`, `gh auth status` (+ `gh api repos/<o>/<r> --jq .permissio
 | Host divergence (read-only in one host, read-write in another) | reported by scan and doctor |
 | `detect_mcp` (access.py) and `_detect_mcp` (tools.py) substring-search configs and duplicate the path list | fixed: one detector |
 | Browser fallback attempted with no session | fixed by contract: never attempted, never a write route |
+
+## Independent review (2026-09-24)
+
+Two reviewers that did not write the code read `main...HEAD` (standards and spec). Every finding
+was reproduced before it was fixed, and each fix has a test that fails without it:
+
+| Finding | Fix | Test |
+| --- | --- | --- |
+| attached curl options, `wget --method=`, `sh -c`, scheme-less URLs bypassed the guard | parser rewritten; nested shells followed; fails closed | G1 |
+| a Confluence grant allowed a Jira REST write (shared host) | host resolved by path; raw HTTP never granted | G1 |
+| shared MCP tool names mapped to the wrong system | narrowed by server name | G1 |
+| unreadable registry disabled the gate | fails closed (ASK) | G1 |
+| any passing check allowed a raw REST write with a found token | raw HTTP writes always ask | G1 |
+| `docker -e READ_ONLY_MODE=true` ignored, reported read-write `declared` | args env read | R7 |
+| a blocked write moved to another route silently | `needs-confirmation` (D12) | R8 |
+| `setup --undo` restored the whole file, losing later edits | removes only the added entry | A2, S1 |
+| launchers run through an interpreter were not inspected | the script is inspected | R7 |
+| `setup`, `remember`, `forget`, `record` lacked `--json` | added | D1, smoke |
+| no probe cache; direct-route knowledge never went stale and matched every `uvx` server | 10-minute probe cache; entry fingerprint; name-scoped match | P2, K1 |
+| second redaction set undocumented | documented and held equal by test | X1 |
+| `tools resolve` looked only at the first matching server | prefers a writable one for writes | D1 |
+
+Not changed: a bare `<repo>/mcp.json` (no dot) was in the old detector's list; no supported host
+reads it, so it is not read now (noted in the changelog).
 
 ## Needs a human decision
 

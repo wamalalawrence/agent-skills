@@ -56,6 +56,10 @@ EXIT_AUTH = 3
 EXIT_NETWORK = 4
 EXIT_CAPABILITY = 11
 
+# A launcher run through its interpreter (`bash ~/bin/w.sh`, `python3 w.py`):
+# the script is the first argument that is not an option.
+INTERPRETERS = {"bash", "sh", "zsh", "dash", "python", "python3", "node"}
+
 RUNTIMES = {"uvx": "uvx", "npx": "npx", "docker": "docker", "podman": "podman", "pipx": "pipx",
             "python-module": "python3", "node": "node"}
 
@@ -114,7 +118,7 @@ class Scanner:
         for report in first:
             for server in report["servers"]:
                 if server["command"] and not self._known_upstream(server):
-                    toggle = ((self.inspect(server["command"]).get("mode") or {}).get("toggle") or {})
+                    toggle = ((self.inspect(launcher_path(server)).get("mode") or {}).get("toggle") or {})
                     if toggle.get("env") and not hosts_mod.looks_secret(toggle["env"]):
                         extra.add(toggle["env"])
         if not extra:
@@ -132,7 +136,7 @@ class Scanner:
     def qualify(self, server: dict) -> List[dict]:
         host = server["host"]
         known = self._known_upstream(server)
-        local = state.match_route(self.knowledge, host, server["server_name"], server["command"])
+        local = state.match_route(self.knowledge, host, server["server_name"], launcher_path(server))
         inspection = None
         via = "direct"
         upstream = None
@@ -143,7 +147,7 @@ class Scanner:
                           if reg.match_upstream(s, server["command"], server["args"], server["url"]) is upstream
                           or any(u.get("id") == upstream["id"] for u in s.get("mcp_upstreams", []))]
         elif server["command"]:
-            inspection = self.inspect(server["command"])
+            inspection = self.inspect(launcher_path(server))
             if inspection["kind"] != "missing":
                 via = "launcher"
             if inspection.get("upstream"):
@@ -156,7 +160,8 @@ class Scanner:
         if not system_ids:
             system_ids = reg.systems_for_hint(self.systems, " ".join(
                 [server["server_name"], server["command"], server["url"]] + server["args"]))
-        stale = bool(local and inspection and state.is_stale(local, inspection.get("sha256", "")))
+        stale = bool(local and state.is_stale(local, (inspection or {}).get("sha256", ""),
+                                              state.entry_fingerprint(server["command"], server["args"])))
         routes = []
         for sid in system_ids:
             system = self.systems.get(sid)
@@ -178,7 +183,9 @@ class Scanner:
         route = {
             "kind": "mcp", "host": server["host"], "scope": server["scope"], "file": server["file"],
             "name": server["server_name"], "system": system["id"], "transport": server["transport"],
-            "command": server["command"], "url": server["url"], "via": via,
+            "command": server["command"], "args": list(server["args"]),
+            "launcher_command": launcher_path(server), "url": server["url"],
+            "via": via,
             "upstream": upstream["id"] if upstream else None,
             "upstream_label": upstream.get("label", upstream["id"]) if upstream else None,
             "disabled": server["disabled"],
@@ -399,6 +406,19 @@ class Scanner:
                                                   "files": [{k: v for k, v in f.items()} for f in r["files"]]}
                                                  for r in reports],
                 "routes": routes, "warnings": warnings}
+
+
+def launcher_path(server: dict) -> str:
+    """The file to inspect: the command, or the script an interpreter runs."""
+    command = server["command"]
+    if os.path.basename(command) in INTERPRETERS:
+        for arg in server["args"]:
+            if arg.startswith("-"):
+                if arg in ("-m", "-c", "-e"):
+                    return command  # a module or an inline program, not a file
+                continue
+            return os.path.expanduser(arg)
+    return command
 
 
 def _split(value: str) -> List[str]:
@@ -888,7 +908,8 @@ def check(scanner: Scanner, system_id: str, op: str, target_raw: str, host: Opti
             base = (route.get("base_url") or {}).get("value") or target.get("base", "")
             if base not in probes:
                 import access_probe
-                probes[base] = access_probe.probe(system, target, base, scanner.cwd, op_class)
+                probes[base] = access_probe.probe(system, target, base, scanner.cwd, op_class,
+                                                  fresh=getattr(args, "fresh", False))
             result = probes[base]
             if result and result["status"] == "network":
                 # Verification was asked for and could not happen: the target
@@ -953,7 +974,37 @@ def check(scanner: Scanner, system_id: str, op: str, target_raw: str, host: Opti
     for rid in RUNGS:
         match = next((r for r in rungs if r["id"] == rid), None)
         full.append(match or _rung(rid, "skipped"))
-    if blocked_at:
+    switched_from = None
+    if route is not None and op_class != "read" and result in ("available", "needs-confirmation"):
+        # Another route in this host was blocked by a setting - read-only, a
+        # scope filter, policy. Using a different route instead is exactly the
+        # "retry a blocked write via another route" the floor forbids unless
+        # the user chooses it, so the check stops and says so.
+        for other, other_rungs in evaluations:
+            if other is route or (other["kind"] == "mcp" and other["host"] != (chosen_host or other["host"])):
+                continue
+            if _same_server(other, route):
+                # A write profile the user added for this server (same launcher,
+                # its own mode) is their fix for the block, not a way round it.
+                continue
+            o_result, o_blocked, _o_code = _result_of(other_rungs, op_class)
+            if o_result == "blocked" and o_blocked in ("mode", "target", "policy"):
+                switched_from = (other, next(r for r in other_rungs if r["id"] == o_blocked))
+                break
+    if switched_from:
+        other, why = switched_from
+        result, blocked_at, code = "needs-confirmation", "route", EXIT_NEEDS_USER
+        full[0]["evidence"] += "; but %s %r is blocked at %s by its own setting (%s)" % (
+            other["kind"], other["name"], why["id"], why["evidence"])
+        options = [{"id": "use-other-route", "label": "Use %s %r for this, knowing your %r %s is set that way on "
+                    "purpose? (Only if you say so.)" % (route["kind"], route["name"], other["name"], other["kind"]),
+                    "command": ""}]
+        options += [o for o in _fix_options(system, other, dict(why), op, host, found_all, target)
+                    if o["id"] != "manual-handoff"]
+        options += [o for o in _fix_options(system, route, {"id": "intent"}, op, host, found_all, target)
+                    if o["id"] == "manual-handoff"]
+        full[0]["fix_options"] = options
+    elif blocked_at:
         blocked = next(r for r in full if r["id"] == blocked_at)
         fix_id = "host" if (blocked_at == "route" and blocked["status"] == "unknown") else blocked_at
         blocked["fix_options"] = _fix_options(system, route, dict(blocked, id=fix_id), op, host, found_all, target)
@@ -977,6 +1028,15 @@ def check(scanner: Scanner, system_id: str, op: str, target_raw: str, host: Opti
                                   route.get("name", ""), route.get("kind", ""))
         report["grant"] = {"path": _tilde(str(grant)), "ttl_minutes": state.GRANT_TTL_SECONDS // 60}
     return report
+
+
+def _same_server(a: dict, b: dict) -> bool:
+    if a.get("kind") != "mcp" or b.get("kind") != "mcp" or a.get("host") != b.get("host"):
+        return False
+    same_launcher = bool(a.get("launcher_command")) and a.get("launcher_command") == b.get("launcher_command") \
+        and a.get("upstream") == b.get("upstream")
+    profile_name = b.get("name") == "%s-write" % a.get("name") or a.get("name") == "%s-write" % b.get("name")
+    return same_launcher or profile_name
 
 
 def _rank(rungs, op_class):
@@ -1094,7 +1154,9 @@ def render_check(report: dict) -> str:
         out.append(line.rstrip())
     label = {"available": "AVAILABLE", "blocked": "BLOCKED at %s" % report["blocked_at"],
              "unknown": "UNKNOWN at %s" % report["blocked_at"],
-             "needs-confirmation": "NEEDS CONFIRMATION of the inferred %s" % report["blocked_at"]}[report["result"]]
+             "needs-confirmation": ("NEEDS CONFIRMATION: another route is blocked by its own setting"
+                                    if report["blocked_at"] == "route"
+                                    else "NEEDS CONFIRMATION of the inferred %s" % report["blocked_at"])}[report["result"]]
     out.append("Result: %s." % label)
     if report.get("confirmation"):
         out.append("Before applying: %s." % report["confirmation"])

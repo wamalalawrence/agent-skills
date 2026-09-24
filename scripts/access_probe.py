@@ -20,6 +20,7 @@ from __future__ import annotations
 
 import base64
 import json
+import os
 import socket
 import ssl
 import urllib.error
@@ -30,6 +31,44 @@ from typing import Optional
 import access as resolver
 
 TIMEOUT = 15
+CACHE_TTL_SECONDS = 10 * 60
+
+
+def _cache_path(key: list) -> Path:
+    import hashlib
+    import access_state
+    digest = hashlib.sha256(json.dumps(key, sort_keys=True).encode("utf-8")).hexdigest()[:32]
+    return access_state.cache_dir() / "probes" / ("%s.json" % digest)
+
+
+def _cache_get(key: list) -> Optional[dict]:
+    import time
+    try:
+        data = json.loads(_cache_path(key).read_text(encoding="utf-8"))
+    except (OSError, ValueError):
+        return None
+    age = time.time() - data.get("at", 0)
+    if not 0 <= age < CACHE_TTL_SECONDS or data.get("key") != key:
+        return None
+    result = dict(data["result"])
+    result["evidence"] += " (probed %d min ago)" % (age // 60)
+    return result
+
+
+def _cache_put(key: list, result: dict) -> None:
+    """Keep a probe's answer briefly. It holds no secret: the key is the
+    system, site, target, operation and identity name; the value is the
+    verdict and its wording."""
+    import time
+    path = _cache_path(key)
+    try:
+        path.parent.mkdir(parents=True, exist_ok=True)
+        tmp = path.with_suffix(".tmp")
+        tmp.write_text(json.dumps({"key": key, "at": time.time(), "result": result}), encoding="utf-8")
+        os.chmod(str(tmp), 0o600)
+        tmp.replace(path)
+    except OSError:
+        pass
 
 
 def _auth_header(values: dict) -> Optional[str]:
@@ -56,12 +95,7 @@ def _get(url: str, header: str) -> tuple:
         return 0, {}
 
 
-def probe(system: dict, target: dict, base_url: str, cwd: Path, op_class: str) -> Optional[dict]:
-    """{status: pass|fail|unknown|network, rung: auth|target, evidence} or None if not probeable."""
-    probes = system.get("probes") or {}
-    service = probes.get("auth_service")
-    if not service or not base_url or not target.get("id"):
-        return None
+def _identity(service: str, base_url: str, cwd: Path):
     values: dict = {}
     resolution = resolver.resolve_access(service, base_url, ["host", "login", "token"], {"token"}, cwd,
                                          allow_capability=False, values_out=values)
@@ -70,9 +104,40 @@ def probe(system: dict, target: dict, base_url: str, cwd: Path, op_class: str) -
         resolution = resolver.resolve_access(service, base_url, ["host", "token"], {"token"}, cwd,
                                              allow_capability=False, values_out=values)
     if resolution.status != "resolved" or not values.get("token"):
+        return None, None
+    return values, resolution
+
+
+def probe(system: dict, target: dict, base_url: str, cwd: Path, op_class: str, fresh: bool = False) -> Optional[dict]:
+    """{status, rung, evidence}, cached for CACHE_TTL_SECONDS unless `fresh`.
+
+    The cache key is the system, site, target, operation and the identity's
+    name - never a value. A network failure is never cached: it is a reason to
+    try again, not an answer about the account.
+    """
+    probes = system.get("probes") or {}
+    service = probes.get("auth_service")
+    if not service or not base_url or not target.get("id"):
+        return None
+    values, resolution = _identity(service, base_url, cwd)
+    if values is None:
         return {"status": "unknown", "rung": "target",
                 "evidence": "no Agent Skills identity for %s to probe with (`agent-skills access set`); the "
                             "route's own credential is never used for a probe" % service}
+    key = [system.get("id"), resolver.resource_host(base_url), target.get("kind"), target.get("id"), op_class,
+           resolution.profile or "environment:%s" % resolver.resource_host(values.get("host", ""))]
+    if not fresh:
+        cached = _cache_get(key)
+        if cached is not None:
+            return cached
+    result = _probe(system, target, base_url, op_class, values, resolution)
+    if result is not None and result.get("status") in ("pass", "fail"):
+        _cache_put(key, result)
+    return result
+
+
+def _probe(system: dict, target: dict, base_url: str, op_class: str, values: dict, resolution) -> Optional[dict]:
+    probes = system.get("probes") or {}
     # The base URL comes from the route, and a project-scoped route is read from
     # a file inside the repository - attacker-controlled for anyone who can open
     # a pull request. The credential is sent only to the site the identity

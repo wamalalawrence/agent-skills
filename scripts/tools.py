@@ -177,7 +177,7 @@ def _probe_cli(command: str, args: list, timeout: int = 15) -> bool:
     return result.returncode == 0
 
 
-def _detect_mcp(hint: str, cwd: Path, tool_id: str = "") -> dict:
+def _detect_mcp(hint: str, cwd: Path, tool_id: str = "", need_write: bool = False) -> dict:
     """The MCP server serving `hint` in the current host, or {} if none.
 
     Asks Access Discovery (`access_ladder.mcp_servers_for`), the one MCP
@@ -197,7 +197,13 @@ def _detect_mcp(hint: str, cwd: Path, tool_id: str = "") -> dict:
         return {}
     if not found["matches"]:
         return {}
-    match = found["matches"][0]
+    matches = found["matches"]
+    if need_write:
+        # Prefer a server that can write; a read-only one is reported only when
+        # it is all there is, so the caller can say why the step was skipped.
+        writable = [m for m in matches if m["mode"] != "read-only"]
+        matches = writable or matches
+    match = matches[0]
     return {"detail": access_ladder.describe_match(match), "mode": match["mode"]}
 
 
@@ -319,7 +325,8 @@ def resolve_capability(reg: Registry, tool: dict, capability: str, allow_write: 
                      "host-native tools are not probeable from a script; check your agent host")
                 continue
             if kind == "mcp":
-                found = _detect_mcp(t.get("hint", tool["id"]), cwd, tool["id"])
+                found = _detect_mcp(t.get("hint", tool["id"]), cwd, tool["id"],
+                                    need_write=action in ("WRITE", "ELEVATED"))
                 if found and action in ("WRITE", "ELEVATED") and found["mode"] == "read-only":
                     step("mcp", "skipped", f"{found['detail']}: read-only, so it cannot provide {capability}; "
                                            f"`agent-skills access check` explains the options")

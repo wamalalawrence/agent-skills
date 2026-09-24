@@ -34,6 +34,38 @@ def _emit(payload, text: str, as_json: bool) -> None:
         sys.stdout.write(redact(text) + "\n")
 
 
+def json_capable(func, name: str):
+    """Give a command that prints prose a `--json` form.
+
+    The prose is still produced; with `--json` it is captured and returned as
+    `messages` beside the exit code and whatever structured result the command
+    attached to `args.result`. A JSON run is never interactive.
+    """
+    import contextlib
+    import io
+
+    def run(args) -> int:
+        if not getattr(args, "json", False):
+            return func(args)
+        import access_setup
+        access_setup.FORCE_NONINTERACTIVE = True
+        out, err = io.StringIO(), io.StringIO()
+        args.result = {}
+        with contextlib.redirect_stdout(out), contextlib.redirect_stderr(err):
+            code = func(args)
+        payload = {"schema": "agent-skills.access-command/v1", "command": name, "exit_code": code,
+                   "result": args.result, "messages": [l for l in out.getvalue().splitlines() if l.strip()],
+                   "errors": [l for l in err.getvalue().splitlines() if l.strip()]}
+        sys.stdout.write(redact(json.dumps(payload, indent=2, sort_keys=True)) + "\n")
+        return code
+    return run
+
+
+def _result(args, **fields) -> None:
+    if isinstance(getattr(args, "result", None), dict):
+        args.result.update(fields)
+
+
 def _systems():
     try:
         return reg.load_systems()
@@ -206,6 +238,8 @@ def cmd_setup(args) -> int:
     if not plan["ok"]:
         print("Cannot propose a write profile: %s" % plan["reason"], file=sys.stderr)
         return ladder.EXIT_NEEDS_USER
+    _result(args, host=host, file=plan["file"], server=plan["new_name"], based_on=route["name"],
+            write_mode=plan["why"], limits=plan["limits"], diff=redact(plan["diff"]), written=False)
     print("Proposed: a second server %r in %s (%s). The existing %r entry is not changed." % (
         plan["new_name"], plan["file"], hosts_mod.HOST_LABELS.get(host, host), route["name"]))
     print("Write mode: %s." % plan["why"])
@@ -226,6 +260,7 @@ def cmd_setup(args) -> int:
         print("Nothing changed.")
         return 0
     _ok, backup = access_setup.apply_change(plan)
+    _result(args, written=True, backup=backup)
     print("Written. Backup: %s (undo: agent-skills access setup --undo --host %s)" % (backup, host))
     print(hosts_mod.RELOAD_HINTS.get(host, "Reload the host's MCP servers."))
     print("Then: agent-skills access check --system %s --op write --target <target> --host %s" % (args.system, host))
@@ -242,6 +277,7 @@ def cmd_remember(args) -> int:
         if not _confirmed(args, "Remember this decision: %s" % json.dumps(decision)):
             return ladder.EXIT_NEEDS_USER
         state.remember_decision(decision)
+        _result(args, decision=decision, saved=True)
         print("Remembered the decision for %s %s." % (args.system, decision["operation"]))
         return 0
     if not args.server:
@@ -289,8 +325,14 @@ def cmd_remember(args) -> int:
         # Knowledge describes the launcher, so it matches by command: a write
         # profile that reuses the same launcher inherits it. A server that is
         # not launched by a command (remote URL) matches by name instead.
-        "match": ({"host": host or "*", "command": route["command"]} if route["command"]
-                  else {"host": host or "*", "server_name": route["name"]}),
+        # A launcher script is matched by its path, so a write profile that runs
+        # the same script inherits the facts. A server launched directly (`uvx
+        # mcp-atlassian`) is matched by name as well: `uvx` alone would match
+        # every uvx server.
+        "match": ({"host": host or "*", "command": route.get("launcher_command") or route["command"]}
+                  if route.get("launcher")
+                  else {"host": host or "*", "server_name": route["name"], "command": route["command"]}
+                  if route["command"] else {"host": host or "*", "server_name": route["name"]}),
         "learned_from": {"server_name": route["name"], "host": route["host"]},
         "systems": system_ids,
         "upstream": route.get("upstream") or "",
@@ -302,12 +344,14 @@ def cmd_remember(args) -> int:
         "source": ("told by the user in dialogue" if (args.mode_env or args.mode_value or args.systems)
                    else "wrapper inspection, confirmed in dialogue" if route.get("via") == "launcher"
                    else "host config, confirmed in dialogue"),
-        "fingerprint": {"launcher_sha256": (route.get("launcher") or {}).get("sha256", "")},
+        "fingerprint": ({"launcher_sha256": route["launcher"]["sha256"]} if route.get("launcher")
+                        else {"entry_sha256": state.entry_fingerprint(route["command"], route.get("args", []))}),
     }
     shown = json.dumps({k: v for k, v in entry.items() if k != "fingerprint"}, indent=2)
     if not _confirmed(args, "Remember these facts (no secrets) in %s?\n%s" % (state.routes_path(), shown)):
         return ladder.EXIT_NEEDS_USER
     _entry, replaced = state.remember_route(entry)
+    _result(args, route={k: v for k, v in entry.items() if k != "fingerprint"}, saved=True, replaced=replaced)
     print("%s local route knowledge for server %r in %s. Evidence for it is now 'declared'." % (
         "Updated" if replaced else "Saved", route["name"], state.routes_path()))
     return 0
@@ -320,12 +364,14 @@ def _raw_server_route(scanner, server_name, host):
         for server in report["servers"]:
             if server["server_name"] != server_name:
                 continue
-            inspection = access_inspect.inspect_launcher(server["command"], scanner.systems) \
+            inspection = access_inspect.inspect_launcher(ladder.launcher_path(server), scanner.systems) \
                 if server["command"] else None
             launcher = None
             if inspection and inspection["kind"] != "missing":
                 launcher = {"sha256": inspection["sha256"]}
             return {"kind": "mcp", "host": server["host"], "name": server_name, "command": server["command"],
+                    "args": list(server["args"]),
+                    "launcher_command": ladder.launcher_path(server),
                     "url": server["url"], "upstream": None, "via": "launcher" if launcher else "direct",
                     "mode": {"value": "unknown", "strength": "inferred"}, "launcher": launcher,
                     "credential_refs": (inspection or {}).get("credential_refs", []), "base_url": None}
@@ -349,6 +395,7 @@ def cmd_forget_routes(args) -> int:
         print("FAIL forget needs --profile NAME, a system id, or --all", file=sys.stderr)
         return ladder.EXIT_USAGE
     routes, decisions = state.forget(args.system or "", everything=args.all)
+    _result(args, routes_removed=routes, decisions_removed=decisions)
     print("Forgot %d route fact(s) and %d decision(s)%s. Credential profiles are untouched "
           "(use `access forget --profile NAME` for those)." % (routes, decisions,
                                                                "" if args.all else " for %s" % args.system))
@@ -359,6 +406,7 @@ def cmd_record(args) -> int:
     path = state.append_audit({"host": args.host or "", "system": args.system, "operation": args.op,
                                "target": args.target, "route": args.route, "result": args.result,
                                "confirmation": args.confirmation})
+    _result(args, audit=str(path))
     print("Recorded in %s (no content, no secrets)." % path)
     return 0
 
@@ -378,6 +426,7 @@ def register(subparsers) -> None:
     check.add_argument("--host", default="")
     check.add_argument("--probe", action="store_true", help="allow non-mutating identity/permission calls")
     check.add_argument("--live", action="store_true", help="also start configured MCP servers and list their tools")
+    check.add_argument("--fresh", action="store_true", help="with --probe: ignore a cached probe answer")
     check.add_argument("--user-authorised", "--user-authorized", dest="user_authorised", action="store_true",
                        help="the user asked for this operation on this target in the current request")
     check.add_argument("--own-target", action="store_true",
@@ -416,7 +465,8 @@ def register(subparsers) -> None:
     setup.add_argument("--all-scopes", action="store_true",
                        help="do not limit the write profile to one space/project (it stays limited to the system)")
     setup.add_argument("--undo", action="store_true")
-    setup.set_defaults(func=cmd_setup)
+    setup.add_argument("--json", action="store_true", help="machine-readable; never interactive, never writes")
+    setup.set_defaults(func=json_capable(cmd_setup, "setup"))
 
     remember = subparsers.add_parser("remember", help="Record facts or a decision the user confirmed.")
     remember.add_argument("--system", default="")
@@ -434,7 +484,8 @@ def register(subparsers) -> None:
                           help="the launcher implements --agent-skills-capabilities and may be run to ask it")
     remember.add_argument("--yes", action="store_true",
                           help="the user confirmed in the conversation; pass it only after they said yes")
-    remember.set_defaults(func=cmd_remember)
+    remember.add_argument("--json", action="store_true")
+    remember.set_defaults(func=json_capable(cmd_remember, "remember"))
 
     systems = subparsers.add_parser("systems", help="List the system registry.")
     systems.add_argument("--json", action="store_true")
@@ -448,4 +499,5 @@ def register(subparsers) -> None:
     record.add_argument("--result", required=True)
     record.add_argument("--confirmation", default="")
     record.add_argument("--host", default="")
-    record.set_defaults(func=cmd_record)
+    record.add_argument("--json", action="store_true")
+    record.set_defaults(func=json_capable(cmd_record, "record"))

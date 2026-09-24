@@ -393,50 +393,52 @@ def evaluate_structured(
         ))
 
     if action.kind == MCP:
-        findings.extend(_access_findings_for_tool(name))
+        findings.extend(_access_findings_for_tool(name))  # policy applied with the rest below
 
     findings.extend(_pattern_findings("%s %s" % (name, json.dumps(arguments)[:4000]), policy))
     return _apply_policy(findings, policy)
 
 
-def _access_findings_for_tool(name: str) -> list[gr.Finding]:
+def _access_finding(reason: str, target: str, policy: gpol.Policy | None) -> list[gr.Finding]:
+    finding = gr.Finding(gr.ACCESS_UNQUALIFIED_WRITE, ASK, reason, target)
+    return _apply_policy([finding], policy) if policy is not None else [finding]
+
+
+def _access_findings_for_tool(name: str, policy: gpol.Policy | None = None) -> list[gr.Finding]:
     """ASK before an MCP write to a known system unless `access check` passed."""
     import guard_access
     hit = guard_access.mcp_write(name)
     if hit is None:
         return []
-    system, op_class, server, tool = hit
-    if guard_access.has_grant(system, op_class, server):
+    systems, op_class, server, tool = hit
+    if any(guard_access.has_grant(system, op_class, server) for system in systems):
         return []
-    return [gr.Finding(
-        gr.ACCESS_UNQUALIFIED_WRITE, ASK,
+    return _access_finding(
         "%s is a %s tool for %s and no access check passed for it in this session. %s"
-        % (tool, op_class, system, guard_access.advice(system, op_class)),
-        name,
-    )]
+        % (tool, op_class, " or ".join(systems), guard_access.advice(systems, op_class)),
+        name, policy)
 
 
 def _access_findings_for_shell(command: str, policy: gpol.Policy) -> list[gr.Finding]:
-    """ASK before `curl -X PUT <known system>` unless `access check` passed.
+    """ASK before `curl -X PUT <known system>`, always.
 
     This is the route around a read-only MCP server: a found token used
-    directly against the REST API. A passing check for the system is the only
-    thing that makes it expected.
+    directly against the REST API. No access check qualifies it, so no grant
+    allows it; the user can still approve one deliberately.
     """
     import guard_access
     hit = guard_access.http_write(command)
     if hit is None:
         return []
-    system, method, host = hit
-    op_class = "destructive" if method == "DELETE" else "write"
-    if guard_access.has_grant(system, op_class):
-        return []
-    return _apply_policy([gr.Finding(
-        gr.ACCESS_UNQUALIFIED_WRITE, ASK,
-        "a direct %s to %s (%s) bypasses the configured route for %s. %s"
-        % (method, host, system, system, guard_access.advice(system, op_class)),
-        host,
-    )], policy)
+    systems, method, host = hit
+    # No grant is consulted. A grant says an MCP or CLI route qualified; a raw
+    # HTTP write with a token is neither, and allowing it after any passing
+    # check would let a found credential through (docs/access/README.md).
+    shown = "a write it could not fully parse" if method == "UNPARSED" else "a direct %s" % method
+    return _access_finding(
+        "%s to %s (%s) goes around the route an access check qualifies. Use the checked route "
+        "(the MCP server or CLI), or approve this call deliberately."
+        % (shown, host, " or ".join(systems)), host, policy)
 
 
 def resolve(
