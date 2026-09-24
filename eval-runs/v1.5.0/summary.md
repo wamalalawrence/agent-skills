@@ -1,9 +1,10 @@
 # Release certification — v1.5.0
 
 Every number below was produced by running the command named, on this branch, before tagging. The
-suites ran in a clean `git worktree` of the release commit (`346d063`), so untracked files in the
-developer's checkout could not affect them. `c113753` (path display only) followed; the access suite
-and eval runner were re-run on it with the same results.
+final run was in a clean `git worktree` of `65c9d3e` (the last code change; `8863f4e` after it only
+turns an invented URL in an eval into a code span), so untracked files in the developer's checkout
+could not affect it. The access suite also ran on Python 3.13, which takes the `tomllib` path CI
+uses; the rest ran on 3.9.
 
 ## What this release changed
 
@@ -23,7 +24,7 @@ nothing is renumbered, and no host configuration changes without an interactive 
 | --- | --- | --- |
 | `scripts/validate-repo.py` | pass, 84 warnings | pass, 94 warnings |
 | `scripts/run-evals.py` (+ `--strict-sections`) | 62 files, 0 failures | 59 files, 0 failures |
-| `scripts/test-access-discovery.py` (new) | 26 passed, 0 failed, offline | — |
+| `scripts/test-access-discovery.py` (new) | 29 passed, 0 failed, offline (3.9 and 3.13) | — |
 | `scripts/eval-access-discovery.py` (new) | 10/10 scenarios correct | — |
 | `scripts/test-cli-install.sh` | 150 passed, 0 failed | 150 |
 | `scripts/test-global-install.sh` | 112 assertions | 112 |
@@ -46,8 +47,8 @@ nothing is renumbered, and no host configuration changes without an interactive 
 tagged; its header documents that the three version assertions fail before the tag. Run it after
 tagging. Every version-independent check in it passed.
 
-**Warnings** fell from 94 to 84: `atlassian.net` joined the product-host allowlist (Atlassian
-Cloud's public domain; docs and fixtures use invented sites under it), which cleared pre-existing
+**Warnings** fell from 94 to 84: `atlassian.net` and `gitlab.com` joined the product-host allowlist
+(public vendor domains; docs and fixtures use invented sites under them), which cleared pre-existing
 `example.atlassian.net` warnings too. No warning comes from a new file.
 
 ### Access evals (CLI half)
@@ -80,9 +81,22 @@ keychain item reported as a locator, the browser never attempted, and a write pr
 profile and the user's confirmation, the same check is `AVAILABLE` and policy asks for a preview
 ([02-write-profile.txt](access-discovery/02-write-profile.txt)).
 
+### Independent review
+
+Per the checklist's diff review, two reviewers that did not write the code (standards, spec) read
+`main...HEAD` after the suites above were already green. They reported thirteen findings; every one
+was reproduced, fixed, and given a test that fails without the fix. The most serious were a guard
+that allowed a raw `curl -X PUT` with a found token after any passing check, five ways to slip a
+REST write past the guard's parser, a `docker -e READ_ONLY_MODE=true` read-only server reported as
+read-write, and a write blocked by one route silently moving to another. The full table is in
+`DISCOVERY-access.md` ("Independent review"). The suites were re-run in full afterwards (the table
+above).
+
 ### Mutation probes
 
-Each weakened build was run against the named check; all five were caught.
+Each weakened build was run against the named check; all ten were caught. M10 was missed on the
+first attempt because the test injected the failure state instead of making the load fail; the test
+was corrected and the probe re-run.
 
 | Probe | Property | Check |
 | --- | --- | --- |
@@ -91,6 +105,11 @@ Each weakened build was run against the named check; all five were caught.
 | M3 | `--probe` sends a credential only to the site its identity names | P2 fails |
 | M4 | presence checks never ask the keychain for the secret (`-w`) | A1 fails |
 | M5 | an explicit read-only setting outranks remembered knowledge | K1 fails |
+| M6 | no grant allows a raw HTTP write | G1 fails |
+| M7 | `docker -e` mode flags in args are read | R7 fails |
+| M8 | a blocked write does not silently switch route | R8 fails |
+| M9 | `--undo` removes only the added entry | A2 fails |
+| M10 | an unreadable registry fails closed | G1 fails |
 
 ### Rollback
 
