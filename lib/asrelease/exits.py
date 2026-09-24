@@ -16,6 +16,11 @@ is not actionable and a single code forces log-scraping:
       changed
   7   the machine is in a bad state  -> run doctor
   10  an update is available         -> informational, not a failure
+  11  the route exists and is        -> not retryable as-is: the route's mode,
+      authenticated, but this           scope, or policy excludes this operation;
+      operation is not available        change the route (e.g. a write profile)
+                                        or hand the change to the user.
+                                        Added in 1.5.0 for `access check`.
 """
 
 from __future__ import annotations
@@ -32,6 +37,7 @@ class Exit:
     INSTALL_FAILED = 6
     VERIFY_FAILED = 7
     UPDATE_AVAILABLE = 10
+    CAPABILITY_UNAVAILABLE = 11
 
     # Human-readable names, used by `agent-skills verify --explain-codes` and by
     # the test suite so a renumbering cannot pass silently.
@@ -44,6 +50,7 @@ class Exit:
         6: "installation-failure",
         7: "verification-failure",
         10: "update-available",
+        11: "capability-unavailable",
     }
 
 

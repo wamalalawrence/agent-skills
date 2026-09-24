@@ -1,0 +1,137 @@
+{
+  "schema": "agent-skills.access-system/v1",
+  "id": "github",
+  "family": "github",
+  "tool_id": "github",
+  "summary": "GitHub repositories, issues and pull requests.",
+  "docs": "docs/access/github.md",
+  "host_hints": [
+    "github.com",
+    "*.github.com",
+    "*.ghe.com"
+  ],
+  "name_hints": [
+    "github"
+  ],
+  "mcp_upstreams": [
+    {
+      "id": "github-mcp-server",
+      "label": "GitHub MCP server (official)",
+      "match": {
+        "args_contain": [
+          "ghcr.io/github/github-mcp-server",
+          "github-mcp-server"
+        ],
+        "command_names": [
+          "github-mcp-server"
+        ],
+        "url_contains": [
+          "api.githubcopilot.com/mcp"
+        ]
+      },
+      "default_mode": "read-write",
+      "mode_rules": [
+        {
+          "env": "GITHUB_READ_ONLY",
+          "truthy": true,
+          "mode": "read-only"
+        },
+        {
+          "arg": "--read-only",
+          "mode": "read-only"
+        }
+      ],
+      "tool_filters": {
+        "env": [],
+        "args": []
+      },
+      "toolset_filters": {
+        "env": [
+          "GITHUB_TOOLSETS"
+        ],
+        "args": [
+          "--toolsets"
+        ],
+        "all_values": [
+          "all",
+          "default"
+        ],
+        "write_toolsets": [
+          "repos",
+          "issues",
+          "pull_requests"
+        ]
+      },
+      "scope_filters": {},
+      "base_url_env": [
+        "GITHUB_HOST"
+      ],
+      "credential_env": [
+        "GITHUB_PERSONAL_ACCESS_TOKEN"
+      ],
+      "tools": {
+        "write": [
+          "create_or_update_file",
+          "push_files",
+          "create_branch",
+          "create_repository",
+          "fork_repository",
+          "issue_write",
+          "add_issue_comment",
+          "update_issue_comment",
+          "sub_issue_write",
+          "create_pull_request",
+          "update_pull_request",
+          "pull_request_review_write",
+          "add_comment_to_pending_review",
+          "add_reply_to_pull_request_comment",
+          "update_pull_request_branch"
+        ],
+        "destructive": [
+          "delete_file",
+          "delete_repository",
+          "merge_pull_request"
+        ]
+      },
+      "verified_against": [
+        {
+          "source": "https://github.com/github/github-mcp-server/blob/main/README.md",
+          "date": "2026-09-23"
+        }
+      ]
+    }
+  ],
+  "cli_routes": [
+    {
+      "command": "gh",
+      "auth_probe": [
+        "auth",
+        "status"
+      ],
+      "label": "GitHub CLI",
+      "permission_probe": [
+        "api",
+        "repos/{owner}/{repo}",
+        "--jq",
+        ".permissions.push"
+      ],
+      "mode_note": "no client-side read-only mode; the token's scopes and repository role apply"
+    }
+  ],
+  "probes": {
+    "cli": "gh"
+  },
+  "target_parser": "github",
+  "credential_hints": {
+    "name_keywords": [
+      "github"
+    ],
+    "token_shapes": [
+      "ghp_",
+      "github_pat_"
+    ]
+  },
+  "notes": [
+    "The remote server's mode is not visible in local configuration and is reported unknown."
+  ]
+}

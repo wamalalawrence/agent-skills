@@ -32,6 +32,9 @@ agent-skills rollback    # return to the previous release
 agent-skills uninstall   # remove it again
 ```
 
+Before an agent writes to Confluence, Jira, or a git host, `agent-skills access scan` shows what
+each assistant's configured route can actually do - read-only or read-write - without any network.
+
 ## Optional: Meeting Intelligence
 
 "Listen to this meeting: <link>" turns a Teams, Zoom, or Google Meet meeting into engineering

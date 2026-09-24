@@ -1,0 +1,4 @@
+$ agent-skills access classify-error --system confluence --op update --status 403 --target https://acme.atlassian.net/wiki/spaces/~jdoe/pages/123456789/Notes
+Classified: confluence update failed with '403' -> target rung: the account or token scope lacks permission on this target.
+Next: re-enter the resolution dialogue at the target rung; do not retry through another route.
+[exit 11]

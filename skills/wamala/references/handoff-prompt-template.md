@@ -90,6 +90,14 @@ Do this:
   an incomplete step.
 - Never print a credential. Pipe any command that might emit one through
   `agent-skills redact`, and resolve service access through the Access Resolver.
+- External access (BINDING): <the access check Wamala ran for this step, verbatim
+  result line and route, or "none needed">. Before any write to an external
+  system, run `agent-skills access check --system <id> --op <op> --target <t>
+  --user-authorised` yourself if Wamala did not, and use only the route it
+  qualifies. On any 401/403/404/"tool not found"/version conflict, run
+  `agent-skills access classify-error ...` and stop blocked with its output. Never
+  use a found credential directly, never fall back to a browser or raw HTTP, and
+  never retry a blocked write through another route: the user decides.
 
 Scope boundary: <the one thing this step must produce>
 Explicitly NOT this step: <the next owner's work, named>
@@ -98,7 +106,8 @@ Expected effort: <minutes> — a budget for reassessment, not a deadline
 Stop and report blocked (do not improvise) if: the owner skill is unavailable,
 required context is missing, the requirement-understanding gate ends at `unknown`
 or `low`, validation fails, or the step would require a forbidden destructive
-action, a discovered credential, or a production mutation. If you are blocked
+action, a discovered credential, or a production mutation, or an access check
+did not pass. If you are blocked
 because a criterion you were given cannot be true as written, say which
 criterion, what you measured or read, and why the two cannot both hold — that
 routes to the planner, not back to you.

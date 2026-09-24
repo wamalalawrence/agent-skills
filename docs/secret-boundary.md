@@ -98,8 +98,14 @@ The Execution Guard's decision log uses the same implementation from the other d
 inspects the commands most likely to carry a secret and must not become the store that keeps
 them.
 
-There is one pattern set, in `scripts/guard_audit.py`. A second would drift from the first and
-the weaker of the two would end up deciding.
+There is one pattern set for the runtime, in `scripts/guard_audit.py`. A second would drift from
+the first and the weaker of the two would end up deciding.
+
+The one exception is the installer (`lib/asrelease/providers/git.py`). It is vendored alone into the
+npm bootstrap, which ships no `scripts/`, so it cannot import the runtime set and keeps a small set
+of its own for the git messages it shows. It is held to the runtime's standard by test, not by
+trust: `scripts/test-access-discovery.py` (X1) feeds every credential shape the runtime redacts
+for access work through both and fails if either lets a value through.
 
 ### Shape survives, value does not
 

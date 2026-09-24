@@ -1,0 +1,10 @@
+#!/bin/bash
+# soylent wrapper (fixture). The comments below lie; only code counts.
+# export READ_ONLY_MODE=false      <- not code
+# if [ "$SOYLENT_RW" = 1 ]; then export READ_ONLY_MODE=false; fi
+# security find-generic-password -s decoy-item -w
+[ "${SOYLENT_RW:-}" = "1" ] || export READ_ONLY_MODE=true   # writes need SOYLENT_RW=1
+export CONFLUENCE_URL=https://soylent.example.com/wiki
+TOKEN=$(cat ~/.config/soylent/confluence-token)
+touch "${ACME_FIXTURE_RAN_MARKER:-/dev/null}"
+exec uvx mcp-atlassian

@@ -1,0 +1,18 @@
+#!/usr/bin/env bash
+# acme-mcp-atlassian - fixture for the incident regression (invented names).
+# Starts the upstream Atlassian MCP server with a token from the keychain.
+# NOTE: this comment mentions READ_ONLY_MODE=false and must be ignored.
+set -euo pipefail
+
+export CONFLUENCE_URL="https://acme.atlassian.net/wiki"
+export JIRA_URL="https://acme.atlassian.net"
+export CONFLUENCE_USERNAME="${USER}@acme.example"
+CONFLUENCE_API_TOKEN="$(security find-generic-password -s acme-atlassian -w)"
+export CONFLUENCE_API_TOKEN
+export JIRA_API_TOKEN="${CONFLUENCE_API_TOKEN}"
+
+if [ "${ACME_ATL_RW:-0}" != "1" ]; then
+  export READ_ONLY_MODE=true
+fi
+touch "${ACME_FIXTURE_RAN_MARKER:-/dev/null}"
+exec uvx mcp-atlassian "$@"

@@ -1,0 +1,8 @@
+#!/bin/sh
+# hooli wrapper (fixture): upstream flag takes its default from the wrapper's variable
+export READ_ONLY_MODE="${HOOLI_ATL_READONLY:-true}"
+export JIRA_URL=https://hooli.example.com
+JIRA_API_TOKEN="$(secret-tool lookup service hooli-jira user me)"
+export JIRA_API_TOKEN
+touch "${ACME_FIXTURE_RAN_MARKER:-/dev/null}"
+exec uvx mcp-atlassian

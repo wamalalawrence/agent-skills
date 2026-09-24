@@ -47,6 +47,11 @@ Exit codes:
   0  access resolved (or the requested management action succeeded)
   1  access not resolved; the report names what is missing
   2  usage or environment error
+
+The Access Discovery subcommands (`scan`, `check`, `classify-error`, ...) live in
+`access_discovery_cli.py` and add three codes from the CLI-wide contract in
+`lib/asrelease/exits.py`: 3 authentication required, 4 network failure during a
+probe, and 11 capability unavailable (the route works; this operation does not).
 """
 from __future__ import annotations
 
@@ -922,58 +927,36 @@ CAPABILITY_SERVED_HOSTS = {
     "jira": (),
 }
 
-MCP_CONFIG_CANDIDATES = (
-    ".mcp.json",
-    "mcp.json",
-    ".cursor/mcp.json",
-    ".vscode/mcp.json",
-    ".kiro/settings/mcp.json",
-)
-MCP_HOME_CANDIDATES = (
-    ".kiro/settings/mcp.json",
-    ".cursor/mcp.json",
-    ".claude.json",
-    ".codex/config.toml",
-)
-
-
 def detect_mcp(service: str, cwd: Path):
-    """Report host MCP configuration that mentions this service.
+    """Report an MCP server in the current host that serves this service.
 
-    This does not call a tool. It reports that an MCP path may exist so the
-    agent tries it before asking for a token, which is the tool-preference order
-    in docs/mcp.md.
+    Asks Access Discovery (`access_ladder.mcp_servers_for`), which reads every
+    host's MCP configuration into routes, instead of searching config text for
+    the service name. It says which server, in which host, and in what mode,
+    because a server that exists is not a server that can write: before a write,
+    `agent-skills access check` answers for the operation. No tool is called.
     """
-    root = git_root(cwd) or cwd
-    found = []
-    for candidate in MCP_CONFIG_CANDIDATES:
-        path = root / candidate
-        if path.is_file():
-            found.append(path)
-    for candidate in MCP_HOME_CANDIDATES:
-        path = Path.home() / candidate
-        if path.is_file():
-            found.append(path)
-    if not found:
-        return None
-    needle = service.lower().split("-")[0]
-    for path in found:
-        try:
-            text = path.read_text(encoding="utf-8", errors="replace").lower()
-        except OSError:
-            continue
-        if needle and needle in text:
-            return {
-                "kind": "mcp",
-                "detail": "host MCP configuration mentions %r (%s)" % (service, path.name),
-                "source": str(path),
-            }
-    return {
-        "kind": "mcp-present",
-        "detail": "host has MCP configuration; check for a %s tool before storing a secret"
-                  % service,
-        "source": str(found[0]),
-    }
+    try:
+        import access_ladder
+        found = access_ladder.mcp_servers_for(service, cwd)
+    except Exception as exc:  # noqa: BLE001 - discovery must not break resolution
+        return {"kind": "mcp-present", "detail": "MCP configuration could not be read (%s)" % exc,
+                "source": "", "serves_resource": False}
+    if found["matches"]:
+        match = found["matches"][0]
+        more = len(found["matches"]) - 1
+        detail = "%s serves %s%s; before a write run `agent-skills access check --system <id> --op <op>`" % (
+            access_ladder.describe_match(match), service, " (and %d more)" % more if more > 0 else "")
+        return {"kind": "mcp", "detail": detail, "source": match["file"], "mode": match["mode"],
+                "base_url": match["base_url"]}
+    if found["servers"]:
+        return {
+            "kind": "mcp-present",
+            "detail": "host has %d MCP server(s), none recognised for %s; `agent-skills access scan` lists them"
+                      % (found["servers"], service),
+            "source": "",
+        }
+    return None
 
 
 def detect_capability(service: str, cwd: Path, resource: str = ""):
@@ -1009,9 +992,11 @@ def detect_capability(service: str, cwd: Path, resource: str = ""):
             )
         return result
     found = detect_mcp(service, cwd)
-    if found is not None:
-        # MCP detection reads configuration files; it never confirms a host.
-        found.setdefault("serves_resource", not wanted)
+    if found is not None and "serves_resource" not in found:
+        # A route whose base URL names a host can be matched to the request;
+        # one that names none cannot be trusted to serve a specific resource.
+        route_host = resource_host(found.get("base_url", ""))
+        found["serves_resource"] = (not wanted) or (bool(route_host) and route_host == wanted)
     return found
 
 
@@ -1909,6 +1894,18 @@ def cmd_unbind(args) -> int:
 
 
 def cmd_forget(args) -> int:
+    if not args.profile:
+        # `forget <system>` / `forget --all` remove confirmed route knowledge
+        # (Access Discovery). Identities are only ever removed by --profile.
+        if args.system and args.all:
+            print("FAIL pass a system id or --all, not both", file=sys.stderr)
+            return 2
+        import access_discovery_cli
+        return access_discovery_cli.cmd_forget_routes(args)
+    if args.system or args.all:
+        print("FAIL --profile removes one identity; it cannot be combined with a system id or --all",
+              file=sys.stderr)
+        return 2
     profile = args.profile.strip().lower()
     if not PROFILE_NAME_RE.match(profile):
         print("FAIL invalid profile name", file=sys.stderr)
@@ -2246,8 +2243,17 @@ def build_parser() -> argparse.ArgumentParser:
     unbind.add_argument("--service", required=True)
     unbind.set_defaults(func=cmd_unbind)
 
-    forget = subparsers.add_parser("forget", help="Delete an identity and its secrets.")
-    forget.add_argument("--profile", required=True)
+    forget = subparsers.add_parser(
+        "forget",
+        help="Delete an identity and its secrets (--profile), or forget confirmed route knowledge "
+             "(<system> or --all).",
+    )
+    forget.add_argument("--profile", default="")
+    forget.add_argument("system", nargs="?", default="",
+                        help="forget confirmed route knowledge for this system (never an identity)")
+    forget.add_argument("--all", action="store_true",
+                        help="forget all confirmed route knowledge (never identities)")
+    forget.add_argument("--json", action="store_true")
     forget.set_defaults(func=cmd_forget)
 
     backend = subparsers.add_parser("backend", help="Report the secret-storage backend.")
@@ -2270,6 +2276,13 @@ def build_parser() -> argparse.ArgumentParser:
         "check-permissions", help="Check permissions on credential state."
     )
     perms.set_defaults(func=cmd_check_permissions)
+
+    # Access Discovery: which route can do which operation on which target.
+    # Its modules import only the standard library and each other, so loading
+    # them for every subcommand costs a few milliseconds and nothing else.
+    import access_discovery_cli
+    access_discovery_cli.register(subparsers)
+    forget.set_defaults(func=access_discovery_cli.json_capable(cmd_forget, "forget"))
 
     return parser
 

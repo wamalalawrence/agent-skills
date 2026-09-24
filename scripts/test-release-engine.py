@@ -481,7 +481,10 @@ def _(box):
     assert Exit.INSTALL_FAILED == 6
     assert Exit.VERIFY_FAILED == 7
     assert Exit.UPDATE_AVAILABLE == 10
-    assert set(Exit.NAMES) == {0, 2, 3, 4, 5, 6, 7, 10}
+    # 1.5.0 added 11. Additions are allowed; the codes above may never move.
+    assert Exit.CAPABILITY_UNAVAILABLE == 11
+    assert set(Exit.NAMES) == {0, 2, 3, 4, 5, 6, 7, 10, 11}
+    assert Exit.NAMES[11] == "capability-unavailable"
 
 
 @check("payload: the entry list does not carry development-only trees")

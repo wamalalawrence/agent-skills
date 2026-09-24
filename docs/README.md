@@ -11,6 +11,11 @@ Start here when reading the repository outside GitHub's main README.
   service: the deterministic precedence order, credential identities, OS-native secret storage, the
   rule that a committed file can never select an identity, and the separation between
   authentication and authorization.
+- [Access Discovery](access/README.md) - can this host do *this* operation on *this* target, and
+  via what: the seven-rung ladder, evidence strengths, launcher inspection, local route knowledge,
+  write profiles, and the resolution dialogue Wamala runs when a check does not pass. Per system:
+  [Atlassian](access/atlassian.md), [GitHub](access/github.md), [GitLab](access/gitlab.md); and
+  [for launcher authors](access/for-launcher-authors.md).
 - [Execution modes](execution-modes.md) - global on your machine, in-repo for cloud agents, and the
   legacy workspace model; plus why a local install cannot reach a remote runner.
 - [Issue tracker / Document store auth discovery](auth-discovery.md) - the Jira and Confluence

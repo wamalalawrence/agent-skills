@@ -163,6 +163,14 @@ jobs:
           python3 scripts/test-shared-knowledge.py
           python3 scripts/eval-shared-knowledge.py
 
+      # Access Discovery, offline: fake HOME with every host's MCP config, fake
+      # security / secret-tool / gh / uvx / docker on PATH, a fake stdio MCP
+      # server, a local fake Confluence for --probe, and canaries that the fake
+      # credential tools print only when asked for a secret. Includes the
+      # incident regression under invented names and the no-coupling lint.
+      - name: Access Discovery
+        run: python3 scripts/test-access-discovery.py
+
       # A pack must never carry a credential into the model's context. Probed
       # here as well as in the suite, because this is the property whose failure
       # is silent: nothing breaks, the secret is simply in the transcript.

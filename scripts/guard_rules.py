@@ -65,6 +65,7 @@ CATEGORIES = (
     "observability",
     "parse",
     "policy",
+    "access",
 )
 
 
@@ -275,6 +276,14 @@ CLOUD_MUTATE = _rule(
     "CLOUD_MUTATE", ASK, "cloud",
     "cloud-provider state mutation",
     "Add `--dry-run` where the provider supports it, or run the `describe-*` verb first.",
+)
+
+# --- access ------------------------------------------------------------------
+ACCESS_UNQUALIFIED_WRITE = _rule(
+    "ACCESS_UNQUALIFIED_WRITE", ASK, "access",
+    "a write to a known external system without a passing access check",
+    "Run `agent-skills access check --system <id> --op write --target <url-or-key> "
+    "--user-authorised`; a passing check allows the write for a short grant window.",
 )
 
 # --- observability ---------------------------------------------------------

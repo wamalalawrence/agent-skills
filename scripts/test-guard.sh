@@ -1042,6 +1042,7 @@ problems = []
 categories = {
     "filesystem", "disk", "database", "infrastructure", "cloud", "container",
     "vcs", "credential", "remote-execution", "observability", "parse", "policy",
+    "access",
 }
 for row in rows:
     if not row["summary"]:

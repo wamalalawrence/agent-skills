@@ -94,6 +94,14 @@ _REDACTIONS = (
     (re.compile(r"\bgh[pousr]_[A-Za-z0-9]{16,}"), "<redacted-token>"),
     (re.compile(r"\bgithub_pat_[A-Za-z0-9_]{20,}"), "<redacted-token>"),
     (re.compile(r"\bxox[abposr]-[A-Za-z0-9-]{10,}"), "<redacted-token>"),
+    # 1.5.0: headers, JWTs, Atlassian tokens and `*_API_TOKEN=` style
+    # assignments, which the rules above did not recognise.
+    (re.compile(r"(?i)(authorization[\"']?\s*[:=]\s*[\"']?)(?:bearer|basic|token)\s+[^\s\"']+"),
+     r"\1<redacted>"),
+    (re.compile(r"\beyJ[A-Za-z0-9_-]{10,}\.[A-Za-z0-9_-]{10,}\.[A-Za-z0-9_-]{5,}"), "<redacted-token>"),
+    (re.compile(r"\bAT[AC]TT[A-Za-z0-9_=\-]{8,}"), "<redacted-token>"),
+    (re.compile(r"(?i)\b([A-Z0-9_]*(?:_API_TOKEN|_PERSONAL_TOKEN|_TOKEN|_SECRET|_PASSWORD))=\S+"),
+     r"\1=<redacted>"),
     (re.compile(r"\b[A-Za-z0-9_\-]{0,8}(?:token|secret|password)[\"'\s:=]+\S{8,}", re.I),
      "<redacted-secret>"),
 )

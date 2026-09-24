@@ -1,6 +1,6 @@
 # Versioning
 
-`agent-skills` is at `1.4.0`. `1.0.0` was the first stable release. From here the contracts enumerated in
+`agent-skills` is at `1.5.0`. `1.0.0` was the first stable release. From here the contracts enumerated in
 [the 1.0 contract](one-point-oh.md) are stable within the `1.x` line: names do not change, exit
 codes are not renumbered, and machine-readable shapes stay compatible. The pre-`1.0.0` rules
 below describe every release up to and including `0.44.0` and the four release candidates; a
@@ -55,6 +55,7 @@ new code afterwards is allowed; changing the meaning of an existing one is not.
 | `6` | installation-failure | The machine could not be changed. | The previous release is still active. |
 | `7` | verification-failure | The installation is in a bad state. | Run `agent-skills doctor`. |
 | `10` | update-available | Informational, from `check-updates`. Not a failure. | Run `agent-skills update`. |
+| `11` | capability-unavailable | Added in `1.5.0`. The route works, but its mode, scope, or policy excludes this operation. | Change the route (a write profile) or hand the change to the user. |
 
 Each answers a different operator question, because "it failed" is not actionable and a single code
 forces log-scraping. In particular, `3` and `4` are separate on purpose: one is fixed by

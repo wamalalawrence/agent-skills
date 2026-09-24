@@ -89,6 +89,27 @@ runtime enforcement, or guaranteed outcomes.
   [destructive-action safety policy](destructive-action-safety.md) is a separate contract and still
   applies to everything a resolver reports as available.
 
+## Access Discovery
+
+- **Launcher inspection is a heuristic.** It reads shell and Python launchers statically and
+  recognises common shapes (`if [ "$X" != 1 ]; then export READ_ONLY_MODE=true`, `${X:-true}`,
+  `os.environ.get`). Unusual logic comes back `unknown` or with low confidence, and is always
+  `inferred` until you confirm it. Binaries are opaque.
+- **Remote MCP servers' modes are invisible locally.** Atlassian's and GitHub's hosted servers are
+  governed by OAuth scopes or server-side settings; their mode is reported `unknown`.
+- **The current host is known only from `--host`, `AGENT_SKILLS_HOST`, or `CLAUDECODE=1`.** Other
+  hosts set no documented variable, so every detected host is evaluated and a check that differs
+  by host asks which one you are in.
+- **Linux secret-service presence cannot be checked** without reading the secret, so it is
+  reported `unknown`.
+- **Enforcement needs a pre-execution hook.** Execution Guard gates MCP write tools and direct REST
+  writes on Claude Code and Codex. Elsewhere, Wamala's contract is the only gate. The guard's grant
+  is per system, operation class and server, not per target, and covers MCP tools only. HTTP calls
+  made from inside a program (a Python or Node one-liner) are not parsed.
+- **Probes speak for the identity they used.** `--probe` uses an identity from `access set`; if
+  that is not the MCP route's own account, the result is about a different credential, and the
+  report says which one it used.
+
 ## Project context
 
 - **Inference can be wrong.** Build and format commands derived from a build system are hints. Anything

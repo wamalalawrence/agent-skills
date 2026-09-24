@@ -116,6 +116,12 @@ Task needs an external resource
 Step 2 sits above every file on purpose: an operator must always be able to override stored state
 for one command without editing anything.
 
+For MCP, step 1 asks [Access Discovery](access/README.md): it reads every host's MCP configuration
+into routes and reports the server, the host, and its mode (`read-only`, `read-write`, or unknown). A
+route whose base URL names a different site than the requested resource does not resolve it.
+Resolving through MCP says a route exists, not that it can write: before a write, run
+`agent-skills access check`.
+
 Step 1 sits above step 2 because the cheapest credential is the one you never store. If `gh` is
 logged in, the agent should use `gh`, not ask for a token that duplicates it. This is the same
 [tool-preference order](mcp.md#tool-preference-order) the skills already follow.

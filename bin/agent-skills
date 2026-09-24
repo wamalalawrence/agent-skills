@@ -124,6 +124,21 @@ Access subcommands (see docs/access-resolution.md):
   access backend                  Report the secret-storage backend in use
   access import-legacy            Offer to move legacy .env credentials in
 
+Access discovery (see docs/access/README.md): can this host do THIS operation?
+  access scan [--host H|--all-hosts]   Routes per host: mode, strength, credential
+  access check --system S --op OP [--target T] [--host H] [--probe] [--live]
+                                  Walk the ladder: route, launch, auth, mode,
+                                  target, intent, policy (0 ok, 1 needs you,
+                                  3 auth, 4 network, 11 capability unavailable)
+  access classify-error --system S --op OP --status CODE   Map a failure to a rung
+  access inspect <command>        Read a launcher script (never runs it)
+  access explain <system>         Routes, modes, fixes, and policy for a system
+  access setup <system> [--write-profile] [--host H] [--undo]
+                                  Propose a route or a separate write profile;
+                                  writes only after you type yes in a terminal
+  access remember / forget <system>|--all   Confirmed local route knowledge
+  access systems                  The system registry
+
 Context subcommands (see docs/context-optimizer.md):
   context inspect <path>          Cheap metadata and structure; no model, no full read
   context check <path>...         Past the large-input threshold? Exit 10 when it is
@@ -196,7 +211,8 @@ technical enforcement point where a host offers one. Exit codes for
 check-command: 0 allow, 10 ask, 20 deny.
 
 Exit codes (stable): 0 ok, 2 usage, 3 authentication required, 4 network,
-5 integrity, 6 installation failed, 7 verification failed, 10 update available.
+5 integrity, 6 installation failed, 7 verification failed, 10 update available,
+11 capability unavailable (access check: the route works, this operation does not).
 
 Nothing in `install` asks for a credential. Reading the release source may need
 the git access you already have; that is distribution access, and it is never
@@ -359,6 +375,11 @@ case "${COMMAND}" in
       scripts/knowledge.py scripts/knowledge_resolver.py scripts/knowledge_store.py \
       scripts/knowledge_git.py scripts/knowledge_model.py scripts/knowledge_source.py \
       scripts/knowledge_cli.py \
+      scripts/access_discovery_cli.py scripts/access_ladder.py scripts/access_hosts.py \
+      scripts/access_toml.py scripts/access_registry.py scripts/access_inspect.py \
+      scripts/access_creds.py scripts/access_state.py scripts/access_setup.py \
+      scripts/access_live.py scripts/access_probe.py scripts/guard_access.py \
+      lib/access/systems/confluence.json \
       lib/tools/capabilities.json lib/tools/classes.json; do
       if [ ! -f "${RELEASE_DIR}/${required}" ]; then
         printf 'self-test: missing %s\n' "${required}" >&2

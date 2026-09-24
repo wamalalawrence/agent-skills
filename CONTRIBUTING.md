@@ -31,6 +31,7 @@ bash scripts/test-tools.sh                         # if you touched the tool fra
 bash scripts/test-guard.sh                         # if you touched Execution Guard
 bash scripts/test-context-optimizer.sh             # if you touched Context Optimizer
 bash scripts/test-access-resolution.sh             # if you touched the Access Resolver
+python3 scripts/test-access-discovery.py           # if you touched Access Discovery (scripts/access_*.py)
 bash scripts/test-cli-install.sh                   # if you touched installation
 python3 scripts/test-release-engine.py             # if you touched the release engine
 bash scripts/test-knowledge.sh                     # if you touched the memory tiers, durable.py, or the lifecycle wrappers

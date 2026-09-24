@@ -1,0 +1,182 @@
+{
+  "schema": "agent-skills.access-system/v1",
+  "id": "confluence",
+  "family": "atlassian",
+  "tool_id": "confluence",
+  "summary": "Confluence pages, comments, labels and attachments.",
+  "docs": "docs/access/atlassian.md",
+  "host_hints": [
+    "*.atlassian.net",
+    "confluence.*",
+    "wiki.*"
+  ],
+  "name_hints": [
+    "confluence",
+    "atlassian",
+    "wiki"
+  ],
+  "mcp_upstreams": [
+    {
+      "id": "sooperset-mcp-atlassian",
+      "label": "mcp-atlassian (sooperset)",
+      "match": {
+        "args_contain": [
+          "mcp-atlassian",
+          "ghcr.io/sooperset/mcp-atlassian",
+          "mcp_atlassian"
+        ],
+        "command_names": [
+          "mcp-atlassian"
+        ]
+      },
+      "default_mode": "read-write",
+      "mode_rules": [
+        {
+          "env": "READ_ONLY_MODE",
+          "truthy": true,
+          "mode": "read-only"
+        },
+        {
+          "arg": "--read-only",
+          "mode": "read-only"
+        }
+      ],
+      "tool_filters": {
+        "env": [
+          "ENABLED_TOOLS"
+        ],
+        "args": [
+          "--enabled-tools"
+        ]
+      },
+      "toolset_filters": {
+        "env": [
+          "TOOLSETS"
+        ],
+        "all_values": [
+          "all",
+          "default",
+          "legacy"
+        ],
+        "system_prefix": "confluence_",
+        "system_toolsets": [
+          "confluence_pages",
+          "confluence_comments",
+          "confluence_labels",
+          "confluence_attachments",
+          "confluence_analytics",
+          "confluence_permissions",
+          "confluence_templates",
+          "confluence_users"
+        ],
+        "args": [
+          "--toolsets"
+        ]
+      },
+      "scope_filters": {
+        "CONFLUENCE_SPACES_FILTER": "space"
+      },
+      "base_url_env": [
+        "CONFLUENCE_URL"
+      ],
+      "credential_env": [
+        "CONFLUENCE_API_TOKEN",
+        "CONFLUENCE_PERSONAL_TOKEN",
+        "CONFLUENCE_OAUTH_ACCESS_TOKEN",
+        "ATLASSIAN_OAUTH_ACCESS_TOKEN"
+      ],
+      "tool_prefix": "confluence_",
+      "tools": {
+        "write": [
+          "confluence_create_page",
+          "confluence_create_page_from_template",
+          "confluence_update_page",
+          "confluence_update_page_section",
+          "confluence_copy_page",
+          "confluence_add_comment",
+          "confluence_add_inline_comment",
+          "confluence_reply_to_comment",
+          "confluence_add_label",
+          "confluence_upload_attachment",
+          "confluence_upload_attachments",
+          "confluence_set_page_restrictions"
+        ],
+        "destructive": [
+          "confluence_delete_page",
+          "confluence_move_page",
+          "confluence_delete_attachment"
+        ]
+      },
+      "verified_against": [
+        {
+          "source": "https://github.com/sooperset/mcp-atlassian/blob/main/docs/configuration.mdx",
+          "date": "2026-09-23"
+        },
+        {
+          "source": "https://github.com/sooperset/mcp-atlassian/blob/main/.env.example",
+          "date": "2026-09-23"
+        },
+        {
+          "source": "https://github.com/sooperset/mcp-atlassian/blob/main/docs/tools-reference.mdx",
+          "date": "2026-09-23"
+        },
+        {
+          "source": "https://github.com/sooperset/mcp-atlassian/blob/main/src/mcp_atlassian/utils/toolsets.py",
+          "date": "2026-09-24"
+        }
+      ]
+    },
+    {
+      "id": "atlassian-remote-mcp",
+      "label": "Atlassian Remote MCP server (OAuth)",
+      "match": {
+        "args_contain": [
+          "mcp.atlassian.com"
+        ],
+        "url_contains": [
+          "mcp.atlassian.com"
+        ]
+      },
+      "default_mode": "unknown",
+      "mode_note": "Governed by the OAuth scopes granted at sign-in; nothing in local configuration states it.",
+      "mode_rules": [],
+      "scope_filters": {},
+      "base_url_env": [],
+      "credential_env": [],
+      "tools": {
+        "write": [],
+        "destructive": []
+      },
+      "verified_against": [
+        {
+          "source": "not verified in this release: mode is always reported unknown",
+          "date": "2026-09-23"
+        }
+      ]
+    }
+  ],
+  "cli_routes": [],
+  "probes": {
+    "auth_service": "confluence",
+    "identity": "GET {base}/rest/api/user/current",
+    "target_permissions": "GET {base}/rest/api/content/{id}?expand=operations,space,version"
+  },
+  "target_parser": "confluence",
+  "credential_hints": {
+    "name_keywords": [
+      "confluence",
+      "atlassian"
+    ],
+    "token_shapes": [
+      "ATATT"
+    ]
+  },
+  "notes": [
+    "An Atlassian Cloud API token created with scopes can read but fail writes with 401/403: that is L5 token scope, not a network fault.",
+    "Server/Data Center uses CONFLUENCE_PERSONAL_TOKEN; Cloud uses CONFLUENCE_USERNAME + CONFLUENCE_API_TOKEN.",
+    "CONFLUENCE_SPACES_FILTER that omits a personal space (~user) makes its pages look missing, not forbidden."
+  ],
+  "path_hints": [
+    "/wiki"
+  ]
+}
