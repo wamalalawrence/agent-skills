@@ -10,8 +10,8 @@ it. The design, the ladder and every failure class: [Access Discovery](../../../
 `start-task` prints the capability report. Its `access` line comes from
 `agent-skills access scan` (static, no network) and reads per system:
 `system · route · mode · strength · credential presence`. A route marked `ready (read-only)` is
-**not** a write route. `mcp ... config present` only says a file exists; the access line says what
-it can do. Presence is not capability.
+**not** a write route. The `mcp` line only says which servers exist; the access line says what each
+can do. Presence is not capability.
 
 ## 2. Derive the operations, then check before the work that depends on them
 
@@ -69,8 +69,9 @@ Same shape every time, one decision per message:
      tool you normally use for <system>" (then `agent-skills access inspect <command>`);
    - no credential: the user stores a token themselves (`agent-skills access set ... --secret-field
      token`); a found credential is offered only as input to setting up a route;
-   - read-only: a separate write profile (`agent-skills access setup <system> --write-profile`),
-     which the user applies in a terminal; the read-only entry stays;
+   - read-only: a separate write profile (`agent-skills access setup <system> --write-profile
+     --target <t>`), which the user applies in a terminal; it is limited to the target's space or
+     project and to that system's tools, and the read-only entry stays;
    - out of scope or no permission: name the filter or the missing permission and who can grant it;
    - unknown host: ask which assistant the user is in;
    - always: **manual hand-off** - prepare the exact content or diff and the target link, and finish

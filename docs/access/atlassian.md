@@ -26,11 +26,13 @@ system - `TOOLSETS=jira_issues` has none for Confluence.
 Keep the read-only server and add a second one for writes:
 
 ```bash
-agent-skills access setup confluence --write-profile --host <id> [--scope ~yourname]
+agent-skills access setup confluence --write-profile --host <id> --target "<page url>"
 ```
 
-It copies the existing entry, sets `READ_ONLY_MODE=false` (or the launcher's own switch), and shows
-the diff. You apply it in a terminal.
+It copies the existing entry, sets `READ_ONLY_MODE=false` (or the launcher's own switch), limits it
+to the page's space (`CONFLUENCE_SPACES_FILTER`) and to the Confluence toolsets (`TOOLSETS`), and
+shows the diff. You apply it in a terminal. `--all-scopes` drops the space limit; the Confluence-only
+limit stays. The toolset names were checked against upstream's `toolsets.py` on 2026-09-24.
 
 ## Cloud vs Server / Data Center
 
@@ -56,8 +58,8 @@ exist. The check catches this before any work:
                     pages there look missing, not forbidden   [declared]
 ```
 
-`JIRA_PROJECTS_FILTER` does the same for Jira projects. A write profile with
-`--scope ~yourname` gets its own filter.
+`JIRA_PROJECTS_FILTER` does the same for Jira projects. A write profile made with
+`--target <page url>` gets its own filter for that page's space.
 
 ## Probes (`--probe`)
 

@@ -84,7 +84,10 @@ terminal (stdin and stdout both TTYs). There is no flag or variable that skips i
 non-interactive run prints the change and writes nothing (A2 asserts the file is byte-identical).
 Writes back up the file, go through a temporary file and `os.replace`, and keep the mode (S1).
 `--undo` restores the backup after its own confirmation (A2). A JSONC file is never rewritten (S1).
-The diff is masked: secret-shaped values appear as a placeholder or `[redacted]` (S1).
+The diff is masked: secret-shaped values appear as a placeholder or `[redacted]` (S1). A write profile
+is limited by default to the target's space or project and to the target system's toolsets, so a
+profile made for one page's space cannot write elsewhere, and a Confluence profile cannot write to
+Jira (A2, S1).
 
 ## Threat: a write routes around a read-only setting
 

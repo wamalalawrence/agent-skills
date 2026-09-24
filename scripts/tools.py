@@ -177,41 +177,28 @@ def _probe_cli(command: str, args: list, timeout: int = 15) -> bool:
     return result.returncode == 0
 
 
-_MCP_CONFIG_CANDIDATES = (
-    ".mcp.json",
-    "mcp.json",
-    ".cursor/mcp.json",
-    ".vscode/mcp.json",
-    ".kiro/settings/mcp.json",
-)
-_MCP_HOME_CANDIDATES = (
-    ".kiro/settings/mcp.json",
-    ".cursor/mcp.json",
-    ".claude.json",
-    ".codex/config.toml",
-)
+def _detect_mcp(hint: str, cwd: Path, tool_id: str = "") -> dict:
+    """The MCP server serving `hint` in the current host, or {} if none.
 
-
-def _detect_mcp(hint: str, cwd: Path) -> str:
-    """Return the path of an MCP config that mentions `hint`, or "" if none.
-
-    This does not call a tool. It reports that an MCP path may exist, the same
-    way access.py step 1 does, so a resolve can prefer it over a stored secret.
+    Asks Access Discovery (`access_ladder.mcp_servers_for`), the one MCP
+    detector, so `tools` agrees with `access resolve` and `doctor`. The result
+    carries the server's mode: a read-only route does not provide a WRITE
+    capability. It does not call a tool.
     """
-    hint = (hint or "").lower()
-    seen = []
-    for name in _MCP_CONFIG_CANDIDATES:
-        seen.append(cwd / name)
-    home = Path(os.path.expanduser("~"))
-    for name in _MCP_HOME_CANDIDATES:
-        seen.append(home / name)
-    for path in seen:
-        try:
-            if path.is_file() and hint and hint in path.read_text(encoding="utf-8", errors="ignore").lower():
-                return str(path)
-        except OSError:
-            continue
-    return ""
+    try:
+        import access_ladder
+        import access_registry
+        # A tool that is itself a known system matches by that system's routes
+        # only. Its family hint (`atlassian` for jira) would also match a server
+        # the user confirmed serves only Confluence.
+        known = tool_id in access_registry.load_systems()
+        found = access_ladder.mcp_servers_for(tool_id if known else (hint or ""), cwd)
+    except Exception:  # noqa: BLE001 - discovery must not break resolution
+        return {}
+    if not found["matches"]:
+        return {}
+    match = found["matches"][0]
+    return {"detail": access_ladder.describe_match(match), "mode": match["mode"]}
 
 
 def _assumed_hosts() -> set:
@@ -332,12 +319,17 @@ def resolve_capability(reg: Registry, tool: dict, capability: str, allow_write: 
                      "host-native tools are not probeable from a script; check your agent host")
                 continue
             if kind == "mcp":
-                path = _detect_mcp(t.get("hint", tool["id"]), cwd)
-                if path:
-                    step("mcp", "resolved", f"MCP config mentions {t.get('hint', tool['id'])}: {path}")
+                found = _detect_mcp(t.get("hint", tool["id"]), cwd, tool["id"])
+                if found and action in ("WRITE", "ELEVATED") and found["mode"] == "read-only":
+                    step("mcp", "skipped", f"{found['detail']}: read-only, so it cannot provide {capability}; "
+                                           f"`agent-skills access check` explains the options")
+                    continue
+                if found:
+                    note = "" if action == "READ" else "; confirm with `agent-skills access check` before writing"
+                    step("mcp", "resolved", f"{found['detail']}{note}")
                     base.update(status="resolved", via="mcp", needs_auth=False, steps=steps)
                     return base, EXIT_OK
-                step("mcp", "skipped", "no host MCP config mentions this service")
+                step("mcp", "skipped", "no MCP server in this host serves this service")
                 continue
             if kind in ("cli", "native-client"):
                 command = t.get("command", "")
@@ -390,9 +382,10 @@ def tool_status(reg: Registry, tool: dict) -> dict:
             if kind == "host" and tool["id"] in _assumed_hosts():
                 return {"state": "AVAILABLE", "via": "host"}
             if kind == "mcp":
-                path = _detect_mcp(t.get("hint", tool["id"]), cwd)
-                if path:
-                    return {"state": "AVAILABLE", "via": "MCP"}
+                found = _detect_mcp(t.get("hint", tool["id"]), cwd, tool["id"])
+                if found:
+                    mode = found["mode"] if found["mode"] != "unknown" else "mode unknown"
+                    return {"state": "AVAILABLE", "via": f"MCP ({mode})"}
             if kind in ("cli", "native-client"):
                 command = t.get("command", "")
                 if command and shutil.which(command) is not None:

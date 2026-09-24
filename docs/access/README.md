@@ -96,7 +96,7 @@ only, never values, and everything passes through [redaction](../secret-boundary
 | `route` (unknown) | routes differ by host and the current host is unknown | say which assistant you are in, or pass `--host` |
 | `launch` | the launcher or its runtime (`uvx`, `docker`) is missing | install it or fix the path |
 | `auth` | no credential, or a launcher reads an item that does not exist | store a token yourself: `agent-skills access set ... --secret-field token` |
-| `mode` | read-only flag, tool allow-list, or toolset without write tools | a separate write profile: `agent-skills access setup <system> --write-profile` |
+| `mode` | read-only flag, tool allow-list, or toolset without write tools | a write profile: `agent-skills access setup <system> --write-profile --target <t>` |
 | `target` | a scope filter excludes the target ("looks missing, not forbidden") | a write profile scoped to that space or project |
 | `target` | the account lacks the permission (`--probe`) | ask the space or project owner for exactly that permission |
 | `intent` | the request did not ask for this operation | Wamala asks you |
@@ -173,7 +173,20 @@ sufficient; an explicit read-only setting outranks the tool list. Doctor never u
 A read-only route stays read-only. For writes, `access setup <system> --write-profile` proposes a
 second entry, `<name>-write`, reusing the same command and switching write mode by that route's own
 rule: `READ_ONLY_MODE=false` for the upstream, or the launcher's variable (`ACME_ATL_RW=1` in the
-example). `--scope <space|project>` narrows its scope filter.
+example).
+
+It is **limited by default**:
+
+- to the target's space or project, through the route's scope filter
+  (`CONFLUENCE_SPACES_FILTER`, `JIRA_PROJECTS_FILTER`). Name the target with `--target <url-or-key>`
+  or the key with `--scope <key>`; without either it refuses and says so. `--all-scopes` lifts this
+  limit on purpose. A route with no scope filter (GitHub, GitLab) cannot be narrowed, and the
+  proposal says the profile covers everything the account can write;
+- to the target system, when one server serves several: a Confluence write profile of
+  `mcp-atlassian` sets `TOOLSETS` to the Confluence toolsets, so it cannot write to Jira. There is no
+  opt-out for this one.
+
+The check's own fix options already carry `--target`, so the command Wamala hands you is scoped.
 
 - It shows the exact diff, with secret-shaped values masked.
 - It writes only after you type `yes` in a terminal. Run by an agent, it prints and writes nothing.
@@ -181,9 +194,6 @@ example). `--scope <space|project>` narrows its scope filter.
 - A file with comments (VS Code JSONC) is never rewritten; you get the snippet to paste.
 - It tells you how to reload the host and, for Claude Code, to keep the new server's tools off
   your permissions allow list so every write is asked.
-
-Whether a write profile should narrow scope to the target by default is an open decision; today
-narrowing is opt-in (`--scope`).
 
 ## Policy
 

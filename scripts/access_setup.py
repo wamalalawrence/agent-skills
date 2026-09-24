@@ -5,8 +5,10 @@ A read-only route should stay read-only. When the user wants writes, the safe
 change is a **second** server entry, `<name>-write`, that reuses the same
 command and switches write mode with whatever that route's own mode rule says:
 the upstream's setting (`READ_ONLY_MODE=false`), or a wrapper's own variable
-learned by inspection or confirmed by the user. It can narrow the scope filter
-to one space or project. The read-only entry is left exactly as it was.
+learned by inspection or confirmed by the user. By default it is limited to the
+target's space or project (the route's scope filter) and, when one server serves
+several systems, to the target system's toolsets; `--all-scopes` lifts only the
+first. The read-only entry is left exactly as it was.
 
 Rules this module never bends:
 
@@ -176,7 +178,33 @@ def _toml_value(value) -> str:
     return access_toml.dump_string(str(value))
 
 
-def plan_write_profile(route: dict, system: dict, scope_value: str, repo_root: Optional[Path]) -> dict:
+def scope_requirement(route: dict, system: dict) -> Optional[dict]:
+    """The scope filter a write profile for this route is limited by, if any.
+
+    {"key": CONFLUENCE_SPACES_FILTER, "kind": "space"} for an upstream that can
+    filter by space or project; None when the route has no such setting (the
+    profile then covers everything the account may write, and says so).
+    """
+    upstream = _upstream_of(route, system)
+    for key, kind in (upstream or {}).get("scope_filters", {}).items():
+        return {"key": key, "kind": kind}
+    return None
+
+
+def _upstream_of(route: dict, system: dict) -> Optional[dict]:
+    return next((u for u in system.get("mcp_upstreams", []) if u.get("id") == route.get("upstream")), None)
+
+
+def plan_write_profile(route: dict, system: dict, scope_value: str, repo_root: Optional[Path],
+                       all_scopes: bool = False) -> dict:
+    """Propose `<name>-write`, limited by default.
+
+    Limits, in order: the target's space or project (the route's scope filter),
+    and the target system's toolsets when the upstream serves several systems
+    from one server (a Confluence write profile must not also write to Jira).
+    `all_scopes` is the explicit opt-out of the first; there is none for the
+    second, because a profile made for one system has no business in another.
+    """
     path = Path(route["file"])
     fmt = hosts_mod.format_of(route["host"], path)
     text = path.read_text(encoding="utf-8")
@@ -192,16 +220,31 @@ def plan_write_profile(route: dict, system: dict, scope_value: str, repo_root: O
     new_entry = copy.deepcopy(entry)
     env = new_entry.get("env") if isinstance(new_entry.get("env"), dict) else {}
     env.update(switch["set_env"])
-    if scope_value:
-        upstream = next((u for u in system.get("mcp_upstreams", []) if u.get("id") == route.get("upstream")), None)
-        keys = list((upstream or {}).get("scope_filters", {}).keys())
-        if not keys:
-            return {"ok": False, "reason": "this route has no scope filter setting to narrow"}
-        env[keys[0]] = scope_value
+    upstream = _upstream_of(route, system)
+    requirement = scope_requirement(route, system)
+    limits = []
+    if requirement and not all_scopes:
+        if not scope_value:
+            return {"ok": False, "needs_scope": True, "reason": (
+                "a write profile is limited to one %s by default. Name the target (--target <url-or-key>) or the "
+                "%s (--scope <key>); --all-scopes removes the limit" % (requirement["kind"], requirement["kind"]))}
+        env[requirement["key"]] = scope_value
+        limits.append("%s %s only (%s=%s)" % (requirement["kind"], scope_value, requirement["key"], scope_value))
+    elif scope_value and not requirement:
+        return {"ok": False, "reason": "this route has no scope filter setting to narrow"}
+    elif requirement and all_scopes:
+        limits.append("every %s the account can write (--all-scopes)" % requirement["kind"])
+    else:
+        limits.append("everything the account can write: this route has no scope filter")
+    toolsets = (upstream or {}).get("toolset_filters", {})
+    if toolsets.get("system_toolsets"):
+        env[toolsets["env"][0]] = ",".join(toolsets["system_toolsets"])
+        limits.append("%s tools only (%s)" % (system["id"], toolsets["env"][0]))
     if env:
         new_entry["env"] = env
-    if switch["drop_args"] and isinstance(new_entry.get("args"), list):
-        new_entry["args"] = [a for a in new_entry["args"] if a not in switch["drop_args"]]
+    if isinstance(new_entry.get("args"), list):
+        new_entry["args"] = _drop_flags(new_entry["args"], switch["drop_args"], toolsets.get("args", [])
+                                        if toolsets.get("system_toolsets") else [])
     secrets = _secret_values(entry)
     if fmt == "codex-toml":
         new_text = text.rstrip("\n") + "\n" + _toml_block(new_name, new_entry)
@@ -219,9 +262,28 @@ def plan_write_profile(route: dict, system: dict, scope_value: str, repo_root: O
     if new_text is not None:
         diff = "".join(difflib.unified_diff(_mask(text, secrets).splitlines(True), _mask(new_text, secrets).splitlines(True),
                                             fromfile=str(path), tofile=str(path) + " (proposed)"))
-    return {"ok": True, "why": why, "file": str(path), "format": fmt, "new_name": new_name, "writable": writable,
+    return {"ok": True, "why": why, "limits": limits, "file": str(path), "format": fmt, "new_name": new_name, "writable": writable,
             "new_text": new_text, "diff": diff, "snippet": _mask(snippet, secrets), "host": route["host"],
             "server": route["name"]}
+
+
+def _drop_flags(args: List[str], bare: List[str], with_value: List[str]) -> List[str]:
+    """Remove `--read-only`-style flags, and `--toolsets <v>` / `--toolsets=<v>` pairs."""
+    out = []
+    skip = False
+    for arg in args:
+        if skip:
+            skip = False
+            continue
+        if arg in bare:
+            continue
+        if arg in with_value:
+            skip = True
+            continue
+        if any(arg.startswith(flag + "=") for flag in with_value):
+            continue
+        out.append(arg)
+    return out
 
 
 def apply_change(plan: dict) -> Tuple[bool, str]:

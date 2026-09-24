@@ -392,7 +392,10 @@ class Scanner:
                 warnings.append("%s: confirmed knowledge for server %r is stale: the launcher changed since %s; "
                                 "confirm it again" % (route["host"], route["name"], kn.get("confirmed_by_user", "?")))
         warnings.extend(_divergence(routes))
-        return {"schema": SCHEMA_SCAN, "hosts": [{"host": r["host"], "label": r["label"], "detected": r["detected"],
+        servers = [{"host": s["host"], "name": s["server_name"], "file": s["file"], "scope": s["scope"],
+                    "command": s["command"], "url": s["url"], "args": s["args"], "disabled": s["disabled"]}
+                   for report in reports for s in report["servers"]]
+        return {"schema": SCHEMA_SCAN, "servers": servers, "hosts": [{"host": r["host"], "label": r["label"], "detected": r["detected"],
                                                   "files": [{k: v for k, v in f.items()} for f in r["files"]]}
                                                  for r in reports],
                 "routes": routes, "warnings": warnings}
@@ -419,6 +422,64 @@ def _divergence(routes: List[dict]) -> List[str]:
 
 def detected_hosts(root: Path) -> List[str]:
     return [h for h in hosts_mod.HOSTS if hosts_mod.host_detected(h, root)]
+
+
+_MATCH_CACHE: Dict[tuple, dict] = {}
+
+
+def mcp_servers_for(hint: str, cwd: Path) -> dict:
+    """MCP servers in the current host (or every detected host) that serve `hint`.
+
+    The one MCP detector. `access resolve` (step 1), `tools resolve`, `tools
+    status` and doctor all ask this instead of searching config text for a
+    substring. `hint` is a system id (`confluence`), a family or name hint
+    (`atlassian`), or a name the registry has never heard of (`linear`): a known
+    system matches by its qualified routes, anything else by server name,
+    command, URL or arguments.
+
+    Returns {"host", "matches": [{host, name, file, system, mode, strength,
+    base_url}], "servers": <count of every configured server>}.
+    """
+    host, _how = hosts_mod.resolve_current_host()
+    key = (str(cwd), host, os.environ.get("HOME", ""))
+    if key not in _MATCH_CACHE:
+        scanner = Scanner(cwd)
+        host_ids = [host] if host else detected_hosts(scanner.root)
+        _MATCH_CACHE[key] = {"scan": scanner.scan(host_ids), "systems": scanner.systems}
+    scan = _MATCH_CACHE[key]["scan"]
+    systems = _MATCH_CACHE[key]["systems"]
+    needle = (hint or "").strip().lower()
+    wanted = {needle} if needle in systems else set(reg.systems_for_hint(systems, needle))
+    matches = []
+    seen = set()
+    for route in scan["routes"]:
+        if route["kind"] != "mcp" or route.get("disabled") or route["system"] not in wanted:
+            continue
+        seen.add((route["host"], route["name"]))
+        matches.append({"host": route["host"], "name": route["name"], "file": route["file"],
+                        "system": route["system"], "mode": route["mode"]["value"],
+                        "strength": route["mode"]["strength"],
+                        "base_url": (route.get("base_url") or {}).get("value", "")})
+    if needle:
+        for server in scan["servers"]:
+            if server["disabled"] or (server["host"], server["name"]) in seen:
+                continue
+            text = " ".join([server["name"], server["command"], server["url"]] + server["args"]).lower()
+            if needle in text:
+                seen.add((server["host"], server["name"]))
+                matches.append({"host": server["host"], "name": server["name"], "file": server["file"],
+                                "system": "", "mode": "unknown", "strength": "inferred", "base_url": ""})
+    return {"host": host or "", "matches": matches, "servers": len(scan["servers"])}
+
+
+def describe_match(match: dict) -> str:
+    what = 'MCP server "%s" in %s (%s)' % (match["name"], hosts_mod.HOST_LABELS.get(match["host"], match["host"]),
+                                          _tilde(match["file"]))
+    if match["mode"] in ("read-only", "read-write", "modify"):
+        what += ", %s [%s]" % (match["mode"], match["strength"])
+    else:
+        what += ", mode unknown"
+    return what
 
 
 # ---------------------------------------------------------------------------
@@ -710,16 +771,18 @@ def _fix_options(system: dict, route: Optional[dict], blocked: dict, op: str, ho
             options.append({"id": "confirm-inferred", "label": "Confirm what I inferred from %s" % (
                 route.get("mode", {}).get("source") or "the launcher"),
                 "command": "agent-skills access remember --system %s --server %s%s --yes" % (sid, route["name"], host_flag)})
-        options.append({"id": "write-profile", "label": "Add a separate write profile for this host (the read-only entry "
-                        "stays as it is)%s" % _toggle_note(route),
-                        "command": "agent-skills access setup %s --write-profile%s%s" % (
-                            sid, host_flag, " --server %s" % route["name"] if route else "")})
+        options.append({"id": "write-profile", "label": "Add a separate write profile for this host, limited to this "
+                        "target's space or project (the read-only entry stays as it is)%s" % _toggle_note(route),
+                        "command": "agent-skills access setup %s --write-profile%s%s%s" % (
+                            sid, host_flag, " --server %s" % route["name"] if route else "",
+                            _target_flag(target))})
     elif rid == "target":
         text = blocked["evidence"]
         if "excluded by" in text:
-            options.append({"id": "write-profile-scoped", "label": "Add a write profile whose scope filter includes "
-                            "this target", "command": "agent-skills access setup %s --write-profile --scope %s%s" % (
-                                sid, target.get("space") or target.get("project") or "<key>", host_flag)})
+            options.append({"id": "write-profile-scoped", "label": "Add a write profile limited to this target's "
+                            "space or project", "command": "agent-skills access setup %s --write-profile%s%s%s" % (
+                                sid, host_flag, " --server %s" % route["name"] if route else "",
+                                _target_flag(target))})
         elif "serves" in text:
             options.append({"id": "other-route", "label": "Set up a route for the target's site", "command":
                             "agent-skills access setup %s%s" % (sid, host_flag)})
@@ -739,6 +802,13 @@ def _fix_options(system: dict, route: Optional[dict], blocked: dict, op: str, ho
     options.append({"id": "manual-handoff", "label": "Do it once yourself: I prepare the exact change and the link, and "
                     "finish the rest of the task", "command": ""})
     return options
+
+
+def _target_flag(target: dict) -> str:
+    raw = (target or {}).get("raw", "")
+    if not raw:
+        return ""
+    return ' --target "%s"' % raw.replace('"', "")
 
 
 def _toggle_note(route: Optional[dict]) -> str:

@@ -43,9 +43,10 @@ and existing exit codes are unchanged. Design record: `DISCOVERY-access.md`; gui
 - **Local route knowledge** (`access remember`, `access forget <system>|--all`) in
   `~/.config/agent-skills/access/routes.json` (`0600`): facts the user confirmed, never secrets;
   stale when the launcher changes.
-- **Write profiles** (`access setup <system> --write-profile [--scope KEY] [--undo]`): a second
-  server entry with write mode switched by the route's own rule; masked diff, interactive `yes`
-  only, backup, atomic write, undo. `access setup <system>` prints the steps for a new route.
+- **Write profiles** (`access setup <system> --write-profile --target <t> [--undo]`): a second
+  server entry with write mode switched by the route's own rule, limited by default to the target's
+  space or project (`--scope KEY`; `--all-scopes` opts out) and to the target system's toolsets;
+  masked diff, interactive `yes` only, backup, atomic write, undo. `access setup <system>` prints the steps for a new route.
 - **`access classify-error`** maps a mid-task 401/403/404/"tool not found"/409 back onto a rung;
   **`access explain`**, **`access systems`**, **`access record`** (write audit in
   `~/.agent-skills/state/access/audit.jsonl`, no content, no secrets).
@@ -72,14 +73,18 @@ and existing exit codes are unchanged. Design record: `DISCOVERY-access.md`; gui
 - **Redaction** covers Atlassian tokens (`ATATT`/`ATCTT`) and a JSON `"Authorization"` member in the
   runtime, and `Authorization: Basic|Bearer`, JWTs, Atlassian tokens and `*_API_TOKEN=` /
   `*_PERSONAL_TOKEN=` / `*_SECRET=` assignments in the installer.
-- **Doctor's `mcp` row** now also sees Codex's `config.toml` and Claude Desktop's config (a
-  Codex-only machine used to report no MCP at all), and says it reports presence only.
+- **One MCP detector.** `access resolve` (step 1), `tools resolve`, `tools status` and doctor's `mcp`
+  row used to search config files for a substring; they now read routes from Access Discovery. The
+  resolver's note names the server, host and mode, and a route for another site no longer resolves
+  a request; `tools resolve` no longer counts a read-only MCP route as providing a WRITE capability;
+  doctor lists servers per host, including Codex and Claude Desktop (a Codex-only machine used to
+  report no MCP at all).
 - **`access forget`** also accepts `<system>` or `--all` for route knowledge; `--profile NAME` is
   unchanged and cannot be combined with them.
 
 ### Tests
 
-- `scripts/test-access-discovery.py`: 26 offline checks - the incident under invented names (acme,
+- `scripts/test-access-discovery.py`: 27 offline checks - the incident under invented names (acme,
   then globex with a docker upstream and a `pass` credential), host readers and the TOML subset,
   registry mode rules and filters, seven launcher shapes (never executed), presence-only credential
   checks with canaries, local knowledge and staleness, live introspection against a fake MCP

@@ -212,15 +212,19 @@ def _():
     try:
         config = box.home / ".codex" / "config.toml"
         before = config.read_bytes()
-        rc, out, _ = box.run("setup", "confluence", "--write-profile", "--host", "codex")
+        rc, out, err = box.run("setup", "confluence", "--write-profile", "--host", "codex")
+        assert rc == 1 and "limited to one space by default" in err, (out, err)
+        rc, out, _ = box.run("setup", "confluence", "--write-profile", "--host", "codex", "--target", PAGE)
         assert rc == 0 and "Not a terminal, so nothing was written" in out, out
-        assert 'ACME_ATL_RW = "1"' in out, out
+        assert 'ACME_ATL_RW = "1"' in out and 'CONFLUENCE_SPACES_FILTER = "~jdoe"' in out, out
+        assert 'TOOLSETS = "confluence_pages,' in out and "Limited to: space ~jdoe only" in out, out
         assert config.read_bytes() == before, "non-interactive setup wrote the file"
-        rc, out = box.run_tty(["yes"], "setup", "confluence", "--write-profile", "--host", "codex")
+        rc, out = box.run_tty(["yes"], "setup", "confluence", "--write-profile", "--host", "codex", "--target", PAGE)
         assert rc == 0 and "Written. Backup:" in out, out
         after = config.read_text()
         assert after.startswith(before.decode()), "the read-only entry was changed"
         assert "[mcp_servers.atlassian-write]" in after and 'ACME_ATL_RW = "1"' in after, after
+        assert 'CONFLUENCE_SPACES_FILTER = "~jdoe"' in after and "jira_issues" not in after, after
         backups = list((box.home / ".codex").glob("config.toml.agent-skills-backup-*"))
         assert len(backups) == 1 and backups[0].read_bytes() == before
         rc, rep, _ = box.run_json("check", "--system", "confluence", "--op", "update", "--target", PAGE, "--host",
@@ -271,7 +275,7 @@ def _():
         assert any(c["source"] == "pass" and c["locator"] == "work/globex/atlassian" and c["present"] == "present"
                    for c in rep["found_credentials"]), rep["found_credentials"]
         write = next(f for f in mode["fix_options"] if f["id"] == "write-profile")
-        assert write["command"].endswith("--server confluence"), write
+        assert "--server confluence" in write["command"] and '--target "%s"' % page in write["command"], write
         assert "acme" not in json.dumps(rep).lower(), "an earlier fixture's name leaked into another check"
         box.json_host(".cursor/mcp.json", "mcpServers", {
             "confluence": {"command": str(path)},
@@ -329,7 +333,9 @@ def _():
         (box.home / ".cursor" / "mcp.json").write_text("{ not json")
         rep = H.read_host("cursor", box.work, allowed)
         assert rep["servers"] == [] and rep["files"][0]["status"] == "error", rep
-        box.codex('[mcp_servers.x]\ncommand = """multi\nline"""\n')
+        # Invalid for both parsers (a multi-line string is valid TOML to tomllib
+        # on 3.11+, and only outside the 3.8 subset).
+        box.codex('[mcp_servers.x]\ncommand = \n')
         rc, scan, _ = box.run_json("scan", "--host", "codex")
         assert rc == 0 and any("unknown, not absent" in w for w in scan["warnings"]), scan["warnings"]
     finally:
@@ -505,6 +511,51 @@ def _():
         assert rc == 3 and rep["blocked_at"] == "auth", (rc, rep["blocked_at"], rung(rep, "auth"))
         assert "store-token" in [f["id"] for f in rung(rep, "auth")["fix_options"]]
         box.assert_no_secret_requested()
+    finally:
+        box.close()
+
+
+@check("D1 one MCP detector: access resolve, tools and doctor read routes (with mode), not config text")
+def _():
+    box = Box()
+    try:
+        def tool(*args):
+            out = subprocess.run([sys.executable, str(HERE / "tools.py")] + list(args), env=box.env,
+                                 cwd=str(box.work), stdout=subprocess.PIPE, stderr=subprocess.STDOUT,
+                                 universal_newlines=True, timeout=60)
+            return out.returncode, out.stdout
+        _direct(box, {"READ_ONLY_MODE": "true", "JIRA_URL": "https://acme.atlassian.net",
+                      "CONFLUENCE_URL": "https://acme.atlassian.net/wiki"})
+        rc, out, _ = box.run("resolve", "--service", "jira", "--resource", "https://acme.atlassian.net",
+                             "--require", "host,token", "--secret", "token")
+        assert rc == 0 and "via: mcp" in out and "read-only [declared]" in out, out
+        rc, out, _ = box.run("resolve", "--service", "jira", "--resource", "https://other.atlassian.net",
+                             "--require", "host,token", "--secret", "token")
+        assert "via: mcp" not in out, "a route for one site must not resolve a request for another: %s" % out
+        rc, out = tool("resolve", "jira", "--capability", "tracker.issue.write", "--allow-write")
+        assert "read-only, so it cannot provide tracker.issue.write" in out and "resolved via: mcp" not in out, out
+        rc, out = tool("resolve", "jira", "--capability", "tracker.issue.read")
+        assert "resolved via: mcp" in out, out
+        rc, out = tool("status")
+        assert re.search(r"jira\s+AVAILABLE\s+MCP \(read-only\)", out), out
+        box.json_host(".cursor/mcp.json", "mcpServers", {"linear": {"command": "npx", "args": ["-y", "linear-mcp"]}})
+        import importlib
+        old = dict(os.environ)
+        try:
+            os.environ["HOME"] = str(box.home)
+            os.environ.pop("CLAUDECODE", None)
+            import access_ladder
+            importlib.reload(access_ladder)
+            found = access_ladder.mcp_servers_for("linear", box.work)
+            assert [m["name"] for m in found["matches"]] == ["linear"] and found["matches"][0]["mode"] == "unknown"
+            assert access_ladder.mcp_servers_for("gitlab", box.work)["matches"] == []
+        finally:
+            os.environ.clear()
+            os.environ.update(old)
+        box.codex('[mcp_servers.atl]\ncommand = "uvx"\nargs = ["mcp-atlassian"]\n')
+        doctor = subprocess.run(["bash", str(HERE / "doctor.sh"), "--brief"], env=box.env, cwd=str(box.work),
+                                stdout=subprocess.PIPE, stderr=subprocess.STDOUT, universal_newlines=True, timeout=120)
+        assert re.search(r"ok\s+mcp\s+\d+ server\(s\):.*codex: atl", doctor.stdout), doctor.stdout
     finally:
         box.close()
 
@@ -735,24 +786,27 @@ def _():
         assert rc == 0 and '"READ_ONLY_MODE": "false"' in out and '"CONFLUENCE_SPACES_FILTER": "~jdoe"' in out, out
         assert "<unchanged value of CONFLUENCE_API_TOKEN>" in out or '"CONFLUENCE_API_TOKEN": "[redacted]"' in out, out
         no_canary(out, err)
-        rc, out = box.run_tty(["no"], "setup", "confluence", "--write-profile", "--host", "cursor")
+        rc, out = box.run_tty(["no"], "setup", "confluence", "--write-profile", "--host", "cursor", "--scope", "~jdoe")
         assert "Nothing changed" in out and "atl-write" not in path.read_text(), out
-        rc, out = box.run_tty(["yes"], "setup", "confluence", "--write-profile", "--host", "cursor")
+        rc, out = box.run_tty(["yes"], "setup", "confluence", "--write-profile", "--host", "cursor", "--all-scopes")
         no_canary(out)
         data = json.loads(path.read_text())
         assert data["mcpServers"]["atl"]["env"]["READ_ONLY_MODE"] == "true", "the original entry changed"
         assert data["mcpServers"]["atl-write"]["env"]["READ_ONLY_MODE"] == "false"
+        assert "CONFLUENCE_SPACES_FILTER" not in data["mcpServers"]["atl-write"]["env"], "--all-scopes still scoped"
+        assert data["mcpServers"]["atl-write"]["env"]["TOOLSETS"].split(",")[0] == "confluence_pages", \
+            "a Confluence write profile must stay limited to Confluence tools"
         assert data["mcpServers"]["atl-write"]["env"]["CONFLUENCE_API_TOKEN"] == PLAINTEXT_CANARY, \
             "the write profile must carry the same credential reference"
         assert stat.S_IMODE(path.stat().st_mode) == 0o600
-        rc, out, _ = box.run("setup", "confluence", "--write-profile", "--host", "cursor")
+        rc, out, _ = box.run("setup", "confluence", "--write-profile", "--host", "cursor", "--all-scopes")
         assert rc == 1, "a second write profile must not be proposed over the first"
         vs = box.work / ".vscode" / "mcp.json"
         vs.parent.mkdir()
         vs.write_text('{\n  // keep me\n  "servers": {"atl": {"command": "uvx", "args": ["mcp-atlassian"], '
                       '"env": {"READ_ONLY_MODE": "true"}}}\n}\n')
         before = vs.read_bytes()
-        rc, out = box.run_tty(["yes"], "setup", "confluence", "--write-profile", "--host", "copilot")
+        rc, out = box.run_tty(["yes"], "setup", "confluence", "--write-profile", "--host", "copilot", "--all-scopes")
         assert "has comments" in out and vs.read_bytes() == before, out
     finally:
         box.close()

@@ -1,9 +1,10 @@
-$ agent-skills access setup confluence --write-profile --host codex
+$ agent-skills access setup confluence --write-profile --host codex --target https://acme.atlassian.net/wiki/spaces/~jdoe/pages/123456789/Notes
 Proposed: a second server 'atlassian-write' in ~/.codex/config.toml (Codex). The existing 'atlassian' entry is not changed.
 Write mode: ACME_ATL_RW=1 switches write mode, per the launcher (~/.local/bin/acme-mcp-atlassian line 14, 15).
+Limited to: space ~jdoe only (CONFLUENCE_SPACES_FILTER=~jdoe); confluence tools only (TOOLSETS).
 --- ~/.codex/config.toml
 +++ ~/.codex/config.toml (proposed)
-@@ -3,3 +3,11 @@
+@@ -3,3 +3,13 @@
  command = "~/.local/bin/acme-mcp-atlassian"
  args = []
  startup_timeout_sec = 60
@@ -15,18 +16,21 @@ Write mode: ACME_ATL_RW=1 switches write mode, per the launcher (~/.local/bin/ac
 +
 +[mcp_servers.atlassian-write.env]
 +ACME_ATL_RW = "1"
++CONFLUENCE_SPACES_FILTER = "~jdoe"
++TOOLSETS = "confluence_pages,confluence_comments,confluence_labels,confluence_attachments,confluence_analytics,confluence_permissions,confluence_templates,confluence_users"
 
 Agent Skills does not know a per-tool approval setting for Codex; if it has one, keep the atlassian-write server's tools on ask.
 Not a terminal, so nothing was written. To apply it, run this yourself in a terminal:
-  agent-skills access setup confluence --write-profile --host codex
+  agent-skills access setup confluence --write-profile --host codex --scope ~jdoe
 [exit 0]
 
-$ agent-skills access setup confluence --write-profile --host codex   (in a terminal)
+$ agent-skills access setup confluence --write-profile --host codex --target https://acme.atlassian.net/wiki/spaces/~jdoe/pages/123456789/Notes   (in a terminal)
 Proposed: a second server 'atlassian-write' in ~/.codex/config.toml (Codex). The existing 'atlassian' entry is not changed.
 Write mode: ACME_ATL_RW=1 switches write mode, per the launcher (~/.local/bin/acme-mcp-atlassian line 14, 15).
+Limited to: space ~jdoe only (CONFLUENCE_SPACES_FILTER=~jdoe); confluence tools only (TOOLSETS).
 --- ~/.codex/config.toml
 +++ ~/.codex/config.toml (proposed)
-@@ -3,3 +3,11 @@
+@@ -3,3 +3,13 @@
  command = "~/.local/bin/acme-mcp-atlassian"
  args = []
  startup_timeout_sec = 60
@@ -38,10 +42,12 @@ Write mode: ACME_ATL_RW=1 switches write mode, per the launcher (~/.local/bin/ac
 +
 +[mcp_servers.atlassian-write.env]
 +ACME_ATL_RW = "1"
++CONFLUENCE_SPACES_FILTER = "~jdoe"
++TOOLSETS = "confluence_pages,confluence_comments,confluence_labels,confluence_attachments,confluence_analytics,confluence_permissions,confluence_templates,confluence_users"
 
 Agent Skills does not know a per-tool approval setting for Codex; if it has one, keep the atlassian-write server's tools on ask.
 Add 'atlassian-write' to ~/.codex/config.toml? Type 'yes' to apply: yes
-Written. Backup: ~/.codex/config.toml.agent-skills-backup-20260923T180254 (undo: agent-skills access setup --undo --host codex)
+Written. Backup: ~/.codex/config.toml.agent-skills-backup-20260924T093058 (undo: agent-skills access setup --undo --host codex)
 Start a new Codex session; Codex reads config.toml at startup.
 Then: agent-skills access check --system confluence --op write --target <target> --host codex
 [exit 0]
@@ -73,7 +79,7 @@ Remember these facts (no secrets) in ~/.config/agent-skills/access/routes.json?
     "name": "acme-atlassian"
   },
   "trusted_self_report": false,
-  "confirmed_by_user": "2026-09-23",
+  "confirmed_by_user": "2026-09-24",
   "source": "wrapper inspection, confirmed in dialogue"
 }
 Confirmed by the user in the conversation (--yes).

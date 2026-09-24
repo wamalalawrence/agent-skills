@@ -16,8 +16,8 @@ Credentials found (locators only; a found credential is not a route):
 Options:
   1. Confirm what I inferred from ~/.local/bin/acme-mcp-atlassian line 14, 15
      agent-skills access remember --system confluence --server atlassian --host codex --yes
-  2. Add a separate write profile for this host (the read-only entry stays as it is), using ACME_ATL_RW=1
-     agent-skills access setup confluence --write-profile --host codex --server atlassian
+  2. Add a separate write profile for this host, limited to this target's space or project (the read-only entry stays as it is), using ACME_ATL_RW=1
+     agent-skills access setup confluence --write-profile --host codex --server atlassian --target "https://acme.atlassian.net/wiki/spaces/~jdoe/pages/123456789/Notes"
   3. Do it once yourself: I prepare the exact change and the link, and finish the rest of the task
 warning: codex: ~/.codex/config.toml is readable by other users (mode 644)
 [exit 11]

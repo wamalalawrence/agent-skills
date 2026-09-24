@@ -192,13 +192,24 @@ def cmd_setup(args) -> int:
               "for a new one." % (args.system, host, args.system, host), file=sys.stderr)
         return ladder.EXIT_NEEDS_USER
     route = routes[0]
-    plan = access_setup.plan_write_profile(route, system, args.scope or "", scanner.root)
+    scope = args.scope or ""
+    if args.target and not scope:
+        requirement = access_setup.scope_requirement(route, system)
+        if requirement:
+            target = reg.parse_target(system, args.target)
+            scope = reg.target_scope_value(target, requirement["kind"])
+            if not scope:
+                print("Cannot tell the %s from %r (a short link does not name it). Pass --scope <key>." % (
+                    requirement["kind"], args.target), file=sys.stderr)
+                return ladder.EXIT_NEEDS_USER
+    plan = access_setup.plan_write_profile(route, system, scope, scanner.root, all_scopes=args.all_scopes)
     if not plan["ok"]:
         print("Cannot propose a write profile: %s" % plan["reason"], file=sys.stderr)
         return ladder.EXIT_NEEDS_USER
     print("Proposed: a second server %r in %s (%s). The existing %r entry is not changed." % (
         plan["new_name"], plan["file"], hosts_mod.HOST_LABELS.get(host, host), route["name"]))
     print("Write mode: %s." % plan["why"])
+    print("Limited to: %s." % "; ".join(plan["limits"]))
     if plan["diff"]:
         print(redact(plan["diff"]))
     print(access_setup.approval_note(host, plan["new_name"]))
@@ -207,9 +218,9 @@ def cmd_setup(args) -> int:
         return 0
     if not access_setup.interactive():
         print("Not a terminal, so nothing was written. To apply it, run this yourself in a terminal:\n"
-              "  agent-skills access setup %s --write-profile --host %s%s%s" % (
+              "  agent-skills access setup %s --write-profile --host %s%s%s%s" % (
                   args.system, host, " --server %s" % route["name"] if args.server else "",
-                  " --scope %s" % args.scope if args.scope else ""))
+                  " --scope %s" % scope if scope else "", " --all-scopes" if args.all_scopes else ""))
         return 0
     if not access_setup.confirm("Add %r to %s?" % (plan["new_name"], plan["file"])):
         print("Nothing changed.")
@@ -400,7 +411,10 @@ def register(subparsers) -> None:
     setup.add_argument("--write-profile", action="store_true")
     setup.add_argument("--host", default="")
     setup.add_argument("--server", default="", help="base the profile on this server entry")
-    setup.add_argument("--scope", default="", help="narrow the write profile's scope filter to this space/project")
+    setup.add_argument("--target", default="", help="limit the write profile to this target's space/project")
+    setup.add_argument("--scope", default="", help="limit the write profile to this space/project key")
+    setup.add_argument("--all-scopes", action="store_true",
+                       help="do not limit the write profile to one space/project (it stays limited to the system)")
     setup.add_argument("--undo", action="store_true")
     setup.set_defaults(func=cmd_setup)
 

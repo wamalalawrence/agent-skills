@@ -189,13 +189,18 @@ CLI routes: `jira me`, `gh auth status` (+ `gh api repos/<o>/<r> --jq .permissio
 | Installer redaction missed auth headers, JWTs, `*_API_TOKEN=` / `*_PERSONAL_TOKEN=` | fixed |
 | Host MCP configs with plaintext tokens, or group/world-readable | reported by scan and doctor |
 | Host divergence (read-only in one host, read-write in another) | reported by scan and doctor |
-| `detect_mcp` (access.py) and `_detect_mcp` (tools.py) substring-search configs and duplicate the path list | reported, not changed |
+| `detect_mcp` (access.py) and `_detect_mcp` (tools.py) substring-search configs and duplicate the path list | fixed: one detector |
 | Browser fallback attempted with no session | fixed by contract: never attempted, never a write route |
 
 ## Needs a human decision
 
-- Should a write profile narrow its scope filter to the target space or project by default? Today
-  narrowing is opt-in (`--scope`).
-- Should `ACCESS_UNQUALIFIED_WRITE` default to deny once Wamala is the usual entry point?
-- Should the two older MCP detectors be replaced by `access scan`? It would change `access resolve`
-  and `tools resolve` notes, so it is left for a release that can say so.
+Decided by the maintainer on 2026-09-24, and implemented in this release:
+
+- **Write profiles are limited by default** to the target's space or project (`--target`/`--scope`;
+  `--all-scopes` opts out) and always to the target system's toolsets when one server serves several.
+- **`ACCESS_UNQUALIFIED_WRITE` stays ASK.**
+- **The two older MCP detectors are replaced** by one (`access_ladder.mcp_servers_for`, built on
+  `access scan`), used by `access resolve` step 1, `tools resolve`, `tools status`, and doctor's `mcp`
+  row. `access resolve` notes now name the server, host and mode, and a route for another site no
+  longer resolves a request; `tools resolve` no longer counts a read-only MCP route as providing a
+  WRITE capability; doctor's `mcp` row lists servers instead of config files.

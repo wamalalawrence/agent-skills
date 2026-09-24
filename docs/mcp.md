@@ -102,13 +102,13 @@ agent-skills doctor --brief
 
 ```text
     NO  tracker config   Jira config: missing required field(s): JIRA_HOST
-    ok  mcp              config present: ~/.claude.json
+    ok  mcp              1 server(s): claude-code: atlassian (presence only; the access rows say what each can do)
 ```
 
 Read that way round: tracker configuration is incomplete, but the host has MCP, so check for an
 Atlassian tool before reporting the tracker unreachable.
 
-**Presence is not capability.** `mcp ... config present` says a file exists. Before a **write**,
+**Presence is not capability.** The `mcp` row says which servers exist. Before a **write**,
 run `agent-skills access check` ([Access Discovery](access/README.md)): the server may be
 read-only, filtered, or a launcher script whose mode only the check reports. The order above is for
 finding a route, not for getting around one. When a check fails at `mode`, `target`, or `policy`,

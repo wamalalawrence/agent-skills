@@ -188,6 +188,12 @@ to store.
 7. unresolved -> safe setup guidance
 ```
 
+Step 2 asks [Access Discovery](access/README.md), the same detector `access resolve` and `doctor`
+use: an MCP server in the current host whose route serves the tool (a known system by its routes,
+any other tool by server name). A read-only route does not provide a `WRITE` or `ELEVATED`
+capability and the step is skipped with the reason; for a write it also reminds you to run
+`agent-skills access check`, which answers for one operation on one target.
+
 Steps 1–4 need no secret. Steps 5–6 call `agent-skills access resolve` and report its
 secret-safe result — the field *names* that are missing, never a value. Step 7 names the missing
 capability and points at the tool's setup doc; it never asks for a token in the conversation.

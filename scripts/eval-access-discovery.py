@@ -63,11 +63,11 @@ def s2_write_profile_present():
     box = suite.incident_box()
     try:
         texts = []
-        rc, text = transcript(box, "setup", "confluence", "--write-profile", "--host", "codex")
+        rc, text = transcript(box, "setup", "confluence", "--write-profile", "--host", "codex", "--target", PAGE)
         texts.append(text)
-        rc, out = box.run_tty(["yes"], "setup", "confluence", "--write-profile", "--host", "codex")
-        texts.append(_clean(box, "$ agent-skills access setup confluence --write-profile --host codex   "
-                                 "(in a terminal)\n" + out + "[exit %d]\n" % rc))
+        rc, out = box.run_tty(["yes"], "setup", "confluence", "--write-profile", "--host", "codex", "--target", PAGE)
+        texts.append(_clean(box, "$ agent-skills access setup confluence --write-profile --host codex --target %s   "
+                                 "(in a terminal)\n" % PAGE + out + "[exit %d]\n" % rc))
         rc, text = transcript(box, "remember", "--system", "confluence", "--server", "atlassian", "--host", "codex",
                               "--yes")
         texts.append(text)

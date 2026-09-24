@@ -220,33 +220,12 @@ probe_github() {
 }
 
 probe_mcp() {
-  # MCP is host-owned configuration. agent-skills ships none and enables none;
-  # this only reports whether the host has any, so a skill can prefer an MCP
-  # tool over shelling out. See docs/mcp.md.
+  # MCP is host-owned configuration. agent-skills ships none and enables none.
+  # The row is filled in by probe_access from the same `access scan` that the
+  # access rows come from, so the two can never disagree about what exists.
+  # It reports presence; the access rows say what each route can do.
   MCP_STATE="no"
-  MCP_DETAIL="no MCP configuration found (agent-skills ships none by design)"
-  local found=""
-  local candidate
-  local root
-  root="$(git rev-parse --show-toplevel 2>/dev/null || pwd)"
-  for candidate in \
-    "${root}/.mcp.json" \
-    "${root}/mcp.json" \
-    "${root}/.cursor/mcp.json" \
-    "${root}/.kiro/settings/mcp.json" \
-    "${root}/.vscode/mcp.json" \
-    "${HOME}/.kiro/settings/mcp.json" \
-    "${HOME}/.cursor/mcp.json" \
-    "${HOME}/.claude.json" \
-    "${CODEX_HOME:-${HOME}/.codex}/config.toml" \
-    "${HOME}/Library/Application Support/Claude/claude_desktop_config.json" \
-    "${HOME}/.config/Claude/claude_desktop_config.json"; do
-    [[ -f "${candidate}" ]] && found="${found}${candidate} "
-  done
-  if [[ -n "${found}" ]]; then
-    MCP_STATE="yes"
-    MCP_DETAIL="config present: ${found%% } (presence only; the access rows say what each route can do)"
-  fi
+  MCP_DETAIL="no MCP server configured in any detected host (agent-skills ships none by design)"
 }
 
 # Access Discovery: per detected host, per known system, what the route can do
@@ -257,6 +236,9 @@ probe_access() {
   ACCESS_DETAIL="access scan unavailable"
   ACCESS_ROWS=""
   ACCESS_WARNINGS=""
+  local mcp_none="${MCP_DETAIL}"
+  MCP_STATE="?"
+  MCP_DETAIL="MCP configuration could not be read (agent-skills access scan failed)"
   local script="${SCRIPT_DIR}/access.py"
   [[ -f "${script}" ]] || return 0
   local out=""
@@ -283,6 +265,13 @@ state = "no" if broken else ("yes" if ready else "no")
 detail = "%s: %s" % (host, "; ".join(sorted(set(bits))) if bits else "no route for a known system")
 print("STATE\t" + state)
 print("DETAIL\t" + detail)
+servers = scan.get("servers") or []
+if servers:
+    by_host = {}
+    for s in servers:
+        by_host.setdefault(s["host"], []).append(s["name"])
+    print("MCP\t%d server(s): %s (presence only; the access rows say what each can do)" % (
+        len(servers), "; ".join("%s: %s" % (h, ", ".join(sorted(set(n)))) for h, n in sorted(by_host.items()))))
 for r in rows:
     line = r["state"]
     if r["route"]:
@@ -298,10 +287,13 @@ for r in rows:
 for w in scan.get("warnings") or []:
     print("WARN\t" + w)
 ' 2>/dev/null)" || return 0
+  MCP_STATE="no"
+  MCP_DETAIL="${mcp_none}"
   local kind a b c d
   while IFS=$'\t' read -r kind a b c d; do
     case "${kind}" in
       STATE) ACCESS_STATE="${a}" ;;
+      MCP) MCP_STATE="yes"; MCP_DETAIL="${a}" ;;
       DETAIL) ACCESS_DETAIL="${a}" ;;
       ROW) ACCESS_ROWS="${ACCESS_ROWS}${a}"$'\t'"${b}"$'\t'"${c}"$'\t'"${d}"$'\n' ;;
       WARN) ACCESS_WARNINGS="${ACCESS_WARNINGS}${a}"$'\n' ;;

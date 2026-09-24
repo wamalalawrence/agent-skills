@@ -55,7 +55,28 @@
           "default",
           "legacy"
         ],
-        "system_prefix": "jira_"
+        "system_prefix": "jira_",
+        "system_toolsets": [
+          "jira_issues",
+          "jira_fields",
+          "jira_comments",
+          "jira_transitions",
+          "jira_agile",
+          "jira_attachments",
+          "jira_development",
+          "jira_forms",
+          "jira_links",
+          "jira_metrics",
+          "jira_project_analysis",
+          "jira_projects",
+          "jira_service_desk",
+          "jira_users",
+          "jira_watchers",
+          "jira_worklog"
+        ],
+        "args": [
+          "--toolsets"
+        ]
       },
       "scope_filters": {
         "JIRA_PROJECTS_FILTER": "project"
@@ -113,6 +134,10 @@
         {
           "source": "https://github.com/sooperset/mcp-atlassian/blob/main/docs/tools-reference.mdx",
           "date": "2026-09-23"
+        },
+        {
+          "source": "https://github.com/sooperset/mcp-atlassian/blob/main/src/mcp_atlassian/utils/toolsets.py",
+          "date": "2026-09-24"
         }
       ]
     },
