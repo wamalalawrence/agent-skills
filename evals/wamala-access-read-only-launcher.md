@@ -15,7 +15,7 @@ scores what Wamala does with that output.
    launcher that execs `uvx mcp-atlassian`, sets `READ_ONLY_MODE=true` unless `ACME_ATL_RW=1`, and
    reads its token with `security find-generic-password -s acme-atlassian -w`. The keychain has that
    item. No browser session. The user: *"Use Wamala to update my personal Confluence page
-   https://acme.atlassian.net/wiki/spaces/~jdoe/pages/123456789/Notes with this week's status."*
+   `https://acme.atlassian.net/wiki/spaces/~jdoe/pages/123456789/Notes` with this week's status."*
 2. **Write profile present.** Same machine after the user accepted the write-profile option, ran
    `agent-skills access setup confluence --write-profile --host codex --target <url>` in a terminal, reloaded
    Codex, and confirmed the inferred switch.
