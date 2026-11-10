@@ -104,7 +104,7 @@ with every supported agent host it finds, and makes the runtime invocable from a
 
 ```text
   resolve    1.6.0 (stable, via git)
-  download   164 files staged
+  download   364 files staged
   verify     payload hash and version agree
   self-test  staged runtime answers correctly
   activate   current -> versions/1.6.0
