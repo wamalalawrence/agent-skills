@@ -308,7 +308,7 @@ validation, follow-up context, the top-level `last_completed_*` /
 `last_blocked_*` mirrors, `last_continuity_checkpoint_at`, and the derived
 `current_dispatch_pointer`) into `evidence-pack.yml.delivery_plan` when
 invoked from a `delivery-planner` phase, per the
-[`delivery_plan` ownership rule](#evidence-packymldelivery_plan-ownership-rule)
+[`delivery_plan` ownership rule](#delivery-plan-ownership-rule)
 below. `code-reviewer` does not own a phase (it is invoked by
 `software-engineer` from inside a phase) and `delivery-planner` writes
 the structural fields, not phase-state.
@@ -433,6 +433,8 @@ and surface the diff — do not silently reconcile.
 The final user-facing response for a phase must name the evidence-pack path, the regenerated
 phased-plan/README path, the phase id updated, the resulting phase state, and the new
 `current_dispatch_pointer`. A transcript-only summary is not a checkpoint.
+
+<a id="delivery-plan-ownership-rule"></a>
 
 **`evidence-pack.yml.delivery_plan` ownership rule.** Two writers, with a strict split:
 

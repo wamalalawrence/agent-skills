@@ -166,6 +166,6 @@ make silently inside a feature release.
   validated` means the framework resolution path was exercised, not that every capability round-
   trips against a real GitHub / Jira / Sentry / cluster.
 - It does not prove the capability vocabulary is complete or correctly carved — that is the 1.0
-  freeze review's job (see [versioning.md](versioning.md#contracts-under-consideration-for-a-10-freeze)).
+  freeze review's job (see [versioning.md](versioning.md#the-10-contract)).
 - It does not re-audit the Access Resolver or the Execution Guard; both are unchanged in
   substance and covered by their own suites, which pass.

@@ -76,7 +76,7 @@ The original model: a parent workspace folder holding the clone, sibling repos, 
 - **Cache:** `${WORKSPACE_ROOT}/.cache/agent-skills/`.
 
 Migration is documented in
-[installation.md](installation.md#upgrading-from-v036x-workspace-installation) and explained by
+[installation.md](installation.md#upgrading-from-an-earlier-release) and explained by
 `agent-skills migrate`. Nothing is deleted and no secret is moved without an explicit request.
 
 ## How a skill detects the mode

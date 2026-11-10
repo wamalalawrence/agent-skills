@@ -959,7 +959,7 @@ verbatim and asserted to perform the update it described. Suite total 135, exit 
   `0.43.0`, `1.0.0-rc.1`, `1.0.0-rc.2`.
 
 - **Recorded as a 1.0 blocker:** the stable-line npm publication has to be resolved before
-  `1.0.0`. See [ROADMAP](ROADMAP.md#before-100). Not a defect today — the lockstep rule in
+  `1.0.0`. See [ROADMAP](ROADMAP.md#previously-v100). Not a defect today — the lockstep rule in
   [docs/one-point-oh.md](docs/one-point-oh.md#npm-bootstrap) binds from `1.x` — but it does not
   survive the promotion unchanged.
 
@@ -2410,7 +2410,7 @@ agent-skills migrate
 
 Nothing is deleted, and no secret moves without an explicit request.
 `agent-skills access import-legacy` is read-only until `--apply`. Full path:
-[installation.md](docs/installation.md#upgrading-from-v036x-workspace-installation).
+[installation.md](docs/installation.md#upgrading-from-an-earlier-release).
 
 ### Cloud and remote agents
 
@@ -2781,7 +2781,7 @@ agent discipline.
 
 ### Design rationale
 
-The root cause diagnosed in [#1](#) (the conversation that triggered this release)
+The root cause diagnosed in #1 (the conversation that triggered this release)
 was not that agents don't understand the memory contract — it's that the contract
 was buried 130+ lines deep in a 400+ line file, behind philosophy that satisfies
 curiosity but doesn't gate action. Three architectural fixes:

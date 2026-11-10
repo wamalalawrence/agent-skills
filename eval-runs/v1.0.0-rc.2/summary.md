@@ -349,7 +349,7 @@ runtime by channel — so a `0.43.0` doorway installs the `0.44.0` runtime today
 now, because the lockstep rule binds from `1.x` onward, and the deferral was a deliberate
 decision recorded in the v0.44.0 changelog.
 
-It does not survive `1.0.0`. Tracked in [ROADMAP](../../ROADMAP.md#before-100).
+It does not survive `1.0.0`. Tracked in [ROADMAP](../../ROADMAP.md#previously-v100).
 
 The v0.44.0 note describing that deferral is also inaccurate: it says the registry "still points
 at `0.43.1`", which was never published. Corrected under `Unreleased` in the changelog rather

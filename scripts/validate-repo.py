@@ -862,6 +862,120 @@ def check_internal_links(path: Path, text: str, result: Result) -> None:
             continue
         if not resolved.exists():
             result.error(f"{rel(path)}: broken relative link: {target}")
+    check_link_fragments(path, text, result)
+
+
+# --- Heading anchors -----------------------------------------------------------
+# A link to a real file with a dead `#fragment` used to pass, because the fragment
+# was stripped before the existence check. Slugs follow GitHub's rendering rules
+# closely enough that every anchor in this repository resolves, and they are
+# computed once per target file.
+
+ATX_HEADING_RE = re.compile(r"^ {0,3}(#{1,6})(?:[ \t]+(.*?))?(?:[ \t]+#+)?[ \t]*$")
+SETEXT_UNDERLINE_RE = re.compile(r"^ {0,3}(=+|-+)[ \t]*$")
+EXPLICIT_ANCHOR_RE = re.compile(r"<a\s+[^>]*?\b(?:id|name)\s*=\s*[\"']([^\"']+)[\"']", re.IGNORECASE)
+CODE_SPAN_RE = re.compile(r"(`+)(.+?)\1")
+INLINE_LINK_TEXT_RE = re.compile(r"!?\[([^\]]*)\]\([^)]*\)")
+HTML_TAG_RE = re.compile(r"<[^>]+>")
+EMPHASIS_UNDERSCORE_RE = re.compile(r"(?<![0-9A-Za-z])_+|_+(?![0-9A-Za-z])")
+SLUG_DROP_RE = re.compile(r"[^\w\- ]")
+_ANCHOR_CACHE: dict[Path, frozenset[str]] = {}
+
+
+def without_fenced_code(text: str) -> list[str]:
+    """Return the lines of `text`, with every line inside a fenced code block blanked."""
+    lines: list[str] = []
+    fence: str | None = None
+    for line in text.splitlines():
+        stripped = line.lstrip()
+        marker = stripped[:3] if stripped.startswith(("```", "~~~")) else None
+        if fence is None and marker:
+            fence = marker
+            lines.append("")
+        elif fence is not None:
+            if marker == fence:
+                fence = None
+            lines.append("")
+        else:
+            lines.append(line)
+    return lines
+
+
+def heading_slug(heading: str) -> str:
+    """GitHub's anchor for a heading: rendered text, lowercased, punctuation dropped."""
+    parts: list[str] = []
+    position = 0
+    for match in CODE_SPAN_RE.finditer(heading):
+        parts.append(_rendered_prose(heading[position : match.start()]))
+        parts.append(match.group(2).strip())
+        position = match.end()
+    parts.append(_rendered_prose(heading[position:]))
+    text = "".join(parts).strip().lower()
+    return SLUG_DROP_RE.sub("", text).replace(" ", "-")
+
+
+def _rendered_prose(fragment: str) -> str:
+    fragment = INLINE_LINK_TEXT_RE.sub(r"\1", fragment)
+    fragment = HTML_TAG_RE.sub("", fragment)
+    return EMPHASIS_UNDERSCORE_RE.sub("", fragment)
+
+
+def heading_anchors(path: Path) -> frozenset[str]:
+    cached = _ANCHOR_CACHE.get(path)
+    if cached is not None:
+        return cached
+    anchors: set[str] = set()
+    seen: dict[str, int] = {}
+    previous = ""
+    for line in without_fenced_code(strip_frontmatter(read_text(path))):
+        anchors.update(EXPLICIT_ANCHOR_RE.findall(line))
+        heading: str | None = None
+        atx = ATX_HEADING_RE.match(line)
+        if atx:
+            heading = atx.group(2) or ""
+        elif SETEXT_UNDERLINE_RE.match(line) and _is_paragraph_line(previous):
+            heading = previous.strip()
+        previous = "" if heading is not None else line
+        if heading is None:
+            continue
+        slug = heading_slug(heading)
+        count = seen.get(slug, 0)
+        seen[slug] = count + 1
+        anchors.add(slug if count == 0 else f"{slug}-{count}")
+    result = frozenset(anchors)
+    _ANCHOR_CACHE[path] = result
+    return result
+
+
+def _is_paragraph_line(line: str) -> bool:
+    stripped = line.strip()
+    if not stripped or line.startswith(("    ", "\t")):
+        return False
+    return not re.match(r"^(#{1,6}\s|[-*+]\s|\d+[.)]\s|>|\||<)", stripped)
+
+
+def check_link_fragments(path: Path, text: str, result: Result) -> None:
+    """Every `#fragment` on a link to a Markdown file must name a heading or explicit anchor."""
+    prose = "\n".join(without_fenced_code(text))
+    prose = CODE_SPAN_RE.sub(lambda match: " " * len(match.group(0)), prose)
+    for raw in markdown_link_targets(prose):
+        target = raw.strip("<>")
+        parsed = urlparse(target)
+        if parsed.scheme or parsed.netloc or "#" not in target:
+            continue
+        file_part, fragment = target.split("#", 1)
+        if not fragment:
+            result.error(f"{rel(path)}: link with an empty fragment: {raw}")
+            continue
+        destination = (path.parent / unquote(file_part)).resolve() if file_part else path
+        if destination.suffix != ".md" or not destination.is_file():
+            continue
+        try:
+            destination.relative_to(ROOT)
+        except ValueError:
+            continue
+        if unquote(fragment) not in heading_anchors(destination):
+            result.error(f"{rel(path)}: broken anchor (no such heading): {raw}")
 
 
 def check_skill_files(result: Result, repo_version: str) -> None:
