@@ -50,10 +50,10 @@ unchanged, so a `1.5.0` Definition of Done still verifies. Plan:
 ### Changed
 
 - **Repository visibility wording.** The repository is public on purpose. README, CONTRIBUTING,
-  ROADMAP, and SECURITY say "solo-maintained, not open to outside contribution" instead of "private"; the release
-  checklist's Private-Source Acceptance stage runs only while the repository is private and is
-  recorded as skipped when it is public, and `test-private-source.sh`'s header says the same.
-  `LICENSE` stays proprietary.
+  ROADMAP, and SECURITY say "solo-maintained, not open to outside contribution" instead of
+  "private"; the release checklist's Private-Source Acceptance stage runs only while the repository
+  is private and is recorded as skipped when it is public, and `test-private-source.sh`'s header
+  says the same. `LICENSE` stays proprietary.
 
 ### Tests and evals
 
