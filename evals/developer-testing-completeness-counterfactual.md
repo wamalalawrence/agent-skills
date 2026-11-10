@@ -36,7 +36,7 @@ the profile is `STANDARD`.
   upload at 0.015, and one for a non-`enterprise` paid tier at 0.02, which fails if the exception
   leaks into the general rate or the general rate replaces the exception.
 - Rule 5 gets a case whose expected value differs between half-up and the alternatives (for
-  example an `enterprise` upload of 1 GB, 0.015, which rounds to 0.02 half-up and to 0.01 under
+  example an `enterprise` upload of 3 GB, 0.045, which rounds to 0.05 half-up and to 0.04 under
   half-even or truncation).
 - Ends with roughly one test per independently drifting entry: six or seven, not twelve.
 
