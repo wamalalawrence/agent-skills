@@ -96,13 +96,17 @@ a claim, and `dod-check` refuses it.
     // Bug fixes only (classification.is_bug_fix = true). RED is the regression
     // test run against the unfixed implementation WITH the test present, and
     // the assertion is the behavioural one that failed — a missing test, zero
-    // collected tests, or a setup error is not RED.
+    // collected tests, or a setup error is not RED. The command asserts the
+    // failure (exit 0 = failed as expected) from head_sha; the baseline and the
+    // test's own exit code sit beside it.
     "regression_red": {
       "result": "pass",
-      "command": "mvn test -Dtest=SamlExpiryRedirectTest",
+      "command": "git worktree add ../red fa11ed00 && cd ../red && ! mvn test -Dtest=SamlExpiryRedirectTest",
       "cwd": "services/example-api",
-      "revision": "fa11ed00",           // the test-only commit, or the isolated baseline
-      "exit_code": 1,                    // the RUN's exit code; the check passed because it failed as expected
+      "revision": "deadbee1234",
+      "exit_code": 0,
+      "baseline_revision": "fa11ed00",  // the test-only commit, or the isolated baseline
+      "test_exit_code": 1,
       "assertion": "expected 302 to /login, got 200",
       "evidence": ".cache/agent-skills/PROJ-1234/logs/red.log"
     },
@@ -194,8 +198,8 @@ The `safety_acknowledgement` block, when `applies: true`, carries the fields the
   `classification.is_bug_fix` is `true`: `regression_red`, `regression_green`.
 - **A pass without an execution record is not a pass.** `command`, `cwd`, `revision`, and
   `exit_code` are mandatory on a pass; `regression_red` also needs `assertion`. A recorded
-  `revision` that is not `head_sha` (or, for `regression_red`, the test-only baseline) is stale
-  evidence.
+  `revision` that is not `head_sha` is stale evidence; for `regression_red` the test-only
+  baseline goes in `baseline_revision`.
 - **`regression_red` proves the defect, not the absence of a test.** The reviewer verifies it in
   `--repro-verify` mode by running the named test on a baseline that **contains the test and not
   the fix** — the test-only commit, or an isolated checkout with the test transplanted — and
@@ -229,16 +233,16 @@ The `safety_acknowledgement` block, when `applies: true`, carries the fields the
 
 ## Optional fields
 
-Recorded when they apply; `dod-check` does not require them in `1.6.0`, so a file without them
-verifies exactly as before.
+`dod-check` does not require these in `1.6.0`; a file without them verifies as before. Waivers
+cover required checks only: an optional check that is `not_run` with a `reason` needs none.
 
 - **`checks.mutation`** — at execution profile `RIGOROUS` (`software-engineer` 3.2). Fields:
   `result`, `command`, `revision`, `exit_code`, `killed`, `total`, `survived_on_changed_lines`
-  (each survivor with the assertion added or the reason none was), and `reason` when the result
-  is `not_run`. The reviewer, not `dod-check`, treats an absent or reasonless record as `major`.
-- **`checks.regression_red.predicted`** — the failure expected before the test-only commit ran
-  (`software-engineer` 1.5). `dod-check` still requires only `assertion`. When the two differ,
-  the evidence says why before any fix was written.
+  (each with its added assertion or a reason), and `reason` when the result is `not_run`. The
+  reviewer, not `dod-check`, treats an absent or reasonless record as `major`.
+- **`checks.regression_red.predicted`** — the failure expected before the RED run
+  (`software-engineer` 1.5). `dod-check` still requires only `assertion`. When they differ, the
+  evidence says why before the fix.
 
 ## Producing it
 

@@ -795,6 +795,39 @@ else
   bad "code-reviewer names checks.mutation as a RIGOROUS review item"
 fi
 
+# The Definition-of-Done reference is where engineers copy the record shape
+# from, including checks.mutation. Its worked example has to verify under the
+# same dod-check that will read their file.
+DOD_DOC="$REPO/skills/software-engineer/references/definition-of-done.md"
+"$PYTHON3" - "$DOD_DOC" "$BOX/dod-example.json" <<'PY'
+import json
+import re
+import sys
+
+text = open(sys.argv[1], encoding="utf-8").read()
+block = re.search(r"## Schema\n\n```jsonc\n(.*?)\n```", text, re.S).group(1)
+kept = []
+for line in block.splitlines():
+    quoted = False
+    for index, char in enumerate(line):
+        if char == '"' and (index == 0 or line[index - 1] != "\\"):
+            quoted = not quoted
+        if not quoted and line.startswith("//", index):
+            line = line[:index]
+            break
+    kept.append(line)
+body = re.sub(r",(\s*[}\]])", r"\1", "\n".join(kept))
+json.dump(json.loads(body), open(sys.argv[2], "w", encoding="utf-8"))
+PY
+if [ $? -ne 0 ]; then
+  bad "the Definition-of-Done schema example could be extracted"
+elif "$PYTHON3" "$REPO/scripts/dod-check.py" "$BOX/dod-example.json" >/dev/null 2>&1; then
+  ok "the Definition-of-Done schema example verifies under dod-check"
+else
+  bad "the Definition-of-Done schema example verifies under dod-check" \
+      "$("$PYTHON3" "$REPO/scripts/dod-check.py" "$BOX/dod-example.json" 2>&1 | grep FAIL | head -3)"
+fi
+
 # ---------------------------------------------------------------------------
 sec "Mutation probes"
 # ---------------------------------------------------------------------------
