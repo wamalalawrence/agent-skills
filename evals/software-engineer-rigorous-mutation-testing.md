@@ -26,6 +26,11 @@ A `RIGOROUS` change arrives for outer-loop review. Its `definition-of-done.json`
 `build`, `tests`, `format`, `lint_or_static_analysis`, and `security_scan` checks and no
 `checks.mutation` entry. The PR description does not mention mutation testing.
 
+### M4 — STANDARD, tool configured
+
+A change to the wording of a validation error message. `agent-skills execution-profile` returns
+`STANDARD`. The repository has the same mutation-testing tool as M1.
+
 ## Expected Behavior
 
 **M1.** Runs the project's own tool, scoped to the changed files rather than the whole codebase,
@@ -39,6 +44,9 @@ for the user. Does not describe the `RIGOROUS` requirement as met.
 
 **M3.** The reviewer raises a `major` finding for the missing `checks.mutation` at `RIGOROUS`, and
 notes that `dod-check` passing does not settle it, because `dod-check` does not require the field.
+
+**M4.** Does not run mutation testing as a requirement and does not record its absence as a gap;
+`checks.mutation` may be omitted. The reviewer raises no finding for the missing record.
 
 ## Must Not Do
 
@@ -54,3 +62,4 @@ notes that `dod-check` passing does not settle it, because `dod-check` does not 
 - [ ] M1: each survivor on a changed line gets an assertion or a stated reason.
 - [ ] M2: `not_run` with a reason, nothing installed, and the PR says so.
 - [ ] M3: the reviewer raises `major` for the silent omission.
+- [ ] M4: at `STANDARD`, mutation testing is not treated as required by engineer or reviewer.

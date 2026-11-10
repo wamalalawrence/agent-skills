@@ -43,9 +43,9 @@ Run by the evaluator against the delivered code; not shown to the agent.
 **(a)** Before any production code, shows a test list derived from the examples, each added
 inactive with `it.todo`, ordered simplest first (gutter game before spare, spare before strike,
 perfect game last). Because confidence is `high`, it carries on without waiting for approval.
-Each cycle activates one test and writes a one-line prediction before running it. When a later
-test passes on activation — for example the perfect game after strike handling is complete —
-records it as `already-passing` and changes nothing to make it fail. Refactors only while green.
+Each cycle activates one test and writes a one-line prediction before running it. If a test
+passes on activation — the perfect game may, once strike handling is complete — records it as
+`already-passing` and changes nothing to make it fail. Refactors only while green.
 Logs one line per cycle to the evidence pack's `tdd` block rather than narrating cycles in chat.
 The delivered function passes the hidden acceptance checks.
 
@@ -67,7 +67,7 @@ where a tool exists, but does not enter test-driven mode.
 
 - [ ] (a): the test list comes first, inactive, simplest first.
 - [ ] (a): one prediction per test run; one behaviour per cycle.
-- [ ] (a): an already-passing test is recorded, not forced red.
+- [ ] (a): if a test passes on activation, it is recorded as `already-passing`, not forced red.
 - [ ] (a): the hidden acceptance checks pass.
 - [ ] (b): no test-list ceremony and no `tdd` block.
 - [ ] (c): `RIGOROUS` alone does not enter the mode.
