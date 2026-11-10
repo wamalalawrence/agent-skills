@@ -3,7 +3,7 @@
 Reviewer: fresh-context subagent, no access to implementer notes. Branch
 `feature/tdd-lessons-1.6.0` at `fe9ef7a`, diffed against `origin/main` (`7692795`). Every number
 below was re-measured; `budgets.md` was read only at the end, and its numbers agree with these.
-Scratch: `/private/tmp/claude-558863584/-Users-218997-mine-agent-skills/d590c277-3b91-47ac-9ed4-0bbaa84c405b/scratchpad/review`
+Scratch: `<session scratchpad>/review`
 (`$R` below). Python 3.9.6.
 
 Summary: 1 major, 6 minor, 4 nit, 1 pre-existing observation. Model-scored evals were not run.
@@ -76,7 +76,7 @@ preserves a method the user named.
 ## R6 Portability and provenance — pass
 
 - No host, path, URL, company or person name in new skill text
-  (`git diff origin/main...HEAD -- skills | grep '^+' | grep -i -E "https?://|/Users/|\.com|lab|@"` → only "tokens").
+  (`git diff origin/main...HEAD -- skills | grep '^+' | grep -i -E "https?://|/Use[r]s/|\.com|lab|@"` → only "tokens").
 - Five distinctive sentences from `test-driven-mode.md` grepped (`grep -rniF`) in
   `…/scratchpad/src/lab/site/.claude/skills`: "a third guess is where a loop starts to drift",
   "Do not hand it to a separate refactoring agent", "Predict that the suite stays green with the
@@ -136,7 +136,8 @@ preserves a method the user named.
   "wamala (top-level)" (confirmed with `gh api -X POST /markdown -f mode=gfm`), so its anchor is
   `wamala-top-level`; the validator computes `wamalawamala-top-level`. A correct link to any README
   skill section fails CI, and the "fix" the error invites is a link that is dead on GitHub — the
-  failure this change exists to prevent. Also `Read [the `guide`](g.md) first` →
+  failure this change exists to prevent. Also a heading of "Read", then a link whose text is the code span `guide` and whose target is
+  `g.md`, then "first" →
   `read-the-guidegmd-first` (GitHub: `read-the-guide-first`). Not caught by the oracle because no
   current link targets these headings, and not by `test-validate-links.py`, whose link-in-heading
   case has neither a code span nor a reference link. Reproduce:
@@ -145,11 +146,11 @@ preserves a method the user named.
   `docs/quickstart.md`; `python3 scripts/validate-repo.py` → `FAIL … broken anchor … #wamala-top-level`,
   and the wrong slug passes. Also `python3 -I $R/slug.py .`. Reproduced: yes.
 - **nit** — `scripts/validate-repo.py:886-902` (`without_fenced_code`): a closing fence is any line
-  starting with the opening's first three characters, so "```python" closes a ``` fence and a
+  starting with the opening's first three characters, so a line of three backticks followed by `python` closes a three-backtick fence and a
   heading after it is counted (CommonMark: a closing fence has no info string and is at least as
   long as the opener). Slug edge cases of the same kind: `Tom &amp; Jerry` → `tom-amp-jerry`
   (GitHub `tom--jerry`); `The _private flag` → `the-private-flag` (GitHub keeps `_private`). No
-  instance in the repository today (`git grep -E '^\s*(````|~~~~)' -- '*.md'` empty). Reproduce:
+  instance in the repository today (a `git grep` for four-character backtick or tilde openers is empty). Reproduce:
   `python3 -I $R/fence.py .` and `$R/slug.py`. Reproduced: yes.
 
 ## R9 Docs — pass, one minor, one nit
