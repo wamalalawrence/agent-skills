@@ -2,6 +2,7 @@
 """Validate repository structure, skill contracts, links, versions, and public-safety guardrails."""
 from __future__ import annotations
 
+import html
 import os
 import re
 import subprocess
@@ -876,9 +877,13 @@ ATX_HEADING_RE = re.compile(r"^ {0,3}(#{1,6})(?:[ \t]+(.*?))?(?:[ \t]+#+)?[ \t]*
 SETEXT_UNDERLINE_RE = re.compile(r"^ {0,3}(=+|-+)[ \t]*$")
 EXPLICIT_ANCHOR_RE = re.compile(r"<a\s+[^>]*?\b(?:id|name)\s*=\s*[\"']([^\"']+)[\"']", re.IGNORECASE)
 CODE_SPAN_RE = re.compile(r"(`+)(.+?)\1")
-INLINE_LINK_TEXT_RE = re.compile(r"!?\[([^\]]*)\]\([^)]*\)")
+# An inline `[text](url)` or reference `[text][label]` link renders as its text alone.
+LINK_TEXT_RE = re.compile(r"!?\[([^\]]*)\](?:\([^)]*\)|\[[^\]]*\])")
 HTML_TAG_RE = re.compile(r"<[^>]+>")
-EMPHASIS_UNDERSCORE_RE = re.compile(r"(?<![0-9A-Za-z])_+|_+(?![0-9A-Za-z])")
+# `_word_` and `__word__` are emphasis; an underscore that opens no pair is literal text.
+EMPHASIS_UNDERSCORE_RE = re.compile(r"(?<![0-9A-Za-z_])(__?)(?=\S)(.+?)(?<=\S)\1(?![0-9A-Za-z_])")
+FENCE_OPEN_RE = re.compile(r"^ {0,3}(`{3,}|~{3,})")
+CODE_PLACEHOLDER = "\x00{}\x00"
 SLUG_DROP_RE = re.compile(r"[^\w\- ]")
 _ANCHOR_CACHE: dict[Path, frozenset[str]] = {}
 
@@ -888,37 +893,38 @@ def without_fenced_code(text: str) -> list[str]:
     lines: list[str] = []
     fence: str | None = None
     for line in text.splitlines():
-        stripped = line.lstrip()
-        marker = stripped[:3] if stripped.startswith(("```", "~~~")) else None
-        if fence is None and marker:
-            fence = marker
-            lines.append("")
-        elif fence is not None:
-            if marker == fence:
-                fence = None
-            lines.append("")
-        else:
-            lines.append(line)
+        if fence is None:
+            opener = FENCE_OPEN_RE.match(line)
+            if opener:
+                fence = opener.group(1)
+            lines.append("" if opener else line)
+            continue
+        # Only a bare run of the same character, at least as long as the opener, closes it.
+        stripped = line.strip()
+        if stripped and set(stripped) == {fence[0]} and len(stripped) >= len(fence):
+            fence = None
+        lines.append("")
     return lines
 
 
 def heading_slug(heading: str) -> str:
-    """GitHub's anchor for a heading: rendered text, lowercased, punctuation dropped."""
-    parts: list[str] = []
-    position = 0
-    for match in CODE_SPAN_RE.finditer(heading):
-        parts.append(_rendered_prose(heading[position : match.start()]))
-        parts.append(match.group(2).strip())
-        position = match.end()
-    parts.append(_rendered_prose(heading[position:]))
-    text = "".join(parts).strip().lower()
-    return SLUG_DROP_RE.sub("", text).replace(" ", "-")
+    """GitHub's anchor for a heading: rendered text, lowercased, punctuation dropped.
 
+    Code spans are set aside first so their contents stay literal, then the prose is
+    rendered (links to their text, tags removed, entities decoded, emphasis dropped).
+    """
+    spans: list[str] = []
 
-def _rendered_prose(fragment: str) -> str:
-    fragment = INLINE_LINK_TEXT_RE.sub(r"\1", fragment)
-    fragment = HTML_TAG_RE.sub("", fragment)
-    return EMPHASIS_UNDERSCORE_RE.sub("", fragment)
+    def hold(match: re.Match) -> str:
+        spans.append(match.group(2).strip())
+        return CODE_PLACEHOLDER.format(len(spans) - 1)
+
+    prose = CODE_SPAN_RE.sub(hold, heading)
+    prose = LINK_TEXT_RE.sub(r"\1", prose)
+    prose = html.unescape(HTML_TAG_RE.sub("", prose))
+    prose = EMPHASIS_UNDERSCORE_RE.sub(r"\2", prose)
+    text = re.sub(r"\x00(\d+)\x00", lambda match: spans[int(match.group(1))], prose)
+    return SLUG_DROP_RE.sub("", text.strip().lower()).replace(" ", "-")
 
 
 def heading_anchors(path: Path) -> frozenset[str]:

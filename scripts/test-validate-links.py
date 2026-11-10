@@ -43,6 +43,23 @@ TARGET_DOC = """# Target
 
 <a id="explicit-anchor"></a>
 
+### [`wamala`][wamala] (top-level)
+
+## Read [the `guide`](g.md) first, again
+
+## Tom &amp; Jerry
+
+## The _private flag
+
+## An _emphasised_ word
+
+```
+```python
+## Inside a fence an info-string line does not close
+```
+
+[wamala]: skills/wamala/
+
 **A bold paragraph, not a heading.**
 """
 
@@ -57,6 +74,13 @@ CASES = [
     ("link text is kept, the URL is not", "[x](target.md#read-the-guide-first)", 0),
     ("a heading inside a fence is not a heading", "[x](target.md#not-a-heading)", 1),
     ("an explicit <a id> is an anchor", "[x](target.md#explicit-anchor)", 0),
+    ("a reference link in a heading keeps only its text", "[x](target.md#wamala-top-level)", 0),
+    ("a reference link label is not part of the slug", "[x](target.md#wamalawamala-top-level)", 1),
+    ("a code span inside link text keeps the text", "[x](target.md#read-the-guide-first-again)", 0),
+    ("an entity renders before punctuation is dropped", "[x](target.md#tom--jerry)", 0),
+    ("a literal leading underscore is kept", "[x](target.md#the-_private-flag)", 0),
+    ("underscore emphasis is dropped", "[x](target.md#an-emphasised-word)", 0),
+    ("an info-string line does not close a fence", "[x](target.md#inside-a-fence-an-info-string-line-does-not-close)", 1),
     ("an empty fragment is an error", "[x](#)", 1),
     ("a missing anchor is an error", "[x](target.md#no-such-heading)", 1),
     ("a same-file fragment resolves", "[x](#source)", 0),
