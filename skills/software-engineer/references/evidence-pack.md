@@ -108,6 +108,19 @@ review:
       major_count: 4
       verdict: REQUEST_CHANGES
 
+# Test-driven mode log (software-engineer, references/test-driven-mode.md).
+# Absent unless the user explicitly asked for that mode and it ran.
+tdd:
+  test_list: # in execution order
+    - id: T1
+      description: "empty cart totals 0.00"
+  cycles: # one entry per cycle
+    - id: T1
+      predicted: "fail: assertion, expected 0.00, got undefined"
+      actual: "fail: assertion, expected 0.00, got undefined"
+      green_change: "total() returns 0.00 for an empty cart" # or: already-passing
+      refactor: kept # kept | undone | none
+
 # Automation state (owned by test-automation-engineer). Present only for tasks
 # that touched automation. It exists so a fresh agent can answer: what was
 # being automated, why, what changed, what failed, how the failures were

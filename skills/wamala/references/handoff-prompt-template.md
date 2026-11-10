@@ -126,6 +126,8 @@ stopped — the specific missing thing and who should supply it.
 - `<skill-source>` is resolved per
   [skill-source resolution](../../../docs/skill-source-resolution.md), honouring any explicit
   path the user supplied.
+- **`Request`**, when summarised in one line, keeps any working method the user named, such as
+  test-first or TDD. Dropping it silently turns an explicit request into the default path.
 - `<class>` and the confidence verdict are copied from Wamala's own step 1 and step 2. Passing
   them forward is what stops the fresh agent re-running the gate from scratch.
 - **`Prior steps completed this run`** is one line per step, never a transcript. If the

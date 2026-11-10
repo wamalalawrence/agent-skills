@@ -300,7 +300,7 @@ floor for negligence, not a definition of quality.
 
 A specification shaped like a catalogue — a table, a mapping, rules repeated across variants and
 operations — invites a suite that stays green while one entry is wrong. First name the dimensions
-the entries vary along independently: operation, variant, input category, policy attribute,
+the entries vary along independently: operation, variant, kind of input, policy attribute,
 state, observable result. Then, for each entry the specification states explicitly, ask: *would
 any test go red if this entry alone were wrong and everything around it were right?*
 

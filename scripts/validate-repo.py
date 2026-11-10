@@ -110,6 +110,7 @@ REQUIRED_FILES = [
     "skills/software-engineer/references/evidence-pack.md",
     "skills/software-engineer/references/security-checklist.md",
     "skills/software-engineer/references/sonarqube-checklist.md",
+    "skills/software-engineer/references/test-driven-mode.md",
     "skills/software-engineer/skills/issue-investigator/SKILL.md",
     "skills/software-engineer/skills/issue-investigator/README.md",
     "skills/software-engineer/skills/code-reviewer/SKILL.md",

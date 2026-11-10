@@ -507,6 +507,9 @@ Three things the reviewer must not do:
   test-first development: judge the tests and the design that resulted, not the order in which they
   were written.
 
+When the evidence pack carries a `tdd` block, compare its test list with the acceptance examples
+and raise any omission. Judge the result, not the method.
+
 #### Date-gated / phased-rollout check (binding)
 
 If the diff, PR description, ticket, or commit messages reference a future cutover date, a

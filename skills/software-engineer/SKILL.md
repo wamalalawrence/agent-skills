@@ -549,6 +549,11 @@ the defect deterministically.
 
 ## Phase 2: Implementation
 
+**Test-driven mode is opt-in.** Enter it only when the user or the dispatch brief explicitly asks
+for TDD or test-first work; then run this phase per [test-driven mode](./references/test-driven-mode.md).
+It costs several times the tokens of the default path. Never enter it on your own judgement or
+because of the execution profile.
+
 ### 2.1 Code standards
 
 Follow these strictly — see [code review checklist](./references/code-review-checklist.md) for the
@@ -1324,6 +1329,8 @@ See [the software-engineer bugfix example](../../docs/examples/software-engineer
 - [Developer testing](./references/developer-testing.md) — choosing the unit, real collaborators
   vs doubles, double types, state vs interaction verification, boundary adapters, refactoring
   resilience, test-level selection
+- [Test-driven mode](./references/test-driven-mode.md) — the opt-in test-first loop; only on
+  explicit request
 - [Architecture patterns](./references/architecture-patterns.md) — module layout, multi-variant
   projects, framework conventions
 - [Destructive action guardrails](./references/destructive-action-guardrails.md) — the full
