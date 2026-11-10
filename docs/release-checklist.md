@@ -309,7 +309,9 @@ criterion the release called critical.
 
 ## Private-Source Acceptance (Stage B)
 
-Required before `1.0.0-rc.1`, and only meaningful once the repository is private.
+Applies only while the repository is private. When it is public, skip this stage and record in
+`eval-runs/<release>/summary.md` that it was skipped and why: `scripts/test-private-source.sh`
+refuses to run against a public repository, so there is nothing for it to prove.
 
 - [ ] Confirm the GitHub repository visibility is **private**. `scripts/test-private-source.sh`
       refuses to run against a public repository, because anonymous access would satisfy every

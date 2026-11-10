@@ -4,7 +4,7 @@ Reusable [Agent Skills](https://agentskills.io/) for software-engineering work �
 role-shaped workflows your AI assistant can load on demand so the same model produces
 senior-engineer, product-owner, tester, or reviewer output instead of generic answers.
 
-> **Status:** `1.5.0` — stable, private. The [1.0 contracts](docs/one-point-oh.md) — CLI names
+> **Status:** `1.5.0` — stable. The [1.0 contracts](docs/one-point-oh.md) — CLI names
 > and exit codes, the install layout, the release-provider interface, the skill names, and the
 > Engineering Tool Capability Framework — are frozen for the `1.x` line, and `1.5.0` only adds to
 > them. It adds [Access Discovery](docs/access/README.md): before Wamala writes to Confluence, Jira,
@@ -521,12 +521,12 @@ the per-tier docs: [task blackboard](docs/task-blackboard.md),
 - **Layered:** prompt-level policy states the contract; [Execution Guard](docs/execution-guard.md)
   enforces the part of it a runtime can check, deterministically, at the moment of execution.
   Neither layer is claimed to be sufficient on its own.
-- **Maintainer-realistic:** governance, support, and roadmap promises match a solo-maintainer
-  private project.
+- **Maintainer-realistic:** governance, support, and roadmap promises match a solo-maintained
+  project.
 
 ## Contributing
 
-This is a private, solo-maintained project built for the maintainer's own engineering work. It is
+This is a solo-maintained project built for the maintainer's own engineering work. It is
 not open to outside contribution and is not distributed for outside use. The internal bar for a
 change is in [CONTRIBUTING.md](CONTRIBUTING.md).
 

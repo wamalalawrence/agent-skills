@@ -1,7 +1,7 @@
 # Roadmap
 
-`agent-skills` is a private, solo-maintained project. It grows through proven usefulness in the
-maintainer's own delivery work, not through an up-front framework.
+`agent-skills` is a solo-maintained project, not open to outside contribution. It grows through
+proven usefulness in the maintainer's own delivery work, not through an up-front framework.
 
 ## Commercial direction — decided September 2026
 
