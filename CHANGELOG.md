@@ -4,6 +4,65 @@ All notable project changes should be recorded here.
 
 ## Unreleased
 
+Example-guided and predictive testing lessons, kept cheap on the default path, plus fixes for
+flaws found while checking the current flows. Additive against the 1.0 contract: no CLI, exit
+code, install layout, provider, skill name, or skill `description` changes, and `dod-check` is
+unchanged, so a `1.5.0` Definition of Done still verifies. Plan:
+[docs/plans/2026-11-tdd-lessons-v1.6.0.md](docs/plans/2026-11-tdd-lessons-v1.6.0.md).
+
+### Added
+
+- **Literal-valued examples per data rule** (`product-owner` step 5 and the Definition of Ready):
+  every calculation, threshold, mapping, eligibility, or state rule gets at least one
+  `given <input>, <action> → <exact outcome>` example plus one per named boundary, nested under its
+  criterion. A value nobody supplied is an open question, never an invented number.
+- **Completeness counterfactual** (`software-engineer` 2.4, `references/developer-testing.md`):
+  for catalogue-shaped specifications, a discriminating test per cell that can drift on its own,
+  never the full cross product.
+- **Opt-in test-driven mode** (`references/test-driven-mode.md`): a test list first, one behaviour
+  per cycle with a one-line prediction before each run, already-passing tests recorded rather than
+  forced red, refactoring under the Four Rules of Simple Design, and a bounded stop on an
+  unexplained mismatch. Entered only on an explicit request, never by the execution profile or the
+  agent's judgement. The evidence pack gains an optional `tdd` block; the reviewer checks its test
+  list against the acceptance examples.
+- **Predicted RED** at the bug-fix gate (`software-engineer` 1.5): the expected failure is
+  written down first as the optional `checks.regression_red.predicted`.
+- **Anchor validation**: `validate-repo.py` now fails a link whose `#fragment` names no heading or
+  explicit anchor in the target Markdown file, and a bare `#` link. Tested by
+  `scripts/test-validate-links.py` (in CI and release readiness), including a probe that proves
+  the test fails without the check.
+
+### Fixed
+
+- **`RIGOROUS` promised mutation testing that no skill performed.** `software-engineer` 3.2 now
+  runs the project's own tool scoped to the changed code and records `checks.mutation`, or records
+  `not_run` with a reason and says so in the PR; it never installs a tool. `code-reviewer` raises
+  `major` on a silent omission. `dod-check` does not require the field. A probe in
+  `scripts/test-adaptive-execution.sh` keeps both skills naming it.
+- Ten dead heading anchors, found by the new check, including the upgrade link on the quickstart.
+- README said "the eleven skills" next to a table of twelve; literal `\u2192` / `\u2014` escapes in
+  `software-engineer` and this changelog; stale "until `v1.0.0`" pinning advice; ROADMAP "Now"
+  still named `v1.1.0`.
+
+### Changed
+
+- **Repository visibility wording.** The repository is public on purpose. README, CONTRIBUTING, and
+  ROADMAP say "solo-maintained, not open to outside contribution" instead of "private"; the release
+  checklist's Private-Source Acceptance stage runs only while the repository is private and is
+  recorded as skipped when it is public. `LICENSE` stays proprietary.
+
+### Tests and evals
+
+- Four evals: `product-owner-examples-per-rule`, `developer-testing-completeness-counterfactual`,
+  `software-engineer-rigorous-mutation-testing`, and `software-engineer-test-driven-mode-opt-in`
+  (with hidden acceptance checks).
+
+### Credit
+
+- The example-mapping, test-list, completeness, and predictive-TDD ideas were studied in the public
+  lab repository `marcoemrich/agentic_coding_lab` (MIT licence). No text was copied; all wording
+  here is new.
+
 ## 1.5.0 - Access Discovery: can this host do *this* operation, and via what?
 
 A user asked Wamala to update their own Confluence page. Preflight said only that an Atlassian MCP
