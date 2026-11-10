@@ -2469,7 +2469,7 @@ agent-skills migrate
 
 Nothing is deleted, and no secret moves without an explicit request.
 `agent-skills access import-legacy` is read-only until `--apply`. Full path:
-[installation.md](docs/installation.md#upgrading-from-an-earlier-release).
+[installation.md](docs/installation.md#coming-from-the-pre-v037-workspace-layout).
 
 ### Cloud and remote agents
 

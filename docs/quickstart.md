@@ -91,7 +91,7 @@ agent-skills migrate
 ```
 
 Nothing is deleted and no secret is copied without an explicit request. Details in
-[installation](installation.md#upgrading-from-an-earlier-release).
+[installation](installation.md#coming-from-the-pre-v037-workspace-layout).
 
 ## Starter prompts
 
