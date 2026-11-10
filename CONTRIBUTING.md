@@ -1,8 +1,8 @@
 # Contributing
 
-This is a **private, solo-maintained project**. It is not open source, is not distributed for
-outside use, and does not accept outside contributions. This file is the internal bar for a
-change — for the maintainer and anyone explicitly invited to the repository.
+This is a **solo-maintained project, not open to outside contribution**. Its source is readable,
+but it is not open source and is not distributed for outside use. This file is the internal bar
+for a change — for the maintainer and anyone explicitly invited to the repository.
 
 ## Ground rules
 

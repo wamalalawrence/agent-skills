@@ -21,6 +21,9 @@ jobs:
       - name: Validate repository structure and skills
         run: python3 scripts/validate-repo.py
 
+      - name: Test the Markdown anchor check
+        run: python3 scripts/test-validate-links.py
+
       - name: Validate eval corpus
         run: python3 scripts/run-evals.py
 

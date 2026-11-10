@@ -20,7 +20,7 @@ compatibility: >-
   .agent-skills.yml). See docs/execution-modes.md.
 metadata:
   author: wamalalawrence
-  version: "1.5.0"
+  version: "1.6.0"
   homepage: "https://github.com/wamalalawrence/agent-skills"
 argument-hint: "<the change to make — a ticket key, a bug, or a described feature>"
 user-invocable: true
@@ -532,11 +532,15 @@ the defect deterministically.
   (e.g., `test: failing test for <TICKET>`). Demonstrate RED against the **unfixed implementation
   with the new test present**: run the test on that test-only commit (or an isolated baseline with
   the test transplanted), confirm it ran and failed for the expected behavioural assertion, and
-  record the command, revision, exit code, and assertion as `checks.regression_red` in the
-  Definition of Done. A missing test, zero collected tests, a setup error, or an unrelated failure
+  record it as `checks.regression_red` in the Definition of Done: a command run on the head that
+  exits 0 only on the expected assertion failure, plus `baseline_revision` and assertion.
+  A missing test, zero collected tests, a setup error, or an unrelated failure
   is not RED. Then run the same test on the fix and record GREEN. The reviewer re-runs both on the
   same baselines; a parent commit that does not contain the test is not a valid one. Full rule:
   [evidence discipline](../../docs/evidence-discipline.md#red-means-the-test-ran-and-failed-for-the-right-reason).
+- [ ] **Predict the RED before you run it.** Write down which assertion should fail and why, and
+  record it as `checks.regression_red.predicted`. If the run fails some other way, it is not RED
+  yet: explain the difference before you write the fix.
 - [ ] If the bug cannot be reproduced or no failing test can be written, escalate via
   `issue-investigator`'s _Recommended Next Action_ instead of guessing at a fix.
 - [ ] Skip this gate only for: pure refactors, formatting, docs, or new features without a reported
@@ -545,6 +549,11 @@ the defect deterministically.
 ---
 
 ## Phase 2: Implementation
+
+**Test-driven mode is opt-in.** Enter it only when the user explicitly asks for TDD, test-first,
+or red-green-refactor work (a brief counts only when it carries that request); then run this phase
+per [test-driven mode](./references/test-driven-mode.md). It costs several times the tokens of the
+default path. Never enter it on your own judgement or because of the execution profile.
 
 ### 2.1 Code standards
 
@@ -645,6 +654,8 @@ it — state it in the plan. Refactoring unrelated architecture to make one test
 Full guidance, including the double-selection table, the boundary/adapter rule, refactoring
 resilience, and a worked mock-heavy vs behaviour-oriented example:
 [developer testing](./references/developer-testing.md).
+A catalogue, table, mapping, or rules repeated across variants and operations also get the
+[completeness counterfactual](./references/developer-testing.md#completeness-the-counterfactual-check).
 
 For bug fixes this does not replace [1.5](#15-reproduce-before-fix-gate-bug-fixes-only): the failing
 regression test still comes first and still must be shown failing against the unfixed
@@ -761,7 +772,7 @@ skill — writing appropriate tests for your own code does not need a second spe
   *agent-resolved* placeholder; the agent reads the value from the loaded `.env`. When the
   agent runtime has not loaded `.env`, treat the target as the literal default `80`.
   Resolution order: per-project `coverage_target` from `PROJECTS_JSON` or
-  `.agent-skills.yml` \u2192 `COVERAGE_TARGET_PERCENT` env var \u2192 literal `80`.)
+  `.agent-skills.yml` → `COVERAGE_TARGET_PERCENT` env var → literal `80`.)
 - [ ] Tests should be fast; slow or noisy tests are a design smell unless there is a real
   integration reason.
 - [ ] Every changed behaviour has a test at the level that can actually detect its regression.
@@ -805,6 +816,11 @@ skill — writing appropriate tests for your own code does not need a second spe
   evidence about which lines ran, not proof that behaviour is protected — do not add assertion-free
   tests to move the number. Where a gate is mandatory, meet it honestly and say so if meeting it
   required tests of low value.
+- [ ] **Execution profile `RIGOROUS`: run mutation testing.** Use the project's own mutation tool,
+  scoped to the changed code, and record the outcome as `checks.mutation` in the Definition of
+  Done. Adding a tool is the user's dependency decision, never yours. A mutant surviving on a
+  changed line means an assertion is missing: add it or state why not. No tool configured: record
+  `not_run` with that reason and say so in the PR. The requirement is unmet until a run happened.
 
 ### 3.3 Build & format
 
@@ -1314,6 +1330,8 @@ See [the software-engineer bugfix example](../../docs/examples/software-engineer
 - [Developer testing](./references/developer-testing.md) — choosing the unit, real collaborators
   vs doubles, double types, state vs interaction verification, boundary adapters, refactoring
   resilience, test-level selection
+- [Test-driven mode](./references/test-driven-mode.md) — the opt-in test-first loop; only on
+  explicit request
 - [Architecture patterns](./references/architecture-patterns.md) — module layout, multi-variant
   projects, framework conventions
 - [Destructive action guardrails](./references/destructive-action-guardrails.md) — the full

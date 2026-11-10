@@ -72,7 +72,8 @@ Do this:
   skill, stop and say which one — do not do it yourself.
 - Match the workflow depth to the execution profile above. At LIGHT: answer the
   question directly, verify the answer, keep evidence but do not build a dossier.
-  At RIGOROUS: full evidence and review discipline, unchanged.
+  At RIGOROUS: full evidence and review discipline, unchanged, including mutation
+  testing (`software-engineer` 3.2).
 - Meet the output contract above. The deliverable and the evidence are NOT the
   same artifact: write the evidence where the contract says, and keep the primary
   answer to the size and reading time asked for.
@@ -125,6 +126,8 @@ stopped — the specific missing thing and who should supply it.
 - `<skill-source>` is resolved per
   [skill-source resolution](../../../docs/skill-source-resolution.md), honouring any explicit
   path the user supplied.
+- **`Request`**, when summarised in one line, keeps any working method the user named, such as
+  test-first or TDD. Dropping it silently turns an explicit request into the default path.
 - `<class>` and the confidence verdict are copied from Wamala's own step 1 and step 2. Passing
   them forward is what stops the fresh agent re-running the gate from scratch.
 - **`Prior steps completed this run`** is one line per step, never a transcript. If the

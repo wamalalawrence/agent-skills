@@ -769,6 +769,66 @@ else
 fi
 
 # ---------------------------------------------------------------------------
+sec "RIGOROUS mutation testing has a performer"
+# ---------------------------------------------------------------------------
+# The profile promises mutation testing at RIGOROUS. Until 1.6.0 no skill told
+# anyone to run it, and nothing noticed. Both sides of the promise must keep
+# naming the Definition-of-Done record: the engineer who writes it and the
+# reviewer who checks for it.
+
+SE_SKILL="$REPO/skills/software-engineer/SKILL.md"
+CR_SKILL="$REPO/skills/software-engineer/skills/code-reviewer/SKILL.md"
+
+# `names_mutation_record FILE` — succeeds when FILE still asks for checks.mutation.
+names_mutation_record() {
+  grep -q 'checks\.mutation' "$1"
+}
+
+if names_mutation_record "$SE_SKILL"; then
+  ok "software-engineer names checks.mutation for RIGOROUS work"
+else
+  bad "software-engineer names checks.mutation for RIGOROUS work"
+fi
+if names_mutation_record "$CR_SKILL"; then
+  ok "code-reviewer names checks.mutation as a RIGOROUS review item"
+else
+  bad "code-reviewer names checks.mutation as a RIGOROUS review item"
+fi
+
+# The Definition-of-Done reference is where engineers copy the record shape
+# from, including checks.mutation. Its worked example has to verify under the
+# same dod-check that will read their file.
+DOD_DOC="$REPO/skills/software-engineer/references/definition-of-done.md"
+"$PYTHON3" - "$DOD_DOC" "$BOX/dod-example.json" <<'PY'
+import json
+import re
+import sys
+
+text = open(sys.argv[1], encoding="utf-8").read()
+block = re.search(r"## Schema\n\n```jsonc\n(.*?)\n```", text, re.S).group(1)
+kept = []
+for line in block.splitlines():
+    quoted = False
+    for index, char in enumerate(line):
+        if char == '"' and (index == 0 or line[index - 1] != "\\"):
+            quoted = not quoted
+        if not quoted and line.startswith("//", index):
+            line = line[:index]
+            break
+    kept.append(line)
+body = re.sub(r",(\s*[}\]])", r"\1", "\n".join(kept))
+json.dump(json.loads(body), open(sys.argv[2], "w", encoding="utf-8"))
+PY
+if [ $? -ne 0 ]; then
+  bad "the Definition-of-Done schema example could be extracted"
+elif "$PYTHON3" "$REPO/scripts/dod-check.py" "$BOX/dod-example.json" >/dev/null 2>&1; then
+  ok "the Definition-of-Done schema example verifies under dod-check"
+else
+  bad "the Definition-of-Done schema example verifies under dod-check" \
+      "$("$PYTHON3" "$REPO/scripts/dod-check.py" "$BOX/dod-example.json" 2>&1 | grep FAIL | head -3)"
+fi
+
+# ---------------------------------------------------------------------------
 sec "Mutation probes"
 # ---------------------------------------------------------------------------
 
@@ -906,6 +966,18 @@ else
     bad "probe 4: without redaction an evidence-pack credential reaches the brief" \
         "the weakened build still hid it, so the redaction test proves nothing"
   fi
+fi
+
+# Probe 5: delete the mutation instruction from a sandboxed copy of the
+# engineer's skill and confirm the performer check then fails.
+grep -v 'checks\.mutation' "$SE_SKILL" >"$PROBE/se-SKILL.md"
+if cmp -s "$SE_SKILL" "$PROBE/se-SKILL.md"; then
+  bad "probe 5 could weaken the build" "no checks.mutation line to remove"
+elif names_mutation_record "$PROBE/se-SKILL.md"; then
+  bad "probe 5: without the instruction the performer check fails" \
+      "the weakened copy still passed, so the check proves nothing"
+else
+  ok "probe 5: without the instruction the performer check fails"
 fi
 
 # ---------------------------------------------------------------------------

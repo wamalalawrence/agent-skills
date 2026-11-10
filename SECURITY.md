@@ -1,6 +1,6 @@
 # Security
 
-`agent-skills` is private, proprietary software. This page describes how security is treated in
+`agent-skills` is proprietary, solo-maintained software. This page describes how security is treated in
 the project and how to report a problem.
 
 ## How the project approaches security

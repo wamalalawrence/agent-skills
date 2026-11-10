@@ -1,10 +1,10 @@
 #!/usr/bin/env bash
 # Stage B acceptance: install Agent Skills from the real release source.
 #
-# Run this AFTER the GitHub repository visibility has been changed to private.
-# It is the evidence that the distribution contract works against an
-# authenticated private source, and it is a precondition for every release from
-# `1.0.0-rc.1` onward.
+# It applies only while the GitHub repository is private. There it is the
+# evidence that the distribution contract works against an authenticated
+# private source, and a precondition for the release. While the repository is
+# public, the release checklist skips Stage B and records why.
 #
 # ORDERING. This suite installs from the REMOTE, so it can only certify a
 # version whose tag has been pushed. Run against a working tree whose VERSION

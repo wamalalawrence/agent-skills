@@ -130,6 +130,11 @@ for suite in test-cli-install test-global-install test-access-resolution \
     bad "$suite.sh" "$(grep 'FAIL' "/tmp/as-rr-$suite.log" | head -5)"
   fi
 done
+if python3 scripts/test-validate-links.py >/tmp/as-rr-links.log 2>&1; then
+  good "anchor check: $(tail -1 /tmp/as-rr-links.log)"
+else
+  bad "anchor check" "$(grep 'FAIL' /tmp/as-rr-links.log | head -5)"
+fi
 if python3 scripts/test-release-engine.py >/tmp/as-rr-engine.log 2>&1; then
   good "release engine: $(tail -1 /tmp/as-rr-engine.log)"
 else

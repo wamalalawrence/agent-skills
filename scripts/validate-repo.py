@@ -2,6 +2,7 @@
 """Validate repository structure, skill contracts, links, versions, and public-safety guardrails."""
 from __future__ import annotations
 
+import html
 import os
 import re
 import subprocess
@@ -110,6 +111,7 @@ REQUIRED_FILES = [
     "skills/software-engineer/references/evidence-pack.md",
     "skills/software-engineer/references/security-checklist.md",
     "skills/software-engineer/references/sonarqube-checklist.md",
+    "skills/software-engineer/references/test-driven-mode.md",
     "skills/software-engineer/skills/issue-investigator/SKILL.md",
     "skills/software-engineer/skills/issue-investigator/README.md",
     "skills/software-engineer/skills/code-reviewer/SKILL.md",
@@ -862,6 +864,125 @@ def check_internal_links(path: Path, text: str, result: Result) -> None:
             continue
         if not resolved.exists():
             result.error(f"{rel(path)}: broken relative link: {target}")
+    check_link_fragments(path, text, result)
+
+
+# --- Heading anchors -----------------------------------------------------------
+# A link to a real file with a dead `#fragment` used to pass, because the fragment
+# was stripped before the existence check. Slugs follow GitHub's rendering rules
+# closely enough that every anchor in this repository resolves, and they are
+# computed once per target file.
+
+ATX_HEADING_RE = re.compile(r"^ {0,3}(#{1,6})(?:[ \t]+(.*?))?(?:[ \t]+#+)?[ \t]*$")
+SETEXT_UNDERLINE_RE = re.compile(r"^ {0,3}(=+|-+)[ \t]*$")
+EXPLICIT_ANCHOR_RE = re.compile(r"<a\s+[^>]*?\b(?:id|name)\s*=\s*[\"']([^\"']+)[\"']", re.IGNORECASE)
+CODE_SPAN_RE = re.compile(r"(`+)(.+?)\1")
+# An inline `[text](url)` or reference `[text][label]` link renders as its text alone.
+LINK_TEXT_RE = re.compile(r"!?\[([^\]]*)\](?:\([^)]*\)|\[[^\]]*\])")
+HTML_TAG_RE = re.compile(r"<[^>]+>")
+# `_word_` and `__word__` are emphasis; an underscore that opens no pair is literal text.
+EMPHASIS_UNDERSCORE_RE = re.compile(r"(?<![0-9A-Za-z_])(__?)(?=\S)(.+?)(?<=\S)\1(?![0-9A-Za-z_])")
+FENCE_OPEN_RE = re.compile(r"^ {0,3}(`{3,}|~{3,})")
+CODE_PLACEHOLDER = "\x00{}\x00"
+SLUG_DROP_RE = re.compile(r"[^\w\- ]")
+_ANCHOR_CACHE: dict[Path, frozenset[str]] = {}
+
+
+def without_fenced_code(text: str) -> list[str]:
+    """Return the lines of `text`, with every line inside a fenced code block blanked."""
+    lines: list[str] = []
+    fence: str | None = None
+    for line in text.splitlines():
+        if fence is None:
+            opener = FENCE_OPEN_RE.match(line)
+            if opener:
+                fence = opener.group(1)
+            lines.append("" if opener else line)
+            continue
+        # Only a bare run of the same character, at least as long as the opener, closes it.
+        stripped = line.strip()
+        if stripped and set(stripped) == {fence[0]} and len(stripped) >= len(fence):
+            fence = None
+        lines.append("")
+    return lines
+
+
+def heading_slug(heading: str) -> str:
+    """GitHub's anchor for a heading: rendered text, lowercased, punctuation dropped.
+
+    Code spans are set aside first so their contents stay literal, then the prose is
+    rendered (links to their text, tags removed, entities decoded, emphasis dropped).
+    """
+    spans: list[str] = []
+
+    def hold(match: re.Match) -> str:
+        spans.append(match.group(2).strip())
+        return CODE_PLACEHOLDER.format(len(spans) - 1)
+
+    prose = CODE_SPAN_RE.sub(hold, heading)
+    prose = LINK_TEXT_RE.sub(r"\1", prose)
+    prose = html.unescape(HTML_TAG_RE.sub("", prose))
+    prose = EMPHASIS_UNDERSCORE_RE.sub(r"\2", prose)
+    text = re.sub(r"\x00(\d+)\x00", lambda match: spans[int(match.group(1))], prose)
+    return SLUG_DROP_RE.sub("", text.strip().lower()).replace(" ", "-")
+
+
+def heading_anchors(path: Path) -> frozenset[str]:
+    cached = _ANCHOR_CACHE.get(path)
+    if cached is not None:
+        return cached
+    anchors: set[str] = set()
+    seen: dict[str, int] = {}
+    previous = ""
+    for line in without_fenced_code(strip_frontmatter(read_text(path))):
+        anchors.update(EXPLICIT_ANCHOR_RE.findall(line))
+        heading: str | None = None
+        atx = ATX_HEADING_RE.match(line)
+        if atx:
+            heading = atx.group(2) or ""
+        elif SETEXT_UNDERLINE_RE.match(line) and _is_paragraph_line(previous):
+            heading = previous.strip()
+        previous = "" if heading is not None else line
+        if heading is None:
+            continue
+        slug = heading_slug(heading)
+        count = seen.get(slug, 0)
+        seen[slug] = count + 1
+        anchors.add(slug if count == 0 else f"{slug}-{count}")
+    result = frozenset(anchors)
+    _ANCHOR_CACHE[path] = result
+    return result
+
+
+def _is_paragraph_line(line: str) -> bool:
+    stripped = line.strip()
+    if not stripped or line.startswith(("    ", "\t")):
+        return False
+    return not re.match(r"^(#{1,6}\s|[-*+]\s|\d+[.)]\s|>|\||<)", stripped)
+
+
+def check_link_fragments(path: Path, text: str, result: Result) -> None:
+    """Every `#fragment` on a link to a Markdown file must name a heading or explicit anchor."""
+    prose = "\n".join(without_fenced_code(text))
+    prose = CODE_SPAN_RE.sub(lambda match: " " * len(match.group(0)), prose)
+    for raw in markdown_link_targets(prose):
+        target = raw.strip("<>")
+        parsed = urlparse(target)
+        if parsed.scheme or parsed.netloc or "#" not in target:
+            continue
+        file_part, fragment = target.split("#", 1)
+        if not fragment:
+            result.error(f"{rel(path)}: link with an empty fragment: {raw}")
+            continue
+        destination = (path.parent / unquote(file_part)).resolve() if file_part else path
+        if destination.suffix != ".md" or not destination.is_file():
+            continue
+        try:
+            destination.relative_to(ROOT)
+        except ValueError:
+            continue
+        if unquote(fragment) not in heading_anchors(destination):
+            result.error(f"{rel(path)}: broken anchor (no such heading): {raw}")
 
 
 def check_skill_files(result: Result, repo_version: str) -> None:

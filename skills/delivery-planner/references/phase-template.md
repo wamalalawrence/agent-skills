@@ -71,7 +71,7 @@ collides.
 
 ## Body sections
 
-```markdown
+````markdown
 # Phase 03 — Failing regression test for expired SAML cookie redirect
 
 ## Intent
@@ -186,7 +186,7 @@ Optional. One short paragraph at most. Use only when the phase has a
 non-obvious gotcha the executor would not otherwise see (a hidden module
 README, a flake-prone area, a test selector convention specific to this
 repo). Otherwise omit the section.
-```
+````
 
 ## When the phase is owned by a non-implementation skill
 

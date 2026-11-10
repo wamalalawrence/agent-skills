@@ -51,6 +51,9 @@ stronger boundary; this page makes the local claim checkable, not unfalsifiable.
 For a bug fix, demonstrate RED against the **unfixed implementation with the new regression test
 present**. Confirm the selected test ran and failed for the expected behavioural assertion.
 Missing tests, zero collected tests, setup errors, and unrelated failures are not RED evidence.
+Writing the expected failure down first, as `checks.regression_red.predicted` in the
+[Definition of Done](../skills/software-engineer/references/definition-of-done.md#optional-fields),
+is what makes "the right reason" something you can compare rather than recall.
 
 Then run the same regression against the fixed implementation and record GREEN.
 

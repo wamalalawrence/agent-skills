@@ -182,5 +182,5 @@ one path removed on which correct-looking tooling advised a downgrade.
 ## Disposition
 
 Publish `1.0.0-rc.3` to npm on the `rc` dist-tag. `latest` is untouched. Not a promotion to
-`1.0.0`; the stable-line npm blocker in [ROADMAP](../../ROADMAP.md#before-100) is unchanged by
+`1.0.0`; the stable-line npm blocker in [ROADMAP](../../ROADMAP.md#previously-v100) is unchanged by
 this candidate.

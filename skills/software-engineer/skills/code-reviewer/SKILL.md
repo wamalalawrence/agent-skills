@@ -16,7 +16,7 @@ compatibility: >-
   .agent-skills.yml). See docs/execution-modes.md.
 metadata:
   author: wamalalawrence
-  version: "1.5.0"
+  version: "1.6.0"
   homepage: "https://github.com/wamalalawrence/agent-skills"
 argument-hint: >-
   optional: mode inner|outer, base branch, issue key/URL, PR URL, or task description
@@ -482,6 +482,9 @@ Test findings to raise **when the evidence in the diff supports them**:
 - `major` — the test only verifies calls and never verifies a meaningful result.
 - `major` — the defect being fixed lives in serialization, persistence, or framework wiring, and
   the test never exercises that layer, so it cannot detect the regression it exists for.
+- `major` — at execution profile `RIGOROUS`, the Definition of Done has no `checks.mutation`, or
+  records `not_run` without a reason. A mutant surviving on a changed line needs an added
+  assertion or a stated reason.
 - `minor` — a trivial deterministic in-process collaborator is doubled for no stated reason.
 - `minor` — double setup dominates the test and hides the business scenario.
 - `minor` — broad framework bootstrapping is used for logic a focused test could prove cheaply.
@@ -503,6 +506,9 @@ Three things the reviewer must not do:
   every class" is this repository's policy, and neither is a valid finding. Nor is the absence of
   test-first development: judge the tests and the design that resulted, not the order in which they
   were written.
+
+When the evidence pack carries a `tdd` block, compare its test list with the acceptance examples
+and raise any omission. Judge the result, not the method.
 
 #### Date-gated / phased-rollout check (binding)
 

@@ -4,6 +4,73 @@ All notable project changes should be recorded here.
 
 ## Unreleased
 
+## 1.6.0 - Example-guided and predictive testing, cheap on the default path
+
+Example-guided and predictive testing lessons, kept cheap on the default path, plus fixes for
+flaws found while checking the current flows. Additive against the 1.0 contract: no CLI, exit
+code, install layout, provider, skill name, or skill `description` changes, and `dod-check` is
+unchanged, so a `1.5.0` Definition of Done still verifies. Plan:
+[docs/plans/2026-11-tdd-lessons-v1.6.0.md](docs/plans/2026-11-tdd-lessons-v1.6.0.md).
+
+### Added
+
+- **Literal-valued examples per data rule** (`product-owner` step 5 and the Definition of Ready):
+  every calculation, threshold, mapping, eligibility, or state rule gets at least one
+  `given <input>, <action> → <exact outcome>` example plus one per named boundary, nested under its
+  criterion. A value nobody supplied is an open question, never an invented number.
+- **Completeness counterfactual** (`software-engineer` 2.4, `references/developer-testing.md`):
+  for catalogue-shaped specifications, a discriminating test per cell that can drift on its own,
+  never the full cross product.
+- **Opt-in test-driven mode** (`references/test-driven-mode.md`): a test list first, one behaviour
+  per cycle with a one-line prediction before each run, already-passing tests recorded rather than
+  forced red, refactoring under the Four Rules of Simple Design, and a bounded stop on an
+  unexplained mismatch. Entered only on an explicit request, never by the execution profile or the
+  agent's judgement. The evidence pack gains an optional `tdd` block; the reviewer checks its test
+  list against the acceptance examples.
+- **Predicted RED** at the bug-fix gate (`software-engineer` 1.5): the expected failure is
+  written down first as the optional `checks.regression_red.predicted`.
+- **Anchor validation**: `validate-repo.py` now fails a link whose `#fragment` names no heading or
+  explicit anchor in the target Markdown file, and a bare `#` link. Tested by
+  `scripts/test-validate-links.py` (in CI and release readiness), including a probe that proves
+  the test fails without the check.
+
+### Fixed
+
+- **`RIGOROUS` promised mutation testing that no skill performed.** `software-engineer` 3.2 now
+  runs the project's own tool scoped to the changed code and records `checks.mutation`, or records
+  `not_run` with a reason and says so in the PR; it never installs a tool. `code-reviewer` raises
+  `major` on a silent omission. `dod-check` does not require the field. A probe in
+  `scripts/test-adaptive-execution.sh` keeps both skills naming it.
+- Ten dead heading anchors, found by the new check, including the upgrade link on the quickstart.
+- The Definition-of-Done reference's worked example was rejected by `dod-check` (`regression_red`
+  recorded the test's exit code 1 on the baseline). RED is now recorded as a command run from the
+  head that exits 0 only when the baseline shows the expected assertion, with `baseline_revision`
+  beside it; the example verifies, and
+  `scripts/test-adaptive-execution.sh` runs `dod-check` on it.
+- README said "the eleven skills" next to a table of twelve; literal `\u2192` / `\u2014` escapes in
+  `software-engineer` and this changelog; stale "until `v1.0.0`" pinning advice; ROADMAP "Now"
+  still named `v1.1.0`.
+
+### Changed
+
+- **Repository visibility wording.** The repository is public on purpose. README, CONTRIBUTING,
+  and ROADMAP say "solo-maintained, not open to outside contribution" and SECURITY says
+  "proprietary, solo-maintained" instead of "private"; the release checklist's Private-Source Acceptance stage runs only while the repository
+  is private and is recorded as skipped when it is public, and `test-private-source.sh`'s header
+  says the same. `LICENSE` stays proprietary.
+
+### Tests and evals
+
+- Five evals: `product-owner-examples-per-rule`, `developer-testing-completeness-counterfactual`,
+  `software-engineer-rigorous-mutation-testing`, `software-engineer-predicted-red`, and
+  `software-engineer-test-driven-mode-opt-in` (with hidden acceptance checks).
+
+### Credit
+
+- The example-mapping, test-list, completeness, and predictive-TDD ideas were studied in the public
+  lab repository `marcoemrich/agentic_coding_lab` (MIT licence). No text was copied; all wording
+  here is new.
+
 ## 1.5.0 - Access Discovery: can this host do *this* operation, and via what?
 
 A user asked Wamala to update their own Confluence page. Preflight said only that an Atlassian MCP
@@ -959,7 +1026,7 @@ verbatim and asserted to perform the update it described. Suite total 135, exit 
   `0.43.0`, `1.0.0-rc.1`, `1.0.0-rc.2`.
 
 - **Recorded as a 1.0 blocker:** the stable-line npm publication has to be resolved before
-  `1.0.0`. See [ROADMAP](ROADMAP.md#before-100). Not a defect today — the lockstep rule in
+  `1.0.0`. See [ROADMAP](ROADMAP.md#previously-v100). Not a defect today — the lockstep rule in
   [docs/one-point-oh.md](docs/one-point-oh.md#npm-bootstrap) binds from `1.x` — but it does not
   survive the promotion unchanged.
 
@@ -2410,7 +2477,7 @@ agent-skills migrate
 
 Nothing is deleted, and no secret moves without an explicit request.
 `agent-skills access import-legacy` is read-only until `--apply`. Full path:
-[installation.md](docs/installation.md#upgrading-from-v036x-workspace-installation).
+[installation.md](docs/installation.md#coming-from-the-pre-v037-workspace-layout).
 
 ### Cloud and remote agents
 
@@ -2781,7 +2848,7 @@ agent discipline.
 
 ### Design rationale
 
-The root cause diagnosed in [#1](#) (the conversation that triggered this release)
+The root cause diagnosed in #1 (the conversation that triggered this release)
 was not that agents don't understand the memory contract — it's that the contract
 was buried 130+ lines deep in a 400+ line file, behind philosophy that satisfies
 curiosity but doesn't gate action. Three architectural fixes:
@@ -3634,8 +3701,8 @@ wrong version. This release fixes that by:
   twelve-field `Requirement Understanding` block at the top of skill output, applies the binding
   confidence-to-action rules tailored to that skill, and adds a guardrail forbidding skipping the
   gate.
-- `issue-investigator` now tracks **dual confidence** \u2014 root-cause confidence and
-  requirement-understanding confidence \u2014 and may not recommend at higher than the lower of the
+- `issue-investigator` now tracks **dual confidence** — root-cause confidence and
+  requirement-understanding confidence — and may not recommend at higher than the lower of the
   two.
 - `eval-runs/v0.17.0/` capturing the requirement-understanding multi-skill scenario and release
   summary.

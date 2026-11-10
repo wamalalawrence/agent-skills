@@ -108,6 +108,19 @@ review:
       major_count: 4
       verdict: REQUEST_CHANGES
 
+# Test-driven mode log (software-engineer, references/test-driven-mode.md).
+# Absent unless the user explicitly asked for that mode and it ran.
+tdd:
+  test_list: # in execution order
+    - id: T1
+      description: "empty cart totals 0.00"
+  cycles: # one entry per cycle
+    - id: T1
+      predicted: "fail: assertion, expected 0.00, got undefined"
+      actual: "fail: assertion, expected 0.00, got undefined"
+      green_change: "total() returns 0.00 for an empty cart" # or: already-passing
+      refactor: kept # kept | undone | none
+
 # Automation state (owned by test-automation-engineer). Present only for tasks
 # that touched automation. It exists so a fresh agent can answer: what was
 # being automated, why, what changed, what failed, how the failures were
@@ -308,7 +321,7 @@ validation, follow-up context, the top-level `last_completed_*` /
 `last_blocked_*` mirrors, `last_continuity_checkpoint_at`, and the derived
 `current_dispatch_pointer`) into `evidence-pack.yml.delivery_plan` when
 invoked from a `delivery-planner` phase, per the
-[`delivery_plan` ownership rule](#evidence-packymldelivery_plan-ownership-rule)
+[`delivery_plan` ownership rule](#delivery-plan-ownership-rule)
 below. `code-reviewer` does not own a phase (it is invoked by
 `software-engineer` from inside a phase) and `delivery-planner` writes
 the structural fields, not phase-state.
@@ -433,6 +446,8 @@ and surface the diff — do not silently reconcile.
 The final user-facing response for a phase must name the evidence-pack path, the regenerated
 phased-plan/README path, the phase id updated, the resulting phase state, and the new
 `current_dispatch_pointer`. A transcript-only summary is not a checkpoint.
+
+<a id="delivery-plan-ownership-rule"></a>
 
 **`evidence-pack.yml.delivery_plan` ownership rule.** Two writers, with a strict split:
 
