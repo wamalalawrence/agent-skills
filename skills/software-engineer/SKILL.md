@@ -761,7 +761,7 @@ skill — writing appropriate tests for your own code does not need a second spe
   *agent-resolved* placeholder; the agent reads the value from the loaded `.env`. When the
   agent runtime has not loaded `.env`, treat the target as the literal default `80`.
   Resolution order: per-project `coverage_target` from `PROJECTS_JSON` or
-  `.agent-skills.yml` \u2192 `COVERAGE_TARGET_PERCENT` env var \u2192 literal `80`.)
+  `.agent-skills.yml` → `COVERAGE_TARGET_PERCENT` env var → literal `80`.)
 - [ ] Tests should be fast; slow or noisy tests are a design smell unless there is a real
   integration reason.
 - [ ] Every changed behaviour has a test at the level that can actually detect its regression.

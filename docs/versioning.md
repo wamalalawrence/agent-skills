@@ -92,8 +92,7 @@ The aliases live in `AGENT_SKILLS_DEPRECATED_SKILLS` in
 [`scripts/task-context.sh`](../scripts/task-context.sh). Adding a row is a commitment to carry it
 for three minor releases; removing one on schedule is part of that release's checklist.
 
-Until `v1.0.0`, pin the repository version or tag when you need repeatable behavior across teams or
-automation.
+Pin a release tag when you need repeatable behaviour across teams or automation.
 
 ## The 1.0 contract
 

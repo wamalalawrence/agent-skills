@@ -42,7 +42,7 @@ That is the whole setup. No clone, no per-repository step, no credentials.
 - [Wamala](#wamala) — the front door
 - [Why skills](#why-skills) — what a skill changes
 - [Install](#install) — install, update, roll back, uninstall
-- [Skills](#skills) — the eleven skills, and which one owns what
+- [Skills](#skills) — the twelve skills, and which one owns what
 - [The company brain](#the-company-brain) — memory, knowledge, telemetry
 - [Documentation](#documentation) — the full index
 - [Design principles](#design-principles) · [Contributing](#contributing) · [License](#license)

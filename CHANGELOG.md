@@ -3634,8 +3634,8 @@ wrong version. This release fixes that by:
   twelve-field `Requirement Understanding` block at the top of skill output, applies the binding
   confidence-to-action rules tailored to that skill, and adds a guardrail forbidding skipping the
   gate.
-- `issue-investigator` now tracks **dual confidence** \u2014 root-cause confidence and
-  requirement-understanding confidence \u2014 and may not recommend at higher than the lower of the
+- `issue-investigator` now tracks **dual confidence** — root-cause confidence and
+  requirement-understanding confidence — and may not recommend at higher than the lower of the
   two.
 - `eval-runs/v0.17.0/` capturing the requirement-understanding multi-skill scenario and release
   summary.

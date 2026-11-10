@@ -19,7 +19,15 @@ distribution boundary only — an active seat is required to download and update
 the installed runtime blocks work. The commercial line ships as `2.0`; `1.x` keeps every frozen
 contract and its current credential-free install path.
 
-## Now: v1.1.0
+## Now: v1.6.0
+
+`v1.6.0` sharpens the inputs to testing: refinement gives every data-dependent rule a literal-valued
+example, and the engineer checks catalogue-shaped specifications for cells a test would miss.
+`v1.6.0` also makes `RIGOROUS` honest about mutation testing — it runs or is recorded as not run —
+and adds a test-driven mode that is entered only on request. In `v1.6.0` the repository validator
+rejects dead heading anchors; every change is additive against the 1.0 contract.
+
+## Previously: v1.1.0
 
 A field-report release on top of `1.0.0`. Wamala finishes multi-phase runs on hosts where
 dispatched agents cannot dispatch, routes a defective plan to its planner, restores independent
