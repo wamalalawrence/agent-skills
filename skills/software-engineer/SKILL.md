@@ -648,6 +648,8 @@ it — state it in the plan. Refactoring unrelated architecture to make one test
 Full guidance, including the double-selection table, the boundary/adapter rule, refactoring
 resilience, and a worked mock-heavy vs behaviour-oriented example:
 [developer testing](./references/developer-testing.md).
+A catalogue, table, mapping, or rules repeated across variants and operations also get the
+[completeness counterfactual](./references/developer-testing.md#completeness-the-counterfactual-check).
 
 For bug fixes this does not replace [1.5](#15-reproduce-before-fix-gate-bug-fixes-only): the failing
 regression test still comes first and still must be shown failing against the unfixed

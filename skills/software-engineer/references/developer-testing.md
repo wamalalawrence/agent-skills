@@ -296,6 +296,19 @@ Where a project sets a coverage gate, meet it honestly — that means real asser
 behaviour, not padding — and say so if meeting it required tests you consider low value. A gate is a
 floor for negligence, not a definition of quality.
 
+## Completeness: the counterfactual check
+
+A specification shaped like a catalogue — a table, a mapping, rules repeated across variants and
+operations — invites a suite that stays green while one entry is wrong. First name the dimensions
+the entries vary along independently: operation, variant, input category, policy attribute,
+state, observable result. Then, for each entry the specification states explicitly, ask: *would
+any test go red if this entry alone were wrong and everything around it were right?*
+
+Where the answer is no, add one discriminating test for that cell: a case whose expected value
+differs from what the neighbouring rule would produce. Where a single uniform rule governs several
+values, one representative test covers them; a cell that can drift on its own needs its own test.
+Never generate the full cross product of the dimensions — that adds volume, not discrimination.
+
 ## On the two schools
 
 The classical/Detroit style — real collaborators, state verification, units defined by behaviour —
