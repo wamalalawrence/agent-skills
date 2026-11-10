@@ -40,22 +40,26 @@ unchanged, so a `1.5.0` Definition of Done still verifies. Plan:
   `major` on a silent omission. `dod-check` does not require the field. A probe in
   `scripts/test-adaptive-execution.sh` keeps both skills naming it.
 - Ten dead heading anchors, found by the new check, including the upgrade link on the quickstart.
+- The Definition-of-Done reference's worked example was rejected by `dod-check` (`regression_red`
+  recorded the test's exit code 1 on the baseline). It now verifies, and
+  `scripts/test-adaptive-execution.sh` runs `dod-check` on it.
 - README said "the eleven skills" next to a table of twelve; literal `\u2192` / `\u2014` escapes in
   `software-engineer` and this changelog; stale "until `v1.0.0`" pinning advice; ROADMAP "Now"
   still named `v1.1.0`.
 
 ### Changed
 
-- **Repository visibility wording.** The repository is public on purpose. README, CONTRIBUTING, and
-  ROADMAP say "solo-maintained, not open to outside contribution" instead of "private"; the release
+- **Repository visibility wording.** The repository is public on purpose. README, CONTRIBUTING,
+  ROADMAP, and SECURITY say "solo-maintained, not open to outside contribution" instead of "private"; the release
   checklist's Private-Source Acceptance stage runs only while the repository is private and is
-  recorded as skipped when it is public. `LICENSE` stays proprietary.
+  recorded as skipped when it is public, and `test-private-source.sh`'s header says the same.
+  `LICENSE` stays proprietary.
 
 ### Tests and evals
 
-- Four evals: `product-owner-examples-per-rule`, `developer-testing-completeness-counterfactual`,
-  `software-engineer-rigorous-mutation-testing`, and `software-engineer-test-driven-mode-opt-in`
-  (with hidden acceptance checks).
+- Five evals: `product-owner-examples-per-rule`, `developer-testing-completeness-counterfactual`,
+  `software-engineer-rigorous-mutation-testing`, `software-engineer-predicted-red`, and
+  `software-engineer-test-driven-mode-opt-in` (with hidden acceptance checks).
 
 ### Credit
 
