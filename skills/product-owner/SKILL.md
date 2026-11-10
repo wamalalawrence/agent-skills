@@ -251,6 +251,11 @@ Guardrails specific to product-owner:
 - Include happy paths, important edge cases, **at least one negative criterion**
   (`Given X, the system MUST NOT Y`), permissions, validation, data states, and error handling. Most
   accuracy bugs come from missing negative paths.
+- For every rule whose outcome depends on data — a calculation, threshold, mapping, eligibility, or
+  state change — add at least one example with literal values
+  (`given <input>, <action> → <exact outcome>`) and one at each boundary the rule names. Nest the
+  examples as sub-bullets under the criterion they illustrate. A value nobody has supplied makes the
+  rule an open question: ask, never invent it. These examples become the engineer's test cases.
 - Include non-functional requirements when relevant: performance, accessibility, privacy,
   auditability, reliability, compatibility, localization, or operational visibility.
 
@@ -284,6 +289,8 @@ Do not produce the tracker-ready output in step 7 until all of these are true:
   [docs/execution-modes.md](../../docs/execution-modes.md).
 - Acceptance criteria are observable/testable, include at least one negative criterion, and cover
   the relevant edge cases.
+- Every data-dependent rule carries at least one literal-valued example, or is listed as an open
+  question.
 - In-scope and out-of-scope are explicit.
 - Feasibility note from [`software-engineer`](../software-engineer/SKILL.md) is attached for any
   work touching APIs, migrations, security, or shared libraries.
