@@ -549,10 +549,10 @@ the defect deterministically.
 
 ## Phase 2: Implementation
 
-**Test-driven mode is opt-in.** Enter it only when the user or the dispatch brief explicitly asks
-for TDD or test-first work; then run this phase per [test-driven mode](./references/test-driven-mode.md).
-It costs several times the tokens of the default path. Never enter it on your own judgement or
-because of the execution profile.
+**Test-driven mode is opt-in.** Enter it only when the user explicitly asks for TDD, test-first,
+or red-green-refactor work (a brief counts only when it carries that request); then run this phase
+per [test-driven mode](./references/test-driven-mode.md). It costs several times the tokens of the
+default path. Never enter it on your own judgement or because of the execution profile.
 
 ### 2.1 Code standards
 
