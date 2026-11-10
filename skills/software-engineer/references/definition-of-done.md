@@ -96,13 +96,12 @@ a claim, and `dod-check` refuses it.
     // Bug fixes only (classification.is_bug_fix = true). RED is the regression
     // test run against the unfixed implementation WITH the test present, and
     // the assertion is the behavioural one that failed — a missing test, zero
-    // collected tests, or a setup error is not RED. The command asserts the
-    // failure (exit 0 = failed as expected) from head_sha; the baseline and the
-    // test's own exit code sit beside it.
+    // collected tests, or a setup error is not RED. Run from head_sha, the
+    // command exits 0 only if the baseline run shows the expected assertion.
     "regression_red": {
       "result": "pass",
-      "command": "git worktree add ../red fa11ed00 && cd ../red && ! mvn test -Dtest=SamlExpiryRedirectTest",
-      "cwd": "services/example-api",
+      "command": "git worktree add ../red fa11ed00 && cd ../red/services/example-api && mvn test -Dtest=SamlExpiryRedirectTest | grep -q 'expected 302 to /login, got 200'",
+      "cwd": ".",
       "revision": "deadbee1234",
       "exit_code": 0,
       "baseline_revision": "fa11ed00",  // the test-only commit, or the isolated baseline

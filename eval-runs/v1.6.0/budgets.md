@@ -12,13 +12,13 @@ Baseline is `origin/main` at `7692795`.
 
 | File | Before | After | Growth | Cap | Result |
 | --- | ---: | ---: | ---: | ---: | --- |
-| `skills/software-engineer/SKILL.md` | 81,672 | 83,093 | +1,421 | +1,500 | within |
+| `skills/software-engineer/SKILL.md` | 81,672 | 83,169 | +1,497 | +1,500 | within |
 | `skills/product-owner/SKILL.md` | 26,696 | 27,268 | +572 | +800 | within |
 | `skills/software-engineer/skills/code-reviewer/SKILL.md` | 53,335 | 53,712 | +377 | +600 | within |
 | `skills/wamala/references/handoff-prompt-template.md`, template block only | 5,946 | 6,002 | +56 | +120 | within |
 | `skills/software-engineer/references/test-driven-mode.md` (new) | 0 | 5,517 | +5,517 | <= 9,000 | within |
 | `skills/software-engineer/references/developer-testing.md` | 17,955 | 18,861 | +906 | +1,200 | within |
-| `skills/software-engineer/references/definition-of-done.md` | 11,559 | 12,538 | +979 | +1,000 | within |
+| `skills/software-engineer/references/definition-of-done.md` | 11,559 | 12,535 | +976 | +1,000 | within |
 | `skills/software-engineer/references/evidence-pack.md` | 26,006 | 26,573 | +567 | +1,200 | within |
 | Every skill's frontmatter `description` | — | unchanged | 0 | 0 | within |
 
@@ -80,8 +80,8 @@ the cause is a pre-existing rendering defect, not a checker bug:
 line 74 and nests a fenced `yaml` block (three backticks plus `yaml`) at line 115. Under CommonMark (and on GitHub) the
 inner opener does not close the outer fence, so line 123 closes it, and line 189 opens a fence that
 runs to the end of the file. The three links at lines 198, 203, and 207 are therefore not
-rendered as links, and the checker now agrees. The file is outside plan section 5.2; the fix (a
-four-backtick outer fence) is recorded here for a later change.
+rendered as links, and the checker now agrees. Fixed after review round 2 (plan 5.2 amended): the outer fence is now four backticks, and
+the three links render and resolve.
 
 ## Suites
 

@@ -532,8 +532,9 @@ the defect deterministically.
   (e.g., `test: failing test for <TICKET>`). Demonstrate RED against the **unfixed implementation
   with the new test present**: run the test on that test-only commit (or an isolated baseline with
   the test transplanted), confirm it ran and failed for the expected behavioural assertion, and
-  record the command, revision, exit code, and assertion as `checks.regression_red` in the
-  Definition of Done. A missing test, zero collected tests, a setup error, or an unrelated failure
+  record it as `checks.regression_red` in the Definition of Done: a command run on the head that
+  exits 0 only on the expected assertion failure, plus `baseline_revision` and assertion.
+  A missing test, zero collected tests, a setup error, or an unrelated failure
   is not RED. Then run the same test on the fix and record GREEN. The reviewer re-runs both on the
   same baselines; a parent commit that does not contain the test is not a valid one. Full rule:
   [evidence discipline](../../docs/evidence-discipline.md#red-means-the-test-ran-and-failed-for-the-right-reason).

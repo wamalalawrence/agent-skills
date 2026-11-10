@@ -298,7 +298,8 @@ becoming stricter is not a contract change: `scripts/` invoked directly is "Not 
 Allowed to change: the files named in section 6, `CHANGELOG.md`, new files under `evals/` and
 `eval-runs/v1.6.0/`, this plan, and — in Phase 4 only — the version files.
 Amended after review round 1 (change H completeness): `SECURITY.md` line 3, and the header comment
-only (lines 1-15, no logic) of `scripts/test-private-source.sh`. Must not change:
+only (lines 1-15, no logic) of `scripts/test-private-source.sh`. After round 2: the outer fence
+(lines 74 and 189) of `skills/delivery-planner/references/phase-template.md`. Must not change:
 `lib/`, `bin/`, `hooks/`, `npm/` (until Phase 4), `scripts/install.py`, `scripts/guard*`,
 `scripts/execution-profile.py`, `scripts/dod-check.py`, any skill's frontmatter `description`. A
 diff outside the allowed set is a review blocker unless this plan is amended first.

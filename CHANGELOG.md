@@ -41,7 +41,9 @@ unchanged, so a `1.5.0` Definition of Done still verifies. Plan:
   `scripts/test-adaptive-execution.sh` keeps both skills naming it.
 - Ten dead heading anchors, found by the new check, including the upgrade link on the quickstart.
 - The Definition-of-Done reference's worked example was rejected by `dod-check` (`regression_red`
-  recorded the test's exit code 1 on the baseline). It now verifies, and
+  recorded the test's exit code 1 on the baseline). RED is now recorded as a command run from the
+  head that exits 0 only when the baseline shows the expected assertion, with `baseline_revision`
+  beside it; the example verifies, and
   `scripts/test-adaptive-execution.sh` runs `dod-check` on it.
 - README said "the eleven skills" next to a table of twelve; literal `\u2192` / `\u2014` escapes in
   `software-engineer` and this changelog; stale "until `v1.0.0`" pinning advice; ROADMAP "Now"
@@ -50,8 +52,8 @@ unchanged, so a `1.5.0` Definition of Done still verifies. Plan:
 ### Changed
 
 - **Repository visibility wording.** The repository is public on purpose. README, CONTRIBUTING,
-  ROADMAP, and SECURITY say "solo-maintained, not open to outside contribution" instead of
-  "private"; the release checklist's Private-Source Acceptance stage runs only while the repository
+  and ROADMAP say "solo-maintained, not open to outside contribution" and SECURITY says
+  "proprietary, solo-maintained" instead of "private"; the release checklist's Private-Source Acceptance stage runs only while the repository
   is private and is recorded as skipped when it is public, and `test-private-source.sh`'s header
   says the same. `LICENSE` stays proprietary.
 

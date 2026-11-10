@@ -8,8 +8,8 @@ review in [`SKILL.md`](../SKILL.md) stays as it is.
 
 Enter this mode only when the user explicitly asks for TDD, test-first, or red-green-refactor
 work. The brief that dispatched you counts only when it carries that request from the user; a
-planner or dispatcher choosing the mode on its own is not a request. Nothing else enters it: not the execution profile
-(`RIGOROUS` included), not the size or risk of the change, not your own view that it would help.
+planner or dispatcher choosing the mode on its own is not a request. Nothing else enters it: not
+the execution profile (`RIGOROUS` included), not the size or risk of the change, not your own view that it would help.
 Without that request, Phase 2 runs as `SKILL.md` describes it.
 
 The reason is cost. Published measurements of a full predictive loop like this one put it at
