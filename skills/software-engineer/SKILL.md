@@ -805,6 +805,11 @@ skill — writing appropriate tests for your own code does not need a second spe
   evidence about which lines ran, not proof that behaviour is protected — do not add assertion-free
   tests to move the number. Where a gate is mandatory, meet it honestly and say so if meeting it
   required tests of low value.
+- [ ] **Execution profile `RIGOROUS`: run mutation testing.** Use the project's own mutation tool,
+  scoped to the changed code, and record the outcome as `checks.mutation` in the Definition of
+  Done. Adding a tool is the user's dependency decision, never yours. A mutant surviving on a
+  changed line means an assertion is missing: add it or state why not. No tool configured: record
+  `not_run` with that reason and say so in the PR. The requirement is unmet until a run happened.
 
 ### 3.3 Build & format
 

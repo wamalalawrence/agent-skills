@@ -37,7 +37,7 @@ the same machinery — and there it was worth every minute.
 | Phase decomposition | no | no | yes |
 | Fresh-context dispatch | no | yes | yes |
 | Independent review agent | no | yes | yes |
-| Mutation testing | no | no | yes |
+| Mutation testing | no | no | yes, [as `software-engineer` 3.2 defines it](../skills/software-engineer/SKILL.md#32-test-coverage) |
 | Evidence depth | retained separately | cited inline | full |
 | Dispatch budget | 1 | 3 | 6 |
 
@@ -53,6 +53,9 @@ phases. This is what work gets when nobody classified it.
 migrations, production infrastructure, payment correctness, credential handling, anything that
 can destroy data, anything spanning systems, anything irreversible. Fresh-context isolation,
 independent review, stronger evidence, mutation testing. **Unchanged from before this release.**
+What mutation testing asks of the engineer and the reviewer — a scoped run recorded as
+`checks.mutation`, or an honest `not_run` — is in
+[`software-engineer` 3.2](../skills/software-engineer/SKILL.md#32-test-coverage).
 
 ## What LIGHT does not give up
 

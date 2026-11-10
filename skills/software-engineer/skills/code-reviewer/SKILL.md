@@ -482,6 +482,9 @@ Test findings to raise **when the evidence in the diff supports them**:
 - `major` — the test only verifies calls and never verifies a meaningful result.
 - `major` — the defect being fixed lives in serialization, persistence, or framework wiring, and
   the test never exercises that layer, so it cannot detect the regression it exists for.
+- `major` — at execution profile `RIGOROUS`, the Definition of Done has no `checks.mutation`, or
+  records `not_run` without a reason. A mutant surviving on a changed line needs an added
+  assertion or a stated reason.
 - `minor` — a trivial deterministic in-process collaborator is doubled for no stated reason.
 - `minor` — double setup dominates the test and hides the business scenario.
 - `minor` — broad framework bootstrapping is used for logic a focused test could prove cheaply.

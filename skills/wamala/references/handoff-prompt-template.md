@@ -72,7 +72,8 @@ Do this:
   skill, stop and say which one — do not do it yourself.
 - Match the workflow depth to the execution profile above. At LIGHT: answer the
   question directly, verify the answer, keep evidence but do not build a dossier.
-  At RIGOROUS: full evidence and review discipline, unchanged.
+  At RIGOROUS: full evidence and review discipline, unchanged, including mutation
+  testing (`software-engineer` 3.2).
 - Meet the output contract above. The deliverable and the evidence are NOT the
   same artifact: write the evidence where the contract says, and keep the primary
   answer to the size and reading time asked for.

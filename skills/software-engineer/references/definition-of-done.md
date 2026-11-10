@@ -227,6 +227,16 @@ The `safety_acknowledgement` block, when `applies: true`, carries the fields the
 - The file is regenerated on every Phase 5 run; it is a gate signal between engineer and
   reviewer, not a long-lived artifact.
 
+## Optional fields
+
+Recorded when they apply; `dod-check` does not require them in `1.6.0`, so a file without them
+verifies exactly as before.
+
+- **`checks.mutation`** — at execution profile `RIGOROUS` (`software-engineer` 3.2). Fields:
+  `result`, `command`, `revision`, `exit_code`, `killed`, `total`, `survived_on_changed_lines`
+  (each survivor with the assertion added or the reason none was), and `reason` when the result
+  is `not_run`. The reviewer, not `dod-check`, treats an absent or reasonless record as `major`.
+
 ## Producing it
 
 `software-engineer` writes this file as the last step of Phase 5.1 (Commit) and updates it again

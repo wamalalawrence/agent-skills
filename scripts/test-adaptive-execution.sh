@@ -769,6 +769,33 @@ else
 fi
 
 # ---------------------------------------------------------------------------
+sec "RIGOROUS mutation testing has a performer"
+# ---------------------------------------------------------------------------
+# The profile promises mutation testing at RIGOROUS. Until 1.6.0 no skill told
+# anyone to run it, and nothing noticed. Both sides of the promise must keep
+# naming the Definition-of-Done record: the engineer who writes it and the
+# reviewer who checks for it.
+
+SE_SKILL="$REPO/skills/software-engineer/SKILL.md"
+CR_SKILL="$REPO/skills/software-engineer/skills/code-reviewer/SKILL.md"
+
+# `names_mutation_record FILE` — succeeds when FILE still asks for checks.mutation.
+names_mutation_record() {
+  grep -q 'checks\.mutation' "$1"
+}
+
+if names_mutation_record "$SE_SKILL"; then
+  ok "software-engineer names checks.mutation for RIGOROUS work"
+else
+  bad "software-engineer names checks.mutation for RIGOROUS work"
+fi
+if names_mutation_record "$CR_SKILL"; then
+  ok "code-reviewer names checks.mutation as a RIGOROUS review item"
+else
+  bad "code-reviewer names checks.mutation as a RIGOROUS review item"
+fi
+
+# ---------------------------------------------------------------------------
 sec "Mutation probes"
 # ---------------------------------------------------------------------------
 
@@ -906,6 +933,18 @@ else
     bad "probe 4: without redaction an evidence-pack credential reaches the brief" \
         "the weakened build still hid it, so the redaction test proves nothing"
   fi
+fi
+
+# Probe 5: delete the mutation instruction from a sandboxed copy of the
+# engineer's skill and confirm the performer check then fails.
+grep -v 'checks\.mutation' "$SE_SKILL" >"$PROBE/se-SKILL.md"
+if cmp -s "$SE_SKILL" "$PROBE/se-SKILL.md"; then
+  bad "probe 5 could weaken the build" "no checks.mutation line to remove"
+elif names_mutation_record "$PROBE/se-SKILL.md"; then
+  bad "probe 5: without the instruction the performer check fails" \
+      "the weakened copy still passed, so the check proves nothing"
+else
+  ok "probe 5: without the instruction the performer check fails"
 fi
 
 # ---------------------------------------------------------------------------
