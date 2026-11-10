@@ -26,6 +26,9 @@ Start here when reading the repository outside GitHub's main README.
   install manifest is consulted for drift.
 - [Release providers](release-providers.md) - where releases come from, how they are verified,
   and how distribution access differs from project access.
+- [Release signing and verification](release-signing.md) - the Ed25519 manifest signature the Node
+  bootstrap checks before the installer sees an archive: the canonical form that is signed, every
+  error code, the two-key trust bundle and its rotation procedure, and the extraction bounds.
 - [Commercial plan](commercial-roadmap.md) - the decided €11-per-developer subscription: stack,
   billing and seat policies, private distribution, operating costs, and the build order to launch.
 - [Updates, rollback, and channels](updates.md) - how a user notices a new release and applies it without losing

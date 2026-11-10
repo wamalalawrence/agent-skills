@@ -17,6 +17,12 @@
  *   - any credential handling. If the release source needs authentication, the
  *     engine reports that and exits; nothing here reads, prompts for, or
  *     stores a token.
+ *
+ * One thing does happen here rather than in the engine: Ed25519 verification
+ * of a signed release, in `lib/verify.js`. It runs in Node because Node is
+ * what is already running, has Ed25519 in its standard library, and is earlier
+ * in the chain than Python — the signature is checked before the archive is
+ * handed to anything that will open it. See `docs/release-signing.md`.
  */
 
 "use strict";
@@ -27,9 +33,10 @@ const fs = require("fs");
 
 const PACKAGE_ROOT = path.resolve(__dirname, "..");
 const ENGINE = path.join(PACKAGE_ROOT, "vendor", "install.py");
+const TRUST_BUNDLE = path.join(PACKAGE_ROOT, "lib", "trust-bundle.json");
 
 // Matches lib/asrelease/exits.py. Keep in step; the test suite asserts it.
-const EXIT = { OK: 0, USAGE: 2, AUTH_REQUIRED: 3 };
+const EXIT = { OK: 0, USAGE: 2, AUTH_REQUIRED: 3, INTEGRITY: 5 };
 
 function fail(message, code) {
   process.stderr.write("agent-skills: " + message + "\n");
@@ -68,6 +75,11 @@ function usage() {
       "  agent-skills rollback    return to the previous release",
       "  agent-skills uninstall   remove it again",
       "",
+      "One command is answered here rather than by the installer:",
+      "",
+      "  verify-release --manifest M --signature S --archive A",
+      "                           check a signed release without installing it",
+      "",
       "Options are passed straight through to the installer:",
       "  --version X        install this exact release",
       "  --channel rc       follow the release-candidate line",
@@ -82,6 +94,74 @@ function usage() {
   );
 }
 
+function flags(argv) {
+  const out = {};
+  for (let index = 0; index < argv.length; index += 1) {
+    if (argv[index].indexOf("--") !== 0) {
+      continue;
+    }
+    const value = argv[index + 1];
+    if (value === undefined || value.indexOf("--") === 0) {
+      fail(argv[index] + " needs a value", EXIT.USAGE);
+    }
+    out[argv[index].slice(2)] = value;
+    index += 1;
+  }
+  return out;
+}
+
+/*
+ * Verify a signed release and say so. Exits 5 — the frozen integrity code —
+ * on any verification failure, and prints the failure's code, because "it did
+ * not verify" is not actionable and an unknown key ID, an old bootstrap, and a
+ * tampered archive need three different answers.
+ */
+function verifyRelease(argv) {
+  const given = flags(argv);
+  for (const required of ["manifest", "signature", "archive"]) {
+    if (!given[required]) {
+      fail("verify-release needs --" + required + " <file>", EXIT.USAGE);
+    }
+  }
+  let verifier;
+  try {
+    verifier = require(path.join(PACKAGE_ROOT, "lib", "verify.js"));
+  } catch (error) {
+    fail("this package is incomplete: lib/verify.js is missing", EXIT.USAGE);
+  }
+  verifier
+    .verifyRelease({
+      manifestPath: given.manifest,
+      signaturePath: given.signature,
+      archivePath: given.archive,
+      trustBundle: given["trust-bundle"] || TRUST_BUNDLE,
+      bootstrapVersion: require("../package.json").version,
+      expect: {
+        version: given.version,
+        channel: given.channel,
+        platform: given.platform,
+      },
+    })
+    .then((result) => {
+      process.stdout.write(
+        "verified " +
+          result.manifest.version +
+          " (" +
+          result.manifest.platform +
+          ", " +
+          result.manifest.channel +
+          ") signed by " +
+          result.signingKeyId +
+          "\n"
+      );
+      process.exit(EXIT.OK);
+    })
+    .catch((error) => {
+      const code = error && error.code ? error.code : "VERIFICATION_FAILED";
+      fail("INTEGRITY: " + code + ": " + error.message, EXIT.INTEGRITY);
+    });
+}
+
 function main() {
   const argv = process.argv.slice(2);
   const command = argv[0];
@@ -89,6 +169,11 @@ function main() {
   if (!command || command === "help" || command === "--help" || command === "-h") {
     usage();
     process.exit(command ? EXIT.OK : EXIT.USAGE);
+  }
+
+  if (command === "verify-release") {
+    verifyRelease(argv.slice(1));
+    return;
   }
 
   // The bootstrap exists to get a first release onto the machine. Everything

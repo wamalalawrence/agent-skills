@@ -91,6 +91,15 @@ jobs:
       - name: Release engine, archive safety, and provider independence
         run: python3 scripts/test-release-engine.py
 
+      # Ed25519 signing and the verifier that runs before the installer sees an
+      # archive. Every case asserts a specific error code rather than "it
+      # threw", because a verifier that rejects everything passes a suite that
+      # only checks for failure. Keys are generated per run and never written
+      # to the repository; one case asserts the signing script does not print
+      # its own key.
+      - name: Release signing, verification, and two-key rotation
+        run: node scripts/test-release-signing.js
+
       - name: Front-door skill identity and contract
         run: bash scripts/test-front-door-skill.sh
 

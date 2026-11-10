@@ -4,6 +4,50 @@ All notable project changes should be recorded here.
 
 ## Unreleased
 
+### Added
+
+- **Ed25519 release signing and verification** ([`docs/release-signing.md`](docs/release-signing.md)).
+  Phase 11 of the commercial plan, with no new dependency on either side. Verification is
+  [`npm/lib/verify.js`](npm/lib/verify.js), a dependency-free module running in the Node bootstrap
+  *before* the Python engine starts — upstream of the tar parser, which is the component an archive
+  attacks. `node:crypto` has had native Ed25519 since Node 12 and the package floor is already
+  Node 18, so nothing was added to get it. The Python side keeps its own SHA-256 and payload-tree
+  verification; the two are independent and both must pass.
+  - The signed bytes are a **canonical** serialisation: UTF-8, no whitespace, keys sorted by UTF-8
+    byte order, integers only, and the file on disk must equal those bytes exactly. Floats,
+    `undefined`, cycles, lone surrogates and duplicate keys are rejected rather than normalised —
+    a value that cannot round-trip cannot be signed, and a manifest whose reviewed form differs
+    from its signed form is a place to hide a second value.
+  - Every failure is a distinct code, not a boolean: an unknown key ID, a bootstrap below the
+    release's minimum, and a tampered archive need three different answers. The bootstrap prints
+    the code and exits `5`.
+  - The trust bundle ships **two** slots with states (`active`, `retiring`, `reserved`), so
+    rotation is: publish both, wait for adoption, switch signing, drop the old one next version.
+    A key ID is derived from its own key material and checked, so swapping a key under a trusted
+    ID is a detected edit. Both slots ship `reserved`: verification fails closed until the first
+    signing ceremony in the protected environment.
+  - [`scripts/sign-release.js`](scripts/sign-release.js) takes the private key from
+    `AGENT_SKILLS_SIGNING_KEY` and from nowhere else — no flag, no file, never logged, never in an
+    error message — and refuses to sign with a key the trust bundle does not list as `active`.
+  - Additive by construction: an unsigned `git` or `local` install is unchanged, and no frozen
+    `1.x` contract moves.
+- **Extraction bounds** (`lib/asrelease/archive.py`). The existing checks — traversal, escaping
+  links, device nodes, setuid — answer "may this member be written"; these answer "how much of
+  this is there". Archive size, expanded size, compression ratio, file count and path length are
+  bounded, and duplicate or case-colliding member paths are refused, because on a case-insensitive
+  filesystem the archive that was reviewed and the archive that installs are different trees. The
+  expanded size is measured by decompressing in bounded chunks and abandoning the stream at the
+  bound, so measuring a decompression bomb costs the bound rather than the bomb.
+
+### Fixes
+
+- **A hardlink's target was checked against a path that was never written**
+  (`lib/asrelease/archive.py`). The escape check resolved a hardlink's `linkname` relative to the
+  directory the link sits in, while extraction resolved it from the archive root. Both still
+  rejected an escape, so nothing was unsafe, but every in-root hardlink below the top level was
+  validated against the wrong path. Symlinks are resolved from the member's directory and
+  hardlinks from the root, which is what tar means by each.
+
 ## 1.6.0 - Example-guided and predictive testing, cheap on the default path
 
 Example-guided and predictive testing lessons, kept cheap on the default path, plus fixes for
