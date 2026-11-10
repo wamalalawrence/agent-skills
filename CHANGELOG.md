@@ -4,6 +4,8 @@ All notable project changes should be recorded here.
 
 ## Unreleased
 
+## 1.6.0 - Example-guided and predictive testing, cheap on the default path
+
 Example-guided and predictive testing lessons, kept cheap on the default path, plus fixes for
 flaws found while checking the current flows. Additive against the 1.0 contract: no CLI, exit
 code, install layout, provider, skill name, or skill `description` changes, and `dod-check` is

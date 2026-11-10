@@ -4,14 +4,13 @@ Reusable [Agent Skills](https://agentskills.io/) for software-engineering work �
 role-shaped workflows your AI assistant can load on demand so the same model produces
 senior-engineer, product-owner, tester, or reviewer output instead of generic answers.
 
-> **Status:** `1.5.0` — stable. The [1.0 contracts](docs/one-point-oh.md) — CLI names
+> **Status:** `1.6.0` — stable. The [1.0 contracts](docs/one-point-oh.md) — CLI names
 > and exit codes, the install layout, the release-provider interface, the skill names, and the
-> Engineering Tool Capability Framework — are frozen for the `1.x` line, and `1.5.0` only adds to
-> them. It adds [Access Discovery](docs/access/README.md): before Wamala writes to Confluence, Jira,
-> or a git host, `agent-skills access check` says whether this assistant's route can do *that*
-> operation on *that* target — read-only launchers, tool and scope filters, and missing credentials
-> included — and when it cannot, Wamala explains exactly why and offers options instead of
-> improvising a workaround. The details are [in the changelog](CHANGELOG.md).
+> Engineering Tool Capability Framework — are frozen for the `1.x` line, and `1.6.0` only adds to
+> them. It sharpens testing: `product-owner` gives every data-dependent rule a literal example,
+> `software-engineer` predicts the bug-fix RED, checks catalogue-shaped specs for missing cases,
+> runs mutation testing at `RIGOROUS`, and offers an opt-in test-driven mode when you ask for TDD.
+> The details are [in the changelog](CHANGELOG.md).
 
 ## Start here
 
@@ -104,18 +103,18 @@ Requirements: Python 3.8+, bash, and git. macOS or Linux; on Windows use WSL or 
 with every supported agent host it finds, and makes the runtime invocable from anywhere:
 
 ```text
-  resolve    1.5.0 (stable, via git)
+  resolve    1.6.0 (stable, via git)
   download   164 files staged
   verify     payload hash and version agree
   self-test  staged runtime answers correctly
-  activate   current -> versions/1.5.0
+  activate   current -> versions/1.6.0
   hosts      claude-code, agents-standard, cursor, codex
   verified   installation is consistent
 
-Agent Skills 1.5.0 is installed.
+Agent Skills 1.6.0 is installed.
 
   install root : ~/.agent-skills
-  active release: ~/.agent-skills/versions/1.5.0
+  active release: ~/.agent-skills/versions/1.6.0
   hosts        : claude-code, agents-standard, cursor, codex
   command      : ~/.local/bin/agent-skills
 
