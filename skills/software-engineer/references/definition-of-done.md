@@ -236,6 +236,9 @@ verifies exactly as before.
   `result`, `command`, `revision`, `exit_code`, `killed`, `total`, `survived_on_changed_lines`
   (each survivor with the assertion added or the reason none was), and `reason` when the result
   is `not_run`. The reviewer, not `dod-check`, treats an absent or reasonless record as `major`.
+- **`checks.regression_red.predicted`** — the failure expected before the test-only commit ran
+  (`software-engineer` 1.5). `dod-check` still requires only `assertion`. When the two differ,
+  the evidence says why before any fix was written.
 
 ## Producing it
 

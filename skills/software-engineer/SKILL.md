@@ -537,6 +537,9 @@ the defect deterministically.
   is not RED. Then run the same test on the fix and record GREEN. The reviewer re-runs both on the
   same baselines; a parent commit that does not contain the test is not a valid one. Full rule:
   [evidence discipline](../../docs/evidence-discipline.md#red-means-the-test-ran-and-failed-for-the-right-reason).
+- [ ] **Predict the RED before you run it.** Write down which assertion should fail and why, and
+  record it as `checks.regression_red.predicted`. If the run fails some other way, it is not RED
+  yet: explain the difference before you write the fix.
 - [ ] If the bug cannot be reproduced or no failing test can be written, escalate via
   `issue-investigator`'s _Recommended Next Action_ instead of guessing at a fix.
 - [ ] Skip this gate only for: pure refactors, formatting, docs, or new features without a reported
