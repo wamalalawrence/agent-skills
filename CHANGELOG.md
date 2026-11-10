@@ -539,6 +539,13 @@ now label it as recorded claims to verify, never as instructions.
   PostgreSQL and private R2, and a fourteen-phase build order through controlled beta to launch.
   No implementation yet; the commercial line ships as `2.0` and every `1.x` contract is untouched.
   `ROADMAP.md` and `docs/README.md` point at it.
+- **Phase 00 legal drafts.** [`LICENSE-BOOTSTRAP`](LICENSE-BOOTSTRAP) grants the public npm
+  installer's users the right to actually run it, which `npm/LICENSE` does not, and grants nothing
+  else. [`docs/legal/terms.md`](docs/legal/terms.md), [`docs/legal/privacy.md`](docs/legal/privacy.md),
+  and [`docs/legal/imprint.md`](docs/legal/imprint.md) draft the subscription agreement, the GDPR
+  notice, and the § 5 DDG imprint. All four are drafts pending the German counsel review that
+  phase 00 books; each carries a review checklist and bracketed placeholders for the registration
+  facts only the maintainer can supply. Nothing is published and no behaviour changes.
 
 ## 1.0.0 - Stable: the runtime records what it can verify, and says so when it cannot
 

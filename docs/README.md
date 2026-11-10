@@ -28,6 +28,9 @@ Start here when reading the repository outside GitHub's main README.
   and how distribution access differs from project access.
 - [Commercial plan](commercial-roadmap.md) - the decided €11-per-developer subscription: stack,
   billing and seat policies, private distribution, operating costs, and the build order to launch.
+- [Commercial legal drafts](legal/) - phase 00 drafts of the [subscription terms](legal/terms.md),
+  [privacy notice](legal/privacy.md), and [imprint](legal/imprint.md), each with a review
+  checklist for counsel. Drafts, not published documents.
 - [Updates, rollback, and channels](updates.md) - how a user notices a new release and applies it without losing
   credentials or bindings (`agent-skills check-updates`, `agent-skills update`, `git pull`).
 - [Meeting Intelligence](meeting-intelligence.md) - "Listen to this meeting": the meeting is

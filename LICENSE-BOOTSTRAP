@@ -1,0 +1,48 @@
+Agent Skills Bootstrap Licence
+Copyright (c) 2026 Lawrence Wamala. All rights reserved.
+
+DRAFT. Pending review by German counsel. Do not publish an npm package under
+this file until that review is complete.
+
+This licence covers ONLY the public bootstrap package published to npm as
+@wamalalawrence/agent-skills: the installer entry point, the sign-in client,
+the release-manifest verifier, the install engine, and their accompanying
+metadata ("the Bootstrap"). It does not cover the Agent Skills product that
+the Bootstrap downloads and installs ("the Product"), which is licensed
+separately under the Agent Skills Subscription Terms.
+
+GRANT
+
+Permission is granted to any person, free of charge, to:
+
+  a. download, install, and run the Bootstrap, on any number of machines,
+     for the purpose of evaluating, purchasing, installing, updating, or
+     removing the Product; and
+  b. redistribute the Bootstrap verbatim and unmodified, including its
+     dependencies as published, provided this licence file is included
+     unchanged and the package is not presented as originating from anyone
+     other than the copyright holder.
+
+CONDITIONS AND LIMITS
+
+  1. No right is granted to modify the Bootstrap, to create derivative works
+     from it, or to redistribute a modified copy.
+  2. No right is granted to the Product. Running the Bootstrap does not
+     license the Product. Access to the Product requires an active
+     subscription and an assigned seat.
+  3. No right is granted to remove, disable, or circumvent the release
+     signature verification the Bootstrap performs, or to use the Bootstrap
+     to obtain the Product other than through the official registry.
+  4. No trademark right is granted. "Agent Skills" and the associated names
+     may not be used to endorse or promote derived or competing offerings.
+  5. This licence terminates automatically if these conditions are breached.
+
+NO WARRANTY
+
+THE BOOTSTRAP IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+COPYRIGHT HOLDER BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER LIABILITY, WHETHER
+IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN
+CONNECTION WITH THE BOOTSTRAP OR ITS USE. Nothing in this paragraph limits
+liability that cannot be limited under applicable mandatory law.
