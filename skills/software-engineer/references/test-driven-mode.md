@@ -70,9 +70,11 @@ adding behaviour until it is explained.
 - If two such checks leave it unexplained, stop and report `needs-user` with both outcomes and what
   the checks showed. The limit is deliberate: a third guess is where a loop starts to drift.
 
-This is one of exactly two places the mode pauses; the other is the test list below `high`
-confidence. Everything else proceeds without asking, as the auto-iterate rule in
-[2.5](../SKILL.md#25-inner-loop-code-review-call-code-reviewer) expects.
+The mode adds two pauses of its own: this one, and the test list below `high` confidence. It
+adds no others; between cycles it proceeds without asking, as the auto-iterate rule in
+[2.5](../SKILL.md#25-inner-loop-code-review-call-code-reviewer) expects. It also removes none:
+gate 1.5's escalation, dependency and destructive-action confirmations, and the safety floor
+still stop work exactly as they do outside the mode.
 
 ## 4. Suite cadence
 
